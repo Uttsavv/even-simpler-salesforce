@@ -329,7 +329,7 @@ class AsyncTokenStoreContract:
         async def body(store: AsyncTokenStore) -> None:
             lock = getattr(store, "lock", None)
             if lock is None:
-                return
+                pytest.skip("store has no lock()")
             async with lock(_KEY):
                 pass
 
@@ -341,7 +341,7 @@ class AsyncTokenStoreContract:
         async def body(store: AsyncTokenStore) -> None:
             lock = getattr(store, "lock", None)
             if lock is None:
-                return
+                pytest.skip("store has no lock()")
             entered = asyncio.Event()
 
             async def second() -> None:

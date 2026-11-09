@@ -12,6 +12,7 @@ import fnmatch
 import json
 import os
 import sys
+import tempfile
 from collections.abc import Iterable, Iterator, Sequence
 from pathlib import Path
 from typing import Any, TextIO
@@ -67,9 +68,11 @@ def _write_atomic(path: Path, text: str) -> None:
     The new content goes to a temporary file in the same directory first, so an interrupted
     run never leaves a half-written source file.
     """
-    tmp = path.with_name(f".{path.name}.esf-migrate.tmp")
+    # A unique name: concurrent runs can't share it, and it is never an existing symlink.
+    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".esf-migrate.tmp")
+    tmp = Path(tmp_name)
     try:
-        with tmp.open("w", encoding="utf-8", newline="") as fh:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as fh:
             fh.write(text)
         os.chmod(tmp, path.stat().st_mode & 0o7777)
         os.replace(tmp, path)
@@ -218,7 +221,11 @@ def _run(argv: Sequence[str] | None, out: TextIO, err: TextIO) -> int:
     if args.write:
         for r in results:
             if r.changed and not r.error:
-                _write_atomic(Path(r.path), r.updated)
+                try:
+                    _write_atomic(Path(r.path), r.updated)
+                except OSError as exc:  # report it like a read error; keep going
+                    r.error = f"write error: {exc}"
+                    continue
             _remap_lines(r)
     elif not args.check:
         for r in results:

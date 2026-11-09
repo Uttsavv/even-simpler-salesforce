@@ -3,6 +3,7 @@
 Run it (from the ``examples/`` directory)::
 
     export SF_DOMAIN=https://acme.my.salesforce.com SF_CLIENT_ID=... SF_CLIENT_SECRET=...
+    export SF_CURSOR_KEY="a long random secret"   # signs pagination cursors
     uvicorn fastapi_app.app:app --reload
 
 What it shows:

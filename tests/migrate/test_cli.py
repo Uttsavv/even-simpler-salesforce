@@ -289,7 +289,8 @@ def test_failed_write_leaves_original_and_no_temp(tmp_path: Path, monkeypatch: p
         raise OSError("disk full")
 
     monkeypatch.setattr(os, "replace", boom)
-    with pytest.raises(OSError, match="disk full"):
-        run(["--write", str(f)])
+    code, out, _ = run(["--write", "--report", "-", str(f)])
+    assert code != 0
+    assert "write error: disk full" in out
     assert f.read_text() == CLEAN
     assert [p.name for p in tmp_path.iterdir()] == ["app.py"]

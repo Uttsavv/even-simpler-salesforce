@@ -176,6 +176,7 @@ class Redactor:
         self._emails: dict[str, str] = {}
         self._phones: dict[str, str] = {}
         self._personal: dict[tuple[str, str], str] = {}
+        self._personal_counts: dict[str, int] = {}
         self._ids: dict[str, str] = {}
         self._lock = threading.Lock()
 
@@ -204,8 +205,11 @@ class Redactor:
 
     def _personal_value(self, key: str, value: str) -> str:
         with self._lock:
-            n = sum(1 for k in self._personal if k[0] == key) + 1
-            return self._personal.setdefault((key, value), f"{key} {n}")
+            label = self._personal.get((key, value))
+            if label is None:
+                n = self._personal_counts[key] = self._personal_counts.get(key, 0) + 1
+                label = self._personal[(key, value)] = f"{key} {n}"
+            return label
 
     @staticmethod
     def _host(m: re.Match[str]) -> str:

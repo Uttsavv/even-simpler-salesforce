@@ -3,6 +3,7 @@
 Run it (from the ``examples/`` directory)::
 
     export SF_DOMAIN=https://acme.my.salesforce.com SF_CLIENT_ID=... SF_CLIENT_SECRET=...
+    export SF_CURSOR_KEY="a long random secret"   # signs pagination cursors
     flask --app flask_app.app:create_app run
 
 What it shows:

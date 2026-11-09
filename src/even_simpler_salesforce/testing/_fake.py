@@ -648,7 +648,8 @@ class FakeSalesforce(_FakeControls):
     is recorded in :attr:`calls`.
 
     Args:
-        auth: Ignored; accepted so the fake can be built like the real client.
+        auth: Not used to authenticate. Its ``instance_url`` (``StaticToken``) or My Domain
+            ``base_url`` sets :attr:`instance_url`; otherwise a default instance is used.
         api_version: API version used in record URLs and cursors.
         cursor_key: Sign cursors like the real client's ``cursor_key``.
         observers: Event observers.
@@ -1131,7 +1132,8 @@ class AsyncFakeSalesforce(_FakeControls):
             page = await fake.query("SELECT Id FROM Lead")
 
     Args:
-        auth: Ignored; accepted so the fake can be built like the real client.
+        auth: Not used to authenticate. Its ``instance_url`` (``StaticToken``) or My Domain
+            ``base_url`` sets :attr:`instance_url`; otherwise a default instance is used.
         api_version: API version used in record URLs and cursors.
         cursor_key: Sign cursors like the real client's ``cursor_key``.
         observers: Event observers.
