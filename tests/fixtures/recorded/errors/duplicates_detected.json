@@ -1,0 +1,34 @@
+{
+  "synthetic": true,
+  "source": "hand-written from Salesforce REST API Developer Guide examples",
+  "body": [
+    {
+      "message": "Use one of these records?",
+      "errorCode": "DUPLICATES_DETECTED",
+      "fields": [],
+      "duplicateResult": {
+        "allowSave": false,
+        "duplicateRule": "Standard_Lead_Duplicate_Rule",
+        "duplicateRuleEntityType": "Lead",
+        "errorMessage": "Use one of these records?",
+        "matchResults": [
+          {
+            "entityType": "Lead",
+            "matchRecords": [
+              {
+                "record": {
+                  "attributes": {
+                    "type": "Lead"
+                  },
+                  "Id": "00Qxx0000000002AAA"
+                }
+              }
+            ],
+            "size": 1,
+            "success": true
+          }
+        ]
+      }
+    }
+  ]
+}

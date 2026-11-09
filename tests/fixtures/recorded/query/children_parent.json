@@ -1,0 +1,33 @@
+{
+  "synthetic": true,
+  "source": "hand-written from Salesforce REST API Developer Guide examples (truncated child subquery)",
+  "body": {
+    "totalSize": 1,
+    "done": true,
+    "records": [
+      {
+        "attributes": {
+          "type": "Account"
+        },
+        "Id": "001xx0000000001AAA",
+        "Contacts": {
+          "totalSize": 3,
+          "done": false,
+          "nextRecordsUrl": "/services/data/v68.0/query/01gxx0000000009AAA-1",
+          "records": [
+            {
+              "Id": "003xx0000000001AAA"
+            }
+          ]
+        },
+        "Owner": {
+          "attributes": {
+            "type": "User"
+          },
+          "Name": "O"
+        },
+        "Cases": null
+      }
+    ]
+  }
+}

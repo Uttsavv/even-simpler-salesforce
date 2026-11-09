@@ -1,0 +1,11 @@
+{
+  "synthetic": true,
+  "source": "OpenID Connect UserInfo endpoint docs",
+  "body": {
+    "sub": "https://login.salesforce.com/id/00Dxx0000000001EAA/005xx0000000001AAA",
+    "user_id": "005xx0000000001AAA",
+    "organization_id": "00Dxx0000000001EAA",
+    "preferred_username": "user@example.com",
+    "email": "user@example.com"
+  }
+}
