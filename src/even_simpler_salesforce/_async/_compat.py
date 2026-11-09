@@ -7,7 +7,7 @@ import contextlib
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Any, TypeVar
 
-__all__ = ["Lock", "Periodic", "Semaphore", "gather_limited", "nullcontext", "sleep"]
+__all__ = ["Lock", "Periodic", "Semaphore", "gather_limited", "gather_settled", "nullcontext", "sleep"]
 
 T = TypeVar("T")
 
@@ -31,6 +31,30 @@ async def gather_limited(n: int, funcs: Sequence[Callable[[], Awaitable[T]]]) ->
             return await f()
 
     return list(await asyncio.gather(*(run(f) for f in funcs)))
+
+
+async def gather_settled(n: int, funcs: Sequence[Callable[[], Awaitable[T]]]) -> list[T | Exception]:
+    """Like :func:`gather_limited`, but always waits for every call and returns exceptions in
+    place of results. Nothing is left running in the background when this returns."""
+    if n <= 1 or len(funcs) <= 1:
+        out: list[T | Exception] = []
+        for f in funcs:
+            try:
+                out.append(await f())
+            except Exception as exc:
+                out.append(exc)
+        return out
+    sem = asyncio.Semaphore(n)
+
+    async def run(f: Callable[[], Awaitable[T]]) -> T:
+        async with sem:
+            return await f()
+
+    settled = await asyncio.gather(*(run(f) for f in funcs), return_exceptions=True)
+    for item in settled:
+        if isinstance(item, BaseException) and not isinstance(item, Exception):
+            raise item  # cancellation etc. must propagate
+    return [item for item in settled if not isinstance(item, BaseException) or isinstance(item, Exception)]  # pyright: ignore[reportReturnType]
 
 
 class Periodic:

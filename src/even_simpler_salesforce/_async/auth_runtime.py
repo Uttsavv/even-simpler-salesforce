@@ -76,15 +76,27 @@ class AsyncAuthRuntime:
             tok = await self.refresh(tok, proactive=True)
         return tok
 
-    async def refresh(self, stale: Token, *, proactive: bool = False) -> Token:
-        """Refresh after ``stale`` was rejected (or is due). Concurrent callers share one refresh."""
+    def generation(self) -> int:
+        """Refresh generation for this key; capture it before sending a request and pass it to
+        :meth:`refresh` so a refresh that failed while the request was in flight is shared."""
+        return self._generation()
+
+    async def refresh(self, stale: Token, *, proactive: bool = False, entered: int | None = None) -> Token:
+        """Refresh after ``stale`` was rejected (or is due). Concurrent callers share one refresh.
+
+        Args:
+            stale: The token that was rejected.
+            proactive: The refresh is ahead of expiry (for events).
+            entered: :meth:`generation` captured before the rejected request was sent.
+        """
         if not self.can_refresh:
             raise SessionExpired(
                 "access token expired or invalid and StaticToken can't be refreshed",
                 error_code="INVALID_SESSION_ID",
                 status=401,
             )
-        entered = self._generation()
+        if entered is None:
+            entered = self._generation()
         async with self.transport.lock_for(self.key):
             cur = self.transport.tokens.get(self.key)
             if cur is not None and cur.access_token != stale.access_token and not self._due(cur):

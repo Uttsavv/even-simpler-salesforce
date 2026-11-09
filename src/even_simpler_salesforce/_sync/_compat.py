@@ -10,7 +10,7 @@ from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, TypeVar
 
-__all__ = ["Lock", "Periodic", "Semaphore", "gather_limited", "nullcontext", "sleep"]
+__all__ = ["Lock", "Periodic", "Semaphore", "gather_limited", "gather_settled", "nullcontext", "sleep"]
 
 T = TypeVar("T")
 
@@ -34,6 +34,31 @@ def gather_limited(n: int, funcs: Sequence[Callable[[], T]]) -> list[T]:
     with ThreadPoolExecutor(max_workers=min(n, len(funcs))) as pool:
         futures = [pool.submit(contextvars.copy_context().run, f) for f in funcs]
         return [fut.result() for fut in futures]
+
+
+def gather_settled(n: int, funcs: Sequence[Callable[[], T]]) -> list[T | Exception]:
+    """Like :func:`gather_limited`, but always waits for every call and returns exceptions in
+    place of results."""
+    if n <= 1 or len(funcs) <= 1:
+        out: list[T | Exception] = []
+        for f in funcs:
+            try:
+                out.append(f())
+            except Exception as exc:
+                out.append(exc)
+        return out
+    with ThreadPoolExecutor(max_workers=min(n, len(funcs))) as pool:
+        futures = [pool.submit(contextvars.copy_context().run, f) for f in funcs]
+        results: list[T | Exception] = []
+        for fut in futures:
+            exc = fut.exception()
+            if exc is None:
+                results.append(fut.result())
+            elif isinstance(exc, Exception):
+                results.append(exc)
+            else:  # pragma: no cover - BaseException in a worker thread
+                raise exc
+        return results
 
 
 class Periodic:

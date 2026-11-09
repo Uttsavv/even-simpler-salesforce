@@ -17,6 +17,7 @@ web-server flow (``test_refresh.py::test_invalid_grant_requires_reauthorization`
 from __future__ import annotations
 
 import threading
+import time
 from typing import Any
 
 import httpx
@@ -36,13 +37,24 @@ N = 20
 class Counter:
     """Thread-safe call counter that answers with a fixed response (or a sequence of tokens)."""
 
-    def __init__(self, response: httpx.Response | None = None, *, fresh_tokens: bool = False) -> None:
+    def __init__(
+        self,
+        response: httpx.Response | None = None,
+        *,
+        fresh_tokens: bool = False,
+        wait_for: Any = None,
+    ) -> None:
         self.lock = threading.Lock()
         self.count = 0
         self.response = response
         self.fresh_tokens = fresh_tokens
+        self.wait_for = wait_for  # (sync only) block until this returns True, max 5 s
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
+        if self.wait_for is not None:
+            deadline = time.monotonic() + 5
+            while not self.wait_for() and time.monotonic() < deadline:
+                time.sleep(0.001)
         with self.lock:
             self.count += 1
             n = self.count
@@ -201,7 +213,10 @@ def test_concurrent_callers_share_one_failed_refresh(
 ) -> None:
     auth, tok = flow()
     api = Counter(EXPIRED)
-    endpoint = Counter(failure)
+    # Threads: hold the token response until every caller has seen its 401, so all of them are
+    # genuinely waiting on the in-flight refresh (a caller arriving after the failure was recorded
+    # is a "later call" and may legitimately try again).
+    endpoint = Counter(failure, wait_for=None if h.is_async else (lambda: api.count >= N))
     mock.get(URL).mock(side_effect=api)
     mock.post(TOKEN_URL).mock(side_effect=endpoint)
     sf = h.client(auth, token=tok)

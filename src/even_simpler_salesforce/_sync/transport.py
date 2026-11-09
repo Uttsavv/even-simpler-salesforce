@@ -198,6 +198,7 @@ class Transport:
                 while True:
                     attempts += 1
                     sent = True
+                    generation = runtime.generation()
                     try:
                         raw, wire_in, wire_out = self._attempt(spec, token)
                         bytes_in += wire_in
@@ -216,7 +217,7 @@ class Transport:
                             if refreshed:
                                 err.message = f"{err.message} (still rejected after one token refresh)"
                             raise err
-                        token = runtime.refresh(token)
+                        token = runtime.refresh(token, entered=generation)
                         refreshed = True
                         continue
 

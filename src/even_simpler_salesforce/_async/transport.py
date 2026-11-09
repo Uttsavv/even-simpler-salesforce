@@ -196,6 +196,7 @@ class AsyncTransport:
                 while True:
                     attempts += 1
                     sent = True
+                    generation = runtime.generation()
                     try:
                         raw, wire_in, wire_out = await self._attempt(spec, token)
                         bytes_in += wire_in
@@ -214,7 +215,7 @@ class AsyncTransport:
                             if refreshed:
                                 err.message = f"{err.message} (still rejected after one token refresh)"
                             raise err
-                        token = await runtime.refresh(token)
+                        token = await runtime.refresh(token, entered=generation)
                         refreshed = True
                         continue
 
