@@ -239,28 +239,37 @@ def test_concurrent_initial_acquisition_shares_one_failure(
     h: Harness, mock: respx.MockRouter, failure: httpx.Response
 ) -> None:
     api = Counter(httpx.Response(200, json={}))
-    started = Counter()
-
-    def all_waiting() -> bool:
-        # Threads: hold the token response until every caller has started (plus a moment to
-        # reach the lock), so none arrives after the failure and legitimately tries again.
-        if started.count < N:
-            return False
-        time.sleep(0.05)
-        return True
-
-    endpoint = Counter(failure, wait_for=None if h.is_async else all_waiting)
-    mock.get(URL).mock(side_effect=api)
-    mock.post(TOKEN_URL).mock(side_effect=endpoint)
+    endpoint = Counter(failure)
     sf = h.client(cc_auth(), token=False)
     slow_transport(h, sf, 0.01)
+    if h.is_async:
+        mock.post(TOKEN_URL).mock(side_effect=endpoint)
+    else:
+        # Threads: answer the token request only once every caller has captured its refresh
+        # generation, so none can arrive after the failure is recorded (a later call may
+        # legitimately try again). Fail rather than pass on timing if that never happens.
+        runtime = sf._runtime  # pyright: ignore[reportPrivateUsage]
+        real_generation = runtime._generation  # pyright: ignore[reportPrivateUsage]
+        captured: set[int] = set()
+        ready = threading.Event()
 
-    def call() -> Any:
-        with started.lock:
-            started.count += 1
-        return sf.limits()
+        def generation() -> int:
+            g = real_generation()
+            captured.add(threading.get_ident())
+            if len(captured) >= N:
+                ready.set()
+            return g
 
-    results = outcomes(h, [call if not h.is_async else sf.limits for _ in range(N)])
+        runtime._generation = generation  # pyright: ignore[reportPrivateUsage]
+
+        def token_endpoint(request: httpx.Request) -> httpx.Response:
+            assert ready.wait(5), f"only {len(captured)} of {N} callers reached generation capture"
+            return endpoint(request)
+
+        mock.post(TOKEN_URL).mock(side_effect=token_endpoint)
+    mock.get(URL).mock(side_effect=api)
+
+    results = outcomes(h, [sf.limits for _ in range(N)])
 
     assert all(isinstance(r, esf.AuthError) for r in results), results
     assert endpoint.count == 1

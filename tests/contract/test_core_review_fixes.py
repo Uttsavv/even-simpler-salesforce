@@ -178,6 +178,36 @@ def test_lru_dict_bounds_and_recency() -> None:
     assert d.get("missing", 0) == 0
 
 
+def test_lru_dict_never_evicts_pinned_keys() -> None:
+    d: LruDict[str, int] = LruDict(2)
+    d["a"] = 1
+    d.pin("a")
+    d.pin("a")  # counted
+    d["b"] = 2
+    d["c"] = 3
+    assert list(d) == ["a", "c"]  # "b" went, not the pinned (older) "a"
+    d.unpin("a")
+    d["d"] = 4
+    assert "a" in d  # still pinned once
+    d.pin("x")
+    d.pin("d")
+    d["e"] = 5  # every older key pinned: the dict grows instead of dropping them
+    assert list(d) == ["a", "d", "e"]
+    d.unpin("a")
+    d.unpin("d")
+    d.unpin("x")
+    d["f"] = 6
+    assert list(d) == ["e", "f"]
+    assert d._pins == {}  # pyright: ignore[reportPrivateUsage]
+
+
+def test_calls_unpin_refresh_outcomes(h: Harness, mock: respx.MockRouter) -> None:
+    mock.get(f"{DATA}/limits").respond(json={})
+    sf = h.client()
+    h.run(sf.limits())
+    assert sf._transport.refresh_outcomes._pins == {}  # pyright: ignore[reportPrivateUsage]
+
+
 def test_revoke_drops_refresh_outcome(h: Harness, mock: respx.MockRouter) -> None:
     mock.post(f"{'https://acme.my.salesforce.com'}/services/oauth2/revoke").respond(200)
     auth = web_auth()
