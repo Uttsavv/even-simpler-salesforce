@@ -290,3 +290,29 @@ def test_invalid_json_is_unexpected_response_and_value_error() -> None:
     assert ei.value.status == 200
     assert ei.value.raw == b"<html/>"
     assert "text/html" in ei.value.message
+
+
+# --- instance URL check -------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("https://acme.my.salesforce.com/", "https://acme.my.salesforce.com"),
+        ("http://localhost:8080", "http://localhost:8080"),
+        ("http://127.0.0.1", "http://127.0.0.1"),
+        ("http://[::1]", "http://[::1]"),
+    ],
+)
+def test_check_instance_url_accepts(url: str, expected: str) -> None:
+    from even_simpler_salesforce.core.http import check_instance_url
+
+    assert check_instance_url(url) == expected
+
+
+@pytest.mark.parametrize("url", ["http://acme.my.salesforce.com", "https://", "acme.com", "ftp://h"])
+def test_check_instance_url_rejects(url: str) -> None:
+    from even_simpler_salesforce.core.http import check_instance_url
+
+    with pytest.raises(ValueError, match="https://"):
+        check_instance_url(url)

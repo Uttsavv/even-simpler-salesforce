@@ -193,6 +193,6 @@ def test_batch_result_sequence_semantics() -> None:
     assert b.results is items
     with pytest.raises(IndexError):
         b[3]
-    assert b.ok == [items[0], items[2]]
+    assert b.succeeded == [items[0], items[2]]
     assert b.failed == [items[1]]
     assert list(iter(b)) == list(iter(b))  # re-iterable, not a one-shot generator

@@ -47,7 +47,9 @@ The return value depends on the response body:
 |---|---|
 | JSON | the decoded JSON |
 | empty, for example `204` | `None` |
-| anything else | the text |
+| text: `text/*`, XML, JavaScript, CSV, form data, `+json` or `+xml` types, or any `charset=` | the text |
+| no `Content-Type`, and the body is valid UTF-8 | the text |
+| anything else, for example file contents from `sobjects/ContentVersion/{id}/VersionData` | the raw `bytes` |
 
 Every 2xx status counts as success. The client never sends `X-PrettyPrint`.
 

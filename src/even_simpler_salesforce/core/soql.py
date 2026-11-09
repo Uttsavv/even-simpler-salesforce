@@ -20,6 +20,7 @@ __all__ = [
     "soql_identifier",
     "soql_like",
     "soql_values",
+    "sosl_term",
 ]
 
 _IDENT_SEGMENT = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(__[a-z]+)?$")
@@ -177,6 +178,32 @@ def soql_like(value: str, pattern: str = "{}") -> SoqlLiteral:
     escaped = _escape(value).replace("%", "\\%").replace("_", "\\_")
     before, after = pattern.split("{}")
     return SoqlLiteral(f"'{_escape(before)}{escaped}{_escape(after)}'")
+
+
+# Reserved characters in a SOSL FIND clause, escaped with a backslash. Source:
+# https://developer.salesforce.com/docs/atlas.en-us.soql_sosl.meta/soql_sosl/sforce_api_calls_sosl_find.htm
+_SOSL_RESERVED = frozenset("?&|!{}[]()^~*:\\\"'+-")
+
+
+def sosl_term(value: str) -> str:
+    """Quote user input as a SOSL ``FIND`` search term, braces included.
+
+    Example:
+        sf.search(f"FIND {esf.sosl_term(text)} IN NAME FIELDS RETURNING Account(Id, Name)")
+
+    Every SOSL reserved character (``? & | ! { } [ ] ( ) ^ ~ * : \\ " ' + -``) is escaped with
+    a backslash, so input can't close the braces or add wildcards. Words such as ``AND``, ``OR``
+    and ``AND NOT`` keep their meaning as SOSL operators.
+
+    Raises:
+        ValueError: ``value`` is empty or only whitespace (Salesforce rejects an empty search).
+    """
+    if not isinstance(value, str):  # pyright: ignore[reportUnnecessaryIsInstance]
+        raise TypeError("sosl_term() takes a str")
+    if not value.strip():
+        raise ValueError("SOSL search term must not be empty")
+    escaped = "".join("\\" + c if c in _SOSL_RESERVED else c for c in value)
+    return "{" + escaped + "}"
 
 
 def soql_identifier(name: str) -> SoqlIdentifier:

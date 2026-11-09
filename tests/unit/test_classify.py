@@ -262,27 +262,47 @@ def test_json_without_error_entries_falls_back() -> None:
 # --- OAuth bodies ------------------------------------------------------------------------------
 
 
+OAUTH = RequestSpec("GET", "/services/oauth2/userinfo", operation="oauth.userinfo")
+
+
 def test_oauth_bodies() -> None:
     e1 = classify(
-        resp(400, {"error": "invalid_grant", "error_description": "expired access/refresh token"}), SPEC
+        resp(400, {"error": "invalid_grant", "error_description": "expired access/refresh token"}), OAUTH
     )
     assert isinstance(e1, esf.ReauthorizationRequired)
     assert e1.error_code == "invalid_grant"
     assert e1.message == "expired access/refresh token"
-    e2 = classify(resp(401, {"error": "invalid_token", "error_description": "bad"}), SPEC)
+    e2 = classify(resp(401, {"error": "invalid_token", "error_description": "bad"}), OAUTH)
     assert isinstance(e2, esf.SessionExpired)
-    e3 = classify(resp(400, {"error": "invalid_token"}), SPEC)
+    e3 = classify(resp(400, {"error": "invalid_token"}), OAUTH)
     assert isinstance(e3, esf.SessionExpired)
     assert e3.message == "invalid_token"
     e4 = classify(
-        resp(400, {"error": "invalid_client_id", "error_description": "client identifier invalid"}), SPEC
+        resp(400, {"error": "invalid_client_id", "error_description": "client identifier invalid"}), OAUTH
     )
     assert isinstance(e4, esf.OAuthError)
     assert e4.error == "invalid_client_id"
     assert e4.error_description == "client identifier invalid"
     assert e4.error_code == "invalid_client_id"
-    e5 = classify(resp(401, {"error": "whatever"}), SPEC)
+    e5 = classify(resp(401, {"error": "whatever"}), OAUTH)
     assert isinstance(e5, esf.SessionExpired)
+
+
+def test_error_key_outside_oauth_is_not_oauth() -> None:
+    # An Apex REST class may return {"error": "..."}; that is not an OAuth failure.
+    apex = RequestSpec("GET", "/services/apexrest/Orders/42", operation="raw")
+    e404 = classify(resp(404, {"error": "order not found"}), apex)
+    assert type(e404) is esf.NotFound
+    assert e404.raw is not None
+    e401 = classify(resp(401, {"error": "custom"}), SPEC)
+    assert not isinstance(e401, esf.OAuthError)
+
+
+def test_apex_error_keeps_body() -> None:
+    body = [{"errorCode": "APEX_ERROR", "message": "System.NullPointerException"}]
+    exc = classify(resp(500, body), RequestSpec("POST", "/services/apexrest/Score", operation="raw"))
+    assert isinstance(exc, esf.ApexError)
+    assert exc.body == body
 
 
 def test_invalid_session_rest_body() -> None:

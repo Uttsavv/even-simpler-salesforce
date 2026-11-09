@@ -240,10 +240,34 @@ def test_concurrent_initial_acquisition_shares_one_failure(
 ) -> None:
     api = Counter(httpx.Response(200, json={}))
     endpoint = Counter(failure)
-    mock.get(URL).mock(side_effect=api)
-    mock.post(TOKEN_URL).mock(side_effect=endpoint)
     sf = h.client(cc_auth(), token=False)
     slow_transport(h, sf, 0.01)
+    if h.is_async:
+        mock.post(TOKEN_URL).mock(side_effect=endpoint)
+    else:
+        # Threads: answer the token request only once every caller has captured its refresh
+        # generation, so none can arrive after the failure is recorded (a later call may
+        # legitimately try again). Fail rather than pass on timing if that never happens.
+        runtime = sf._runtime  # pyright: ignore[reportPrivateUsage]
+        real_generation = runtime._generation  # pyright: ignore[reportPrivateUsage]
+        captured: set[int] = set()
+        ready = threading.Event()
+
+        def generation() -> int:
+            g = real_generation()
+            captured.add(threading.get_ident())
+            if len(captured) >= N:
+                ready.set()
+            return g
+
+        runtime._generation = generation  # pyright: ignore[reportPrivateUsage]
+
+        def token_endpoint(request: httpx.Request) -> httpx.Response:
+            assert ready.wait(5), f"only {len(captured)} of {N} callers reached generation capture"
+            return endpoint(request)
+
+        mock.post(TOKEN_URL).mock(side_effect=token_endpoint)
+    mock.get(URL).mock(side_effect=api)
 
     results = outcomes(h, [sf.limits for _ in range(N)])
 

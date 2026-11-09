@@ -1,0 +1,1 @@
+`StaticToken(instance_url=...)` and the client's `instance_url=` override require `https://` (plain `http://` only for `localhost`, `127.0.0.1` and `::1`), so a bearer token is never sent unencrypted. In-memory tokens are capped at 10,000 per client family (least recently used dropped and reloaded from the store), and `sf.auth.revoke()` also drops the key's refresh state.

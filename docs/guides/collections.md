@@ -13,7 +13,7 @@ sf = esf.AsyncSalesforce(auth)
 
 rows = [{"LastName": f"Imported {i}", "Company": "Acme"} for i in range(450)]
 created = await sf.collections.create(rows, sobject="Lead")  # 3 requests: 200 + 200 + 50
-print(len(created), len(created.ok), len(created.failed))
+print(len(created), len(created.succeeded), len(created.failed))
 ```
 
 You pass any number of rows. The client splits them into chunks and runs the chunks
@@ -33,7 +33,7 @@ Each row needs an `Id`. If a row has no `Id`, the client raises `ValueError` bef
 anything.
 
 ```python
-ids = [r.id for r in created.ok]
+ids = [r.id for r in created.succeeded]
 await sf.collections.update("Lead", [{"Id": i, "Status": "Working"} for i in ids])
 ```
 
@@ -60,7 +60,9 @@ await sf.collections.delete(ids)
 ## Check the results {#results-batchresult-and-recordresult}
 
 If Salesforce rejects some rows, the call still returns normally. Check each `RecordResult` in
-the `BatchResult`. It has `ok`, `id` and `errors`.
+the `BatchResult`. It has `ok`, `id` and `errors`. `BatchResult.succeeded` and
+`BatchResult.failed` list the results of each kind. `BatchResult.ok` is deprecated: use
+`succeeded`.
 
 ```python
 rows = [
@@ -121,7 +123,7 @@ except esf.PartialFailure as exc:
         if not res.ok and res.errors[0].extended.get("outcome") == "unknown"
     ]
     print(f"{len(unknown)} rows may or may not exist; check before re-sending them")
-print(len(result.ok))
+print(len(result.succeeded))
 ```
 
 `extended["chunk_error"]` holds the name of the exception class. `PartialFailure.__cause__` is
@@ -183,7 +185,7 @@ call. To change it for the client, set `sf.collections.concurrency = 8`.
 
 ```python
 result = await sf.collections.update(
-    "Lead", [{"Id": r.id, "Rating": "Warm"} for r in created.ok], concurrency=2
+    "Lead", [{"Id": r.id, "Rating": "Warm"} for r in created.succeeded], concurrency=2
 )
 print(len(result))
 await sf.aclose()
@@ -215,7 +217,7 @@ a thread pool of the same size. `capture()` and `call_context()` still apply ins
 
 | `BatchResult` member | Meaning |
 |---|---|
-| `.ok` | list of the results that succeeded |
+| `.succeeded` | list of the results that succeeded (`.ok` is a deprecated alias) |
 | `.failed` | list of the results that failed |
 | `.results` | every result, in input order |
 | `.operation`, `.sobject` | what the call did, and on which sObject |

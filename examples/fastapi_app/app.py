@@ -209,7 +209,7 @@ def create_app(
         """Set ``Status`` on many leads in as few round trips as possible (chunks of 200)."""
         results = await sf.collections.update("Lead", [{"Id": i, "Status": body.status} for i in body.ids])
         return {
-            "updated": [r.id for r in results.ok],
+            "updated": [r.id for r in results.succeeded],
             "failed": [
                 {
                     "id": lead_id,

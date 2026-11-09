@@ -14,6 +14,7 @@ from . import jsonlib
 
 __all__ = [
     "GZIP_THRESHOLD",
+    "LOOPBACK_MOUNTS",
     "InvalidJSONResponse",
     "RawResponse",
     "RequestSpec",
@@ -207,6 +208,31 @@ def check_record_id(record_id: str) -> str:
     if not isinstance(record_id, str) or not _ID_RE.fullmatch(record_id):  # pyright: ignore[reportUnnecessaryIsInstance]
         raise ValueError(f"invalid Salesforce id: {record_id!r}")
     return record_id
+
+
+_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+# httpx mount patterns for the same hosts (any port).
+LOOPBACK_MOUNTS = ("localhost", "127.0.0.1", "[::1]")
+
+
+def check_instance_url(url: str, *, what: str = "instance_url") -> str:
+    """Validate an instance URL that bearer tokens will be sent to; returns it without a trailing ``/``.
+
+    ``https://`` is required. Plain ``http://`` is allowed only for loopback hosts (local
+    proxies and test servers), so an access token never crosses the network unencrypted.
+
+    Raises:
+        ValueError: not an absolute ``https://`` URL (or ``http://`` to a loopback host).
+    """
+    from urllib.parse import urlsplit
+
+    parts = urlsplit(url)
+    host = (parts.hostname or "").lower()
+    if parts.scheme == "https" and host:
+        return url.rstrip("/")
+    if parts.scheme == "http" and host in _LOOPBACK_HOSTS:
+        return url.rstrip("/")
+    raise ValueError(f"{what} must be an https:// URL (http:// only for localhost), got {url!r}")
 
 
 def build_url(instance_url: str, api_version: str, path: str) -> str:

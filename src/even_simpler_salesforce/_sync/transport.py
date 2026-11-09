@@ -8,12 +8,14 @@ auth → budget guard → concurrency gate → compress → send → parse limit
 
 from __future__ import annotations
 
+import contextlib
 import random
 import threading
 import time
-from collections.abc import Callable, Mapping
+from collections import OrderedDict
+from collections.abc import Iterator, Callable, Mapping
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 import httpx
 
@@ -24,9 +26,11 @@ from ..core import jsonlib
 from ..core.classify import classify
 from ..core.http import (
     GZIP_THRESHOLD,
+    LOOPBACK_MOUNTS,
     RawResponse,
     RequestSpec,
     build_url,
+    check_instance_url,
     gzip_body,
     merge_call_options,
     path_template,
@@ -55,6 +59,73 @@ __all__ = ["DEFAULT_USER_AGENT", "Transport"]
 DEFAULT_USER_AGENT = f"even-simpler-salesforce/{__version__}"
 _NEVER_SENT = (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout, httpx.UnsupportedProtocol)
 _REDACT_HEADERS = frozenset({"authorization", "cookie", "set-cookie"})
+#: In-memory tokens kept per client family; the least recently used beyond this are dropped.
+MAX_TOKENS_IN_MEMORY = 10_000
+
+_K = TypeVar("_K")
+_V = TypeVar("_V")
+
+
+class LruDict(OrderedDict[_K, _V]):
+    """A dict that keeps at most ``maxsize`` entries, dropping the least recently used.
+
+    Keys held with :meth:`pin` are never dropped. The dict may exceed ``maxsize`` while every
+    candidate is pinned, and shrinks back when the pins are released. Pinning, lookups,
+    inserts and eviction share one lock, so a key can't be evicted between being chosen and
+    being pinned.
+    """
+
+    def __init__(self, maxsize: int) -> None:
+        super().__init__()
+        self.maxsize = maxsize
+        self._pins: dict[_K, int] = {}
+        self._guard = threading.RLock()
+
+    def pin(self, key: _K) -> None:
+        """Keep ``key`` (now, or once it is set) from being evicted until :meth:`unpin`. Counted."""
+        with self._guard:
+            self._pins[key] = self._pins.get(key, 0) + 1
+
+    def unpin(self, key: _K) -> None:
+        """Release one :meth:`pin` of ``key``; trims the dict back to ``maxsize`` when possible."""
+        with self._guard:
+            n = self._pins.get(key, 0) - 1
+            if n > 0:
+                self._pins[key] = n
+                return
+            self._pins.pop(key, None)
+            self._trim(None)
+
+    def get(self, key: _K, default: Any = None) -> Any:  # pyright: ignore[reportIncompatibleMethodOverride]
+        with self._guard:
+            if key not in self:
+                return default
+            self.move_to_end(key)
+            return self[key]
+
+    def __setitem__(self, key: _K, value: _V) -> None:
+        with self._guard:
+            super().__setitem__(key, value)
+            self.move_to_end(key)
+            self._trim(key)
+
+    def pop(self, key: _K, *default: Any) -> Any:  # pyright: ignore[reportIncompatibleMethodOverride]
+        with self._guard:
+            return super().pop(key, *default)
+
+    def _trim(self, keep: _K | None) -> None:
+        # Caller holds the guard. Oldest first; never the pinned keys or ``keep`` (just set).
+        excess = len(self) - self.maxsize
+        if excess <= 0:
+            return
+        victims: list[_K] = []
+        for k in self:
+            if k != keep and not self._pins.get(k):
+                victims.append(k)
+                if len(victims) >= excess:
+                    break
+        for k in victims:
+            self.pop(k, None)
 
 
 class _AttemptFailed(Exception):
@@ -105,6 +176,9 @@ class Transport:
                 limits=httpx.Limits(max_connections=50, max_keepalive_connections=20, keepalive_expiry=30.0),
                 http2=http2,
                 headers={"Accept-Encoding": "gzip, deflate"},
+                # Plain-http loopback (local proxies, test servers) always connects directly, so
+                # an HTTP_PROXY from the environment never sees a bearer token in cleartext.
+                mounts={f"http://{h}": httpx.HTTPTransport(http2=http2) for h in LOOPBACK_MOUNTS},
             )
             self.owns_http = True
         else:
@@ -122,14 +196,19 @@ class Transport:
         self.dumps: Callable[[Any], bytes] = getattr(json, "dumps", None) or jsonlib.dumps
         self.loads: Callable[[bytes | str], Any] = getattr(json, "loads", None) or jsonlib.loads
         self.log_soql = log_soql
-        self.instance_url = instance_url.rstrip("/") if instance_url else None
+        self.instance_url = check_instance_url(instance_url) if instance_url else None
         self.debug = debug
         self.call_options = f"client={client_name}" if client_name else None
-        self.tokens: dict[str, Token] = {}
+        # Bounded so per-user clients (with_auth per request) don't keep every token in memory;
+        # an evicted token is reloaded from the store on its next use.
+        self.tokens: LruDict[str, Token] = LruDict(MAX_TOKENS_IN_MEMORY)
         # Per token key: (refresh generation, error of the latest refresh or None on success).
-        self.refresh_outcomes: dict[str, tuple[int, SalesforceError | None]] = {}
-        self._locks: dict[str, Any] = {}
+        self.refresh_outcomes: LruDict[str, tuple[int, SalesforceError | None]] = LruDict(
+            MAX_TOKENS_IN_MEMORY
+        )
         self._locks_guard = threading.Lock()
+        # key -> [lock, holders + waiters]; dropped when the count reaches 0.
+        self._flights: dict[str, list[Any]] = {}
         self._deferred: list[tuple[str, dict[str, Any]]] = []
         self.sleep: Callable[[float], Any] = _compat.sleep
         self.now: Callable[[], datetime] = _utcnow
@@ -140,12 +219,26 @@ class Transport:
 
     # --- helpers ---------------------------------------------------------------------
 
-    def lock_for(self, key: str) -> Any:
+    @contextlib.contextmanager
+    def single_flight(self, key: str) -> Iterator[None]:
+        """Serialise work for ``key``; the lock is retired once no caller holds or awaits it.
+
+        Used per token key (refresh, acquisition) and per describe key; both can have
+        unbounded cardinality, so idle locks must not pile up.
+        """
         with self._locks_guard:
-            lock = self._locks.get(key)
-            if lock is None:
-                lock = self._locks[key] = _compat.Lock()
-            return lock
+            entry = self._flights.get(key)
+            if entry is None:
+                entry = self._flights[key] = [_compat.Lock(), 0]
+            entry[1] += 1
+        try:
+            with entry[0]:
+                yield
+        finally:
+            with self._locks_guard:
+                entry[1] -= 1
+                if entry[1] == 0 and self._flights.get(key) is entry:
+                    del self._flights[key]
 
     def emit(self, name: str, fields: Mapping[str, Any]) -> None:
         event = self.hub.emit(name, fields)
@@ -218,6 +311,9 @@ class Transport:
         failure: BaseException | None = None
         bytes_out = len(spec.content) if spec.content else 0
         bytes_in = 0
+        # A refresh failure this call may have to share must stay until the call ends.
+        pinned_key = runtime.key  # sf.auth may rebind runtime.key while this call runs
+        self.refresh_outcomes.pin(pinned_key)
         try:
             self.usage.check(priority, operation=spec.operation)
             with self.gate if self.gate is not None else _compat.nullcontext():
@@ -279,6 +375,7 @@ class Transport:
             failure = exc
             raise
         finally:
+            self.refresh_outcomes.unpin(pinned_key)
             self._finish(
                 spec,
                 runtime,
@@ -335,7 +432,8 @@ class Transport:
                 ),
                 sent=True,
             ) from exc
-        except httpx.TransportError as exc:
+        except (httpx.TransportError, httpx.RequestError) as exc:
+            # RequestError also covers DecodingError (bad gzip body) and TooManyRedirects.
             raise _AttemptFailed(
                 TransportError(f"transport error: {exc!r}", operation=spec.operation, method=spec.method),
                 sent=True,

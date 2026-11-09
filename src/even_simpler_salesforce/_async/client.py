@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import re
 import time
@@ -43,13 +44,38 @@ MIN_LIMITS_POLL_INTERVAL = 300.0
 
 M = TypeVar("M")
 _FROM = re.compile(r"\bFROM\s+([A-Za-z][A-Za-z0-9_]*)", re.IGNORECASE)
+_STRING_LIT = re.compile(r"'(?:\\.|[^'\\])*'")
+_PARENS = re.compile(r"\([^()]*\)")
+_CHARSET = re.compile(r"charset=\"?([A-Za-z0-9_.:-]+)", re.IGNORECASE)
 _CLIENT_NAME = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")
 _VERSION = re.compile(r"^\d{2,3}\.\d$")
 
 
 def _sobject_of(soql: str) -> str | None:
-    m = _FROM.search(soql)
+    """The top-level ``FROM`` object; subqueries in parentheses and string literals are skipped."""
+    text = _STRING_LIT.sub("''", soql)
+    while True:
+        stripped = _PARENS.sub(" ", text)
+        if stripped == text:
+            break
+        text = stripped
+    m = _FROM.search(text)
     return m.group(1) if m else None
+
+
+_TEXT_SUBTYPES = frozenset({"json", "xml", "javascript", "ecmascript", "x-www-form-urlencoded", "csv"})
+
+
+def _is_text(content_type: str) -> bool:
+    """Whether a body should be decoded: ``text/*``, JSON/XML (incl. ``+json``/``+xml``), or a charset."""
+    media, _, params = content_type.lower().partition(";")
+    if any(p.strip().startswith("charset=") for p in params.split(";")):
+        return True
+    kind, _, subtype = media.strip().partition("/")
+    if kind == "text":
+        return True
+    suffix = subtype.rpartition("+")[2]
+    return subtype in _TEXT_SUBTYPES or suffix in ("json", "xml")
 
 
 def _check_version(v: str) -> str:
@@ -277,11 +303,20 @@ class AsyncSalesforce:
         return await self._describe("sobjects", "global", cached, None)
 
     async def _describe(self, path: str, what: str, cached: bool, sobject: str | None) -> dict[str, Any]:
+        # Callers get their own copy: the cached dict is shared by the whole family.
         t = self._transport
-        cfg = t.describe_cache
         tok = await self._runtime.token()
         user = hashlib.sha256((tok.user_id or self._runtime.key).encode()).hexdigest()[:12]
         key = f"esf:describe:{tok.org_id or tok.instance_url}:{t.api_version}:{what}:{user}"
+        if not cached:
+            return copy.deepcopy(await self._describe_fetch(path, key, False, sobject))
+        # Single flight: concurrent misses for one key wait for the first fetch, then hit the cache.
+        async with t.single_flight(key):
+            return copy.deepcopy(await self._describe_fetch(path, key, True, sobject))
+
+    async def _describe_fetch(self, path: str, key: str, cached: bool, sobject: str | None) -> Any:
+        t = self._transport
+        cfg = t.describe_cache
         cached_value: Any = t.cache.get(key) if cached else None
         entry: dict[str, Any] | None = (
             cast("dict[str, Any]", cached_value) if isinstance(cached_value, dict) else None
@@ -496,11 +531,9 @@ class AsyncSalesforce:
                 if expand_children:
                     await self._expand_children(rec, page_size)
                 yield apply_model([rec], model)[0] if model is not None else rec
-            nxt: Any = body.get("nextRecordsUrl")
-            if page.done or not nxt:
+            if page.cursor is None:  # _page validated nextRecordsUrl when it built the cursor
                 return
-            decode_cursor(encode_cursor(nxt))  # validate the shape before following it
-            body = await self._locator_body(nxt, page_size, soql)
+            body = await self._locator_body(str(body["nextRecordsUrl"]), page_size, soql)
 
     async def _expand_children(self, record: dict[str, Any], page_size: int | None) -> None:
         for value in record.values():
@@ -529,7 +562,11 @@ class AsyncSalesforce:
         return total
 
     async def search(self, sosl: str) -> list[dict[str, Any]]:
-        """``GET search?q=``. Returns the matching records."""
+        """``GET search?q=``. Returns the matching records.
+
+        Wrap user input in :func:`esf.sosl_term` (``f"FIND {esf.sosl_term(text)} ..."``); SOQL
+        quoting does not apply to SOSL search terms.
+        """
         raw = await self._send(
             RequestSpec("GET", "search", params={"q": sosl}, idempotent=True, operation="search", soql=sosl)
         )
@@ -591,7 +628,9 @@ class AsyncSalesforce:
         """Call any REST resource through the full pipeline (auth, refresh, retries, errors, logs).
 
         ``path`` is relative to ``/services/data/vXX.X/`` or absolute under ``/services/``.
-        Returns decoded JSON (``None`` for empty bodies, ``str`` for non-JSON bodies).
+        Returns decoded JSON, ``None`` for an empty body, ``str`` for a text body (``text/*``,
+        XML, or any ``charset=``) and ``bytes`` for anything else, such as
+        ``ContentVersion/{id}/VersionData`` file contents.
         """
         ctype: str | None = None
         if json is not None and content is not None:
@@ -623,7 +662,19 @@ class AsyncSalesforce:
             return None
         if raw.is_json:
             return raw.json()
-        return raw.content.decode(errors="replace")
+        ctype = raw.headers.get("content-type", "").strip()  # with parameters (charset)
+        if ctype:
+            if not _is_text(ctype):
+                return raw.content
+            m = _CHARSET.search(ctype)
+            try:
+                return raw.content.decode(m.group(1) if m else "utf-8", errors="replace")
+            except LookupError:  # unknown charset name
+                return raw.content.decode(errors="replace")
+        try:
+            return raw.content.decode()
+        except UnicodeDecodeError:
+            return raw.content  # no content type and not UTF-8: binary
 
     async def limits(self) -> dict[str, Limit]:
         """``GET limits``: every org limit. Costs one API call; never called implicitly."""

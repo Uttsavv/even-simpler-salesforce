@@ -59,7 +59,6 @@ def test_empty_bodies_are_none(h: Harness, mock: respx.MockRouter, resp: httpx.R
         ("text/csv", '"Id","Name"\n"001","Acme"\n'),
         ("text/html; charset=UTF-8", "<html><body>maintenance</body></html>"),
         ("application/xml", "<?xml version='1.0'?><r/>"),
-        ("application/octet-stream", "binary-ish"),
         (None, '{"looks": "like json but unlabelled"}'),
     ],
 )
@@ -72,6 +71,38 @@ def test_non_json_bodies_are_str(
     out = h.run(sf.request("GET", "x"))
     assert out == body
     assert isinstance(out, str)
+
+
+@pytest.mark.parametrize(
+    ("content_type", "body"),
+    [
+        ("application/octet-stream", b"\x00\xff\x10binary"),
+        ("application/pdf", b"%PDF-1.7\n\xe2\xe3\xcf\xd3"),
+        ("image/png", b"\x89PNG\r\n\x1a\n"),
+        (None, b"\xff\xd8\xff\xe0 not utf-8"),
+    ],
+)
+def test_binary_bodies_are_bytes(
+    h: Harness, mock: respx.MockRouter, content_type: str | None, body: bytes
+) -> None:
+    # e.g. GET sobjects/ContentVersion/{id}/VersionData returns the file contents
+    headers = {"content-type": content_type} if content_type else {}
+    mock.get(URL).mock(return_value=httpx.Response(200, content=body, headers=headers))
+    sf = h.client()
+    assert h.run(sf.request("GET", "x")) == body
+
+
+def test_declared_charset_is_used(h: Harness, mock: respx.MockRouter) -> None:
+    body = "café"
+    mock.get(URL).respond(
+        200, content=body.encode("latin-1"), headers={"content-type": "text/plain; charset=ISO-8859-1"}
+    )
+    mock.get(f"{URL}2").respond(
+        200, content=b"ok", headers={"content-type": "text/plain; charset=no-such-codec"}
+    )
+    sf = h.client()
+    assert h.run(sf.request("GET", "x")) == body
+    assert h.run(sf.request("GET", "x2")) == "ok"
 
 
 def test_invalid_utf8_non_json_body_does_not_raise(h: Harness, mock: respx.MockRouter) -> None:

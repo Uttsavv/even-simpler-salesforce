@@ -158,7 +158,7 @@ def test_batch_result() -> None:
     assert len(b) == 3
     assert list(b) == [ok, bad, bad2]
     assert b[1] is bad
-    assert b.ok == [ok]
+    assert b.succeeded == [ok]
     assert b.failed == [bad, bad2]
     with pytest.raises(esf.PartialFailure) as ei:
         b.raise_for_errors()
@@ -175,7 +175,7 @@ def test_batch_result() -> None:
     assert ei2.value.error_code is None
     assert ei2.value.message == "1 of 1 records failed"
     plain: esf.BatchResult[Any] = esf.BatchResult([{"x": 1}])
-    assert plain.ok == [{"x": 1}]
+    assert plain.succeeded == [{"x": 1}]
     assert plain.failed == []
 
 

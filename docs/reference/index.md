@@ -60,6 +60,8 @@ The reasons behind the design are written down in the
 
 ::: even_simpler_salesforce.soql_identifier
 
+::: even_simpler_salesforce.sosl_term
+
 ::: even_simpler_salesforce.Cursor
 
 ::: even_simpler_salesforce.flatten

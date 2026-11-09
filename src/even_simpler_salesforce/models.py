@@ -78,9 +78,27 @@ class BatchResult(Generic[T]):
         return self.results[index]
 
     @property
-    def ok(self) -> list[T]:
-        """Results that succeeded."""
+    def succeeded(self) -> list[T]:
+        """Results that succeeded (check ``not batch.failed`` for "every record succeeded")."""
         return [r for r in self.results if getattr(r, "ok", True)]
+
+    @property
+    def ok(self) -> list[T]:
+        """Deprecated alias of :attr:`succeeded`; removed in 0.2.
+
+        It reads like a bool (``if batch.ok:``) but is a list, true when *any* record succeeded.
+        """
+        import warnings
+
+        from . import EsfDeprecationWarning
+
+        warnings.warn(
+            "BatchResult.ok is deprecated: use .succeeded (a list), or `not batch.failed` to "
+            "check that every record succeeded",
+            EsfDeprecationWarning,
+            stacklevel=2,
+        )
+        return self.succeeded
 
     @property
     def failed(self) -> list[T]:

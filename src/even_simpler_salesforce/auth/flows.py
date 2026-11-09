@@ -16,6 +16,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, ClassVar, Literal
 from urllib.parse import urlencode, urlparse
 
+from ..core.http import check_instance_url
 from ..errors import ReauthorizationRequired
 from .token import Token
 
@@ -393,7 +394,7 @@ class StaticToken(Auth):
     def __init__(self, access_token: str, instance_url: str) -> None:
         set_ = object.__setattr__
         set_(self, "access_token", access_token)
-        set_(self, "instance_url", instance_url.rstrip("/"))
+        set_(self, "instance_url", check_instance_url(instance_url))
         set_(self, "domain", "login")
         set_(self, "client_id", "")
         set_(self, "client_secret", None)

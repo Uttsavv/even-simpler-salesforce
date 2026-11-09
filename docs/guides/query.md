@@ -279,8 +279,11 @@ print(len(found))
 await sf.aclose()
 ```
 
-SOSL braces (`FIND {...}`) are SOSL syntax, not `esf.soql()` placeholders. Escape user input for
-SOSL yourself, or use `parameterized_search`.
+SOSL braces (`FIND {...}`) are SOSL syntax, not `esf.soql()` placeholders, and SOQL quoting
+does not protect them. Wrap user input in `esf.sosl_term(value)`. It returns the term with its
+braces and escapes every SOSL reserved character, so the input can't close the braces or add
+wildcards. Words like `AND` and `OR` still act as SOSL operators. You can also use
+`parameterized_search`.
 
 `parameterized_search` builds the request body from its arguments:
 
