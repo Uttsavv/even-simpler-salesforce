@@ -67,55 +67,61 @@ _V = TypeVar("_V")
 class LruDict(OrderedDict[_K, _V]):
     """A dict that keeps at most ``maxsize`` entries, dropping the least recently used.
 
-    Keys held with :meth:`pin` are never dropped (the dict may exceed ``maxsize`` while
-    every candidate is pinned).
+    Keys held with :meth:`pin` are never dropped. The dict may exceed ``maxsize`` while every
+    candidate is pinned, and shrinks back when the pins are released. Pinning, lookups,
+    inserts and eviction share one lock, so a key can't be evicted between being chosen and
+    being pinned.
     """
 
     def __init__(self, maxsize: int) -> None:
         super().__init__()
         self.maxsize = maxsize
         self._pins: dict[_K, int] = {}
-        self._pins_guard = threading.Lock()
+        self._guard = threading.RLock()
 
     def pin(self, key: _K) -> None:
         """Keep ``key`` (now, or once it is set) from being evicted until :meth:`unpin`. Counted."""
-        with self._pins_guard:
+        with self._guard:
             self._pins[key] = self._pins.get(key, 0) + 1
 
     def unpin(self, key: _K) -> None:
-        with self._pins_guard:
+        """Release one :meth:`pin` of ``key``; trims the dict back to ``maxsize`` when possible."""
+        with self._guard:
             n = self._pins.get(key, 0) - 1
             if n > 0:
                 self._pins[key] = n
-            else:
-                self._pins.pop(key, None)
+                return
+            self._pins.pop(key, None)
+            self._trim(None)
 
     def get(self, key: _K, default: Any = None) -> Any:  # pyright: ignore[reportIncompatibleMethodOverride]
-        try:
-            value = self[key]
-        except KeyError:
-            return default
-        try:
+        with self._guard:
+            if key not in self:
+                return default
             self.move_to_end(key)
-        except KeyError:  # removed by another thread meanwhile
-            pass
-        return value
+            return self[key]
 
     def __setitem__(self, key: _K, value: _V) -> None:
-        super().__setitem__(key, value)
-        self.move_to_end(key)
+        with self._guard:
+            super().__setitem__(key, value)
+            self.move_to_end(key)
+            self._trim(key)
+
+    def pop(self, key: _K, *default: Any) -> Any:  # pyright: ignore[reportIncompatibleMethodOverride]
+        with self._guard:
+            return super().pop(key, *default)
+
+    def _trim(self, keep: _K | None) -> None:
+        # Caller holds the guard. Oldest first; never the pinned keys or ``keep`` (just set).
         excess = len(self) - self.maxsize
         if excess <= 0:
             return
         victims: list[_K] = []
-        try:
-            for k in self:  # oldest first
-                if k != key and not self._pins.get(k):
-                    victims.append(k)
-                    if len(victims) >= excess:
-                        break
-        except RuntimeError:  # pragma: no cover - resized by another thread; evict next time
-            pass
+        for k in self:
+            if k != keep and not self._pins.get(k):
+                victims.append(k)
+                if len(victims) >= excess:
+                    break
         for k in victims:
             self.pop(k, None)
 
