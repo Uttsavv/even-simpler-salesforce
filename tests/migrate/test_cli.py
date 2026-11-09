@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -273,7 +274,8 @@ def test_write_keeps_line_endings_and_mode(tmp_path: Path, newline: str) -> None
         assert data.count(b"\n") == data.count(b"\r\n")  # no bare LF introduced
     else:
         assert b"\r" not in data
-    assert f.stat().st_mode & 0o777 == 0o640
+    if sys.platform != "win32":  # Windows has no POSIX permission bits to keep
+        assert f.stat().st_mode & 0o777 == 0o640
     assert [p.name for p in tmp_path.iterdir()] == ["app.py"]  # no temp file left behind
 
 
