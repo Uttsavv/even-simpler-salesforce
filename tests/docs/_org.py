@@ -84,6 +84,12 @@ def _split_top(text: str) -> list[str]:
     return out
 
 
+def _value(sobject: str, rec: dict[str, Any], field: str) -> Any:
+    if field == "Name" and sobject in ("Lead", "Contact") and "Name" not in rec:
+        return " ".join(p for p in (rec.get("FirstName"), rec.get("LastName")) if p) or None
+    return rec.get(field)
+
+
 class Rejected(Exception):
     def __init__(self, code: str, message: str, fields: list[str] | None = None, status: int = 400) -> None:
         super().__init__(message)
@@ -161,7 +167,8 @@ class FakeOrg:
 
     def _with_attrs(self, sobject: str, rec: dict[str, Any], version: str) -> dict[str, Any]:
         url = f"/services/data/v{version}/sobjects/{sobject}/{rec['Id']}"
-        return {"attributes": {"type": sobject, "url": url}, **rec}
+        named = {"Name": _value(sobject, rec, "Name")} if sobject in ("Lead", "Contact") else {}
+        return {"attributes": {"type": sobject, "url": url}, **named, **rec}
 
     def _validate(
         self, sobject: str, data: dict[str, Any], *, creating: bool, current: dict[str, Any] | None = None
@@ -254,7 +261,7 @@ class FakeOrg:
             elif "." in f:
                 out[f.split(".", 1)[0]] = None
             else:
-                out[f] = rec.get(f)
+                out[f] = _value(sobject, rec, f)
         return out
 
     def _page(self, rows: list[dict[str, Any]], size: int, version: str) -> dict[str, Any]:
@@ -267,7 +274,8 @@ class FakeOrg:
         return body
 
     def query(self, soql: str, batch: int, version: str) -> dict[str, Any]:
-        m = _FIELD_LIST.match(soql)
+        masked = _SUBQUERY.sub("__SUBQUERY__", soql)  # find the top-level FROM
+        m = _FIELD_LIST.match(masked)
         if not m:
             raise Rejected("MALFORMED_QUERY", "unexpected token: " + (soql.split() or ["''"])[0])
         sobject, tail = m.group("obj"), m.group("tail")
@@ -275,7 +283,7 @@ class FakeOrg:
             raise Rejected("INVALID_TYPE", f"sObject type '{sobject}' is not supported.")
         rows = list(self.records[sobject].values())
         where = re.split(r"\b(?:ORDER\s+BY|LIMIT|GROUP\s+BY)\b", tail, flags=re.I)[0]
-        where_wo_sub = _SUBQUERY.sub("", where)
+        where_wo_sub = where.replace("__SUBQUERY__", "")
         for field, lit in _EQ.findall(where_wo_sub):
             rows = [r for r in rows if r.get(field) == _literal(lit)]
         for field, items in _IN.findall(where_wo_sub):
@@ -284,7 +292,8 @@ class FakeOrg:
         lim = _LIMIT.search(tail)
         if lim:
             rows = rows[: int(lim.group(1))]
-        fields = _split_top(m.group("fields"))
+        it = iter(_SUBQUERY.finditer(soql))
+        fields = [next(it).group(0) if f == "__SUBQUERY__" else f for f in _split_top(m.group("fields"))]
         if [f.upper() for f in fields] == ["COUNT()"]:
             return {"totalSize": len(rows), "done": True, "records": []}
         for f in fields:
@@ -502,7 +511,7 @@ class FakeOrg:
             if rec is None:
                 raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
             wanted = params.get("fields")
-            data = {k: rec.get(k) for k in wanted.split(",")} if wanted else dict(rec)
+            data = {k: _value(sobject, rec, k) for k in wanted.split(",")} if wanted else dict(rec)
             data["Id"] = rid
             return self._json(self._with_attrs(sobject, data, version))
         if method == "PATCH":
