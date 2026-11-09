@@ -66,14 +66,45 @@ short sentences, no detours. Every page follows the same shape.
 
 **Sentences**
 
-- Address the reader as "you". Use the present tense and the active voice.
-- One idea per sentence, one to three sentences per paragraph.
+These rules take the parts of ASD-STE100 Simplified Technical English that suit developer
+docs. They keep the text easy to scan and easy to translate.
+
+- Address the reader as "you". Use simple tenses (present, past, future) and the active
+  voice. Write "the client refreshes the token", not "the token is refreshed" or "has been
+  refreshed".
+- Keep sentences short: at most 20 words for an instruction, 25 for a description.
+- One instruction or one idea per sentence. Start an instruction with the verb: "Create one
+  client per process."
+- Put the condition first: "If Salesforce returns `401`, the client refreshes once."
 - Say what to do, then why if it matters: "Create one client per process. Each client owns a
   connection pool."
-- Use plain words: "use", not "utilise"; "so", not "in order to". Drop "simply", "just",
-  "easily", "note that" and "please".
-- Bold is for the one word the reader must not miss in a paragraph, not for emphasis in
-  general. Most paragraphs need none.
+- At most six sentences in a paragraph, usually one to three. One topic per paragraph, stated
+  in its first sentence.
+- More than three related items go in a list or a table, not in a sentence.
+- Use one term for one thing on every page: always "client", "login flow", "token store",
+  "record". No synonyms for variety.
+- Write "before you send the request", not "before sending the request".
+- At most three nouns in a row. Write "the cache for describe results", not "describe result
+  cache entry".
+- No parentheses for a second idea: write a second sentence. No em dashes. No slash between
+  words in prose ("async and sync", not "async/sync"); paths and code are fine.
+- Prefer plain words:
+
+  | Don't write | Write |
+  |---|---|
+  | utilize, leverage | use |
+  | in order to | to |
+  | prior to, subsequent to | before, after |
+  | in the event that | if |
+  | ensure | make sure |
+  | is capable of | can |
+  | attempt | try |
+  | obtain, retrieve | get |
+  | additional | more |
+  | due to the fact that | because |
+
+- Drop "simply", "just", "easily", "note that", "please" and "basically".
+- Bold is for the one word the reader must not miss in a paragraph. Most paragraphs need none.
 
 **Headings**
 
@@ -92,7 +123,11 @@ short sentences, no detours. Every page follows the same shape.
 **Admonitions**
 
 - At most one or two per page. `!!! tip` for a shortcut, `!!! warning` for something that
-  loses data or money. Never for page intros, status banners or long text.
+  loses data, leaks a secret or costs money. Never for page intros, status banners or long
+  text.
+- Put a warning before the step it applies to. Start it with the condition or the command,
+  and say what goes wrong: "Don't log `sf.auth.token`. Anyone with the token can act as the
+  user."
 
 **Tables**
 
