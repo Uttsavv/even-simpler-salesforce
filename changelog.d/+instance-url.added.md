@@ -1,0 +1,1 @@
+`sf.instance_url`: read-only base URL of the org (the `instance_url=` override, else the current token's instance; `None` before the first call). Replaces simple-salesforce's `sf_instance` / `base_url` for building links.

@@ -56,7 +56,10 @@ nav = [
   ] },
   { "Testing" = "testing.md" },
   { "CLI" = "cli.md" },
-  { "Migrating from simple-salesforce" = "migrating-from-simple-salesforce.md" },
+  { "Migrating from simple-salesforce" = [
+    "migrating-from-simple-salesforce.md",
+    { "esf migrate (codemod)" = "migrate.md" },
+  ] },
   { "Salesforce dependency index" = "salesforce-dependencies.md" },
   { "Reference" = "reference/index.md" },
   { "Changelog" = "changelog.md" },

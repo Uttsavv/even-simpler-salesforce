@@ -169,3 +169,12 @@ def test_test_files_get_mock_rule(tmp_path: Path) -> None:
     _, out, _ = run(["--report", "-", str(tmp_path)])
     data = json.loads(out[out.index('{\n  "version"') :])
     assert [f["rule"] for f in data["findings"]] == ["mock-sobject"]
+
+
+def test_every_rule_has_a_docs_anchor() -> None:
+    """``docs_url`` links to ``.../migrate/#<rule>``: each rule id needs a heading there."""
+    from even_simpler_salesforce._migrate._findings import RULES
+
+    page = (Path(__file__).resolve().parents[2] / "docs" / "migrate.md").read_text(encoding="utf-8")
+    missing = [r for r in RULES if f"### `{r}`" not in page]
+    assert not missing, missing

@@ -8,6 +8,7 @@ esf whoami [--json]
 esf limits [--json]
 esf query "SELECT Id, Name FROM Lead LIMIT 10" [--json | --csv] [--all] [--include-deleted] [--page-size N]
 esf version
+esf migrate src/ [--write] [--report FILE] [--check] [--client-names NAME,...]
 ```
 
 | Command | What it does | API calls |
@@ -16,6 +17,7 @@ esf version
 | `esf limits` | Prints a table of every org limit: used, max, remaining and percentage used | one `GET limits` |
 | `esf query SOQL` | Runs a query and prints a table (default), a JSON array (`--json`) or CSV (`--csv`). Prints the first page only, unless you pass `--all` | one per page |
 | `esf version` | Prints the library, default API version, httpx and Python versions | none |
+| `esf migrate PATH...` | Rewrites simple-salesforce code and marks what it can't (needs the `[migrate]` extra). See [`esf migrate`](migrate.md) | none (no login) |
 
 `esf query` flattens each row with [`esf.flatten`](guides/query.md#exporting-rows-esfflatten):
 parent relationships become dotted columns (`Owner.Name`), and child subquery rows are printed
