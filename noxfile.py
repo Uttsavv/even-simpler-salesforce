@@ -117,6 +117,12 @@ def min_deps(session: nox.Session) -> None:
     session.run("pytest", "tests/unit", "tests/contract", "-m", "not sandbox", *session.posargs)
 
 
+@nox.session(python="3.12")
+def smoke_wheel(session: nox.Session) -> None:
+    """Build the wheel, install it into a clean venv without extras and smoke-test it."""
+    session.run("python", "scripts/smoke_wheel.py", *session.posargs)
+
+
 @nox.session(python=False)
 def changelog(session: nox.Session) -> None:
     """Preview the next CHANGELOG section from changelog.d/ fragments."""
