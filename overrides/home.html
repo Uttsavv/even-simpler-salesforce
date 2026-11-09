@@ -18,13 +18,18 @@
         <a class="esf-btn esf-btn--primary" href="{{ 'getting-started/' | url }}">Get started</a>
         <a class="esf-btn" href="{{ config.repo_url }}">GitHub</a>
       </div>
-      <div class="esf-windows">
-        <figure class="esf-window" aria-label="FastAPI example (async client)">
-          <figcaption class="esf-window__bar">
-            <span class="esf-window__dots" aria-hidden="true"><i></i><i></i><i></i></span>
-            <span class="esf-window__label">FastAPI <small>async</small></span>
-          </figcaption>
-          <pre class="esf-window__code highlight"><code><span class="kn">import</span><span class="w"> </span><span class="nn">even_simpler_salesforce</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">esf</span>
+      <figure class="esf-window esf-window--tabs" aria-label="Example web app: FastAPI (async client) or Flask (sync client)">
+        <input class="esf-tab-input" type="radio" name="esf-framework" id="esf-tab-fastapi" checked>
+        <input class="esf-tab-input" type="radio" name="esf-framework" id="esf-tab-flask">
+        <figcaption class="esf-window__bar">
+          <span class="esf-window__dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="esf-window__label">app.py <small class="esf-only-fastapi">async client</small><small class="esf-only-flask">sync client</small></span>
+          <span class="esf-tabs">
+            <label class="esf-tab esf-tab--fastapi" for="esf-tab-fastapi">FastAPI</label>
+            <label class="esf-tab esf-tab--flask" for="esf-tab-flask">Flask</label>
+          </span>
+        </figcaption>
+        <pre class="esf-window__code esf-only-fastapi highlight"><code><span class="kn">import</span><span class="w"> </span><span class="nn">even_simpler_salesforce</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">esf</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">contextlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">asynccontextmanager</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">FastAPI</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">fastapi.responses</span><span class="w"> </span><span class="kn">import</span> <span class="n">JSONResponse</span>
@@ -58,13 +63,7 @@
 <span class="nd">@app</span><span class="o">.</span><span class="n">exception_handler</span><span class="p">(</span><span class="n">esf</span><span class="o">.</span><span class="n">NotFound</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">not_found</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="n">exc</span><span class="p">:</span> <span class="n">esf</span><span class="o">.</span><span class="n">NotFound</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">JSONResponse</span><span class="p">({</span><span class="s2">"error"</span><span class="p">:</span> <span class="s2">"not found"</span><span class="p">},</span> <span class="n">status_code</span><span class="o">=</span><span class="mi">404</span><span class="p">)</span></code></pre>
-        </figure>
-        <figure class="esf-window" aria-label="Flask example (sync client)">
-          <figcaption class="esf-window__bar">
-            <span class="esf-window__dots" aria-hidden="true"><i></i><i></i><i></i></span>
-            <span class="esf-window__label">Flask <small>sync</small></span>
-          </figcaption>
-          <pre class="esf-window__code highlight"><code><span class="kn">import</span><span class="w"> </span><span class="nn">atexit</span>
+        <pre class="esf-window__code esf-only-flask highlight"><code><span class="kn">import</span><span class="w"> </span><span class="nn">atexit</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">even_simpler_salesforce</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">esf</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">flask</span><span class="w"> </span><span class="kn">import</span> <span class="n">Flask</span><span class="p">,</span> <span class="n">request</span>
 
@@ -94,8 +93,7 @@
 <span class="nd">@app</span><span class="o">.</span><span class="n">errorhandler</span><span class="p">(</span><span class="n">esf</span><span class="o">.</span><span class="n">NotFound</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">not_found</span><span class="p">(</span><span class="n">exc</span><span class="p">:</span> <span class="n">esf</span><span class="o">.</span><span class="n">NotFound</span><span class="p">):</span>
     <span class="k">return</span> <span class="p">{</span><span class="s2">"error"</span><span class="p">:</span> <span class="s2">"not found"</span><span class="p">},</span> <span class="mi">404</span></code></pre>
-        </figure>
-      </div>
+      </figure>
     </div>
   </section>
 {% endblock %}
