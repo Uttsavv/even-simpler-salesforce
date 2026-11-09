@@ -132,6 +132,7 @@ release since June 2024, has a single maintainer, and also lacks refresh-token f
 | D26 | Org automation: generic calls to invocable actions (standard, Flow, Apex) and Apex REST; `esf generate actions` produces typed stubs from an org; anonymous Apex lives under Tooling and only runs when called explicitly. Triggers cannot be called directly (they fire on DML). |
 | D27 | **Usage tracking:** read `Sforce-Limit-Info` on every response; counters by operation, object and caller; `sf.usage.snapshot()`; budget threshold events; optional guard that pauses low-priority callers; `/limits` polling opt-in. |
 | D28 | **Lessons from simple-salesforce's issue tracker** (482 issues analysed, 2026-11-09): every design-caused bug class there gets a guard test here, and the decisions below cite the issue numbers. Summary in §15.1. |
+| D29 | **One way per task.** A new public method or parameter must either do something no existing public API can do, or replace code users would otherwise write by hand and often get wrong. Aliases, shortcut parameters and format converters are rejected. `sf.request` is the one deliberate overlap (the escape hatch, §9.5). Positional values in SOQL methods (§9.2) and `esf.soql` share one quoting implementation; docs teach the first and use `esf.soql` only for building a query in pieces. Rejected under this rule (2026-11-09): `QueryResult.flat()` (use `esf.flatten`), `to_pandas()`/`to_polars()` and a `[dataframe]` extra (use `pandas.DataFrame([esf.flatten(r) for r in page])`), `esf shell` (use `python -i`), `Auth.from_env()` (infers the flow from which variables are set, the §1.1 problem), an `sf` CLI-backed auth (depends on an external binary). Deferred until users ask: `sf.with_options(timeout=, retry=, headers=)`. |
 
 ### 2.2 Resolved open questions
 
@@ -190,7 +191,7 @@ even-simpler-salesforce/
 │   ├── models.py                # Token, QueryResult, RecordResult, BatchResult, UsageSnapshot, ...
 │   ├── observability/           # Event types, observers, canonical summary, stdlib/structlog/otel adapters
 │   ├── cache.py                 # Cache protocol + in-memory TTL cache
-│   ├── cli/                     # `esf` command (generate actions, whoami, limits, debug)
+│   ├── cli/                     # `esf` command (§9.18)
 │   ├── testing/                 # FakeSalesforce, recorder, pytest plugin
 │   └── contrib/
 │       ├── fastapi.py
@@ -694,7 +695,21 @@ sf = esf.AsyncSalesforce(auth, error_tags={"ADDR_REQUIRED": AddressRequired})
 - Registered classes MUST subclass the class the error would otherwise have been.
 - Unmatched tags still populate `.tag` on the default class. Nothing changes for users who don't opt in.
 
-### 8.5 What the library will not do
+### 8.5 Hints and docs links (0.2)
+
+- `SalesforceError` gains `hint: str | None` and `docs_url: str | None`; both are appended to
+  `str(error)` and survive pickling (§15.1).
+- `docs_url` points to the troubleshooting page for the error class (§16), e.g.
+  `.../errors/#invalidfield`.
+- `hint` is computed only from data the client already has; building an error never makes an API
+  call. `InvalidField`: closest field names from the **cached** describe of that sObject
+  (`difflib`), e.g. `did you mean 'Email'?`; nothing when describe isn't cached. Others where the
+  cause is common and fixed: `INVALID_SESSION_ID` after refresh (connected app policy),
+  `API_DISABLED_FOR_ORG`, `REQUEST_LIMIT_EXCEEDED` (link to `sf.usage`), `MALFORMED_QUERY` with an
+  unescaped quote (suggest values in SOQL methods).
+- Hints never include record data or secrets (same redaction as messages).
+
+### 8.6 What the library will not do
 
 No evaluation of validation-rule formulas or trigger logic on the client (D13). Copies drift from
 the org. An opt-in describe-based pre-check (types, lengths, required, restricted picklists) MAY
@@ -745,6 +760,33 @@ res = await sf.parameterized_search(q, sobjects=[...], fields=[...])
 ```
 
 - `include_deleted=True` uses `queryAll`.
+- **Values in SOQL methods (D29):** every method that takes SOQL (`query`, `query_one`, `query_first`,
+  `query_iter`, `count`, `explain`, later `tooling.query`, `bulk.query`) accepts positional values
+  after the query: `sf.query("SELECT Id FROM Lead WHERE Email = {}", email)`. They are quoted by
+  the same code as `esf.soql`, so the two can't behave differently. The template is formatted only
+  when at least one value is given; without values the string is sent unchanged (no `{{` handling),
+  so existing queries keep working. Named placeholders (`{name}`) and `{:like}` are only available
+  through `esf.soql`, because keyword arguments are taken by options (`page_size=`, `model=`, ...).
+  Docs teach this form and warn that an f-string (`f"... = '{email}'"`) looks similar but escapes
+  nothing. `esf.soql` stays public for building a query in pieces.
+- **`query_one(soql, *values, include_deleted=False, model=None)`:** returns exactly one row.
+  Reads only the first page and decides from `totalSize`: 0 → `NotFound`, more than 1 →
+  `MultipleMatches` (`.matches` = the `Id`s of the rows on that page). Both are raised by the
+  client, so `status=None` and `operation="query"`. The SOQL is never rewritten (no added `LIMIT`).
+- **`query_first(soql, *values, include_deleted=False, model=None)`:** returns the first row or
+  `None`; never raises for "no rows". For "one if any" (newest record, any match), where
+  `query_one` is for "must be exactly one". Reads only the first page; add `LIMIT 1` yourself to
+  avoid fetching more rows than needed.
+- **`explain(soql, *values) -> list[QueryPlan]`:** `GET query?explain=`; returns the query plans
+  ordered as Salesforce sends them (cheapest first), each with `leading_operation`,
+  `relative_cost`, `cardinality`, `sobject_cardinality`, `sobject_type`, `fields` and `notes`. The
+  query itself is not run. ⚠️ **VERIFY** the response fields (V22).
+- **`esf.flatten(row) -> dict`:** pure function in `core/records.py` for exporting rows to CSV,
+  DataFrames or JSON. Drops `attributes` at every level; parent lookups become dotted keys
+  (`"Owner.Name"`, `"Owner.Manager.Email"`); a null lookup stays as one key (`"Owner": None`), so
+  read with `.get("Owner.Name")`; a child subquery becomes a list of flattened child rows (only the
+  rows present, so use `expand_children=True` for all of them). Raises `TypeError` for model
+  instances. The CLI's CSV output uses it and adds its own text formatting on top.
 - `page_size` sets `Sforce-Query-Options: batchSize=N` (200–2000).
 - Nested subquery pagination: `query_iter` follows child `nextRecordsUrl`s only when `expand_children=True`.
 
@@ -816,7 +858,14 @@ Helper `sf.graphql_iter(query, variables, path="uiapi.query.Lead")` follows `pag
 | `sf.tooling.execute_anonymous(code)` (0.3) | `GET tooling/executeAnonymous?anonymousBody=` |
 
 - `inputs` may be a dict (one invocation) or a list of dicts (bulk invocation); results are returned in the same shape. Per-invocation `isSuccess=false` → typed error (single) or `BatchResult` (list).
-- `execute_anonymous` returns `AnonymousResult(compiled, success, compile_problem, exception_message, exception_stack_trace, line, column)`. It **cannot** return values. It is never called implicitly.
+- `execute_anonymous` returns `AnonymousResult(compiled, success, compile_problem, exception_message, exception_stack_trace, line, column, log)`. It **cannot** return values. It is never called implicitly.
+- `execute_anonymous(code, capture_log=False)`: with `capture_log=True` the client makes the
+  `System.debug` output visible. It creates a short-lived `TraceFlag` (with an `esf` `DebugLevel`)
+  for the running user, runs the code, reads the new `ApexLog` body into `AnonymousResult.log`, and
+  deletes the trace flag, also when the run fails. This costs several extra API calls, all counted
+  in usage. Another session of the same user running Apex at the same moment can produce a log too;
+  the client picks the log by operation and start time and documents the limitation.
+  ⚠️ **VERIFY** the Tooling objects, required permissions and log-matching fields (V23).
 - **Typed stubs:** `esf generate actions --org <alias|env> --include flow:Assign_Lead --include apex:* --out myapp/sf_actions.py` reads `describe` for each action and writes one class per action:
   ```python
   @dataclass(frozen=True)
@@ -949,6 +998,33 @@ await sf.pubsub.publish("/event/Order_Event__e", [payload, ...])
 ### 9.17 Limits — `sf.limits()` (0.1)
 
 `GET limits` → `dict[str, Limit(max, remaining)]`. Not called implicitly (it costs an API call). See §10 for header-based tracking.
+
+### 9.18 Command line — `esf`
+
+The CLI is a terminal front end over the public API; it adds no library API of its own. Org
+settings come from `ESF_*` environment variables (§5.3).
+
+| Command | Ships | Does |
+|---|---|---|
+| `esf query "SELECT ..." [--format json\|csv]` | 0.1 | runs SOQL; CSV output uses `esf.flatten` |
+| `esf whoami`, `esf limits`, `esf version` | 0.1 | identity, `/limits`, versions |
+| `esf describe <sObject>` | 0.2 | fields with type, length, required, picklist values |
+| `esf request <METHOD> <path> [--json ...]` | 0.2 | `sf.request` from the terminal |
+| `esf generate actions ...` | 0.2 | typed action stubs (§9.7) |
+| `esf generate models <sObject>... --out file.py [--pydantic]` | 0.2 | typed sObject models |
+| `esf migrate <path> [--write]` | 0.3 | rewrites simple-salesforce code |
+
+- **`generate models`** reads `describe` for each sObject and writes one `TypedDict`
+  (`total=False`; nullable fields as `X | None`; picklists as `Literal[...]` when restricted) or,
+  with `--pydantic`, one model. `model=` accepts a `TypedDict` (typing only, no runtime conversion),
+  so pydantic is not required for autocomplete. The file header names the org, API version and
+  timestamp, like action stubs.
+- **`migrate`** rewrites the mechanical rows of the §20 table (`sf.Lead.get(id)` →
+  `sf.sobject("Lead").get(id)`, `query_all` → `list(sf.query_iter(...))`, `format_soql` → values in
+  SOQL methods, `upsert("Ext__c/42", ...)` → `upsert("Ext__c", "42", ...)`). It is a dry run by
+  default (prints a diff); `--write` edits files. Calls it can't convert get an
+  `# esf-migrate: TODO` comment and are listed at the end. Uses libcst behind a `[migrate]` extra;
+  original code (AGENTS.md licensing).
 
 ---
 
@@ -1191,7 +1267,9 @@ Coverage gate: **≥ 90 % lines and branches** overall, **100 %** for `core/` an
 - **Versions on 0.x:** `latest` and `dev` only (O13). Per-release copies from 1.0, using whatever versioning Zensical supports by then (currently only a temporary `mike` fork).
 - **API reference:** Zensical has a native mkdocstrings implementation (since 0.0.11; install `mkdocstrings-python`). Zensical does **not** support `gen-files`; generate reference pages and navigation with its `autoapi` or `api-autonav` plugins instead. Configure under `[project.plugins.mkdocstrings]` in `zensical.toml`.
 - **Docstrings:** Google style, every public symbol, with an example where useful.
-- **Structure** (mirrors simple-salesforce's docs, extended): Home · Getting started · Authentication (one page per flow, Salesforce setup steps for External Client Apps, token stores) · Guides per API area · Errors · Usage & budgets · Logging · Performance · Integrations · Testing · Migrating from simple-salesforce · Reference · Changelog · ADRs.
+- **Structure** (mirrors simple-salesforce's docs, extended): Home · Getting started · Authentication (one page per flow, Salesforce setup steps for External Client Apps, token stores, "which flow do I need?") · Guides per API area · Common tasks (cookbook) · Errors (one troubleshooting entry per error class, the target of `docs_url`, §8.5) · Usage & budgets · Logging · Performance · Integrations · Testing · Migrating from simple-salesforce · Reference · Changelog · ADRs.
+- The query guide opens with one table that says which of `query` / `query_one` / `query_first` / `query_iter` /
+  `query_more` / `count` to use for which job, so they don't read as alternatives (D29).
 - Every code example is executed by `tests/docs` (§15).
 
 ---
@@ -1264,7 +1342,7 @@ Scope:
 - Auth: `WebServerFlow` (PKCE, exchange, revoke, userinfo, introspect), `ClientCredentials`, `JwtBearer` (`[jwt]`), `StaticToken`; `Token`, `TokenStore`, `InMemoryTokenStore`; full §6.4 algorithm.
 - Transport: §7 complete.
 - Errors: §8 complete including custom error tags.
-- Areas: Records (§9.1), Query/Search + `soql` + Cursor (§9.2), Collections (§9.3), raw `request` (§9.5), `limits()` (§9.17).
+- Areas: Records (§9.1), Query/Search + `soql` + Cursor (§9.2) incl. values in SOQL methods, `query_one`, `query_first`, `explain`, `esf.flatten`, Collections (§9.3), raw `request` (§9.5), `limits()` (§9.17).
 - Usage (§10) and observability (§11) complete, stdlib observer; structlog/otel adapters.
 - Testing module (§14) for the areas above.
 - Docs: getting started, auth pages, records/query/collections guides, errors, logging, usage, migration guide (partial).
@@ -1277,16 +1355,22 @@ Acceptance criteria:
 
 ### 0.2 — files, actions, integrations
 Files, platform events publish, actions + Apex REST + `esf generate actions`, lead convert/merge
-(SOAP), FastAPI and Flask integrations.
+(SOAP), FastAPI and Flask integrations. Error hints and docs links (§8.5); CLI `describe`,
+`request`, `generate models` (§9.18).
 
 ### 0.3 — Bulk, Tooling, GraphQL, Composite
-Bulk 2.0 ingest/query, Tooling incl. execute anonymous, GraphQL, Composite/Graph/Tree/Batch builders.
+Bulk 2.0 ingest/query, Tooling incl. execute anonymous (with `capture_log`), GraphQL, Composite/Graph/Tree/Batch builders, `esf migrate` (§9.18).
 
 ### 0.4 — UI API, Reports, Metadata
 ### 0.5 — Pub/Sub API
 ### 1.0 — stabilise
 Interface freeze, per-version docs, migration guide complete, all
 deprecations resolved.
+
+### Unscheduled
+- `sf.with_options(timeout=, retry=, headers=)`: deferred under D29 until users ask.
+- A one-time warning when the pinned API version is close to Salesforce's retirement schedule.
+- `esf.testing` data factories for sandbox tests, with cleanup after each test.
 
 ---
 
@@ -1306,7 +1390,8 @@ The docs page contains this table (extended per release). No compatibility shim 
 | `sf.query(q)` / `sf.query_more(url, True)` | `sf.query(q)` / `sf.query_more(page.cursor)` |
 | `sf.query_all(q)` | `[r async for r in sf.query_iter(q)]` or `list(sf.query_iter(q))` |
 | `sf.query_all_iter(q, include_deleted=True)` | `sf.query_iter(q, include_deleted=True)` |
-| `format_soql(...)` | `esf.soql(...)` |
+| `format_soql(...)` | values in SOQL methods: `sf.query("... = {}", value)`; `esf.soql(...)` to build a query in pieces |
+| a whole codebase | `esf migrate src/` (0.3) rewrites the mechanical rows of this table |
 | `sf.restful("composite/sobjects", method="PATCH", json=...)` | `sf.collections.update(...)` |
 | `sf.restful(path, ...)` | `sf.request(method, path, ...)` |
 | `sf.apexecute("path", method="POST", data=...)` | `sf.apex.post("/path", json=...)` |
@@ -1348,6 +1433,8 @@ before the release named.
 | V18 | Bulk 2.0 CSV: empty cell = unchanged, `#N/A` = null; UTF-8 handling | 0.3 | **Open** — official Bulk 2.0 docs + sandbox (simple-salesforce #309, #769, #706) |
 | V19 | External id values containing `.` (e.g. `x.json`) in `sobjects/{o}/{field}/{value}` are read as a format suffix | 0.1 | **Open** — sandbox (simple-salesforce #22) |
 | V21 | HTTP status and body for `UNSUPPORTED_API_VERSION` (configured version not offered by the org); message seen elsewhere: "Invalid Api version specified on URL" | 0.1 | **Open** — sandbox; current test fixture is synthetic |
+| V22 | `GET query?explain=` response fields (`plans[]`: `cardinality`, `fields`, `leadingOperationType`, `relativeCost`, `sobjectCardinality`, `sobjectType`, `notes`) | 0.1 | **Open** — *REST API Developer Guide* (Query resource, explain parameter) + recorded response |
+| V23 | Debug-log capture for anonymous Apex: `TraceFlag`/`DebugLevel` fields and permissions, `ApexLog` body endpoint, fields to match the log to the run | 0.3 | **Open** — *Tooling API* reference + sandbox |
 | V20 | `Sforce-Call-Options: client=<name>` on REST calls: accepted on every resource, and where admins see it | 0.1 | **Open** — REST API headers reference + sandbox |
 
 Remaining open: V4, V5b, V11 (sandbox half), V17, V18, V19, V20, V21 — all need a sandbox (V18/V20 also a docs check).
