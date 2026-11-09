@@ -41,5 +41,12 @@ def test_nav_pages_exist() -> None:
 def test_every_page_is_in_the_nav() -> None:
     nav = set(_nav())
     pages = {str(p.relative_to(DOCS)) for p in DOCS.rglob("*.md")}
-    orphans = sorted(pages - nav - {"adr/" + p.name for p in (DOCS / "adr").glob("0*.md")})
+    orphans = sorted(pages - nav)
     assert not orphans, orphans
+
+
+def test_changelog_include_starts_at_the_towncrier_marker() -> None:
+    page = (DOCS / "changelog.md").read_text(encoding="utf-8")
+    line = int(page.split('--8<-- "CHANGELOG.md:', 1)[1].split(":", 1)[0])
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8").splitlines()
+    assert changelog[line - 1] == "<!-- towncrier release notes start -->"

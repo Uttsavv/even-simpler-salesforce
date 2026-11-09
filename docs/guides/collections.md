@@ -26,13 +26,14 @@ sf = esf.AsyncSalesforce(auth)
 
 ```python
 rows = [{"LastName": f"Imported {i}", "Company": "Acme"} for i in range(450)]
-created = await sf.collections.create(rows, sobject="Lead")      # 3 requests: 200 + 200 + 50
+created = await sf.collections.create(rows, sobject="Lead")  # 3 requests: 200 + 200 + 50
 print(len(created), len(created.ok), len(created.failed))
 
 ids = [r.id for r in created.ok]
 await sf.collections.update("Lead", [{"Id": i, "Status": "Working"} for i in ids])
 await sf.collections.upsert(
-    "Lead", "External_Id__c",
+    "Lead",
+    "External_Id__c",
     [{"External_Id__c": "crm-1", "LastName": "Noether", "Company": "Erlangen"}],
 )
 await sf.collections.delete(ids)
@@ -62,7 +63,7 @@ iteration, `.operation` and `.sobject`.
 ```python
 rows = [
     {"LastName": "Curie", "Company": "Sorbonne"},
-    {"LastName": "Meitner"},                           # no Company: required field missing
+    {"LastName": "Meitner"},  # no Company: required field missing
     {"LastName": "Franklin", "Company": "King's College", "Country": "UK"},  # validation rule
 ]
 result = await sf.collections.create(rows, sobject="Lead")
@@ -79,7 +80,7 @@ normally. Check `.failed`, or call `raise_for_errors()` to turn any failure into
 try:
     result.raise_for_errors()
 except esf.PartialFailure as exc:
-    print(exc)                 # "2 of 3 records failed; first: REQUIRED_FIELD_MISSING: ..."
+    print(exc)  # "2 of 3 records failed; first: REQUIRED_FIELD_MISSING: ..."
     print(exc.error_code, len(exc.errors), len(exc.results.failed))
 ```
 
@@ -115,7 +116,8 @@ try:
 except esf.PartialFailure as exc:
     result = exc.results
     unknown = [
-        row for row, res in zip(rows, result)
+        row
+        for row, res in zip(rows, result)
         if not res.ok and res.errors[0].extended.get("outcome") == "unknown"
     ]
     print(f"{len(unknown)} rows may or may not exist; check before re-sending them")
@@ -162,7 +164,7 @@ except esf.RequiredFieldMissing as exc:
 page = await sf.query("SELECT Id FROM Lead LIMIT 5")
 wanted = [r["Id"] for r in page] + ["00Q8d0000009999999"]
 rows = await sf.collections.retrieve("Lead", wanted, ["Id", "LastName", "Status"])
-print(rows[-1])   # None: that id doesn't exist
+print(rows[-1])  # None: that id doesn't exist
 ```
 
 `retrieve` sends up to 2,000 ids per request (a POST, so long id lists don't hit URL limits),

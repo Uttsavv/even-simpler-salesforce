@@ -24,7 +24,7 @@ await sf.query("SELECT Id, Name FROM Lead WHERE Status = 'Open' LIMIT 5")
 
 request = next(e for e in seen if e.name == "sf.request")
 print(request["operation"], request["status"], request["duration_ms"], request["soql_hash"])
-print([e.name for e in seen])   # ['sf.auth.refreshed', 'sf.request']
+print([e.name for e in seen])  # ['sf.auth.refreshed', 'sf.request']
 ```
 
 ## Events
@@ -138,7 +138,7 @@ Without an argument, it uses `structlog.get_logger("esf")`.
 ### OpenTelemetry (`[otel]` extra)
 
 ```python
-otel = esf.observability.OpenTelemetry()   # or OpenTelemetry(tracer_provider=..., meter_provider=...)
+otel = esf.observability.OpenTelemetry()  # or OpenTelemetry(tracer_provider=..., meter_provider=...)
 traced = esf.AsyncSalesforce(auth, observers=[otel])
 await traced.query("SELECT Id FROM Lead LIMIT 1")
 await traced.aclose()

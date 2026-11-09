@@ -69,8 +69,11 @@ same result. Some reads are sent as POST and are safe to repeat:
 
 ```python
 found = await sf.request(
-    "POST", "parameterizedSearch", json={"q": "Lovelace", "sobjects": [{"name": "Lead"}]},
-    idempotent=True, operation="parameterized_search",
+    "POST",
+    "parameterizedSearch",
+    json={"q": "Lovelace", "sobjects": [{"name": "Lead"}]},
+    idempotent=True,
+    operation="parameterized_search",
 )
 print(len(found["searchRecords"]))
 ```

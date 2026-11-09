@@ -12,7 +12,8 @@ Rules for writers of documentation pages:
   ``SF_USERNAME``, ``SF_ACCESS_TOKEN`` and ``SF_INSTANCE_URL`` set, and the working directory
   contains ``server.key`` (an RSA private key) for JWT examples.
 - Functions named ``test_*`` defined by a block are called afterwards with pytest-style fixture
-  arguments (``esf_fake`` / ``esf_async_fake`` get fresh fakes; other names are resolved with
+  arguments (``esf_fake`` / ``esf_async_fake`` get fresh fakes, ``esf_replay`` resolves paths
+  against the working directory; other names are resolved with
   ``request.getfixturevalue``). Coroutine functions are awaited.
 - ``Test*`` classes that subclass ``TokenStoreContract`` / ``AsyncTokenStoreContract`` are run
   with pytest in a subprocess, from a module holding the imports and definitions of every block
@@ -121,6 +122,8 @@ def org(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Any:
         "SF_USERNAME": "integration@acme.example",
         "SF_ACCESS_TOKEN": "AT-docs-static",
         "SF_INSTANCE_URL": INSTANCE,
+        "ESF_SANDBOX_ACCESS_TOKEN": "AT-docs-sandbox",  # esf_sandbox examples hit the fake org
+        "ESF_SANDBOX_INSTANCE_URL": INSTANCE,
     }.items():
         monkeypatch.setenv(name, value)
     monkeypatch.delenv("ESF_DEBUG", raising=False)
@@ -131,7 +134,7 @@ def org(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Any:
 
 
 def _run_tests(ns: dict[str, Any], before: set[str], loop: asyncio.AbstractEventLoop, request: Any) -> None:
-    from even_simpler_salesforce.testing import AsyncFakeSalesforce, FakeSalesforce
+    from even_simpler_salesforce.testing import AsyncFakeSalesforce, FakeSalesforce, replay
 
     for name, fn in list(ns.items()):
         if name in before or not name.startswith("test_") or not inspect.isfunction(fn):
@@ -142,6 +145,8 @@ def _run_tests(ns: dict[str, Any], before: set[str], loop: asyncio.AbstractEvent
                 kwargs[param] = FakeSalesforce()
             elif param == "esf_async_fake":
                 kwargs[param] = AsyncFakeSalesforce()
+            elif param == "esf_replay":  # relative paths resolve against the page's directory
+                kwargs[param] = lambda path, **kw: replay(Path(path).resolve(), **kw)
             else:
                 kwargs[param] = request.getfixturevalue(param)
         result = fn(**kwargs)

@@ -9,7 +9,7 @@ import os
 import even_simpler_salesforce as esf
 
 auth = esf.ClientCredentials(
-    domain=os.environ["SF_DOMAIN"],        # must be https://<mydomain>.my.salesforce.com
+    domain=os.environ["SF_DOMAIN"],  # must be https://<mydomain>.my.salesforce.com
     client_id=os.environ["SF_CLIENT_ID"],
     client_secret=os.environ["SF_CLIENT_SECRET"],
 )
