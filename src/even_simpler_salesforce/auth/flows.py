@@ -80,18 +80,22 @@ class Auth:
 
     @property
     def token_key(self) -> str:  # pragma: no cover - overridden
+        """Key of this flow's record in the token store."""
         raise NotImplementedError
 
     @property
     def base_url(self) -> str:
+        """Login base URL resolved from ``domain``."""
         return resolve_domain(self.domain)
 
     @property
     def token_url(self) -> str:
+        """The OAuth token endpoint (``/services/oauth2/token``)."""
         return self.base_url + "/services/oauth2/token"
 
     @property
     def client_id_hash(self) -> str:
+        """Short SHA-256 prefix of ``client_id``, used in events instead of the id."""
         return _short_hash(self.client_id)
 
     def static_token(self) -> Token | None:
@@ -103,6 +107,7 @@ class Auth:
         raise NotImplementedError  # pragma: no cover
 
     def client_auth_form(self) -> dict[str, str]:
+        """``client_id`` (and ``client_secret`` when set) for OAuth form posts."""
         form = {"client_id": self.client_id}
         if self.client_secret:
             form["client_secret"] = self.client_secret
@@ -162,6 +167,7 @@ class WebServerFlow(Auth):
 
     @property
     def token_key(self) -> str:
+        """The ``token_key`` passed to the constructor."""
         return self.key or ""  # always set: required in __init__
 
     def authorization_url(
@@ -199,6 +205,7 @@ class WebServerFlow(Auth):
         )
 
     def code_form(self, code: str, code_verifier: str | None) -> dict[str, str]:
+        """Form for exchanging an authorization ``code`` (with the PKCE verifier, if any)."""
         form = {
             "grant_type": "authorization_code",
             "code": code,
@@ -210,6 +217,11 @@ class WebServerFlow(Auth):
         return form
 
     def token_form(self, current: Token | None) -> dict[str, str]:
+        """Refresh-token grant form.
+
+        Raises:
+            ReauthorizationRequired: no refresh token is stored.
+        """
         if current is None or not current.refresh_token:
             raise ReauthorizationRequired(
                 f"no refresh token stored for {self.token_key!r}; complete the authorization flow",
@@ -265,9 +277,11 @@ class ClientCredentials(Auth):
 
     @property
     def token_key(self) -> str:
+        """``token_key`` if given, else a hash of the domain and client id."""
         return self.key or f"client_credentials:{_short_hash(self.base_url + '|' + self.client_id)}"
 
     def token_form(self, current: Token | None) -> dict[str, str]:
+        """Client-credentials grant form."""
         return {"grant_type": "client_credentials", **self.client_auth_form()}
 
 
@@ -321,6 +335,7 @@ class JwtBearer(Auth):
 
     @property
     def token_key(self) -> str:
+        """``token_key`` if given, else a hash of the domain, client id and username."""
         return (
             self.key
             or f"jwt_bearer:{_short_hash(self.base_url + '|' + self.client_id + '|' + self.username)}"
@@ -335,6 +350,7 @@ class JwtBearer(Auth):
         return _HOSTS.get(self.audience, self.audience)
 
     def assertion(self, now: float | None = None) -> str:
+        """A freshly signed RS256 JWT assertion (``iss``, ``sub``, ``aud``, ``exp``)."""
         try:
             import jwt  # pyright: ignore[reportMissingImports]
         except ImportError as exc:  # pragma: no cover - depends on extras
@@ -352,6 +368,7 @@ class JwtBearer(Auth):
         return token if isinstance(token, str) else token.decode()
 
     def token_form(self, current: Token | None) -> dict[str, str]:
+        """JWT bearer grant form with a new assertion."""
         return {
             "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
             "assertion": self.assertion(),
@@ -384,13 +401,16 @@ class StaticToken(Auth):
 
     @property
     def token_key(self) -> str:
+        """A hash of the instance URL and the token."""
         return f"static:{_short_hash(self.instance_url + '|' + self.access_token)}"
 
     @property
     def client_id_hash(self) -> str:
+        """Always empty: a static token has no OAuth client."""
         return ""
 
     def static_token(self) -> Token | None:
+        """The token, built from the constructor arguments."""
         return Token(
             access_token=self.access_token,
             instance_url=self.instance_url,
@@ -398,4 +418,5 @@ class StaticToken(Auth):
         )
 
     def token_form(self, current: Token | None) -> dict[str, str]:  # pragma: no cover
+        """Not supported: a static token can't be refreshed."""
         raise NotImplementedError("StaticToken can't be refreshed")

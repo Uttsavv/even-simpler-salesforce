@@ -124,6 +124,7 @@ class Limit:
 
     @property
     def used(self) -> int:
+        """``max - remaining``."""
         return self.max - self.remaining
 
 

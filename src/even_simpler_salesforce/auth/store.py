@@ -27,14 +27,18 @@ class AsyncTokenStore(Protocol):
     Use ``esf.testing.token_store_contract`` to check your implementation.
     """
 
-    async def load(self, key: str) -> Token | None: ...
+    async def load(self, key: str) -> Token | None:
+        """Return the stored token (with its ``version``) for ``key``, or ``None``."""
+        ...
 
     async def save(self, key: str, token: Token, *, expected_version: int | None) -> Token:
         """Persist ``token``. If ``expected_version`` is not ``None`` and the stored version
         differs, raise :class:`TokenConflict`. Returns the stored token with its new version."""
         ...
 
-    async def delete(self, key: str) -> None: ...
+    async def delete(self, key: str) -> None:
+        """Remove the whole record for ``key`` (access and refresh token); no-op if missing."""
+        ...
 
     def lock(self, key: str) -> AbstractAsyncContextManager[None]:
         """Optional cross-process lock. The default is a no-op; in-process single-flight is
@@ -46,13 +50,24 @@ class AsyncTokenStore(Protocol):
 class TokenStore(Protocol):
     """Sync twin of :class:`AsyncTokenStore` with the same contract."""
 
-    def load(self, key: str) -> Token | None: ...
+    def load(self, key: str) -> Token | None:
+        """Return the stored token (with its ``version``) for ``key``, or ``None``."""
+        ...
 
-    def save(self, key: str, token: Token, *, expected_version: int | None) -> Token: ...
+    def save(self, key: str, token: Token, *, expected_version: int | None) -> Token:
+        """Persist ``token``; compare-and-swap when ``expected_version`` is not ``None``.
 
-    def delete(self, key: str) -> None: ...
+        Returns the stored token with its new version; raises :class:`TokenConflict` on a
+        version mismatch.
+        """
+        ...
+
+    def delete(self, key: str) -> None:
+        """Remove the whole record for ``key`` (access and refresh token); no-op if missing."""
+        ...
 
     def lock(self, key: str) -> AbstractContextManager[None]:
+        """Optional cross-process lock around refreshes. The default is a no-op."""
         return _sync_noop()
 
 

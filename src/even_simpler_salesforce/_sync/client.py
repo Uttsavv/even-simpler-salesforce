@@ -238,10 +238,12 @@ class Salesforce:
 
     @property
     def api_version(self) -> str:
+        """The Salesforce API version used for every URL (e.g. ``"68.0"``)."""
         return self._transport.api_version
 
     @property
     def observers(self) -> ObserverHub:
+        """The observer hub shared by the client family; ``sf.observers.add(obs)`` adds one."""
         return self._transport.hub
 
     # --- pipeline ----------------------------------------------------------------------

@@ -22,5 +22,6 @@ class Structlog:
         self.logger: Any = logger
 
     def on_event(self, event: Event) -> None:
+        """Log ``event`` through structlog."""
         method = "warning" if event.fields.get("outcome") == "error" else "info"
         getattr(self.logger, method)(event.name, **dict(event.fields))
