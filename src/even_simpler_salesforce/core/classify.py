@@ -134,14 +134,11 @@ def parse_retry_after(value: str | None, now: datetime | None = None) -> float |
 def error_class_for(code: str | None, status: int | None, *, dml: bool) -> type[E.SalesforceError]:
     """Pick the exception class for an error code / HTTP status."""
     if code and code in CODE_MAP:
-        cls = CODE_MAP[code]
-        return cls
+        return CODE_MAP[code]
     if status is not None and status in _STATUS_MAP:
         return _STATUS_MAP[status]
     if status is not None and status >= 500:
         return E.ServerError
-    if status is not None and 400 <= status < 500:
-        return E.RecordError if dml else E.RequestError
     return E.RecordError if dml else E.RequestError
 
 

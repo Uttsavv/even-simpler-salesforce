@@ -301,3 +301,14 @@ def test_flows_accept_refresh_ahead_and_expiry() -> None:
     assert f.expiry == "introspect"
     c = esf.ClientCredentials(domain=INSTANCE, client_id="c", client_secret="s", expiry="introspect")
     assert c.expiry == "introspect"
+
+
+def test_jwt_audience_uses_hostname_not_substring() -> None:
+    """CodeQL py/incomplete-url-substring-sanitization: a look-alike host is not a sandbox."""
+    pytest.importorskip("jwt")
+
+    def aud(domain: str) -> str:
+        return esf.JwtBearer(domain=domain, client_id="c", username="u", private_key="k").aud
+
+    assert aud("https://acme--dev.sandbox.my.salesforce.com") == "https://test.salesforce.com"
+    assert aud("https://x.sandbox.my.salesforce.com.attacker.example") == "https://login.salesforce.com"
