@@ -1,1 +1,1 @@
-An `{"error": ...}` body outside `/services/oauth2/`, for example from an Apex REST class, is classified by status instead of as `OAuthError` or `SessionExpired`. `ApexError.body` holds the response body.
+An `{"error": ...}` body outside `/services/oauth2/`, for example from an Apex REST class, is classified by its HTTP status instead of always as `OAuthError`, so a 404 raises `NotFound`. `ApexError.body` holds the response body.

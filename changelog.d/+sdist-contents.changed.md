@@ -1,1 +1,1 @@
-The sdist now ships only the source, the tests, the docs those tests read, and the licence files.
+The sdist now has an explicit file list: the source, the tests, the docs and docs config those tests read, `README.md`, `CHANGELOG.md`, `pyproject.toml` and the licence files.

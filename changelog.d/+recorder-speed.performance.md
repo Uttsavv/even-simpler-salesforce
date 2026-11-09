@@ -1,1 +1,1 @@
-The recorder serialises each interaction once, so long recordings no longer slow down.
+The recorder serialises each interaction once instead of on every write, which reduces the cost of long recordings.

@@ -122,7 +122,8 @@ def _cell(value: Any) -> str:
 
 
 _CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f]")
-_FORMULA_START = ("=", "+", "-", "@", "\t", "\r", "\n")
+# ASCII markers, plus the full-width forms some spreadsheet locales also treat as formulas.
+_FORMULA_START = ("=", "+", "-", "@", "\t", "\r", "\n", "\uff1d", "\uff0b", "\uff0d", "\uff20")
 
 
 def _printable(text: str) -> str:
