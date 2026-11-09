@@ -133,6 +133,7 @@ release since June 2024, has a single maintainer, and also lacks refresh-token f
 | D27 | **Usage tracking:** read `Sforce-Limit-Info` on every response; counters by operation, object and caller; `sf.usage.snapshot()`; budget threshold events; optional guard that pauses low-priority callers; `/limits` polling opt-in. |
 | D28 | **Lessons from simple-salesforce's issue tracker** (482 issues analysed, 2026-11-09): every design-caused bug class there gets a guard test here, and the decisions below cite the issue numbers. Summary in §15.1. |
 | D29 | **One way per task.** A new public method or parameter must either do something no existing public API can do, or replace code users would otherwise write by hand and often get wrong. Aliases, shortcut parameters and format converters are rejected. `sf.request` is the one deliberate overlap (the escape hatch, §9.5). Positional values in SOQL methods (§9.2) and `esf.soql` share one quoting implementation; docs teach the first and use `esf.soql` only for building a query in pieces. Rejected under this rule (2026-11-09): `QueryResult.flat()` (use `esf.flatten`), `to_pandas()`/`to_polars()` and a `[dataframe]` extra (use `pandas.DataFrame([esf.flatten(r) for r in page])`), `esf shell` (use `python -i`), `Auth.from_env()` (infers the flow from which variables are set, the §1.1 problem), an `sf` CLI-backed auth (depends on an external binary). Deferred until users ask: `sf.with_options(timeout=, retry=, headers=)`. |
+| D30 | **Request headers are keyword arguments**, on the method (per call) or the client (per integration) whose Salesforce resource documents the header. There are no generic header objects, because they would be a second way to set the same header (D29) and pyright could not tell which headers a method accepts. Each header kwarg cites the Salesforce page that names the resources accepting it; a header that is not documented for a resource is not sent there. Response headers are parsed into typed results (usage, warnings), never returned raw. Rejected (2026-11-09): typed header objects (`headers=[AutoAssign(...)]`), `If-Match`/`If-None-Match` ETags (Account rows only), `x-sfdc-packageversion-*` (niche; use `sf.request`). Bulk-only headers arrive with Bulk (0.3). Details: ADR 0012. |
 | D31 | **Events are pulled through one async iterator.** Pub/Sub subscriptions are `async with sf.pubsub.subscribe(...) as events: async for ev in events` (a blocking iterator in the sync twin); iterating is the flow control. Change Data Capture (CDC) bitmaps are decoded to field names, gap and overflow events are typed, delivery is at least once through an optional `ReplayStore`, and Pub/Sub error codes map onto §8. Rejected under D29: a callback or decorator registry (`@sf.on(...)`), `before_request`/`on_refresh` hooks (observers and `TokenStore` cover them), and `sf.pubsub.publish` (use `sf.platform_events`, §9.10). `ManagedSubscribe` waits for GA and then becomes one parameter. gRPC is a second network path beside the httpx transport, with one module that owns it (§5.1). The Salesforce `.proto` file is vendored (CC0-1.0). Outbound Messaging receivers are unscheduled. ADR 0013. |
 
 ### 2.2 Resolved open questions
@@ -298,7 +299,7 @@ all `Auth` classes and `AuthStart`, `Token`, `AsyncTokenStore` / `TokenStore`,
 `Cursor`, all exceptions, result models (`QueryResult`, `BatchResult`, `RecordResult`,
 `UpsertResult`, `UsageSnapshot`, `Limit`), config (`Budget`, `RetryPolicy`, `Timeouts`,
 `DescribeCacheConfig`), `Cache` / `MemoryCache`, `Event`, `Observer`, `capture`,
-`call_context`, `EsfDeprecationWarning`, `__version__`. 0.5 adds `PubSubEvent`, `ChangeHeader`,
+`call_context`, `DuplicateRules`, `EsfDeprecationWarning`, `SalesforceWarning`, `__version__`. 0.5 adds `PubSubEvent`, `ChangeHeader`,
 `ChangeType`, `AsyncReplayStore` / `ReplayStore` and `AsyncInMemoryReplayStore` /
 `InMemoryReplayStore` (§9.16). Naming rule: the async variant carries the
 `Async` prefix, like `AsyncSalesforce` / `Salesforce`.
@@ -333,7 +334,7 @@ all `Auth` classes and `AuthStart`, `Token`, `AsyncTokenStore` / `TokenStore`,
 
 ### 5.2 Client lifecycle
 
-- `AsyncSalesforce(auth, *, api_version="68.0", http_client=None, store=None, cache=None, observers=(), budget=None, retry=None, timeout=None, max_concurrency=None, user_agent=None, json=None, error_tags=None, cursor_key=None, instance_url=None, describe_cache=None, log_soql="hash", http2=False, client_name=None)` (`None` means the default config object).
+- `AsyncSalesforce(auth, *, api_version="68.0", http_client=None, store=None, cache=None, observers=(), budget=None, retry=None, timeout=None, max_concurrency=None, user_agent=None, json=None, error_tags=None, cursor_key=None, instance_url=None, describe_cache=None, log_soql="hash", http2=False, client_name=None, default_namespace=None, update_mru=None)` (`None` means the default config object).
 - If `http_client` is not given, the client creates one (`httpx.AsyncClient` with HTTP/1.1, pool limits, timeouts, `Accept-Encoding: gzip`) and **owns** it: `aclose()` / `async with` closes it. An injected client is never closed by the library.
 - `with_auth(auth)` returns a child client sharing transport, caches, observers, usage counters and budget, with its own auth runtime. Children are cheap (no new pool) and SHOULD NOT be closed individually; closing the parent closes the pool.
 - Clients are safe to share across tasks (async) or threads (sync).
@@ -548,7 +549,7 @@ hard-coded (#506, #78, #268). Both rules are enforced by an AST test (`tests/uni
 4. **Concurrency gate**: optional `max_concurrency` semaphore per client family.
 5. **Compression**: always send `Accept-Encoding: gzip`. Gzip request bodies over 64 KiB (`Content-Encoding: gzip`) for Bulk ingest, Collections and Composite.
 6. **Send** via httpx.
-7. **Parse `Sforce-Limit-Info`** (`api-usage=used/max`, and `api-bursts=used/max` when present) into usage counters.
+7. **Parse `Sforce-Limit-Info`** (`api-usage=used/max`, and `api-bursts=used/max` when present) into usage counters. Parse a `Warning` response header (`<code> - "<text>"`; code `299` = deprecated API version) and emit `warnings.warn(text, esf.SalesforceWarning)` **once per distinct text per client family**, so a deprecation notice is not lost or repeated on every call. `SalesforceWarning` subclasses `UserWarning`; users silence or escalate it with the standard `warnings` filters.
 8. **Classify** the response (§8.2) into success or a typed error.
 9. **Refresh** on `INVALID_SESSION_ID` (§6.4).
 10. **Retry** per policy (§7.4).
@@ -756,7 +757,7 @@ Every area exists on both clients with identical names. Signatures below are asy
 | `create(data) -> str` | `POST sobjects/{o}` | returns id |
 | `update(id, data)` | `PATCH sobjects/{o}/{id}` | |
 | `upsert(field, value, data) -> UpsertResult` | `PATCH sobjects/{o}/{field}/{value}` | `created: bool`, `id` |
-| `delete(id)` | `DELETE sobjects/{o}/{id}` | |
+| `delete(id)` | `DELETE sobjects/{o}/{id}` | no conditional headers (see below) |
 | `describe(cached=True)` | `GET sobjects/{o}/describe` | uses describe cache (§12) |
 | `metadata()` | `GET sobjects/{o}` | |
 | `updated(start, end)` / `deleted(start, end)` | `GET sobjects/{o}/updated|deleted` | |
@@ -769,8 +770,41 @@ spaces into `+`, which Salesforce reads literally; simple-salesforce #801). Valu
 in a sandbox (V19); if confirmed, `get_by_external_id`/`upsert` fall back to a SOQL lookup or the
 Collections upsert for such values.
 
-Headers supported via keyword args: `assignment_rule_id`, `duplicate_rule_header`
-(`allow_save=True`), `if_modified_since`, `if_unmodified_since` → `Conflict` on 412.
+**Request headers (D30).** Keyword-only arguments; `None` means the header is not sent and
+Salesforce's default applies.
+
+| Kwarg | Methods | Header | Notes |
+|---|---|---|---|
+| `assignment_rule_id: str \| bool \| None` | `create`, `update`, `upsert` | `Sforce-Auto-Assign` | `True`/`False` → `TRUE`/`FALSE`; a string must be an AssignmentRule id (validated with `check_record_id`). Salesforce defaults to `TRUE` and applies it to Accounts, Cases and Leads, including ones written indirectly by triggers. |
+| `duplicate_rules: DuplicateRules \| None` | `create`, `update`, `upsert` | `Sforce-Duplicate-Rule-Header` | API 52.0+. See below. |
+| `if_modified_since: datetime \| None` | `get` | `If-Modified-Since` | 304 handling as before. The describe cache sends it internally (§12). |
+| `if_unmodified_since: datetime \| None` | `update` | `If-Unmodified-Since` | `Conflict` on 412. |
+
+`esf.DuplicateRules` is a frozen dataclass in `config.py` (no I/O), serialised by
+`core/records.duplicate_rule_header`. It replaces the 0.1 pre-release `allow_save=` kwarg (no
+deprecation needed: unreleased):
+
+```python
+@dataclass(frozen=True)
+class DuplicateRules:
+    allow_save: bool = False             # save despite a duplicate-rule alert
+    include_record_details: bool = False # DuplicateDetected.duplicates carries the matched records' fields, not just ids
+    run_as_current_user: bool = False    # match with the running user's sharing rules, not system sharing
+```
+
+All three fields are always sent (`allowSave=true; includeRecordDetails=false;
+runAsCurrentUser=false`); the defaults equal Salesforce's documented defaults, so
+`DuplicateRules()` behaves like sending no header.
+
+**No conditional headers on delete.** The REST API Developer Guide (*Conditional Request
+Headers*) says DELETE requests don't support them. An earlier 0.1 draft accepted
+`delete(id, if_unmodified_since=)`; Salesforce would ignore the header and delete anyway, which
+is worse than not offering it. It is removed (fix). There is no atomic "delete only if unchanged"
+in REST; the records guide says so and shows a read-then-delete pattern with its race window. V25 records
+the sandbox behaviour for the test docstring.
+
+**Client-wide headers** (§10.2): `client_name` and `default_namespace`
+(`Sforce-Call-Options`) and `update_mru` (`Sforce-Mru`).
 
 ### 9.2 Query and search (0.1)
 
@@ -838,6 +872,12 @@ which validates `^[A-Za-z][A-Za-z0-9_]*(__[a-z]+)?$` (dotted paths allowed).
 | `delete(ids, all_or_none=False)` | `DELETE composite/sobjects?ids=` | chunks of 200 |
 | `retrieve(sobject, ids, fields)` | `POST composite/sobjects/{o}` | chunks of 2000 |
 
+- **Write headers** (D30): `create`, `update` and `upsert` take `assignment_rule_id=` and
+  `duplicate_rules=` with the same types and serialisation as §9.1, sent on every chunk. The
+  *Headers* pages don't limit these two headers to particular resources, and the Collections
+  example responses show `DUPLICATES_DETECTED`, but no page says Collections honours them. They
+  ship only after a sandbox check (V24); if Salesforce ignores either one, that kwarg is not added
+  and the Collections guide says so. `delete` and `retrieve` take neither.
 - Returns `BatchResult` (ordered as input): `.results: list[RecordResult(ok, id, created, errors)]`, `.ok`, `.failed`, `.raise_for_errors()` → `PartialFailure`.
 - **Failures can't go unnoticed** (simple-salesforce #817, #544, #502, #442): every
   Collections `sf.request` event carries `records_failed`, so partial failures show up in logs and
@@ -1227,10 +1267,37 @@ settings come from `ESF_*` environment variables (§5.3).
 **Integration name for admins** (#726): `AsyncSalesforce(..., client_name="acme-sync")` sends
 `Sforce-Call-Options: client=acme-sync` on every API call, so the org's API usage can be
 attributed to this integration on the Salesforce side. Opt-in; validated to
-`[A-Za-z0-9_.:-]{1,64}`. A caller's own `Sforce-Call-Options` (e.g. `defaultNamespace=ns`) is
-merged, not replaced: comma-separated, ours first, header name matched case-insensitively; a
-`client=` the caller sets for one call wins for that call. ⚠️ **VERIFY** where the `client` value
-shows up for admins (V20).
+`[A-Za-z0-9_.:-]{1,64}`.
+
+**Default namespace** (managed-package orgs): `AsyncSalesforce(..., default_namespace="battle")`
+adds `defaultNamespace=battle`, so SOQL and records can name `botId__c` instead of
+`battle__botId__c`. Per the REST API Developer Guide (*Call Options Header*): Salesforce strips the
+prefix from response field names when this is set, and ignores it for describe calls; it is not
+supported by Bulk API 1.0. Validated as a namespace prefix (1–15 letters, digits or underscores,
+starting with a letter, no `__`; ⚠️ **VERIFY** the exact rule, V26). The docs page for each client
+option states the response-name change, because it alters dict keys.
+
+**Merging and separator (fix).** Options are joined with `"; "`, the separator in Salesforce's
+only documented example (`client=caseSensitiveToken; defaultNamespace=battle`). The 0.1 draft
+joined with `", "` and split the caller's header on `,` only, so a caller's
+`defaultNamespace=ns; client=x` was read as one option. A caller's own `Sforce-Call-Options` passed
+through `sf.request` is split on `;` **and** `,`, merged with ours (ours first, header name matched
+case-insensitively), and an option key the caller sets for one call (`client=`,
+`defaultNamespace=`) wins for that call. Pure function in `core/http.py`, unit-tested.
+
+Salesforce documents `Sforce-Call-Options` for sObject Basic Information, sObject Rows, sObject
+Rows by External ID, Query, QueryAll, Search and Bulk. We send it on every REST data call; V20
+checks it is accepted (or ignored, not rejected) on Collections and Composite and where admins see
+the `client` value.
+
+**MRU updates**: `AsyncSalesforce(..., update_mru=False)` sends `Sforce-Mru: updateMru=false`
+(API 60.0+; `ValueError` at construction if `api_version` is older). Salesforce defaults to
+`true` and recommends `false` for integration users, who never see Recent Items. Default `None`
+(no header, Salesforce's behaviour) so the library doesn't silently change what users see in
+the UI; the records guide recommends `update_mru=False` for integrations. Sent only on the
+resources Salesforce documents for it: `sf.sobject(...)` create, get, get-by-external-id,
+update and upsert (sObject Basic Information POST, Rows, Rows by External ID). SOQL never updates
+the MRU, so it is not sent on query.
 
 
 `sf.tagged(caller="job:backfill", priority="low")` returns a child view whose calls carry those
@@ -1298,6 +1365,7 @@ opaque positions, not secrets). Payloads and decoded field values are never logg
 `priority`, `soql_hash` (SHA-256 of normalised SOQL, first 12 hex), `soql` (only if
 `log_soql="redacted"`: string/number literals and SOSL `FIND {...}` terms replaced by `?`),
 `request_id`, `api_version`, `client_id_hash`, `records_failed` (Collections only),
+`sf_warning` (text of a `Warning` response header, when present),
 `error_message` (only with `ESF_DEBUG`: Salesforce messages can quote record values).
 
 **Never logged:** access/refresh tokens, `Authorization` headers, client secrets, private keys,
@@ -1537,6 +1605,7 @@ Scope:
 - Transport: §7 complete.
 - Errors: §8 complete including custom error tags.
 - Areas: Records (§9.1), Query/Search + `soql` + Cursor (§9.2) incl. values in SOQL methods, `query_one`, `query_first`, `explain`, `esf.flatten`, Collections (§9.3), raw `request` (§9.5), `limits()` (§9.17).
+- Request headers (D30, ADR 0012): fixes (no conditional headers on delete; `"; "` in `Sforce-Call-Options`); `DuplicateRules`; `default_namespace`; `update_mru`; `Warning` → `SalesforceWarning`; Collections write headers if V24 passes.
 - Usage (§10) and observability (§11) complete, stdlib observer; structlog/otel adapters.
 - Testing module (§14) for the areas above.
 - Docs: getting started, auth pages, records/query/collections guides, errors, logging, usage, migration guide (partial).
@@ -1643,12 +1712,14 @@ before the release named.
 | V21 | HTTP status and body for `UNSUPPORTED_API_VERSION` (configured version not offered by the org); message seen elsewhere: "Invalid Api version specified on URL" | 0.1 | **Open** — sandbox; current test fixture is synthetic |
 | V22 | `GET query?explain=` response fields (`plans[]`: `cardinality`, `fields`, `leadingOperationType`, `relativeCost`, `sobjectCardinality`, `sobjectType`, `notes`) | 0.1 | **Partly done** — fields confirmed in the *REST API Developer Guide* ("Get Feedback on Query Performance", v264: `plans[]` sorted most to least optimal; `leadingOperationType` is `Index`/`Other`/`TableScan`; `notes[]` has `description`, `fields`, `tableEnumOrId`; errors `MALFORMED_QUERY`/`INVALID_ID`). Salesforce labels it **Beta**. Still record a response in a sandbox (fixture is `synthetic`) |
 | V23 | Debug-log capture for anonymous Apex: `TraceFlag`/`DebugLevel` fields and permissions, `ApexLog` body endpoint, fields to match the log to the run | 0.3 | **Open** — *Tooling API* reference + sandbox |
-| V20 | `Sforce-Call-Options: client=<name>` on REST calls: accepted on every resource, and where admins see it | 0.1 | **Open** — REST API headers reference + sandbox |
-
+| V20 | `Sforce-Call-Options: client=<name>` on REST calls: accepted on every resource, and where admins see it | 0.1 | **Partly done** — *Call Options Header* (REST API Developer Guide v68.0) lists sObject Basic Information, Rows, Rows by External ID, Query, QueryAll, Search, Bulk; separator in the only example is `; `. Sandbox: Collections/Composite accept or ignore it; whether `, ` is also accepted; where admins see `client` |
+| V24 | `Sforce-Auto-Assign` and `Sforce-Duplicate-Rule-Header` take effect on sObject Collections create/update/upsert | 0.1 | **Open** — not stated in the *Headers* or *sObject Collections* pages; sandbox: Lead assignment rule fires (or not) and a duplicate alert is bypassed with `allowSave=true` via `composite/sobjects` |
+| V25 | `If-Unmodified-Since` on `DELETE sobjects/{o}/{id}` is ignored (record deleted) or rejected | 0.1 | **Partly done** — *Conditional Request Headers*: "DELETE requests aren't supported". Record the sandbox response for the test docstring |
+| V26 | Namespace prefix format accepted by `defaultNamespace` | 0.1 | **Open** — Salesforce help on registering a namespace prefix + sandbox with a managed package |
 | V27 | CDC bitmap bit order (bit 0 = least-significant bit of the hex value) and compound `{pos}-0x…` decoding | 0.5 | **Partly done**: format from *Event Deserialization Considerations*; bit order inferred from Salesforce's Python sample. Record a CDC event with several changed and nulled fields (including a compound field) in a sandbox |
 | V28 | How Pub/Sub Avro schemas mark Date/DateTime fields (logicalType or otherwise), so epoch values are converted only where the type is known | 0.5 | **Open**: `GetSchema` on a sandbox platform event and a change event |
 
-Remaining open: V4, V5b, V11 (sandbox half), V17, V18, V19, V20, V21 — all need a sandbox (V18/V20 also a docs check). V27 and V28 (0.5) need a sandbox too.
+Remaining open: V4, V5b, V11 (sandbox half), V17, V18, V19, V20, V21, V24, V25, V26 — all need a sandbox (V18/V26 also a docs check). V27 and V28 (0.5) need a sandbox too.
 
 Note: developer.salesforce.com blocks non-browser clients (403). In a real browser, each docs page
 has a Markdown version at the same path with `.md` instead of `.html` (fetch it from the page's
@@ -1673,6 +1744,31 @@ origin). help.salesforce.com needs JavaScript to render.
 ---
 
 ## Appendix A: Salesforce facts confirmed during design
+
+From the **REST API Developer Guide**, version 68.0 (Winter '27), "Headers" chapter
+(`resources.docs.salesforce.com/latest/latest/en-us/sfdc/pdf/api_rest.pdf`; HTML:
+`developer.salesforce.com/docs/platform/api-rest/guide/headers.html`), read 2026-11-09:
+
+- *Assignment Rule Header*: `Sforce-Auto-Assign`: `TRUE`, `FALSE` (case-insensitive) or an
+  AssignmentRule id; default `TRUE`; applies to Accounts, Cases, Leads, including ones written
+  indirectly (e.g. by a trigger). No resource restriction stated.
+- *Call Options Header*: `Sforce-Call-Options` with `client` and `defaultNamespace` ("Not supported
+  in Bulk API"); usable with sObject Basic Information, sObject Rows, sObject Rows by External ID,
+  Query, QueryAll, Search, Bulk API and Bulk API 2.0. Example:
+  `client=caseSensitiveToken; defaultNamespace=battle`. With a default namespace the response omits
+  the prefix; `defaultNamespace` is ignored for describe.
+- *Conditional Request Headers*: `If-Match`/`If-None-Match` (ETag) only for sObject Rows on
+  **Account**; `If-Modified-Since`/`If-Unmodified-Since` for sObject Rows, sObject Describe,
+  Describe Global, Invocable Actions; invalid values on PATCH/POST → 400; `If-Range` unsupported;
+  **"DELETE requests aren't supported"**.
+- *Duplicate Rule Header*: API 52.0+; `allowSave`, `includeRecordDetails`, `runAsCurrentUser`, all
+  default `false`. No resource restriction stated.
+- *MRU Header*: `Sforce-Mru: updateMru=true|false`, API 60.0+, default `true`; for sObject Basic
+  Information (POST), sObject Rows, sObject Rows by External ID, sObject Relationships; SOQL never
+  updates the MRU. Salesforce recommends `false` for API-only integration users.
+- *Package Version Header*: `x-sfdc-packageversion-[namespace]: xx.x`.
+- *Query Options Header*: `batchSize` default 2,000, min 200, max 2,000, not guaranteed (V9).
+- *Warning Header*: `Warning: <code> <message>`; code `299` for deprecated API versions.
 
 From the official Salesforce Help page **"OAuth 2.0 Refresh Token Flow for Renewed Sessions"**
 (`help.salesforce.com/s/articleView?id=xcloud.remoteaccess_oauth_refresh_token_flow.htm`), read 2026-11-09:

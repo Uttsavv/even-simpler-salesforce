@@ -19,6 +19,7 @@ spec disagree, the newer ADR wins and says what it supersedes.
 | [0009](0009-integrations-and-testing.md) | Framework integrations, testing support and quality gates | accepted | D17, D22, D28 |
 | [0010](0010-org-automation-convert-and-merge.md) | Org automation, lead convert and merge | accepted | D14, D26 |
 | [0011](0011-docs-versioning-and-releases.md) | Docs site, versioning and releases | accepted | D18, D19, D20, D21, D23, O1, O3, O4, O8, O13 |
+| [0012](0012-request-headers.md) | Request headers are keyword arguments, scoped to the resources that document them | accepted | D30 |
 | [0013](0013-event-subscriptions.md) | Events are pulled through one async iterator | accepted | D31 |
 
 To propose a change to one of these decisions, open an issue first (see `AGENTS.md`). A new ADR
