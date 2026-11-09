@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import logging
 import time
@@ -20,6 +21,7 @@ from ..errors import (
     OAuthError,
     ReauthorizationRequired,
     RefreshFailed,
+    SalesforceError,
     SessionExpired,
     TokenConflict,
     TransportError,
@@ -84,11 +86,13 @@ class AuthRuntime:
                 error_code="INVALID_SESSION_ID",
                 status=401,
             )
+        entered = self._generation()
         with self.transport.lock_for(self.key):
             cur = self.transport.tokens.get(self.key)
             if cur is not None and cur.access_token != stale.access_token and not self._due(cur):
                 return cur  # another caller already refreshed
-            new = self._refresh_locked(stale, proactive=proactive)
+            self._raise_shared_failure(entered)
+            new = self._refresh_recorded(stale, proactive=proactive)
             self.transport.tokens[self.key] = new
             return new
 
@@ -121,15 +125,44 @@ class AuthRuntime:
         if static is not None:
             self.transport.tokens.setdefault(self.key, static)
             return self.transport.tokens[self.key]
+        entered = self._generation()
         with self.transport.lock_for(self.key):
             tok = self.transport.tokens.get(self.key)
             if tok is not None:
                 return tok
             tok = self.store.load(self.key)
             if tok is None:
-                tok = self._refresh_locked(None, proactive=False)
+                self._raise_shared_failure(entered)
+                tok = self._refresh_recorded(None, proactive=False)
             self.transport.tokens[self.key] = tok
             return tok
+
+    # Concurrent callers queue on the per-key lock while one of them refreshes. If that refresh
+    # fails, the waiters must not each POST to the token endpoint again (a stampede that can trip
+    # login rate limits): every caller that was already waiting gets a copy of the same error.
+    # A call that starts after the failure was recorded makes a fresh attempt.
+
+    def _generation(self) -> int:
+        return self.transport.refresh_outcomes.get(self.key, (0, None))[0]
+
+    def _raise_shared_failure(self, entered: int) -> None:
+        generation, failure = self.transport.refresh_outcomes.get(self.key, (0, None))
+        if generation != entered and failure is not None:
+            shared = copy.copy(failure)
+            shared.__cause__ = failure.__cause__
+            raise shared
+
+    def _refresh_recorded(self, stale: Token | None, *, proactive: bool) -> Token:
+        generation = self._generation() + 1
+        try:
+            new = self._refresh_locked(stale, proactive=proactive)
+        except SalesforceError as exc:
+            kept = copy.copy(exc)  # no traceback: don't keep the failing frames alive
+            kept.__cause__ = exc.__cause__
+            self.transport.refresh_outcomes[self.key] = (generation, kept)
+            raise
+        self.transport.refresh_outcomes[self.key] = (generation, None)
+        return new
 
     def _post_form(self, url: str, form: dict[str, str]) -> RawResponse:
         return self.transport.post_form(url, form)
