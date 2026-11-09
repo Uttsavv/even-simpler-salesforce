@@ -1,0 +1,1 @@
+`UNSUPPORTED_API_VERSION` maps to `UnsupportedApiVersion`. A caller's own `Sforce-Call-Options` header is merged with `client_name` instead of replacing it. `with_auth(..., instance_url=)`; the parent's override is no longer inherited. `sf.auth.revoke()`/`introspect()` take `auth=` for tokens issued by another flow, and a `StaticToken` revoke really revokes.

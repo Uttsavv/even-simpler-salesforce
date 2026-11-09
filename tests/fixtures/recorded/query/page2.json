@@ -1,0 +1,17 @@
+{
+  "synthetic": true,
+  "source": "hand-written from Salesforce REST API Developer Guide examples",
+  "body": {
+    "totalSize": 3,
+    "done": true,
+    "records": [
+      {
+        "attributes": {
+          "type": "Lead"
+        },
+        "Id": "00Qxx0000000003AAA",
+        "Name": "C"
+      }
+    ]
+  }
+}

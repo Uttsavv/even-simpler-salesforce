@@ -7,18 +7,76 @@ on:
 permissions:
   contents: read
 
+env:
+  UV_PYTHON_DOWNLOADS: automatic
+
 jobs:
-  build:
+  check:
+    name: tag matches _version.py
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - id: v
+        name: Compare tag with __version__
+        run: |
+          version=$(sed -nE 's/^__version__ = "([^"]+)"$/\1/p' src/even_simpler_salesforce/_version.py)
+          test -n "$version" || { echo "::error::no __version__ in _version.py"; exit 1; }
+          test "v${version}" = "${GITHUB_REF_NAME}" || { echo "::error::tag ${GITHUB_REF_NAME} != v${version}"; exit 1; }
+          if echo "$version" | grep -qE '(a|b|rc|\.dev)[0-9]+'; then pre=true; else pre=false; fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$pre" >> "$GITHUB_OUTPUT"
+
+  tests:
+    name: tests (${{ matrix.os }}, py${{ matrix.python }})
+    needs: check
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest]
+        python: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        include:
+          - { os: macos-latest, python: "3.12" }
+          - { os: windows-latest, python: "3.12" }
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          python-version: ${{ matrix.python }}
+      - run: uv sync --all-extras --group dev
+      - run: uv run pytest -m "not sandbox"
+
+  quality:
+    name: lint, types, unasync, benchmarks
+    needs: check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - name: Check tag matches version
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --all-extras --group dev
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pyright
+      - run: uv run python scripts/unasync.py && git diff --exit-code -- src/even_simpler_salesforce/_sync
+      - name: Benchmarks (blocking on release)
         run: |
-          version=$(grep -m1 '^version' pyproject.toml | cut -d'"' -f2)
-          test "v${version}" = "${GITHUB_REF_NAME}" || { echo "tag ${GITHUB_REF_NAME} != v${version}"; exit 1; }
+          if [ -d tests/benchmarks ]; then uv run pytest tests/benchmarks --benchmark-only; fi
+
+  build:
+    needs: [tests, quality]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
       - run: uv build
-      - uses: actions/upload-artifact@v4
+      - name: Smoke-test the wheel
+        run: uv run --no-project python scripts/smoke_wheel.py dist/*.whl
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: dist
           path: dist/
@@ -32,8 +90,52 @@ jobs:
     permissions:
       id-token: write   # trusted publishing; no API token
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: dist
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # release/v1
+
+  github-release:
+    name: GitHub Release
+    needs: [check, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: dist
+          path: dist/
+      - name: Extract release notes
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          # The section compiled by towncrier: from "## [X]" up to the next "## [".
+          awk -v v="$VERSION" '
+            index($0, "## [" v "]") == 1 { grab = 1; next }
+            grab && /^## \[/ { exit }
+            grab { print }
+          ' CHANGELOG.md > notes.md
+          if ! grep -q '[^[:space:]]' notes.md; then
+            # Pre-releases keep their fragments: render a draft instead.
+            uvx towncrier build --draft --version "$VERSION" \
+              | sed -n '/^## /,$p' | tail -n +2 > notes.md
+          fi
+          echo "" >> notes.md
+          echo "Install: \`pip install even-simpler-salesforce==${VERSION}\`" >> notes.md
+          cat notes.md
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ needs.check.outputs.prerelease }}
+        run: |
+          flags=()
+          [ "$PRERELEASE" = "true" ] && flags+=(--prerelease)
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --verify-tag \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file notes.md \
+            "${flags[@]}"

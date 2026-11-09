@@ -1,0 +1,19 @@
+{
+  "synthetic": true,
+  "source": "hand-written from Salesforce REST API Developer Guide examples",
+  "body": {
+    "DailyApiRequests": {
+      "Max": 100000,
+      "Remaining": 88000,
+      "Ant Migration Tool": {
+        "Max": 0,
+        "Remaining": 0
+      }
+    },
+    "DataStorageMB": {
+      "Max": 1024,
+      "Remaining": 1000
+    },
+    "NotALimit": 5
+  }
+}

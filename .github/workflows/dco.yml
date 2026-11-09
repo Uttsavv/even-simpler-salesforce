@@ -1,0 +1,35 @@
+name: dco
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  signoff:
+    name: DCO sign-off
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Every non-merge commit needs a Signed-off-by trailer
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          fail=0
+          for sha in $(git rev-list --no-merges "$BASE..$HEAD"); do
+            if ! git log -1 --format=%B "$sha" | grep -qiE '^Signed-off-by: .+ <.+>$'; then
+              echo "::error::commit $(git log -1 --format='%h %s' "$sha") is missing 'Signed-off-by:'"
+              fail=1
+            fi
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo "Sign your commits with 'git commit -s' (see CONTRIBUTING.md#developer-certificate-of-origin)."
+            echo "Fix existing ones: git rebase --signoff $BASE && git push --force-with-lease"
+            exit 1
+          fi
+          echo "all commits signed off"

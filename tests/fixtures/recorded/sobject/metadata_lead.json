@@ -1,0 +1,10 @@
+{
+  "synthetic": true,
+  "source": "hand-written from Salesforce REST API Developer Guide examples",
+  "body": {
+    "objectDescribe": {
+      "name": "Lead"
+    },
+    "recentItems": []
+  }
+}

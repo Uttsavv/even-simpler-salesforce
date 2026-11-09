@@ -5,3 +5,14 @@ __pycache__/
 *.egg-info/
 .venv/
 site/
+.nox/
+.ruff_cache/
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+.benchmarks/
+
+# Sandbox token store (holds a live refresh token) - tests/sandbox/README.md
+.esf-sandbox/
+.venv-docs/

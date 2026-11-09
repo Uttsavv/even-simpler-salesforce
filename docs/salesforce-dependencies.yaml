@@ -1,0 +1,291 @@
+# Salesforce dependency index: the source of truth.
+#
+# Everything Salesforce-side that even-simpler-salesforce depends on. Review it against each
+# Salesforce release (three a year):
+#   https://help.salesforce.com/s/articleView?id=release-notes.salesforce_release_notes.htm&type=5
+#   https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/intro_rest_whats_new.htm
+#
+# - tests/unit/test_salesforce_index.py checks the code against this file.
+# - docs/salesforce-dependencies.md is generated from it:
+#     python scripts/render_sf_index.py          # regenerate
+#     python scripts/render_sf_index.py --check  # CI / tests
+# - `checked`: the date (YYYY-MM-DD) someone last compared the entry with the official docs.
+#   null = not checked yet. The docs links were added from the documented URL layout and
+#   still need that check.
+# - Paths are relative to /services/data/vXX.X/ unless they start with /services/.
+#   `{}` marks a value filled in at runtime.
+
+last_full_review: null
+
+api_versions:
+  default: "68.0"      # DEFAULT_API_VERSION (_async/client.py)
+  minimum: "59.0"      # MIN_API_VERSION (_async/client.py)
+  end_of_life_policy: https://help.salesforce.com/s/articleView?id=000354473&type=1
+
+rest_endpoints:
+  - path: query
+    methods: [GET]
+    used_by: "sf.query, sf.query_iter, sf.count, sf.query_one, sf.query_first (?q=); sf.explain (?explain=, Salesforce Beta)"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_query.htm
+    checked: null
+    # ?explain= (sf.explain): fields checked 2026-11-09 against
+    # https://developer.salesforce.com/docs/atlas.en-us.264.0.api_rest.meta/api_rest/dome_query_explain.htm (V22)
+  - path: queryAll
+    methods: [GET]
+    used_by: "sf.query(..., include_deleted=True)"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_queryall.htm
+    checked: null
+  - path: "query/{}"
+    methods: [GET]
+    used_by: "sf.query_more, sf.query_iter (nextRecordsUrl, absolute path)"
+    dynamic: true  # the path comes from the opaque cursor, not a literal in the code
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_query.htm
+    checked: null
+  - path: search
+    methods: [GET]
+    used_by: "sf.search (?q= SOSL)"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_search.htm
+    checked: null
+  - path: parameterizedSearch
+    methods: [POST]
+    used_by: sf.parameterized_search
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_search_parameterized.htm
+    checked: null
+  - path: limits
+    methods: [GET]
+    used_by: sf.limits
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_limits.htm
+    checked: null
+  - path: sobjects
+    methods: [GET]
+    used_by: "sf.describe_global() (If-Modified-Since → 304)"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_describeGlobal.htm
+    checked: null
+  - path: "sobjects/{}"
+    methods: [GET]
+    used_by: sobject.metadata()
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_sobject_basic_info.htm
+    checked: null
+  - path: "sobjects/{}/"
+    methods: [POST]
+    used_by: sobject.create()
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_sobject_basic_info.htm
+    checked: null
+  - path: "sobjects/{}/describe"
+    methods: [GET]
+    used_by: "sobject.describe() (If-Modified-Since → 304)"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_sobject_describe.htm
+    checked: null
+  - path: "sobjects/{}/{}"
+    methods: [GET, PATCH, DELETE]
+    used_by: "sobject.get/update/delete() by id"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_sobject_retrieve.htm
+    checked: null
+  - path: "sobjects/{}/{}/{}"
+    methods: [GET, PATCH]
+    used_by: "sobject.get_by_external_id/upsert() (300 on multiple matches)"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_sobject_upsert.htm
+    checked: null
+  - path: "sobjects/{}/updated/"
+    methods: [GET]
+    used_by: sobject.updated(start, end)
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_getupdated.htm
+    checked: null
+  - path: "sobjects/{}/deleted/"
+    methods: [GET]
+    used_by: sobject.deleted(start, end)
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_getdeleted.htm
+    checked: null
+  - path: composite/sobjects
+    methods: [POST, PATCH, DELETE]
+    used_by: collections.create/update/delete()
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobjects_collections.htm
+    checked: null
+  - path: "composite/sobjects/{}"
+    methods: [POST]
+    used_by: collections.retrieve()
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobjects_collections_retrieve.htm
+    checked: null
+  - path: "composite/sobjects/{}/{}"
+    methods: [PATCH]
+    used_by: collections.upsert()
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobjects_collections_upsert.htm
+    checked: null
+  - path: /services/oauth2/userinfo
+    methods: [GET]
+    used_by: sf.auth.userinfo()
+    docs: https://help.salesforce.com/s/articleView?id=sf.remoteaccess_using_userinfo_endpoint.htm&type=5
+    checked: null
+
+oauth:
+  hosts:
+    login: https://login.salesforce.com
+    test: https://test.salesforce.com
+    my_domain: "https://<name>.my.salesforce.com (required for client credentials)"
+  endpoints:
+    - path: /services/oauth2/authorize
+      methods: [GET]
+      used_by: "Web server flow start (code_challenge, S256, state, scope, prompt)"
+      docs: https://help.salesforce.com/s/articleView?id=sf.remoteaccess_oauth_web_server_flow.htm&type=5
+      checked: null
+    - path: /services/oauth2/token
+      methods: [POST]
+      used_by: Every grant type below (form-encoded)
+      docs: null
+      checked: null
+    - path: /services/oauth2/revoke
+      methods: [POST]
+      used_by: sf.auth.revoke()
+      docs: https://help.salesforce.com/s/articleView?id=sf.remoteaccess_revoke_token.htm&type=5
+      checked: null
+    - path: /services/oauth2/introspect
+      methods: [POST]
+      used_by: "sf.auth.introspect(), expiry=\"introspect\" (reads active, exp)"
+      docs: https://help.salesforce.com/s/articleView?id=sf.remoteaccess_oidc_token_introspection_endpoint.htm&type=5
+      checked: null
+  grant_types:
+    - grant_type: authorization_code
+      used_by: WebServerFlow.exchange_code (+ PKCE)
+      docs: https://help.salesforce.com/s/articleView?id=sf.remoteaccess_oauth_web_server_flow.htm&type=5
+      checked: null
+    - grant_type: refresh_token
+      used_by: WebServerFlow refresh
+      docs: https://help.salesforce.com/s/articleView?id=sf.remoteaccess_oauth_refresh_token_flow.htm&type=5
+      checked: null
+    - grant_type: client_credentials
+      used_by: ClientCredentials
+      docs: https://help.salesforce.com/s/articleView?id=sf.remoteaccess_oauth_client_credentials_flow.htm&type=5
+      checked: null
+    - grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer"
+      used_by: "JwtBearer (RS256; aud = login/test/My Domain)"
+      docs: https://help.salesforce.com/s/articleView?id=sf.remoteaccess_oauth_jwt_flow.htm&type=5
+      checked: null
+  behaviour:
+    - "Token success body: access_token and instance_url (required), id (identity URL; org and user ids parsed from /id/<org>/<user>), issued_at (ms), signature, scope, optional refresh_token (a new one means rotation; saved before use)."
+    - "No expires_in: expiry is learnt from a 401, refresh_ahead, or introspection exp."
+    - "Errors are {error, error_description}. invalid_grant → ReauthorizationRequired; the text \"token request is already being processed\" → bounded back-off (3 POSTs)."
+    - "API calls answer an expired token with 401 and INVALID_SESSION_ID (or OAuth invalid_token): one refresh, one resend, then SessionExpired."
+
+headers:
+  - name: Sforce-Call-Options
+    direction: request
+    used_for: "client_name= → client=<name>"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/headers_calloptions.htm
+    checked: null
+  - name: Sforce-Query-Options
+    direction: request
+    used_for: "page_size= → batchSize=200..2000"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/headers_queryoptions.htm
+    checked: null
+  - name: Sforce-Auto-Assign
+    direction: request
+    used_for: "assignment_rule_id= (TRUE / FALSE / rule id)"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/headers_autoassign.htm
+    checked: null
+  - name: Sforce-Duplicate-Rule-Header
+    direction: request
+    used_for: "allow_save= → allowSave=true/false"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/headers_duplicaterules.htm
+    checked: null
+  - name: If-Modified-Since
+    direction: request
+    used_for: "describe revalidation, get(if_modified_since=) → 304"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/intro_rest_conditional_requests.htm
+    checked: null
+  - name: If-Unmodified-Since
+    direction: request
+    used_for: "update/delete(if_unmodified_since=) → 412"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/intro_rest_conditional_requests.htm
+    checked: null
+  - name: Content-Encoding
+    direction: request
+    used_for: "gzip for bodies over 64 KiB (Collections)"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/intro_rest_compression.htm
+    checked: null
+  - name: Sforce-Limit-Info
+    direction: response
+    used_for: "api-usage=N/M; api-bursts=N/M → sf.usage, budgets"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/headers_api_usage.htm
+    checked: null
+  - name: Sforce-Request-Id
+    direction: response
+    used_for: "error.request_id, sf.request events"
+    docs: null
+    checked: null
+  - name: Retry-After
+    direction: response
+    used_for: "429 / REQUEST_LIMIT_EXCEEDED back-off (seconds or HTTP date)"
+    docs: null
+    checked: null
+  - name: Last-Modified
+    direction: response
+    used_for: describe cache revalidation
+    docs: null
+    checked: null
+
+response_shapes:
+  - resource: Query / QueryAll / query more
+    fields: [records, totalSize, done, nextRecordsUrl]
+  - resource: Search
+    fields: [searchRecords]
+  - resource: sObject Collections writes
+    fields: ["list, one per input in order", id, success, "errors[]", created]
+  - resource: sObject Collections retrieve
+    fields: ["list, one per id in order", "null when not found"]
+  - resource: Upsert by external id
+    fields: [id, created, "201 = created, 204/200 = updated", "300 = list of matching URLs"]
+  - resource: Limits
+    fields: ["{name: {Max, Remaining, ...}}"]
+  - resource: REST error body
+    fields: ["list of {message, errorCode or statusCode, fields}", "extras such as duplicateResult"]
+  - resource: OAuth error body
+    fields: [error, error_description]
+
+# Mapped to typed errors in core/classify.py (CODE_MAP); must match it exactly.
+error_codes:
+  MALFORMED_QUERY: MalformedQuery
+  INVALID_QUERY_LOCATOR: MalformedQuery
+  INVALID_QUERY_FILTER_OPERATOR: MalformedQuery
+  MALFORMED_SEARCH: MalformedQuery
+  INVALID_SEARCH: MalformedQuery
+  INVALID_FIELD: InvalidField
+  INVALID_FIELD_FOR_INSERT_UPDATE: InvalidField
+  INVALID_FIELD_WHEN_USING_TEMPLATE: InvalidField
+  INVALID_TYPE: InvalidType
+  NOT_FOUND: NotFound
+  ENTITY_IS_DELETED: NotFound
+  INSUFFICIENT_ACCESS: Forbidden
+  INSUFFICIENT_ACCESS_OR_READONLY: Forbidden
+  INSUFFICIENT_ACCESS_ON_CROSS_REFERENCE_ENTITY: Forbidden
+  API_DISABLED_FOR_ORG: Forbidden
+  API_CURRENTLY_DISABLED: Forbidden
+  FUNCTIONALITY_NOT_ENABLED: Forbidden
+  FIELD_CUSTOM_VALIDATION_EXCEPTION: ValidationRuleFailed
+  REQUIRED_FIELD_MISSING: RequiredFieldMissing
+  DUPLICATES_DETECTED: DuplicateDetected
+  INVALID_CROSS_REFERENCE_KEY: InvalidReference
+  FIELD_INTEGRITY_EXCEPTION: InvalidReference
+  STRING_TOO_LONG: StringTooLong
+  INVALID_OR_NULL_FOR_RESTRICTED_PICKLIST: InvalidPicklistValue
+  UNABLE_TO_LOCK_ROW: RowLocked
+  CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY: RecordSaveBlocked
+  CANNOT_EXECUTE_FLOW_TRIGGER: FlowFailed
+  STORAGE_LIMIT_EXCEEDED: StorageLimitExceeded
+  REQUEST_LIMIT_EXCEEDED: RequestLimitExceeded
+  INVALID_SESSION_ID: SessionExpired
+  SERVER_UNAVAILABLE: ServerError
+  APEX_ERROR: ApexError
+  UNSUPPORTED_API_VERSION: UnsupportedApiVersion
+
+other_error_codes:
+  - code: ALL_OR_NONE_OPERATION_ROLLED_BACK
+    note: skipped when picking the primary error of an all_or_none batch
+
+http_statuses: [300, 304, 401, 403, 404, 409, 410, 412, 414, 420, 428, 429, 431, 500, 502, 503, 504]
+
+limits:
+  collection_write_chunk: 200    # COLLECTION_WRITE_CHUNK
+  collection_read_chunk: 2000    # COLLECTION_READ_CHUNK
+  query_batch_size: [200, 2000]  # Sforce-Query-Options validation
+  record_id_lengths: [15, 18]    # check_record_id
+  gzip_threshold_bytes: 65536    # GZIP_THRESHOLD

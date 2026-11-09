@@ -1,0 +1,10 @@
+{
+  "synthetic": true,
+  "source": "hand-written from Salesforce REST API Developer Guide examples",
+  "body": [
+    {
+      "message": "Session expired or invalid",
+      "errorCode": "INVALID_SESSION_ID"
+    }
+  ]
+}

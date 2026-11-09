@@ -1,0 +1,8 @@
+{
+  "synthetic": true,
+  "source": "OAuth 2.0 Refresh Token Flow help page",
+  "body": {
+    "error": "invalid_request",
+    "error_description": "Token request is already being processed"
+  }
+}

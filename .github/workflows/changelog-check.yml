@@ -1,0 +1,37 @@
+name: changelog
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  fragment:
+    name: changelog fragment
+    runs-on: ubuntu-latest
+    if: >-
+      !contains(github.event.pull_request.labels.*.name, 'skip-changelog')
+      && github.event.pull_request.user.login != 'dependabot[bot]'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Require a changelog.d/<issue>.<type>.md fragment
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          types='added|changed|deprecated|removed|fixed|security|performance'
+          changed=$(git diff --name-only --diff-filter=AMR "$BASE"...HEAD -- changelog.d/ | grep -v '^changelog.d/template.md.jinja$' || true)
+          bad=$(echo "$changed" | grep -v -E "^changelog\.d/[^/]+\.($types)(\.[0-9]+)?\.md$" | grep -v '^$' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::badly named changelog fragment(s); expected changelog.d/<issue-or-+slug>.<type>.md with type in ($types):"
+            echo "$bad"
+            exit 1
+          fi
+          if [ -z "$changed" ]; then
+            echo "::error::no changelog fragment. Add changelog.d/<PR-number>.<type>.md (type: $types), or ask for the 'skip-changelog' label."
+            exit 1
+          fi
+          echo "found:"; echo "$changed"

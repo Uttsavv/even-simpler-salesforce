@@ -1,0 +1,9 @@
+{
+  "synthetic": true,
+  "source": "hand-written from Salesforce REST API Developer Guide examples",
+  "body": {
+    "id": "00Qxx0000000003AAA",
+    "success": true,
+    "errors": []
+  }
+}
