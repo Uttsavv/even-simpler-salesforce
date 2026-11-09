@@ -135,6 +135,7 @@ Behaviour relied on:
 | `INVALID_SESSION_ID` | `SessionExpired` |
 | `SERVER_UNAVAILABLE` | `ServerError` |
 | `APEX_ERROR` | `ApexError` |
+| `UNSUPPORTED_API_VERSION` | `UnsupportedApiVersion` |
 
 Also relied on: `ALL_OR_NONE_OPERATION_ROLLED_BACK` (skipped when picking the primary error of an all_or_none batch). HTTP statuses: 300, 304, 401, 403, 404, 409, 410, 412, 414, 420, 428, 429, 431, 500, 502, 503, 504.
 

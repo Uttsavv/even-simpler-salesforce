@@ -58,8 +58,9 @@ class DebugPrinter:
                 parts.append(f"api {_k(f['api_used'])}/{_k(f['api_max'])}")
             print("  ".join(parts), file=out)
         elif event.name == "sf.auth.refreshed":
+            what = "oauth.token  " if f.get("initial") else "oauth.refresh"
             print(
-                f"esf POST  oauth.refresh  {f.get('flow', '')}  {int(f.get('duration_ms') or 0)}ms"
+                f"esf POST  {what}  {f.get('flow', '')}  {int(f.get('duration_ms') or 0)}ms"
                 + ("  rotated" if f.get("rotated") else ""),
                 file=out,
             )

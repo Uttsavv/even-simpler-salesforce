@@ -16,9 +16,14 @@ DELETE = RequestSpec("DELETE", "sobjects/Lead/00Qxx0000000001AAA")
 POST = RequestSpec("POST", "sobjects/Lead")
 POST_IDEM = RequestSpec("POST", "composite/sobjects/Lead", idempotent=True)
 PATCH_NOT_IDEM = RequestSpec("PATCH", "x", idempotent=False)
+PATCH_IDEM = RequestSpec("PATCH", "x", idempotent=True)
+GET_DML = RequestSpec("GET", "x", dml=True)
+GET_APEXREST = RequestSpec("GET", "/services/apexrest/orders")
+GET_ANON = RequestSpec("GET", "tooling/executeAnonymous", params={"anonymousBody": "x"})
 
-IDEMPOTENT = [GET, HEAD, PATCH, PUT, DELETE, POST_IDEM]
-NON_IDEMPOTENT = [POST, PATCH_NOT_IDEM]
+# ADR 0001: only reads are resent after the request may have reached Salesforce.
+IDEMPOTENT = [GET, HEAD, POST_IDEM, PATCH_IDEM]
+NON_IDEMPOTENT = [POST, PATCH, PUT, DELETE, PATCH_NOT_IDEM, GET_DML, GET_APEXREST, GET_ANON]
 ALL = IDEMPOTENT + NON_IDEMPOTENT
 
 
@@ -47,7 +52,7 @@ def test_timeout_after_send_retried_when_idempotent(spec: RequestSpec) -> None:
 
 
 @pytest.mark.parametrize("spec", NON_IDEMPOTENT, ids=_ids(NON_IDEMPOTENT))
-def test_timeout_after_send_not_retried_for_post(spec: RequestSpec) -> None:
+def test_timeout_after_send_not_retried_unless_idempotent(spec: RequestSpec) -> None:
     assert decide_retry(spec, esf.RequestTimeout("x"), sent=True).retry is False
     assert decide_retry(spec, esf.TransportError("reset"), sent=True).retry is False
 
@@ -152,3 +157,8 @@ def test_retry_policy_defaults_and_validation() -> None:
     )
     with pytest.raises(ValueError):
         esf.RetryPolicy(max_attempts=0)
+
+
+def test_apexrest_get_can_opt_in() -> None:
+    spec = RequestSpec("GET", "/services/apexrest/orders", idempotent=True)
+    assert decide_retry(spec, esf.RequestTimeout("x"), sent=True).retry is True

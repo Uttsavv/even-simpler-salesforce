@@ -273,6 +273,7 @@ error_codes:
   INVALID_SESSION_ID: SessionExpired
   SERVER_UNAVAILABLE: ServerError
   APEX_ERROR: ApexError
+  UNSUPPORTED_API_VERSION: UnsupportedApiVersion
 
 other_error_codes:
   - code: ALL_OR_NONE_OPERATION_ROLLED_BACK

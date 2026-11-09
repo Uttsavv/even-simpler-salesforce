@@ -41,7 +41,7 @@ class Summary:
         with self._lock:
             self.calls += 1
             self.ms += float(f.get("duration_ms") or 0)
-            self.retries += max(0, int(f.get("attempts") or 1) - 1)
+            self.retries += len(f.get("retry_reasons") or ())  # a resend after refresh isn't a retry
             if f.get("refreshed"):
                 self.refreshed = True
             if f.get("outcome") == "error":

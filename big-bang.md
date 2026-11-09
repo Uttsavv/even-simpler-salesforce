@@ -547,16 +547,21 @@ Both backends MUST behave identically (implemented in `core/jsonlib.py`):
 
 `RetryPolicy(max_attempts=3, base_delay=0.25, max_delay=8.0, jitter=True, respect_retry_after=True)`.
 
-| Situation | GET / HEAD | PATCH / PUT / DELETE | POST create & other POSTs | Refresh POST |
+| Situation | GET / HEAD reads | PATCH / PUT / DELETE, upsert, code-running GETs | POST create & other POSTs | Refresh POST |
 |---|---|---|---|---|
 | Connect error (request never sent) | retry | retry | retry | retry |
-| Timeout / reset after send | retry | retry | **no** (ambiguous) unless spec marks `idempotent=True` | **no** (§6.4) |
-| 5xx, `SERVER_UNAVAILABLE` | retry | retry | **no** unless `idempotent=True` | n/a |
+| Timeout / reset after send | retry | **no** unless `idempotent=True` (ADR 0001) | **no** (ambiguous) unless `idempotent=True` | **no** (§6.4) |
+| 5xx, `SERVER_UNAVAILABLE` | retry | **no** unless `idempotent=True` (ADR 0001) | **no** unless `idempotent=True` | n/a |
 | 429 / `REQUEST_LIMIT_EXCEEDED` with `Retry-After` | retry after header | retry after header | retry after header | n/a |
 | `UNABLE_TO_LOCK_ROW` | retry | retry | retry (the write was rejected, so safe) | n/a |
 | 4xx other | no | no | no | no |
 
-- Specs that are idempotent by nature set `idempotent=True` (query, describe, upsert by external id, composite with only GETs, Bulk job status polls).
+- **Only reads are resent after a request may have reached Salesforce** (`docs/adr/0001-retry-safety.md`):
+  a write that timed out may have committed, and a resend re-runs triggers/flows or turns success
+  into a false `Conflict`/`NotFound`. GET/HEAD count as reads except Apex REST and
+  `tooling/executeAnonymous` (they run code); `dml=True` specs never do. Reads sent as POST set
+  `idempotent=True` explicitly (query by POST, `parameterizedSearch`, Collections retrieve,
+  composite with only GETs, Bulk job status polls). Upsert by external id is **not** idempotent here.
 - Each retry is recorded in the final `sf.request` event (`retries`, `retry_reasons`).
 - Exponential backoff with full jitter, capped by `max_delay`; `Retry-After` wins when present.
 
@@ -609,7 +614,9 @@ SalesforceError
 │   ├── Conflict                         409 / 412 / 428
 │   ├── Gone                             410: resource retired or removed
 │   ├── RequestTooLarge                  414 / 431: URI or headers over 16,384 bytes
-│   └── UnsupportedApiVersion            feature needs a newer api_version than configured
+│   └── UnsupportedApiVersion            UNSUPPORTED_API_VERSION from Salesforce (error_code set), or raised by
+│                                        the library (error_code="API_VERSION_TOO_OLD") when a feature needs a
+│                                        newer api_version than configured
 ├── RecordError                          (DML rejected by the org)
 │   ├── ValidationRuleFailed             FIELD_CUSTOM_VALIDATION_EXCEPTION (rules, Flow custom errors, addError())
 │   ├── RequiredFieldMissing             REQUIRED_FIELD_MISSING
@@ -950,7 +957,10 @@ await sf.pubsub.publish("/event/Order_Event__e", [payload, ...])
 **Integration name for admins** (#726): `AsyncSalesforce(..., client_name="acme-sync")` sends
 `Sforce-Call-Options: client=acme-sync` on every API call, so the org's API usage can be
 attributed to this integration on the Salesforce side. Opt-in; validated to
-`[A-Za-z0-9_.:-]{1,64}`. ⚠️ **VERIFY** where the `client` value shows up for admins (V20).
+`[A-Za-z0-9_.:-]{1,64}`. A caller's own `Sforce-Call-Options` (e.g. `defaultNamespace=ns`) is
+merged, not replaced: comma-separated, ours first, header name matched case-insensitively; a
+`client=` the caller sets for one call wins for that call. ⚠️ **VERIFY** where the `client` value
+shows up for admins (V20).
 
 
 `sf.tagged(caller="job:backfill", priority="low")` returns a child view whose calls carry those
@@ -1324,9 +1334,10 @@ before the release named.
 | V17 | Tooling `executeAnonymous` result fields | 0.3 | **Open** — the REST resource is documented (GET, API 29.0+, blocked from managed packages) but no result-field page was found; record a response in a sandbox |
 | V18 | Bulk 2.0 CSV: empty cell = unchanged, `#N/A` = null; UTF-8 handling | 0.3 | **Open** — official Bulk 2.0 docs + sandbox (simple-salesforce #309, #769, #706) |
 | V19 | External id values containing `.` (e.g. `x.json`) in `sobjects/{o}/{field}/{value}` are read as a format suffix | 0.1 | **Open** — sandbox (simple-salesforce #22) |
+| V21 | HTTP status and body for `UNSUPPORTED_API_VERSION` (configured version not offered by the org); message seen elsewhere: "Invalid Api version specified on URL" | 0.1 | **Open** — sandbox; current test fixture is synthetic |
 | V20 | `Sforce-Call-Options: client=<name>` on REST calls: accepted on every resource, and where admins see it | 0.1 | **Open** — REST API headers reference + sandbox |
 
-Remaining open: V4, V5b, V11 (sandbox half), V17, V18, V19, V20 — all need a sandbox (V18/V20 also a docs check).
+Remaining open: V4, V5b, V11 (sandbox half), V17, V18, V19, V20, V21 — all need a sandbox (V18/V20 also a docs check).
 
 Note: developer.salesforce.com blocks non-browser clients (403). In a real browser, each docs page
 has a Markdown version at the same path with `.md` instead of `.html` (fetch it from the page's

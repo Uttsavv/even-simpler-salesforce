@@ -121,12 +121,19 @@ def test_revoke_error_raises_and_keeps_store(h: Harness, mock: respx.MockRouter)
     assert h.load(store, auth.token_key) is not None
 
 
-def test_revoke_static_token_only_forgets(h: Harness, mock: respx.MockRouter) -> None:
-    route = mock.post(REVOKE_URL)
+def test_revoke_static_token_posts_to_instance(h: Harness, mock: respx.MockRouter) -> None:
+    """Review m11: a StaticToken revoke really revokes (at its instance), not just forgets."""
+    route = mock.post(f"{INSTANCE}/services/oauth2/revoke").respond(200)
     sf = h.client(esf.StaticToken("00D!x", INSTANCE))
-    h.run(sf.auth.token())
     h.run(sf.auth.revoke())
-    assert not route.called
+    assert route.called
+    assert route.calls.last.request.content == b"token=00D%21x"
+
+
+def test_revoke_other_key_needs_auth_for_static_client(h: Harness) -> None:
+    sf = h.client(esf.StaticToken("00D!x", INSTANCE))
+    with pytest.raises(ValueError, match="auth="):
+        h.run(sf.auth.revoke("user:9"))
 
 
 def test_userinfo_goes_through_pipeline(h: Harness, mock: respx.MockRouter) -> None:

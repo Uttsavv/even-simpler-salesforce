@@ -232,7 +232,6 @@ class AsyncSObject:
                 content=content,
                 content_type=ctype,
                 headers=_write_headers(assignment_rule_id, allow_save),
-                idempotent=True,
                 operation="sobject.upsert",
                 sobject=self.name,
                 path_template=f"/sobjects/{self.name}/{field}/:value",

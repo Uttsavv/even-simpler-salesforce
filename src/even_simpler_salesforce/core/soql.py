@@ -80,7 +80,9 @@ def quote(value: Any) -> str:
     if isinstance(value, float):
         if math.isnan(value) or math.isinf(value):
             raise ValueError("NaN/Infinity can't be used in SOQL")
-        return repr(value)
+        text = repr(value)
+        # SOQL numbers have no exponent form: 1e16 -> 10000000000000000, 1e-07 -> 0.0000001
+        return format(decimal.Decimal(text), "f") if ("e" in text or "E" in text) else text
     if isinstance(value, decimal.Decimal):
         if not value.is_finite():
             raise ValueError("NaN/Infinity can't be used in SOQL")
@@ -154,7 +156,7 @@ def soql_identifier(name: str) -> SoqlIdentifier:
     if not isinstance(name, str) or not name:  # pyright: ignore[reportUnnecessaryIsInstance]
         raise ValueError("identifier must be a non-empty string")
     for seg in name.split("."):
-        if not _IDENT_SEGMENT.match(seg):
+        if not _IDENT_SEGMENT.fullmatch(seg):
             raise ValueError(f"invalid SOQL identifier: {name!r}")
     return SoqlIdentifier(name)
 
@@ -162,14 +164,17 @@ def soql_identifier(name: str) -> SoqlIdentifier:
 # --- normalisation for logs ------------------------------------------------------------
 
 _STRING_LIT = re.compile(r"'(?:\\.|[^'\\])*'")
+_SOSL_TERM = re.compile(r"\{(?:\\.|[^}\\])*\}")  # FIND {search terms}
 _NUM_LIT = re.compile(r"(?<![A-Za-z0-9_.])-?\d+(?:\.\d+)?(?![A-Za-z0-9_])")
 _DATE_LIT = re.compile(r"\b\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}))?")
 _WS = re.compile(r"\s+")
 
 
 def redact_soql(query: str) -> str:
-    """Replace string, date and number literals with ``?`` and collapse whitespace."""
-    out = _STRING_LIT.sub("?", query)
+    """Replace string, date and number literals (and SOSL ``FIND {...}`` terms) with ``?``
+    and collapse whitespace."""
+    out = _SOSL_TERM.sub("{?}", query)
+    out = _STRING_LIT.sub("?", out)
     out = _DATE_LIT.sub("?", out)
     out = _NUM_LIT.sub("?", out)
     return _WS.sub(" ", out).strip()

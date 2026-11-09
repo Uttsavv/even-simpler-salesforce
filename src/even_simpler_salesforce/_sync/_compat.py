@@ -10,7 +10,7 @@ from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, TypeVar
 
-__all__ = ["Lock", "Periodic", "Semaphore", "gather_limited", "gather_settled", "nullcontext", "sleep"]
+__all__ = ["Lock", "Periodic", "Semaphore", "gather_settled", "nullcontext", "sleep"]
 
 T = TypeVar("T")
 
@@ -23,22 +23,11 @@ def nullcontext() -> contextlib.AbstractContextManager[None]:
     return contextlib.nullcontext()
 
 
-def gather_limited(n: int, funcs: Sequence[Callable[[], T]]) -> list[T]:
+def gather_settled(n: int, funcs: Sequence[Callable[[], T]]) -> list[T | Exception]:
     """Run ``funcs`` on up to ``n`` threads; results keep the input order.
 
-    Each task runs in a copy of the caller's context so ``capture()`` and ``call_context()``
-    keep working.
-    """
-    if n <= 1 or len(funcs) <= 1:
-        return [f() for f in funcs]
-    with ThreadPoolExecutor(max_workers=min(n, len(funcs))) as pool:
-        futures = [pool.submit(contextvars.copy_context().run, f) for f in funcs]
-        return [fut.result() for fut in futures]
-
-
-def gather_settled(n: int, funcs: Sequence[Callable[[], T]]) -> list[T | Exception]:
-    """Like :func:`gather_limited`, but always waits for every call and returns exceptions in
-    place of results."""
+    Always waits for every call and returns exceptions in place of results. Each task runs in a
+    copy of the caller's context so ``capture()`` and ``call_context()`` keep working."""
     if n <= 1 or len(funcs) <= 1:
         out: list[T | Exception] = []
         for f in funcs:

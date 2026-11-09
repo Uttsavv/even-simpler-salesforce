@@ -125,7 +125,6 @@ class Collections:
             sobject,
             all_or_none,
             concurrency,
-            idempotent=True,
         )
 
     def delete(

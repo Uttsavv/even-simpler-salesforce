@@ -41,7 +41,7 @@ def _tag(key: bytes, payload: str) -> str:
 
 def encode_cursor(next_records_url: str, key: bytes | None = None) -> Cursor:
     """Encode a ``nextRecordsUrl`` path as a :class:`Cursor`."""
-    if not _LOCATOR_PATH.match(next_records_url):
+    if not _LOCATOR_PATH.fullmatch(next_records_url):
         raise MalformedQuery(f"unexpected nextRecordsUrl shape: {next_records_url!r}")
     payload = _b64e(next_records_url.encode("ascii"))
     if key is not None:
@@ -67,6 +67,6 @@ def decode_cursor(cursor: str, key: bytes | None = None) -> str:
         path = _b64d(payload).decode("ascii")
     except (binascii.Error, UnicodeDecodeError, ValueError):
         raise MalformedQuery("invalid cursor", error_code="INVALID_CURSOR") from None
-    if not _LOCATOR_PATH.match(path):
+    if not _LOCATOR_PATH.fullmatch(path):
         raise MalformedQuery("invalid cursor", error_code="INVALID_CURSOR")
     return path

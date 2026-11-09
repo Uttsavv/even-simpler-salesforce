@@ -7,7 +7,7 @@ import contextlib
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Any, TypeVar
 
-__all__ = ["Lock", "Periodic", "Semaphore", "gather_limited", "gather_settled", "nullcontext", "sleep"]
+__all__ = ["Lock", "Periodic", "Semaphore", "gather_settled", "nullcontext", "sleep"]
 
 T = TypeVar("T")
 
@@ -20,22 +20,11 @@ def nullcontext() -> contextlib.AbstractAsyncContextManager[None]:
     return contextlib.nullcontext()
 
 
-async def gather_limited(n: int, funcs: Sequence[Callable[[], Awaitable[T]]]) -> list[T]:
-    """Run ``funcs`` with at most ``n`` in flight; results keep the input order."""
-    if n <= 1 or len(funcs) <= 1:
-        return [await f() for f in funcs]
-    sem = asyncio.Semaphore(n)
-
-    async def run(f: Callable[[], Awaitable[T]]) -> T:
-        async with sem:
-            return await f()
-
-    return list(await asyncio.gather(*(run(f) for f in funcs)))
-
-
 async def gather_settled(n: int, funcs: Sequence[Callable[[], Awaitable[T]]]) -> list[T | Exception]:
-    """Like :func:`gather_limited`, but always waits for every call and returns exceptions in
-    place of results. Nothing is left running in the background when this returns."""
+    """Run ``funcs`` with at most ``n`` in flight; results keep the input order.
+
+    Always waits for every call and returns exceptions in place of results, so nothing is left
+    running in the background when this returns."""
     if n <= 1 or len(funcs) <= 1:
         out: list[T | Exception] = []
         for f in funcs:

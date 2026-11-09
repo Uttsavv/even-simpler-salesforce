@@ -149,7 +149,7 @@ def _flow(**kw: object) -> esf.WebServerFlow:
         client_id="cid",
         redirect_uri="https://app/cb",
         client_secret="sec",
-        **kw,  # type: ignore[arg-type]
+        **{"token_key": "user:1", **kw},  # type: ignore[arg-type]
     )
 
 
@@ -208,14 +208,17 @@ def test_web_server_forms() -> None:
         f.token_form(None)
     with pytest.raises(esf.ReauthorizationRequired):
         f.token_form(make_token())
-    public = esf.WebServerFlow(domain="login", client_id="cid", redirect_uri="https://app/cb")
+    public = esf.WebServerFlow(domain="login", client_id="cid", redirect_uri="https://app/cb", token_key="u")
     assert "client_secret" not in public.token_form(make_token(refresh="RT"))
     assert f.uses_refresh_token is True
-    assert f.token_key.startswith("web_server:")
-    assert _flow(token_key="user:1").token_key == "user:1"
+    assert f.token_key == "user:1"
+    assert _flow(token_key="user:2").token_key == "user:2"
+    for bad in ("", None):
+        with pytest.raises(ValueError, match="token_key"):
+            esf.WebServerFlow(domain="login", client_id="c", redirect_uri="r", token_key=bad)  # type: ignore[arg-type]
     assert "sec" not in repr(f).replace("Sequence", "")
     with pytest.raises(ValueError):
-        esf.WebServerFlow(domain="nope", client_id="c", redirect_uri="r")
+        esf.WebServerFlow(domain="nope", client_id="c", redirect_uri="r", token_key="u")
 
 
 # --- JwtBearer ---------------------------------------------------------------------------------------

@@ -60,6 +60,7 @@ CODE_MAP: dict[str, type[E.SalesforceError]] = {
     "INVALID_SESSION_ID": E.SessionExpired,
     "SERVER_UNAVAILABLE": E.ServerError,
     "APEX_ERROR": E.ApexError,
+    "UNSUPPORTED_API_VERSION": E.UnsupportedApiVersion,
 }
 
 _STATUS_MAP: dict[int, type[E.SalesforceError]] = {
@@ -78,6 +79,8 @@ _STATUS_MAP: dict[int, type[E.SalesforceError]] = {
 }
 
 _RETRYABLE_STATUS = frozenset({500, 502, 503, 504})
+# Operations on an sObject *type* (no record id): NOT_FOUND there means the type doesn't exist.
+_TYPE_OPS = frozenset({"sobject.describe", "sobject.metadata", "sobject.updated", "sobject.deleted"})
 
 
 def _as_str_tuple(value: Any) -> tuple[str, ...]:
@@ -132,7 +135,6 @@ def error_class_for(code: str | None, status: int | None, *, dml: bool) -> type[
     """Pick the exception class for an error code / HTTP status."""
     if code and code in CODE_MAP:
         cls = CODE_MAP[code]
-        # NOT_FOUND on a describe/sobject-type path is still NotFound; INVALID_TYPE wins when sent.
         return cls
     if status is not None and status in _STATUS_MAP:
         return _STATUS_MAP[status]
@@ -171,6 +173,13 @@ def error_from_detail(
 ) -> E.SalesforceError:
     """Build a typed exception for one error entry."""
     cls = error_class_for(detail.error_code, status, dml=dml)
+    if (
+        cls is E.NotFound
+        and detail.error_code == "NOT_FOUND"
+        and spec is not None
+        and spec.operation in _TYPE_OPS
+    ):
+        cls = E.InvalidType  # the sObject type itself doesn't exist (§8.2)
     cls, message, tag = _apply_tag(cls, detail.message, error_tags)
     kw: dict[str, Any] = {}
     if issubclass(cls, E.DuplicateDetected):

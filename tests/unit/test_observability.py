@@ -239,7 +239,13 @@ def test_capture_summary_and_nesting() -> None:
         record_event(req())
         with esf.capture() as inner:
             record_event(
-                req(outcome="error", error_code="INVALID_FIELD", attempts=3, operation="sobject.get")
+                req(
+                    outcome="error",
+                    error_code="INVALID_FIELD",
+                    attempts=3,
+                    retry_reasons=["http_503", "http_503"],
+                    operation="sobject.get",
+                )
             )
             record_event(esf.Event("sf.auth.refreshed", {"initial": True}))
         record_event(esf.Event("sf.auth.refreshed", {"initial": False}))
@@ -321,7 +327,7 @@ def test_call_context_nesting() -> None:
 
 
 def test_async_periodic_start_stop_idempotent(arun: Any) -> None:
-    from even_simpler_salesforce._async._compat import Periodic, gather_limited
+    from even_simpler_salesforce._async._compat import Periodic, gather_settled
 
     calls: list[int] = []
 
@@ -337,17 +343,17 @@ def test_async_periodic_start_stop_idempotent(arun: Any) -> None:
         await asyncio.sleep(0)
         await asyncio.sleep(0)
         await p.stop()
-        assert await gather_limited(1, []) == []
+        assert await gather_settled(1, []) == []
 
     arun(main())
     assert calls == [1]
 
 
 def test_sync_compat_helpers() -> None:
-    from even_simpler_salesforce._sync._compat import Periodic, gather_limited
+    from even_simpler_salesforce._sync._compat import Periodic, gather_settled
 
-    assert gather_limited(4, [lambda: 1, lambda: 2, lambda: 3]) == [1, 2, 3]
-    assert gather_limited(1, [lambda: 1]) == [1]
+    assert gather_settled(4, [lambda: 1, lambda: 2, lambda: 3]) == [1, 2, 3]
+    assert gather_settled(1, [lambda: 1]) == [1]
     done = threading.Event()
     Periodic(done.set, 3600).stop()  # never started: no-op
     p = Periodic(done.set, 3600)

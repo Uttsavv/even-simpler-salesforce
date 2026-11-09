@@ -7,20 +7,25 @@ from __future__ import annotations
 import contextlib
 import threading
 from collections.abc import Iterator
+from typing import Any
 
 from ..auth.token import Token
 from ..errors import TokenConflict
+from . import _compat
 
 __all__ = ["InMemoryTokenStore"]
 
 
 class InMemoryTokenStore:
-    """Dict + version counter. Lost on restart, which is fine for ``ClientCredentials`` and
-    ``JwtBearer``. Use a durable store for ``WebServerFlow`` refresh tokens."""
+    """Dict + version counter + per-key lock. Lost on restart, which is fine for
+    ``ClientCredentials`` and ``JwtBearer``. Use a durable store for ``WebServerFlow`` refresh
+    tokens. The lock is in-process only; share one instance between client families of the same
+    event loop (async) or process (sync)."""
 
     def __init__(self) -> None:
         self._data: dict[str, Token] = {}
         self._guard = threading.Lock()
+        self._locks: dict[str, Any] = {}
 
     def load(self, key: str) -> Token | None:
         with self._guard:
@@ -46,4 +51,11 @@ class InMemoryTokenStore:
 
     @contextlib.contextmanager
     def lock(self, key: str) -> Iterator[None]:
-        yield
+        """Per-key lock, so client families that share this store instance refresh one at a
+        time (a rotated refresh token must never be sent twice)."""
+        with self._guard:
+            lock = self._locks.get(key)
+            if lock is None:
+                lock = self._locks[key] = _compat.Lock()
+        with lock:
+            yield

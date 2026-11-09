@@ -113,7 +113,8 @@ class Auth:
 class WebServerFlow(Auth):
     """Authorization-code flow with PKCE, for users who log in through the browser.
 
-    The app holds the user's refresh token in a :class:`TokenStore` under ``token_key``.
+    The app holds the user's refresh token in a :class:`TokenStore` under ``token_key``, which
+    is required: one key per Salesforce identity (e.g. ``f"user:{user_id}"``).
     """
 
     kind: ClassVar[str] = "web_server"
@@ -137,11 +138,16 @@ class WebServerFlow(Auth):
         redirect_uri: str,
         client_secret: str | None = None,
         scopes: Sequence[str] = ("api", "refresh_token"),
-        token_key: str | None = None,
+        token_key: str,
         refresh_ahead: timedelta | None = None,
         expiry: Expiry = "unknown",
         pkce: bool = True,
     ) -> None:
+        if not isinstance(token_key, str) or not token_key:  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise ValueError(
+                "WebServerFlow needs token_key= naming the Salesforce identity whose tokens it uses "
+                "(e.g. f'user:{user_id}'); without it every user would share one token record"
+            )
         resolve_domain(domain)
         set_ = object.__setattr__
         set_(self, "domain", domain)
@@ -156,7 +162,7 @@ class WebServerFlow(Auth):
 
     @property
     def token_key(self) -> str:
-        return self.key or f"web_server:{_short_hash(self.base_url + '|' + self.client_id)}"
+        return self.key or ""  # always set: required in __init__
 
     def authorization_url(
         self,
@@ -306,6 +312,12 @@ class JwtBearer(Auth):
         set_(self, "expiry", expiry)
         set_(self, "client_secret", None)
         set_(self, "assertion_lifetime", 180)
+        try:  # fail at construction, not at the first call
+            import jwt  # pyright: ignore[reportMissingImports, reportUnusedImport]  # noqa: F401
+        except ImportError as exc:  # pragma: no cover - depends on extras
+            raise ImportError(
+                "JwtBearer needs the [jwt] extra: pip install 'even-simpler-salesforce[jwt]'"
+            ) from exc
 
     @property
     def token_key(self) -> str:
