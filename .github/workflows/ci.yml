@@ -156,7 +156,7 @@ jobs:
           python-version: "3.12"
       - run: uv sync --all-extras --group dev
       - name: zensical build
-        run: uv run --with zensical --with mkdocstrings-python zensical build --clean
+        run: uv run --with 'zensical>=0.1' --with 'mkdocstrings-python>=2' zensical build --clean
       - name: Docs examples
         run: |
           if [ -d tests/docs ]; then uv run pytest tests/docs; else echo "no tests/docs yet"; fi

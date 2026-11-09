@@ -23,7 +23,7 @@ nox.options.sessions = ["lint", "types", "unasync_check", "tests"]
 
 PYTHONS = ["3.10", "3.11", "3.12", "3.13", "3.14"]
 SYNC_DIR = "src/even_simpler_salesforce/_sync"
-DOCS_DEPS = ["zensical", "mkdocstrings-python"]
+DOCS_DEPS = ["zensical>=0.1", "mkdocstrings-python>=2"]
 
 
 def _sync(session: nox.Session, *extra: str) -> None:
