@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "even-simpler-salesforce"
-version = "0.0.1"
-description = "A modern, typed, async-first Salesforce client for Python (under active development)."
+dynamic = ["version"]
+description = "A modern, typed, async-first Salesforce client for Python."
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
@@ -13,17 +13,110 @@ requires-python = ">=3.10"
 authors = [{ name = "Utsav Singh" }]
 keywords = ["salesforce", "api", "async", "httpx", "oauth"]
 classifiers = [
-    "Development Status :: 1 - Planning",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
+    "Framework :: AsyncIO",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Typing :: Typed",
 ]
+dependencies = ["httpx>=0.27"]
+
+[project.optional-dependencies]
+pydantic = ["pydantic>=2"]
+speed = ["orjson>=3.9"]
+http2 = ["httpx[http2]>=0.27"]
+jwt = ["pyjwt>=2.8", "cryptography>=42"]
+otel = ["opentelemetry-api>=1.20"]
+structlog = ["structlog>=24.1"]
+fastapi = ["fastapi>=0.110"]
+flask = ["flask>=3.0"]
+testing = ["respx>=0.21", "pytest>=8"]
+all = [
+    "even-simpler-salesforce[pydantic,speed,http2,jwt,otel,structlog,fastapi,flask,testing]",
+]
+
+[project.scripts]
+esf = "even_simpler_salesforce.cli:main"
+
+[project.entry-points.pytest11]
+even_simpler_salesforce = "even_simpler_salesforce.testing.plugin"
 
 [project.urls]
 Homepage = "https://github.com/Uttsavv/even-simpler-salesforce"
 Repository = "https://github.com/Uttsavv/even-simpler-salesforce"
 Documentation = "https://uttsavv.github.io/even-simpler-salesforce/"
+Changelog = "https://github.com/Uttsavv/even-simpler-salesforce/blob/main/CHANGELOG.md"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-cov>=5",
+    "pytest-benchmark>=4",
+    "respx>=0.21",
+    "hypothesis>=6",
+    "ruff>=0.6",
+    "pyright>=1.1.380",
+    "nox>=2024.4",
+    "towncrier>=24",
+    "pyjwt>=2.8",
+    "cryptography>=42",
+    "pydantic>=2",
+    "structlog>=24.1",
+    "opentelemetry-api>=1.20",
+    "opentelemetry-sdk>=1.20",
+    "fastapi>=0.110",
+    "flask>=3.0",
+]
+
+[tool.hatch.version]
+path = "src/even_simpler_salesforce/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/even_simpler_salesforce"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+src = ["src", "tests"]
+extend-exclude = ["src/even_simpler_salesforce/_sync"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "ASYNC", "PT", "S"]
+ignore = ["S101", "S311", "RUF022", "B904", "SIM105", "UP038"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "B", "PT011", "RUF"]
+"examples/**" = ["S", "B"]
+"scripts/**" = ["S"]
+
+[tool.pyright]
+include = ["src"]
+pythonVersion = "3.10"
+typeCheckingMode = "strict"
+reportMissingTypeStubs = false
+reportPrivateUsage = false
+reportUnnecessaryTypeIgnoreComment = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers -p no:cacheprovider"
+markers = [
+    "sandbox: real-org tests (opt-in; need ESF_SANDBOX_* env vars)",
+]
+filterwarnings = ["error::DeprecationWarning:even_simpler_salesforce"]
+
+[tool.coverage.run]
+branch = true
+source = ["even_simpler_salesforce"]
+omit = ["*/_sync/*", "*/contrib/*", "*/cli/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError", "@overload", "\\.\\.\\.$"]
