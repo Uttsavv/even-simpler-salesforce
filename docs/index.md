@@ -1,26 +1,67 @@
 ---
 template: home.html
+hide:
+  - navigation
+  - toc
 ---
 
 # even-simpler-salesforce
 
 A typed Salesforce client for Python. It is async-first, and a sync client with the same
 methods is generated from the async code. Both are built on [httpx](https://www.python-httpx.org/).
+Every call goes through one request pipeline: a token, the budget guard and concurrency limit,
+usage tracking, typed errors, one refresh on an expired session, retries only when they are
+safe, and one log event. [`sf.request()`](guides/requests.md) uses the same pipeline.
 
-```python
-import even_simpler_salesforce as esf
+## What you get
 
-auth = esf.ClientCredentials(
-    domain="https://acme.my.salesforce.com",
-    client_id="3MVG9...",
-    client_secret="...",
-)
+<div class="grid cards" markdown>
 
-async with esf.AsyncSalesforce(auth) as sf:
-    page = await sf.query(esf.soql("SELECT Id, Name FROM Lead WHERE Status = {}", "Open"))
-    for lead in page:
-        print(lead["Id"], lead["Name"])
-```
+-   **Login flows as config objects**
+
+    ---
+
+    [Client credentials](authentication/client-credentials.md),
+    [JWT bearer](authentication/jwt-bearer.md),
+    [web server with PKCE](authentication/web-server-flow.md) and
+    [static tokens](authentication/static-token.md), with
+    [token stores](authentication/token-stores.md) that are safe under refresh-token rotation.
+
+-   **Records, query and Collections**
+
+    ---
+
+    [Records](guides/records.md), [query and search](guides/query.md) with values quoted for
+    you, and [sObject Collections](guides/collections.md).
+
+-   **Typed errors**
+
+    ---
+
+    [Exceptions](errors.md) such as `ValidationRuleFailed`, `RowLocked`, `MultipleMatches` and
+    `PartialFailure`, with `error_code`, `fields`, `status` and `request_id`.
+
+-   **Usage and budgets**
+
+    ---
+
+    [API usage](usage-and-budgets.md) read from response headers at no extra API cost, and a
+    budget guard that stops calls before you hit the org limit.
+
+-   **Structured logs**
+
+    ---
+
+    [One event per call](logging.md) with secrets redacted, plus `ESF_DEBUG=1` for readable
+    local output.
+
+-   **Testing helpers**
+
+    ---
+
+    [In-memory fakes, a recorder and replayer](testing.md), and a pytest plugin.
+
+</div>
 
 !!! warning "Project status: alpha (0.1)"
     Breaking changes are possible in 0.x minor releases. They are always listed under
@@ -37,29 +78,6 @@ async with esf.AsyncSalesforce(auth) as sf:
     If you can run it against another edition, a sandbox, a scratch org or another login
     setup, please share your results by opening an
     [issue or pull request](https://github.com/Uttsavv/even-simpler-salesforce).
-
-## What you get
-
-- **One request pipeline for every call.** Each call gets a token, passes the budget guard
-  and concurrency limit, and is sent. The client then reads the usage header, maps any error
-  to an exception class, refreshes once on an expired session, retries only when that is safe,
-  and emits one log event. [`sf.request()`](guides/requests.md) uses the same pipeline.
-- **Login flows as config objects:** [client credentials](authentication/client-credentials.md),
-  [JWT bearer](authentication/jwt-bearer.md), [web server with PKCE](authentication/web-server-flow.md)
-  and [static tokens](authentication/static-token.md), with
-  [pluggable token stores](authentication/token-stores.md) that are safe under refresh-token
-  rotation.
-- **Records, query, search and Collections**:
-  [records](guides/records.md), [query and search](guides/query.md),
-  [sObject Collections](guides/collections.md).
-- **[Typed errors](errors.md)** such as `ValidationRuleFailed`, `RowLocked`, `MultipleMatches`
-  and `PartialFailure`, with `error_code`, `fields`, `status` and `request_id`.
-- **[Usage tracking and budgets](usage-and-budgets.md)** read from response headers, at no
-  extra API cost.
-- **[Structured logs](logging.md)** with secrets redacted, plus `ESF_DEBUG=1` for readable
-  local output.
-- **[Testing helpers](testing.md):** in-memory fakes, a recorder and replayer, and a pytest
-  plugin.
 
 ## Where to go next
 
