@@ -1,60 +1,19 @@
 # Getting started
 
-## Project status
-
-!!! warning "Project status: alpha (0.1 release candidates)"
-    0.1.0 is in the release-candidate stage (`0.1.0rcN`). Breaking changes are possible in 0.x minor releases. They are always listed under
-    *Changed* / *Removed* in the [changelog](changelog.md) with migration notes.
-
-    So far the library has been tested against **one production org** only:
-
-    | Tested on | |
-    |---|---|
-    | Edition | _TBD_ |
-    | API version | 68.0 (library default) |
-    | Auth flows exercised | _TBD_ |
-
-    If you can run it against another edition, a sandbox, a scratch org or another login
-    setup, please share your results by opening an
-    [issue or pull request](https://github.com/Uttsavv/even-simpler-salesforce).
-
-
-
-## Requirements
-
-- Python 3.10 or newer.
-- A Salesforce org with an **External Client App** (or a classic Connected App) that your code
-  can log in through. [Salesforce setup](authentication/salesforce-setup.md) walks through it.
-- API version **59.0 or newer**. The library defaults to **68.0**, which is pinned for each
-  library release and never set to "latest".
+even-simpler-salesforce is a typed Salesforce client for Python. It has an async client and a
+sync client with the same methods, and it handles login, token refresh and errors for you.
 
 ## Install
 
+You need Python 3.10 or newer.
+
 ```sh
 pip install --pre even-simpler-salesforce
-# optional extras, e.g. JWT bearer login and orjson:
-pip install --pre "even-simpler-salesforce[jwt,speed]"
 ```
 
-`--pre` is needed until 0.1.0 final is published: pip skips release candidates by default, and
-without it you get `0.0.1`, an empty placeholder that only reserves the name. To install from
-the main branch instead, use
-`pip install "even-simpler-salesforce @ git+https://github.com/Uttsavv/even-simpler-salesforce"`.
+`--pre` is needed until 0.1.0 is final, because pip skips release candidates by default.
 
-| Extra | Installs | Enables |
-|---|---|---|
-| `jwt` | PyJWT, cryptography | [`JwtBearer`](authentication/jwt-bearer.md) |
-| `pydantic` | Pydantic 2 | `model=` with Pydantic models |
-| `speed` | orjson | faster JSON (same behaviour as the stdlib codec) |
-| `http2` | `httpx[http2]` | `http2=True` |
-| `otel` | opentelemetry-api | the OpenTelemetry observer |
-| `structlog` | structlog | the structlog observer |
-| `testing` | pytest, respx | `even_simpler_salesforce.testing` helpers that need them |
-| `fastapi`, `flask` | the framework | the example apps |
-| `migrate` | libcst | the [`esf migrate`](migrate.md) codemod |
-| `all` | every extra above | |
-
-The import name is `even_simpler_salesforce`. These docs alias it as `esf`:
+The import name is `even_simpler_salesforce`. These docs import it as `esf`:
 
 ```python
 import even_simpler_salesforce as esf
@@ -62,17 +21,18 @@ import even_simpler_salesforce as esf
 print(esf.__version__)
 ```
 
-## Your first call
+## Make your first call
 
-The examples read credentials from environment variables. For the
-[client-credentials flow](authentication/client-credentials.md) you need the org's **My Domain**
-URL and the app's consumer key and secret:
+You need an External Client App in your org. [Salesforce setup](authentication/salesforce-setup.md)
+shows how to create one. Then put its credentials in the environment:
 
 ```sh
 export SF_DOMAIN=https://acme.my.salesforce.com
 export SF_CLIENT_ID=3MVG9...
 export SF_CLIENT_SECRET=...
 ```
+
+And make a call:
 
 === "Async"
 
@@ -114,33 +74,30 @@ export SF_CLIENT_SECRET=...
         print(sf.count("SELECT COUNT() FROM Lead"))
     ```
 
-Nothing is sent when the client is created. The first call fetches a token and keeps it in
-memory. Later calls reuse it until Salesforce rejects it, and then the client refreshes once
-and resends the call.
+The client sends nothing until the first call. That call gets a token and keeps it in memory.
+When the token expires, the client refreshes it and sends the call again.
 
-!!! tip "Top-level `await` in these docs"
-    Most async examples use `await` at the top level to keep them short, as you would in
-    `python -m asyncio` or a notebook. In a script, put them inside an `async def` and call it
-    with `asyncio.run()`, as above. Every async example has a sync version: drop `async` and
-    `await`, and use `with esf.Salesforce(...)`.
+!!! tip "Top-level `await`"
+    Most async examples in these docs use `await` at the top level to stay short, as in
+    `python -m asyncio` or a notebook. In a script, wrap them in `async def main()` and call
+    `asyncio.run(main())`.
 
-## Async and sync
+## Async or sync
 
-`AsyncSalesforce` is written by hand. `Salesforce` is generated from it, so both have the same
-methods, arguments and behaviour. Pick one per program:
+`AsyncSalesforce` and `Salesforce` have the same methods, arguments and behaviour. Pick the one
+that matches your program:
 
 | | `AsyncSalesforce` | `Salesforce` |
 |---|---|---|
 | Use with | asyncio apps (FastAPI, aiohttp, workers) | scripts, Flask, Django, Celery |
 | Context manager | `async with` | `with` |
 | Close | `await sf.aclose()` | `sf.close()` |
-| `query_iter` | async iterator (`async for`) | iterator (`for`) |
-| Thread/task safety | share one client across tasks | share one client across threads |
+| `query_iter` | `async for` | `for` |
+| Share across | tasks | threads |
 
-Create **one client per process** and share it. Each client owns an httpx connection pool. Use
-the [children](#child-clients) below to vary auth or tags.
+Create one client per process and share it. Each client owns a connection pool.
 
-## Records, queries and collections in one minute
+## Records, queries and collections
 
 ```python
 auth = esf.ClientCredentials(
@@ -162,9 +119,12 @@ result.raise_for_errors()
 await sf.aclose()
 ```
 
-## Configuring the client
+Each of these has its own guide: [Records](guides/records.md),
+[Query and search](guides/query.md) and [Collections](guides/collections.md).
 
-Every option is a keyword argument, and none of them is required:
+## Configure the client
+
+Every option is a keyword argument with a sensible default:
 
 ```python
 sf = esf.AsyncSalesforce(
@@ -202,9 +162,9 @@ await sf.aclose()
 
 ## Child clients
 
-`with_auth()` and `tagged()` return cheap child clients. They share the parent's connection
-pool, describe cache, observers, usage counters and concurrency limit. Closing a child does
-nothing; close the root client.
+Use `tagged()` to label calls in logs and usage counters, and `with_auth()` to act as another
+identity. A child shares its parent's connection pool, cache and limits. Close the root
+client, not the child.
 
 ```python
 root = esf.AsyncSalesforce(auth)
@@ -225,10 +185,38 @@ print(as_user)
 await root.aclose()
 ```
 
+## Optional extras
+
+Install extras for the features that need extra packages:
+
+```sh
+pip install --pre "even-simpler-salesforce[jwt,speed]"
+```
+
+| Extra | Installs | Enables |
+|---|---|---|
+| `jwt` | PyJWT, cryptography | [`JwtBearer`](authentication/jwt-bearer.md) |
+| `pydantic` | Pydantic 2 | `model=` with Pydantic models |
+| `speed` | orjson | faster JSON (same behaviour as the stdlib codec) |
+| `http2` | `httpx[http2]` | `http2=True` |
+| `otel` | opentelemetry-api | the OpenTelemetry observer |
+| `structlog` | structlog | the structlog observer |
+| `testing` | pytest, respx | `even_simpler_salesforce.testing` helpers that need them |
+| `fastapi`, `flask` | the framework | the example apps |
+| `migrate` | libcst | the [`esf migrate`](migrate.md) codemod |
+| `all` | every extra above | |
+
+## Project status
+
+even-simpler-salesforce is in alpha. Breaking changes can happen in 0.x minor releases, and
+each one is listed in the [changelog](changelog.md) with migration notes.
+
+So far it has been tested against one production org, on API version 68.0. If you run it
+against a sandbox, a scratch org or another edition, please
+[share your results](https://github.com/Uttsavv/even-simpler-salesforce/issues).
+
 ## Next steps
 
-- Set up the app in Salesforce: [Salesforce setup](authentication/salesforce-setup.md).
-- Choose a login flow: [Authentication](authentication/index.md).
-- Work with data: [Records](guides/records.md), [Query and search](guides/query.md),
-  [Collections](guides/collections.md).
-- Handle failures: [Errors](errors.md).
+- [Choose a login flow](authentication/index.md).
+- [Work with records](guides/records.md).
+- [Handle errors](errors.md).

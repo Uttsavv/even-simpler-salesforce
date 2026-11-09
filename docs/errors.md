@@ -1,9 +1,8 @@
 # Errors
 
-Every error from Salesforce or the network is an `esf.SalesforceError`, whichever Salesforce
-API produced it (REST, OAuth or Collections). Invalid arguments raise `ValueError` /
-`TypeError` when you construct the object, before any request is made. All of them have the same attributes, so one
-`except` clause can log any of them.
+Every error from Salesforce or the network is a subclass of `esf.SalesforceError`. This is true
+for REST, OAuth and Collections. Catch the most specific class you can handle, then catch
+`SalesforceError` for the rest.
 
 ```python
 import even_simpler_salesforce as esf
@@ -24,9 +23,142 @@ except esf.SalesforceError as exc:
     print("other Salesforce error:", exc)
 ```
 
+Every error has the same [attributes](#attributes), so one `except` clause can log any of them.
+`str(exc)` gives `"ERROR_CODE: message (operation, sobject, HTTP status)"`.
+
+Invalid arguments are different. They raise `ValueError` or `TypeError` when you create the
+object, before the client sends a request.
+
+## Catch a group of errors
+
+The classes form a tree. To handle related errors the same way, catch their group, such as
+`RecordError`, `RequestError` or `AuthError`:
+
+```python
+try:
+    await sf.sobject("Lead").create({"LastName": "Curie"})
+except esf.RecordError as exc:  # RequiredFieldMissing, ValidationRuleFailed, RowLocked, ...
+    print(type(exc).__name__, exc.fields)  # RequiredFieldMissing ('Company',)
+```
+
+The [hierarchy](#hierarchy) lists every class and the Salesforce error codes behind it.
+
+## Retries
+
+The client retries transient failures for you. To change how often it tries and how long it
+waits, pass `retry=esf.RetryPolicy(...)`:
+
+```python
+patient = esf.AsyncSalesforce(auth, retry=esf.RetryPolicy(max_attempts=5, max_delay=20))
+no_retries = esf.AsyncSalesforce(auth, retry=esf.RetryPolicy(max_attempts=1))
+await patient.aclose()
+await no_retries.aclose()
+```
+
+| Field | Default | Description |
+|---|---|---|
+| `max_attempts` | `3` | total attempts per call, including the first (minimum 1) |
+| `base_delay` | `0.25` | first backoff delay in seconds, doubled for each further retry |
+| `max_delay` | `8.0` | cap on one backoff delay |
+| `jitter` | `True` | full jitter: wait a random time between 0 and the delay |
+| `respect_retry_after` | `True` | wait for `Retry-After` when Salesforce sends it |
+| `max_retry_after` | `30.0` | if `Retry-After` is longer than this, raise instead of waiting (`exc.retry_after` says how long) |
+
+If the last attempt fails, the client raises its error. Each retry emits an `sf.retry` event.
+The final `sf.request` event lists `attempts` and `retry_reasons`. [Logging](logging.md)
+describes both events.
+
+### Which failures are retried
+
+!!! warning "If a write times out, the client doesn't send it again"
+    The write may already have committed. A second send can run triggers, flows and e-mails
+    twice, or turn the success into a false `Conflict` or `NotFound`. So the client raises
+    `RequestTimeout` or `ServerError`, and you decide. If you know a call is safe to repeat,
+    pass `sf.request(..., idempotent=True)`.
+
+The client always resends reads. It resends writes only if Salesforce did not run them.
+[ADR 0001](adr/0001-retry-safety.md) explains the rules.
+
+| Failure | Reads (GET/HEAD, POST reads such as `retrieve`, `parameterized_search`) | Writes, upserts, code-running GETs (Apex REST, `executeAnonymous`) |
+|---|---|---|
+| connect error: never sent (`ConnectError`) | retried | retried |
+| timeout or reset after sending | retried | not retried (unless `idempotent=True`) |
+| 500 / 502 / 503 / 504, `SERVER_UNAVAILABLE` | retried | not retried (unless `idempotent=True`) |
+| `UNABLE_TO_LOCK_ROW` (`RowLocked`) | retried | retried (the write was rejected) |
+| 429 / `REQUEST_LIMIT_EXCEEDED` with `Retry-After` | retried | retried |
+| `REQUEST_LIMIT_EXCEEDED` without `Retry-After` | not retried | not retried |
+| any other 4xx | not retried | not retried |
+| `401` | one token refresh and resend (not counted as a retry) | same |
+
+### `retryable`
+
+`exc.retryable` tells you if an error is transient in principle. It is `True` for these errors:
+
+- `TransportError`;
+- `RowLocked`;
+- `ServerError` and `UnexpectedResponse` with status 500, 502, 503 or 504, or with
+  `SERVER_UNAVAILABLE`.
+
+It doesn't tell you if the client retried. A write that timed out has `retryable=True`, but the
+client did not send it again.
+
+The token refresh request has its own rules. See
+[Authentication](authentication/index.md#how-tokens-are-handled).
+
+## Custom errors with tags
+
+Salesforce has no custom error codes. Validation rules, Flow "Custom Error" elements and Apex
+`addError()` all give `FIELD_CUSTOM_VALIDATION_EXCEPTION`. To tell them apart, start each
+message in the org with a tag, such as `[ADDR_REQUIRED]`. Then map the tag to your own class:
+
+```python
+class AddressRequired(esf.ValidationRuleFailed):
+    """The ADDR_REQUIRED validation rule on Lead."""
+
+
+tagged_sf = esf.AsyncSalesforce(auth, error_tags={"ADDR_REQUIRED": AddressRequired})
+
+try:
+    await tagged_sf.sobject("Lead").create({"LastName": "Hodgkin", "Company": "Oxford", "Country": "UK"})
+except AddressRequired as exc:
+    print(exc.tag, "-", exc.message)  # ADDR_REQUIRED - Street is required when Country is set
+await tagged_sf.aclose()
+```
+
+- A tag is `[`, then 2 to 64 characters from `A-Z`, `0-9` and `_`, then `]`. It must be at the
+  start of the message. Whitespace after it is optional.
+- Your class must subclass the default class for that error. For a validation rule, that is
+  `ValidationRuleFailed` or one of its subclasses. If it doesn't, the client ignores the
+  mapping for that error and raises the default class.
+- If an `error_tags` value isn't a `SalesforceError` subclass, creating the client raises
+  `TypeError`.
+- If your class matches, the client removes the tag from `.message`. If no class matches, the
+  client raises the default class with `.tag` set and the message unchanged.
+- Code that doesn't use tags sees no difference.
+
+## Errors in Collections
+
+The client doesn't raise errors for single rows of a Collections call. It puts them in the
+`BatchResult` as `ErrorDetail`s. See
+[Collections](guides/collections.md#results-batchresult-and-recordresult). With
+`all_or_none=True`, the first failed chunk raises the class of its real error.
+
+## Deprecations
+
+Before we remove public API, it emits `esf.EsfDeprecationWarning` for at least one minor
+release. This class is a subclass of `DeprecationWarning`. To see these warnings early, turn
+them into errors in your test suite:
+
+```python
+import warnings
+
+warnings.filterwarnings("error", category=esf.EsfDeprecationWarning)
+await sf.aclose()
+```
+
 ## Attributes
 
-| Attribute | Meaning |
+| Attribute | Description |
 |---|---|
 | `message` | human-readable message, from Salesforce when available |
 | `error_code` | Salesforce `errorCode` / `statusCode`, or the OAuth `error` (e.g. `"INVALID_FIELD"`) |
@@ -36,19 +168,15 @@ except esf.SalesforceError as exc:
 | `sobject` | sObject type, if any |
 | `method`, `path` | HTTP method and path template (ids replaced by `:id`) |
 | `request_id` | Salesforce's request id header, if present |
-| `retryable` | whether the error is transient **in principle** (see [Retries](#retries)) |
+| `retryable` | whether the error is transient in principle (see [`retryable`](#retryable)) |
 | `errors` | every `esf.ErrorDetail(error_code, message, fields, extended)` when Salesforce returned several |
-| `raw` | the first 4 KiB of the response body, for debugging. The library never logs it |
+| `raw` | the first 4 KiB of the response body, for debugging; the library never logs it |
 | `tag` | custom tag parsed from a `[TAG] ...` message, if any |
 
-`str(exc)` is `"ERROR_CODE: message (operation, sobject, HTTP status)"`. Exceptions can be
-pickled with all their attributes, so they survive Celery, multiprocessing and
+Exceptions pickle with all their attributes, so they survive Celery, multiprocessing and
 `concurrent.futures`.
 
 ## Hierarchy
-
-Catch the most specific class you can handle, and fall back to a group (`RecordError`,
-`RequestError`, `AuthError`, ...) or to `SalesforceError`.
 
 ```text
 SalesforceError
@@ -95,26 +223,34 @@ SalesforceError
 └── UnexpectedResponse             HTML pages (proxies, maintenance), non-JSON bodies, unexpected shapes
 ```
 
-`BulkJobFailed`, `GraphQLError` and `SoapFault` already exist so that the hierarchy is stable.
-Nothing in 0.1 raises them.
+`BulkJobFailed`, `GraphQLError` and `SoapFault` exist now to keep the hierarchy stable. Nothing
+in 0.1 raises them.
 
-## How responses are mapped
+## How it works
 
-The library looks at the response in this order:
+### How responses are mapped
+
+The client checks each response in this order:
 
 1. `2xx` (and `304` for conditional requests) is success.
-2. A non-empty body that isn't JSON raises `UnexpectedResponse` (`retryable` for 500/502/503/504).
-   This happens with proxy error pages and maintenance pages.
+2. A non-empty body that isn't JSON raises `UnexpectedResponse`. Proxy error pages and
+   maintenance pages end up here. The error is `retryable` for status 500, 502, 503 and 504.
 3. `300` raises `MultipleMatches` with the matching record URLs.
-4. An OAuth-style body (`{"error": ..., "error_description": ...}`): `invalid_token` or status
-   401 raises `SessionExpired`; `invalid_grant` raises `ReauthorizationRequired`; anything else
-   raises `OAuthError`.
-5. A REST error list (`[{"errorCode", "message", "fields"}]`): the **first** entry's
-   `errorCode` picks the class (table below), and all entries are in `.errors`.
-6. Otherwise, the HTTP status picks the class: 401 `SessionExpired`, 403 `Forbidden`,
-   404 `NotFound`, 409/412/428 `Conflict`, 410 `Gone`, 414/431 `RequestTooLarge`,
-   429 `RequestLimitExceeded`, 420 and 5xx `ServerError`. Any other 4xx raises `RecordError` for
-   writes and `RequestError` for everything else.
+4. An OAuth body such as `{"error": ..., "error_description": ...}` maps like this:
+   `invalid_token` or status 401 raises `SessionExpired`. `invalid_grant` raises
+   `ReauthorizationRequired`. Any other value raises `OAuthError`.
+5. A REST error list such as `[{"errorCode", "message", "fields"}]` maps by the `errorCode` of
+   its first entry. The table below gives the class. All entries are in `.errors`.
+6. In all other cases, the HTTP status picks the class:
+    - 401: `SessionExpired`
+    - 403: `Forbidden`
+    - 404: `NotFound`
+    - 409, 412 and 428: `Conflict`
+    - 410: `Gone`
+    - 414 and 431: `RequestTooLarge`
+    - 429: `RequestLimitExceeded`
+    - 420 and 5xx: `ServerError`
+    - any other 4xx: `RecordError` for writes, `RequestError` for everything else
 
 | `errorCode` | Class |
 |---|---|
@@ -139,109 +275,12 @@ The library looks at the response in this order:
 | `APEX_ERROR` | `ApexError` |
 | `UNSUPPORTED_API_VERSION` | `UnsupportedApiVersion` |
 
-An unknown `errorCode` falls back to the status rule in step 6, and `.error_code` still holds
-the code.
+An unknown `errorCode` falls back to the status rule in step 6. `.error_code` still holds the
+code.
 
-Errors in individual rows of a Collections call are not raised: they are `ErrorDetail`s in the
-`BatchResult` (see [Collections](guides/collections.md#results-batchresult-and-recordresult)).
-With `all_or_none=True`, the first failing chunk raises the class of its real error, as
-described above.
+### What the client doesn't do
 
-## Custom errors with tags
-
-Salesforce has no custom error codes. Validation rules, Flow "Custom Error" elements and Apex
-`addError()` all produce `FIELD_CUSTOM_VALIDATION_EXCEPTION` with your message text. To give
-those errors stable identities, start the message in the org with a tag, such as
-`[ADDR_REQUIRED] Street is required when Country is set`, and map the tag to your own class:
-
-```python
-class AddressRequired(esf.ValidationRuleFailed):
-    """The ADDR_REQUIRED validation rule on Lead."""
-
-
-tagged_sf = esf.AsyncSalesforce(auth, error_tags={"ADDR_REQUIRED": AddressRequired})
-
-try:
-    await tagged_sf.sobject("Lead").create({"LastName": "Hodgkin", "Company": "Oxford", "Country": "UK"})
-except AddressRequired as exc:
-    print(exc.tag, "-", exc.message)  # ADDR_REQUIRED - Street is required when Country is set
-await tagged_sf.aclose()
-```
-
-- A tag is `[` + 2–64 characters from `A-Z`, `0-9` and `_` + `]` at the **start** of the message,
-  followed by optional whitespace.
-- A registered class **must subclass the class the error would otherwise have**. For a
-  validation rule, that is `ValidationRuleFailed` or one of its subclasses. If it doesn't,
-  the mapping is ignored for that error and you get the default class. `error_tags` values that
-  aren't `SalesforceError` subclasses raise `TypeError` when the client is created.
-- When a registered class matches, the tag is removed from `.message`. Otherwise the default
-  class is raised with `.tag` set and the message unchanged. Code that doesn't use tags sees no
-  difference.
-
-## Retries
-
-`retry=esf.RetryPolicy(...)` controls automatic retries:
-
-| Field | Default | Meaning |
-|---|---|---|
-| `max_attempts` | `3` | total attempts per call, including the first (minimum 1) |
-| `base_delay` | `0.25` | first backoff delay in seconds, doubled for each further retry |
-| `max_delay` | `8.0` | cap on one backoff delay |
-| `jitter` | `True` | full jitter: wait a random time between 0 and the delay |
-| `respect_retry_after` | `True` | wait for `Retry-After` when Salesforce sends it |
-| `max_retry_after` | `30.0` | if `Retry-After` is longer than this, raise instead of waiting (`exc.retry_after` says how long) |
-
-```python
-patient = esf.AsyncSalesforce(auth, retry=esf.RetryPolicy(max_attempts=5, max_delay=20))
-no_retries = esf.AsyncSalesforce(auth, retry=esf.RetryPolicy(max_attempts=1))
-await patient.aclose()
-await no_retries.aclose()
-```
-
-What is retried ([ADR 0001](adr/0001-retry-safety.md)):
-
-| Failure | Reads (GET/HEAD, POST reads such as `retrieve`, `parameterized_search`) | Writes, upserts, code-running GETs (Apex REST, `executeAnonymous`) |
-|---|---|---|
-| connect error: never sent (`ConnectError`) | retried | retried |
-| timeout or reset after sending | retried | **not retried** (unless `idempotent=True`) |
-| 500 / 502 / 503 / 504, `SERVER_UNAVAILABLE` | retried | **not retried** (unless `idempotent=True`) |
-| `UNABLE_TO_LOCK_ROW` (`RowLocked`) | retried | retried (the write was rejected) |
-| 429 / `REQUEST_LIMIT_EXCEEDED` **with** `Retry-After` | retried | retried |
-| `REQUEST_LIMIT_EXCEEDED` without `Retry-After` | not retried | not retried |
-| any other 4xx | not retried | not retried |
-| `401` | one token refresh and resend, for every method (not counted as a retry) | same |
-
-A write that timed out may already have committed, and sending it again could run triggers,
-flows and e-mails a second time. It could also turn the success into a false `Conflict` or
-`NotFound`. So the client raises `RequestTimeout` / `ServerError` and lets you decide. Use
-`sf.request(..., idempotent=True)` for calls you know are safe to repeat.
-
-`exc.retryable` says whether an error is transient **in principle**: `True` for
-`TransportError`, `RowLocked`, and `ServerError` / `UnexpectedResponse` with status 500, 502,
-503 or 504 (or `SERVER_UNAVAILABLE`). It doesn't mean the library retried that
-error. A write that timed out has `retryable=True`, but it is not resent. After the last
-attempt, the last error is raised. Each retry emits an `sf.retry` event, and the final
-`sf.request` event lists `attempts` and `retry_reasons`.
-
-The token refresh request has its own rules (see
-[Authentication](authentication/index.md#how-tokens-are-handled)).
-
-## Things the library deliberately doesn't do
-
-- It doesn't evaluate validation rules or trigger logic on the client. Any copy of that logic
-  drifts from the org. Let Salesforce reject the record and handle the typed error.
+- It doesn't run validation rules or trigger logic itself. Any copy of that logic drifts from
+  the org. Let Salesforce reject the record, then handle the typed error.
 - It doesn't hide partial failures. Rows that failed are always in the results and in the logs.
 - It doesn't resend writes that may have run.
-
-## Deprecations
-
-Public API is removed only after it has emitted `esf.EsfDeprecationWarning` (a
-`DeprecationWarning` subclass) for at least one minor release. To see these warnings early,
-turn them into errors in your test suite:
-
-```python
-import warnings
-
-warnings.filterwarnings("error", category=esf.EsfDeprecationWarning)
-await sf.aclose()
-```

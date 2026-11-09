@@ -1,32 +1,41 @@
 # Token stores
 
-The client keeps the current access token in memory and uses a **token store** for anything
-that must outlive the process or be shared between processes. That is mainly `WebServerFlow`
-refresh tokens, but you can also share client-credentials and JWT tokens to save token
-requests.
-
-| Client | Store protocol | Built-in store |
-|---|---|---|
-| `esf.AsyncSalesforce` | `esf.AsyncTokenStore` (async methods) | `esf.AsyncInMemoryTokenStore` (default) |
-| `esf.Salesforce` | `esf.TokenStore` (same methods, sync) | `esf.InMemoryTokenStore` (default) |
+A token store keeps tokens that must outlive the process or be shared between processes. The
+client keeps the current access token in memory and saves every new token to its token store.
 
 ```python
 import even_simpler_salesforce as esf
 
-store = esf.InMemoryTokenStore()
+store = esf.AsyncInMemoryTokenStore()
 auth = esf.ClientCredentials(
     domain="https://acme.my.salesforce.com", client_id="3MVG9...", client_secret="..."
 )
-with esf.Salesforce(auth, store=store) as sf:
-    sf.limits()
-    print(store.load(auth.token_key))
+async with esf.AsyncSalesforce(auth, store=store) as sf:
+    await sf.limits()
+    print(await store.load(auth.token_key))
 ```
 
-The in-memory stores are a dict plus a version counter and a per-key lock. Their contents are
-lost on restart, which is fine for `ClientCredentials` and `JwtBearer` (the process just
-requests a new token). For `WebServerFlow` in production, use a durable store.
+Each client takes the store type that matches it:
 
-## The protocol
+| Client | Store protocol | Built-in store |
+|---|---|---|
+| `esf.AsyncSalesforce` | `esf.AsyncTokenStore`, with async methods | `esf.AsyncInMemoryTokenStore` (default) |
+| `esf.Salesforce` | `esf.TokenStore`, with the same methods as sync | `esf.InMemoryTokenStore` (default) |
+
+Don't give an async store to the sync client, or a sync store to the async client.
+
+## Choose a store
+
+The in-memory stores lose their contents when the process restarts. For `ClientCredentials`
+and `JwtBearer` that is fine, because the process requests a new token.
+
+For `WebServerFlow` in production, use a durable token store. It keeps each user's refresh
+token across restarts and shares it between processes. You can also share
+`ClientCredentials` and `JwtBearer` tokens through a durable store to save token requests.
+
+## Write your own store
+
+A token store is any class with these methods:
 
 ```python
 import contextlib
@@ -50,34 +59,31 @@ class MyTokenStore:  # satisfies esf.TokenStore
         yield
 ```
 
-The async protocol is the same with `async def` methods. Its `lock()` returns an async context
+The async protocol has the same methods as `async def`. Its `lock()` returns an async context
 manager.
 
 | Method | Called when | Must |
 |---|---|---|
 | `load(key)` | the process has no token in memory, before every refresh, and after an ambiguous refresh | return the stored token with its `version`, or `None` |
-| `save(key, token, expected_version=...)` | after a token was issued (initial, refreshed, or exchanged) | if `expected_version` is not `None`, compare-and-swap atomically; return the token with the new, strictly greater `version` |
-| `delete(key)` | `sf.auth.revoke()` | remove the whole record, access **and** refresh token; deleting a missing key is a no-op |
-| `lock(key)` *(optional)* | around each refresh | serialise refreshes for `key` **across processes**; the default does nothing |
+| `save(key, token, expected_version=...)` | after the client gets a token: initial, refreshed or exchanged | if `expected_version` is not `None`, compare-and-swap atomically; return the token with a new, strictly greater `version` |
+| `delete(key)` | `sf.auth.revoke()` | remove the whole record, both access and refresh token; deleting a missing key does nothing |
+| `lock(key)` | around each refresh; optional | serialise refreshes for `key` across processes; the default does nothing |
 
-In-process single-flight always applies, whether or not the store has a lock. A store lock is
-only needed when several processes share a store. Without it, compare-and-swap still keeps the
-stored data consistent, but two processes may both send a refresh request.
+## Rules for durable stores
 
-## Contract for durable stores
+1. Keep one record per Salesforce identity, not per app user. If two of your users share one
+   Salesforce connection, they must share one record and one `token_key`. If several records
+   hold copies of one refresh token, they break as soon as rotation invalidates one of them.
+2. Make `save` with `expected_version` atomic. Use a compare-and-swap, a row lock or a
+   transaction. This makes refresh safe when several processes share a store. If `save` raises
+   `TokenConflict`, the client re-reads the store and uses the token the other process saved.
+3. Encrypt refresh tokens at rest. A refresh token is a long-lived credential.
+4. Make `delete` remove both tokens.
 
-1. **One record per Salesforce identity, not per app user.** If two of your users share one
-   Salesforce connection, they must share one record (one `token_key`). Copies of a refresh
-   token in several records break as soon as rotation invalidates one of them.
-2. **`save` with `expected_version` must be atomic**: a compare-and-swap, a row lock or a
-   transaction. This is what makes refresh safe when several processes share a store. When
-   `save` raises `TokenConflict`, the client re-reads the store and uses the token the other
-   process saved.
-3. **Encrypt refresh tokens at rest.** A refresh token is a long-lived credential.
-4. **`delete` removes both tokens.**
+## Serialise a token
 
-`Token` is a frozen dataclass, so a store serialises it however it likes. This helper is used by
-the examples below:
+`Token` is a frozen dataclass, so your store can serialise it in any format. The examples below
+use this JSON helper:
 
 ```python
 import json
@@ -120,29 +126,9 @@ def token_from_json(data: str, version: int) -> Token:
     )
 ```
 
-## Checking your store: `TokenStoreContract`
+## Example: SQLite
 
-`even_simpler_salesforce.testing` ships the contract as a pytest suite. Subclass
-`TokenStoreContract` (sync) or `AsyncTokenStoreContract` (async) in a `Test*` class and
-override the `make_store` fixture so that it returns a zero-argument factory for fresh, empty
-stores. The suite checks:
-
-- loading a missing key returns `None`, and a save/load round trip keeps every field;
-- versions strictly increase;
-- a stale `expected_version` raises `esf.TokenConflict` and leaves the stored token unchanged;
-- `delete` removes both tokens and is idempotent;
-- keys are isolated;
-- `lock(key)`, if present, is usable as a context manager;
-- N concurrent compare-and-swap saves against the same version have **exactly one winner**
-  (threads for the sync suite, tasks for the async one; set `concurrency = N` on the class,
-  default 16).
-
-The async suite runs each test on its own event loop with `asyncio.run`, so it doesn't need
-pytest-asyncio. `make_store` may return a sync or an async factory. If the store has `aclose()`
-or `close()`, it is called after each test.
-
-Here is a complete durable store on SQLite (standard library only), with the contract run
-against it. The docs test suite runs this example:
+This durable store uses one SQLite file and only the standard library:
 
 ```python
 import contextlib
@@ -151,10 +137,7 @@ import threading
 from collections.abc import Iterator
 from pathlib import Path
 
-import pytest
-
 import even_simpler_salesforce as esf
-from even_simpler_salesforce.testing import TokenStoreContract
 
 
 class SqliteTokenStore:
@@ -212,6 +195,20 @@ class SqliteTokenStore:
             lock = self._locks.setdefault(key, threading.Lock())
         with lock:
             yield
+```
+
+Use it like the built-in stores: `esf.Salesforce(auth, store=SqliteTokenStore("tokens.db"))`.
+
+## Test your store { #checking-your-store-tokenstorecontract }
+
+`even_simpler_salesforce.testing` ships the token store rules as a pytest suite. Subclass
+`TokenStoreContract` for a sync store, or `AsyncTokenStoreContract` for an async one, in a
+`Test*` class. Override the `make_store` fixture to return a zero-argument factory for fresh, empty stores.
+
+```python
+import pytest
+
+from even_simpler_salesforce.testing import TokenStoreContract
 
 
 class TestSqliteTokenStore(TokenStoreContract):
@@ -221,19 +218,36 @@ class TestSqliteTokenStore(TokenStoreContract):
         return lambda: SqliteTokenStore(tmp_path / f"tokens-{next(counter)}.db")
 ```
 
-Use it like the built-in stores: `esf.Salesforce(auth, store=SqliteTokenStore("tokens.db"))`.
+The docs tests run this example. The suite checks that:
 
-## Example: SQLAlchemy (PostgreSQL)
+- loading a missing key returns `None`;
+- a save and load round trip keeps every field;
+- versions strictly increase;
+- a stale `expected_version` raises `esf.TokenConflict` and leaves the stored token unchanged;
+- `delete` removes both tokens and you can call it twice;
+- keys are isolated;
+- `lock(key)`, if present, works as a context manager;
+- N concurrent compare-and-swap saves against the same version have exactly one winner.
 
-!!! warning "Untested example, not part of the package"
-    This store is an illustration for your own code. The library's test suite doesn't run it
-    (it needs a PostgreSQL server). Run `TokenStoreContract` against your version before you
-    rely on it.
+The sync suite runs the concurrent saves in threads, the async suite in tasks. To change N, set
+`concurrency` on the class. The default is 16.
 
-It uses a **version column** for compare-and-swap, `SELECT … FOR UPDATE` to make the
-check-and-write atomic, a PostgreSQL **advisory lock** for `lock()` (so refreshes are serialised
-across processes without blocking the row that `save` updates), and
-[Fernet](https://cryptography.io/en/latest/fernet/) to encrypt tokens at rest.
+The async suite runs each test on its own event loop with `asyncio.run`, so it doesn't need
+pytest-asyncio. `make_store` can return a sync or an async factory. If the store has `aclose()`
+or `close()`, the suite calls it after each test.
+
+## Example: SQLAlchemy with PostgreSQL
+
+This example is not part of the package. The docs tests don't run it, because it needs a
+PostgreSQL server. Run `TokenStoreContract` against your version before you rely on it.
+
+The store uses:
+
+- a version column for compare-and-swap;
+- `SELECT … FOR UPDATE` to make the check and the write atomic;
+- a PostgreSQL advisory lock for `lock()`, so refreshes are serialised across processes without
+  blocking the row that `save` updates;
+- [Fernet](https://cryptography.io/en/latest/fernet/) to encrypt tokens at rest.
 
 <!-- esf: skip -->
 ```python
@@ -307,20 +321,19 @@ class SqlAlchemyTokenStore:
                 conn.commit()
 ```
 
-For `AsyncSalesforce`, write the same thing with `async def` methods on an SQLAlchemy
-`AsyncEngine` (`async with engine.begin() as conn: await conn.execute(...)`) and
-`contextlib.asynccontextmanager` for `lock()`, then run `AsyncTokenStoreContract` against it.
+For `AsyncSalesforce`, write the same store with `async def` methods on an SQLAlchemy
+`AsyncEngine`. Use `async with engine.begin() as conn: await conn.execute(...)` and
+`contextlib.asynccontextmanager` for `lock()`. Then run `AsyncTokenStoreContract` against it.
 
 ## Example: Redis
 
-!!! warning "Untested example, not part of the package"
-    The library's test suite doesn't run this store (it needs a Redis server). Run
-    `TokenStoreContract` against your version before you rely on it.
+This example is not part of the package. The docs tests don't run it, because it needs a Redis
+server. Run `TokenStoreContract` against your version before you rely on it.
 
-It uses a **Lua script** for an atomic compare-and-swap on a hash (`data`, `version`), and a
-**`SET NX PX`** lock with a random owner value, released by a second script only by its owner.
-The lock has a TTL, so a crashed process can't hold it for ever. Pick a TTL longer than a token
-request takes.
+The store uses a Lua script for an atomic compare-and-swap on a hash with `data` and `version`.
+Its lock is a `SET NX PX` key with a random owner value. A second script releases the lock only
+for its owner. The lock has a TTL, so a crashed process can't hold it for ever. Pick a TTL
+longer than a token request takes.
 
 <!-- esf: skip -->
 ```python
@@ -404,10 +417,18 @@ class RedisTokenStore:
 For `AsyncSalesforce`, use `redis.asyncio.Redis` with `async def` methods and an
 `asynccontextmanager` lock.
 
-## Sharing a store between clients
+## Share a store between clients
 
-- Child clients (`with_auth()`, `tagged()`) use the root client's store unless you pass
-  `store=` to `with_auth()`.
-- An in-memory store instance can be shared between client families **of the same event loop**
-  (async) or **the same process** (sync). Its lock is in-process only.
-- Don't give an async store to the sync client, or a sync store to the async client.
+- Child clients from `with_auth()` and `tagged()` use the root client's store. To give a child
+  its own store, pass `store=` to `with_auth()`.
+- You can share an in-memory store between client families on the same event loop for async,
+  or in the same process for sync. Its lock works only inside one process.
+
+## How it works
+
+The in-memory stores are a dict, a version counter and a lock for each key.
+
+Inside one process, the client always runs one refresh at a time for each key, with or without
+a store lock. You need a store lock only if several processes share a store. Without it,
+compare-and-swap still keeps the stored data consistent, but two processes can both send a
+refresh request.
