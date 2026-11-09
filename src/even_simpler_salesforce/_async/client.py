@@ -483,8 +483,11 @@ class AsyncSalesforce:
         if json is not None:
             content, ctype = self._transport.encode(json)
         h = dict(headers or {})
-        if content is not None and ctype is None:
-            ctype = h.pop("Content-Type", None) or "application/octet-stream"
+        # Header names are case-insensitive: a Content-Type the caller passes (in any spelling)
+        # replaces the default instead of being sent alongside it.
+        given = [h.pop(k) for k in [k for k in h if k.lower() == "content-type"]]
+        if content is not None:
+            ctype = (given[-1] if given else None) or ctype or "application/octet-stream"
         raw = await self._send(
             RequestSpec(
                 method.upper(),
