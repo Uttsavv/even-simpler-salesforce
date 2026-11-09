@@ -20,7 +20,15 @@ from ..cache import Cache
 from ..config import DescribeCacheConfig, RetryPolicy, Timeouts
 from ..core import jsonlib
 from ..core.classify import classify
-from ..core.http import GZIP_THRESHOLD, RawResponse, RequestSpec, build_url, gzip_body, path_template
+from ..core.http import (
+    GZIP_THRESHOLD,
+    RawResponse,
+    RequestSpec,
+    build_url,
+    gzip_body,
+    merge_call_options,
+    path_template,
+)
 from ..core.limits import parse_limit_info
 from ..core.retry import backoff_delay, decide_retry
 from ..core.soql import redact_soql, soql_hash
@@ -120,10 +128,12 @@ class AsyncTransport:
         self.refresh_outcomes: dict[str, tuple[int, SalesforceError | None]] = {}
         self._locks: dict[str, Any] = {}
         self._locks_guard = threading.Lock()
+        self._deferred: list[tuple[str, dict[str, Any]]] = []
         self.sleep: Callable[[float], Any] = _compat.sleep
         self.now: Callable[[], datetime] = _utcnow
         self.rng = random.Random()
         self.closed = False
+        self.poller: _compat.Periodic | None = None
         usage.bind(self.emit)
 
     # --- helpers ---------------------------------------------------------------------
@@ -138,6 +148,17 @@ class AsyncTransport:
     def emit(self, name: str, fields: Mapping[str, Any]) -> None:
         event = self.hub.emit(name, fields)
         record_event(event)
+
+    def emit_later(self, name: str, fields: Mapping[str, Any]) -> None:
+        """Queue an event to be emitted by :meth:`flush_deferred` (used under locks)."""
+        with self._locks_guard:
+            self._deferred.append((name, dict(fields)))
+
+    def flush_deferred(self) -> None:
+        with self._locks_guard:
+            pending, self._deferred = self._deferred, []
+        for name, fields in pending:
+            self.emit(name, fields)
 
     def encode(self, obj: Any) -> tuple[bytes, str]:
         return self.dumps(obj), "application/json"
@@ -164,6 +185,9 @@ class AsyncTransport:
         return RawResponse(r.status_code, r.headers, r.content, str(r.url), loads=self.loads)
 
     async def aclose(self) -> None:
+        if self.poller is not None:
+            await self.poller.stop()
+            self.poller = None
         if not self.closed:
             self.closed = True
             if self.owns_http:
@@ -180,6 +204,10 @@ class AsyncTransport:
         priority: str,
     ) -> RawResponse:
         """Run ``spec`` through the full pipeline and return the successful response."""
+        if self.closed:
+            raise TransportError(
+                "client is closed", operation=spec.operation, method=spec.method, retryable=False
+            )
         started = time.perf_counter()
         attempts = 0
         reasons: list[str] = []
@@ -198,7 +226,7 @@ class AsyncTransport:
                     sent = True
                     generation = runtime.generation()
                     try:
-                        raw, wire_in, wire_out = await self._attempt(spec, token)
+                        raw, wire_in, wire_out = await self._attempt(spec, token, runtime.instance_url)
                         bytes_in += wire_in
                         bytes_out = wire_out
                         err = classify(raw, spec, self.error_tags)
@@ -214,6 +242,7 @@ class AsyncTransport:
                         if refreshed or not runtime.can_refresh:
                             if refreshed:
                                 err.message = f"{err.message} (still rejected after one token refresh)"
+                                err.args = (err.message,)
                             raise err
                         token = await runtime.refresh(token, entered=generation)
                         refreshed = True
@@ -263,8 +292,10 @@ class AsyncTransport:
                 priority,
             )
 
-    async def _attempt(self, spec: RequestSpec, token: Token) -> tuple[RawResponse, int, int]:
-        base = self.instance_url or token.instance_url
+    async def _attempt(
+        self, spec: RequestSpec, token: Token, instance_url: str | None = None
+    ) -> tuple[RawResponse, int, int]:
+        base = instance_url or token.instance_url
         url = build_url(base, self.api_version, spec.path)
         headers: dict[str, str] = {
             "Authorization": f"Bearer {token.access_token}",
@@ -272,9 +303,9 @@ class AsyncTransport:
             "Accept-Encoding": "gzip, deflate",
             "User-Agent": self.user_agent,
         }
-        if self.call_options:
-            headers["Sforce-Call-Options"] = self.call_options
         headers.update(spec.headers)
+        if self.call_options:
+            headers = merge_call_options(headers, self.call_options)
         content = spec.content
         if content is not None:
             headers.setdefault("Content-Type", spec.content_type or "application/json")

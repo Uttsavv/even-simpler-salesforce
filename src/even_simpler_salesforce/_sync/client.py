@@ -54,7 +54,7 @@ def _sobject_of(soql: str) -> str | None:
 
 
 def _check_version(v: str) -> str:
-    if not _VERSION.match(v):
+    if not _VERSION.fullmatch(v):
         raise ValueError(f"api_version must look like {DEFAULT_API_VERSION!r}, got {v!r}")
     major, minor = (int(x) for x in v.split("."))
     if (major, minor) < MIN_API_VERSION:
@@ -64,7 +64,7 @@ def _check_version(v: str) -> str:
 
 
 class Salesforce:
-    """Async Salesforce client.
+    """Salesforce client (``Salesforce`` is async; ``Salesforce`` is its generated sync twin).
 
     Example:
         auth = esf.ClientCredentials(domain="https://acme.my.salesforce.com",
@@ -90,7 +90,8 @@ class Salesforce:
         json: Object with ``dumps(obj) -> bytes`` and ``loads(bytes)`` to replace the JSON codec.
         error_tags: Map of ``[TAG]`` message prefixes to custom error classes (§8.4).
         cursor_key: HMAC key used to sign query cursors.
-        instance_url: Override the instance URL learned from the token response.
+        instance_url: Override the instance URL learned from the token response (this client
+            and ``tagged()`` views; not ``with_auth()`` children).
         describe_cache: Describe-cache settings.
         log_soql: ``"hash"`` (default) logs only ``soql_hash``; ``"redacted"`` also logs the
             SOQL with literals replaced by ``?``.
@@ -125,7 +126,7 @@ class Salesforce:
         for tag, cls in (error_tags or {}).items():
             if not (isinstance(cls, type) and issubclass(cls, SalesforceError)):  # pyright: ignore[reportUnnecessaryIsInstance]
                 raise TypeError(f"error_tags[{tag!r}] must be a SalesforceError subclass")
-        if client_name is not None and not _CLIENT_NAME.match(client_name):
+        if client_name is not None and not _CLIENT_NAME.fullmatch(client_name):
             raise ValueError("client_name may only contain letters, digits, '_', '.', ':', '-' (max 64)")
         dc = describe_cache or DescribeCacheConfig()
         level = debug_level()
@@ -153,11 +154,10 @@ class Salesforce:
             client_name=client_name,
         )
         self._store: TokenStore = store if store is not None else InMemoryTokenStore()
-        self._runtime = AuthRuntime(auth, self._transport, self._store)
+        self._runtime = AuthRuntime(auth, self._transport, self._store, instance_url=instance_url)
         self._caller: str | None = None
         self._priority: Priority | None = None
         self._root = True
-        self._poller: _compat.Periodic | None = None
         self._init_areas()
 
     def _init_areas(self) -> None:
@@ -179,13 +179,12 @@ class Salesforce:
         child._caller = caller
         child._priority = priority
         child._root = False
-        child._poller = None
         child._init_areas()
         return child
 
     def __repr__(self) -> str:
         tok = self._runtime.current()
-        where = tok.instance_url if tok else (self._transport.instance_url or "not connected")
+        where = self._runtime.instance_url or (tok.instance_url if tok else "not connected")
         return (
             f"<{type(self).__name__} {where} v{self._transport.api_version} auth={self._runtime.auth.kind}>"
         )
@@ -207,16 +206,25 @@ class Salesforce:
         """Close the owned HTTP client. No-op on children and for injected clients."""
         if not self._root:
             return
-        if self._poller is not None:
-            self._poller.stop()
-            self._poller = None
         self._transport.close()
 
     # --- family ------------------------------------------------------------------------
 
-    def with_auth(self, auth: Auth, *, store: TokenStore | None = None) -> Salesforce:
-        """A child client with its own auth, sharing pool, caches, observers and usage."""
-        runtime = AuthRuntime(auth, self._transport, store if store is not None else self._store)
+    def with_auth(
+        self,
+        auth: Auth,
+        *,
+        store: TokenStore | None = None,
+        instance_url: str | None = None,
+    ) -> Salesforce:
+        """A child client with its own auth, sharing pool, caches, observers and usage.
+
+        The parent's ``instance_url=`` override is not inherited (the child may be another
+        org); pass ``instance_url=`` here if the child needs one.
+        """
+        runtime = AuthRuntime(
+            auth, self._transport, store if store is not None else self._store, instance_url=instance_url
+        )
         return type(self)._child(self, runtime, self._caller, self._priority)
 
     def tagged(self, caller: str | None = None, priority: Priority | None = None) -> Salesforce:
@@ -540,10 +548,15 @@ class Salesforce:
     def start_limits_poller(self, interval: float = MIN_LIMITS_POLL_INTERVAL) -> None:
         """Opt-in: poll ``GET limits`` every ``interval`` seconds (min 300) to refresh usage.
 
-        Each poll costs one API call. Stopped by ``close()``. The async client needs a running event loop.
+        Each poll costs one API call. Stopped when the root client closes.
+        With ``Salesforce`` call this from inside a running event loop; ``Salesforce`` uses a
+        daemon thread.
         """
         if interval < MIN_LIMITS_POLL_INTERVAL:
             raise ValueError("interval must be at least 300 seconds")
-        if self._poller is None:
-            self._poller = _compat.Periodic(self.limits, interval)
-            self._poller.start()
+        t = self._transport
+        if t.closed:
+            raise RuntimeError("client is closed")
+        if t.poller is None:  # one poller per family; stopped when the root client closes
+            t.poller = _compat.Periodic(self.limits, interval)
+            t.poller.start()

@@ -22,6 +22,7 @@ __all__ = [
     "check_sobject",
     "gzip_body",
     "json_body",
+    "merge_call_options",
     "path_template",
     "url_segment",
 ]
@@ -32,6 +33,7 @@ _SOBJECT_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 _ID_SEGMENT = re.compile(r"(?<=/)(?=[a-zA-Z0-9]*\d)[a-zA-Z0-9]{15}(?:[a-zA-Z0-9]{3})?(?=/|$)")
 _LOCATOR_SEGMENT = re.compile(r"(?<=/)[0-9A-Za-z]{15,18}-\d+(?=/|$)")
 _VERSION_PREFIX = re.compile(r"^/services/data/v\d+\.\d")
+_RUNS_CODE = re.compile(r"(^|/)services/apexrest(/|$)|(^|/)tooling/executeAnonymous(/|$)", re.IGNORECASE)
 
 Params = Mapping[str, Any] | list[tuple[str, Any]]
 
@@ -50,8 +52,8 @@ class RequestSpec:
         content: Request body bytes (already encoded).
         content_type: ``Content-Type`` of ``content``.
         headers: Extra headers.
-        idempotent: Whether resending is safe. ``None`` infers it from the method
-            (everything except POST).
+        idempotent: Whether resending after the request may have reached Salesforce is safe.
+            ``None`` infers it: only GET/HEAD reads (see :attr:`is_idempotent`).
         operation: Operation name for logs, metrics and errors (``"sobject.get"``).
         sobject: sObject type for logs and errors.
         path_template: Path with ids replaced, for logs. Derived when omitted.
@@ -85,9 +87,18 @@ class RequestSpec:
 
     @property
     def is_idempotent(self) -> bool:
+        """Whether the request may be resent after it may have reached Salesforce (ADR 0001).
+
+        Only reads are: GET/HEAD that don't run code. DML (``dml=True``) and every other method
+        are not, because a resend can run triggers/flows twice or turn success into a false
+        ``Conflict``/``NotFound``. GETs to Apex REST and ``executeAnonymous`` run code, so they
+        aren't either. ``idempotent=True`` on the spec overrides this.
+        """
         if self.idempotent is not None:
             return self.idempotent
-        return self.method.upper() != "POST"
+        if self.dml or self.method.upper() not in ("GET", "HEAD"):
+            return False
+        return not _RUNS_CODE.search(self.path.split("?", 1)[0])
 
 
 _UNPARSED: Any = object()
@@ -150,6 +161,26 @@ class RawResponse:
         return None
 
 
+def merge_call_options(headers: Mapping[str, str], ours: str) -> dict[str, str]:
+    """Merge ``ours`` (e.g. ``client=acme``) into any ``Sforce-Call-Options`` the caller set.
+
+    The header name is matched case-insensitively; options are comma-separated, ours first. A
+    ``client=`` option the caller set explicitly for one call wins over the client-wide one.
+    """
+    out: dict[str, str] = {}
+    caller: list[str] = []
+    for k, v in headers.items():
+        if k.lower() == "sforce-call-options":
+            caller.extend(p.strip() for p in v.split(",") if p.strip())
+        else:
+            out[k] = v
+    our_parts = [p.strip() for p in ours.split(",") if p.strip()]
+    caller_keys = {p.split("=", 1)[0].strip().lower() for p in caller}
+    merged = [p for p in our_parts if p.split("=", 1)[0].strip().lower() not in caller_keys] + caller
+    out["Sforce-Call-Options"] = ", ".join(merged)
+    return out
+
+
 def json_body(obj: Any) -> tuple[bytes, str]:
     """Encode ``obj`` as a JSON request body."""
     return jsonlib.dumps(obj), "application/json"
@@ -166,14 +197,14 @@ def url_segment(value: str) -> str:
 
 def check_sobject(name: str) -> str:
     """Validate an sObject API name before putting it in a path."""
-    if not isinstance(name, str) or not _SOBJECT_RE.match(name):  # pyright: ignore[reportUnnecessaryIsInstance]
+    if not isinstance(name, str) or not _SOBJECT_RE.fullmatch(name):  # pyright: ignore[reportUnnecessaryIsInstance]
         raise ValueError(f"invalid sObject name: {name!r}")
     return name
 
 
 def check_record_id(record_id: str) -> str:
     """Validate a 15/18-character Salesforce id before putting it in a path."""
-    if not isinstance(record_id, str) or not _ID_RE.match(record_id):  # pyright: ignore[reportUnnecessaryIsInstance]
+    if not isinstance(record_id, str) or not _ID_RE.fullmatch(record_id):  # pyright: ignore[reportUnnecessaryIsInstance]
         raise ValueError(f"invalid Salesforce id: {record_id!r}")
     return record_id
 
@@ -184,7 +215,8 @@ def build_url(instance_url: str, api_version: str, path: str) -> str:
     Raises:
         ValueError: absolute URLs, traversal, or anything outside ``/services/``.
     """
-    if "://" in path or path.startswith("//"):
+    path_part = path.split("?", 1)[0]
+    if "://" in path_part or path.startswith("//"):
         raise ValueError("absolute URLs are not allowed; pass a path under /services/")
     if any(seg in ("..", ".") for seg in path.split("?", 1)[0].split("/")):
         raise ValueError("path traversal is not allowed")

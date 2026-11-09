@@ -129,7 +129,7 @@ def test_limits_poller(h: Harness, mock: respx.MockRouter) -> None:
             time.sleep(0.01)
         sf.close()
     assert route.call_count == 1
-    assert sf._poller is None
+    assert sf._transport.poller is None
 
 
 # --- describe cache ---------------------------------------------------------------------------------

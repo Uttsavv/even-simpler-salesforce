@@ -49,8 +49,17 @@ class AsyncAuthRuntime:
     in a family that uses the same ``token_key`` shares one token and one in-flight refresh.
     """
 
-    def __init__(self, auth: Auth, transport: AsyncTransport, store: AsyncTokenStore) -> None:
+    def __init__(
+        self,
+        auth: Auth,
+        transport: AsyncTransport,
+        store: AsyncTokenStore,
+        *,
+        instance_url: str | None = None,
+    ) -> None:
         self.auth = auth
+        #: Overrides the instance URL from the token response, for this auth only.
+        self.instance_url = instance_url.rstrip("/") if instance_url else None
         self.transport = transport
         self.store = store
         self.key = auth.token_key
@@ -97,14 +106,17 @@ class AsyncAuthRuntime:
             )
         if entered is None:
             entered = self._generation()
-        async with self.transport.lock_for(self.key):
-            cur = self.transport.tokens.get(self.key)
-            if cur is not None and cur.access_token != stale.access_token and not self._due(cur):
-                return cur  # another caller already refreshed
-            self._raise_shared_failure(entered)
-            new = await self._refresh_recorded(stale, proactive=proactive)
-            self.transport.tokens[self.key] = new
-            return new
+        try:
+            async with self.transport.lock_for(self.key):
+                cur = self.transport.tokens.get(self.key)
+                if cur is not None and cur.access_token != stale.access_token and not self._due(cur):
+                    return cur  # another caller already refreshed
+                self._raise_shared_failure(entered)
+                new = await self._refresh_recorded(stale, proactive=proactive)
+                self.transport.tokens[self.key] = new
+                return new
+        finally:
+            self.transport.flush_deferred()
 
     async def set_token(self, token: Token) -> Token:
         """Save ``token`` to the store and memory (used by ``exchange_code``)."""
@@ -136,16 +148,19 @@ class AsyncAuthRuntime:
             self.transport.tokens.setdefault(self.key, static)
             return self.transport.tokens[self.key]
         entered = self._generation()
-        async with self.transport.lock_for(self.key):
-            tok = self.transport.tokens.get(self.key)
-            if tok is not None:
+        try:
+            async with self.transport.lock_for(self.key):
+                tok = self.transport.tokens.get(self.key)
+                if tok is not None:
+                    return tok
+                tok = await self.store.load(self.key)
+                if tok is None:
+                    self._raise_shared_failure(entered)
+                    tok = await self._refresh_recorded(None, proactive=False)
+                self.transport.tokens[self.key] = tok
                 return tok
-            tok = await self.store.load(self.key)
-            if tok is None:
-                self._raise_shared_failure(entered)
-                tok = await self._refresh_recorded(None, proactive=False)
-            self.transport.tokens[self.key] = tok
-            return tok
+        finally:
+            self.transport.flush_deferred()
 
     # Concurrent callers queue on the per-key lock while one of them refreshes. If that refresh
     # fails, the waiters must not each POST to the token endpoint again (a stampede that can trip
@@ -233,8 +248,8 @@ class AsyncAuthRuntime:
                     if reloaded is not None:
                         return reloaded
                     continue
-                if err == "invalid_grant":
-                    self.transport.emit("sf.auth.reauth_required", {"token_key_hash": self.key_hash})
+                if err == "invalid_grant" and self.auth.uses_refresh_token:
+                    self.transport.emit_later("sf.auth.reauth_required", {"token_key_hash": self.key_hash})
                     raise ReauthorizationRequired(
                         desc or "refresh token expired, revoked or rotated out",
                         error_code=err,
@@ -289,7 +304,9 @@ class AsyncAuthRuntime:
 
         if stale is not None:
             self.transport.usage.record_refresh()
-        self.transport.emit(
+        # Deferred: observers run after the per-key lock is released, so an observer that calls
+        # the client can't deadlock.
+        self.transport.emit_later(
             "sf.auth.refreshed",
             {
                 "token_key_hash": self.key_hash,

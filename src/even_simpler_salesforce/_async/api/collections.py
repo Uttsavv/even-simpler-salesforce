@@ -123,7 +123,6 @@ class AsyncCollections:
             sobject,
             all_or_none,
             concurrency,
-            idempotent=True,
         )
 
     async def delete(

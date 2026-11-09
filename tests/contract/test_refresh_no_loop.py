@@ -121,9 +121,12 @@ TOKEN_FAILURES = [
 ]
 
 
-def expected_error(resp: httpx.Response) -> type[esf.SalesforceError]:
+def expected_error(resp: httpx.Response, auth: Any = None) -> type[esf.SalesforceError]:
     if b"invalid_grant" in resp.content:
-        return esf.ReauthorizationRequired
+        # Only a refresh-token flow needs the user to log in again; for client credentials /
+        # JWT it's a configuration problem.
+        uses_rt = auth is None or getattr(auth, "uses_refresh_token", False)
+        return esf.ReauthorizationRequired if uses_rt else esf.OAuthError
     if b'"error"' in resp.content:
         return esf.OAuthError
     return esf.RefreshFailed
@@ -141,7 +144,7 @@ def test_token_endpoint_failure_is_terminal(
     sf = h.client(auth, token=tok)
     with pytest.raises(esf.AuthError) as ei:
         h.run(sf.limits())
-    assert type(ei.value) is expected_error(failure)
+    assert type(ei.value) is expected_error(failure, auth)
     assert ei.value.status == failure.status_code
     assert endpoint.count == 1  # no retry, no recursion into another refresh
     assert api.call_count == 1  # the API call is not resent without a new token
@@ -224,7 +227,7 @@ def test_concurrent_callers_share_one_failed_refresh(
 
     results = outcomes(h, [sf.limits for _ in range(N)])
 
-    cls = expected_error(failure)
+    cls = expected_error(failure, auth)
     assert all(type(r) is cls for r in results), results
     assert len({id(r) for r in results}) == N  # each caller gets its own exception object
     assert endpoint.count == 1  # one failed refresh is shared, not repeated per waiter

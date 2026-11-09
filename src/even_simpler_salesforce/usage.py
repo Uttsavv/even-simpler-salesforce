@@ -17,6 +17,7 @@ __all__ = ["UsageTracker"]
 
 _WINDOW = timedelta(hours=1)
 _MIN_SPAN = timedelta(minutes=1)
+_SAMPLE_EVERY = timedelta(seconds=30)
 
 Emit = Callable[[str, dict[str, Any]], object]
 
@@ -66,7 +67,11 @@ class UsageTracker:
             )
             self._as_of = now
             if info.api_used is not None:
-                self._samples.append((now, info.api_used))
+                # At most ~2 samples per minute: the projection only needs the window's ends.
+                if len(self._samples) >= 2 and now - self._samples[-2][0] < _SAMPLE_EVERY:
+                    self._samples[-1] = (now, info.api_used)
+                else:
+                    self._samples.append((now, info.api_used))
                 while self._samples and now - self._samples[0][0] > _WINDOW:
                     self._samples.popleft()
             frac = self._fraction_locked()

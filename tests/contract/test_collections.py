@@ -133,16 +133,14 @@ def test_update_requires_id_and_sends_patch(h: Harness, mock: respx.MockRouter) 
         h.run(sf.collections.update("Bad Name", [{"Id": ids[0]}]))
 
 
-def test_upsert_path_and_idempotent_retry(h: Harness, mock: respx.MockRouter) -> None:
+def test_upsert_path_and_no_resend_after_timeout(h: Harness, mock: respx.MockRouter) -> None:
     route = mock.patch(f"{DATA}/composite/sobjects/Account/Ext__c")
-    route.side_effect = [
-        httpx.ReadTimeout("slow"),
-        httpx.Response(200, json=[{"id": "a", "success": True, "created": True}]),
-    ]
+    route.side_effect = [httpx.ReadTimeout("slow")]
     sf = h.client()
-    res = h.run(sf.collections.upsert("Account", "Ext__c", [{"Ext__c": "1", "Name": "x"}]))
-    assert res[0].created is True
-    assert route.call_count == 2  # upsert by external id is idempotent → timeout retried
+    # ADR 0001: a resend after a create would report created=False and re-run triggers.
+    with pytest.raises(esf.RequestTimeout):
+        h.run(sf.collections.upsert("Account", "Ext__c", [{"Ext__c": "1", "Name": "x"}]))
+    assert route.call_count == 1
     with pytest.raises(ValueError):
         h.run(sf.collections.upsert("Account", "bad field", [{"x": 1}]))
 
