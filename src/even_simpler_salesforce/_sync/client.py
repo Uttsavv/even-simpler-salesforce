@@ -10,9 +10,10 @@ import time
 from collections.abc import Iterator, Iterable, Mapping, Sequence
 from email.utils import formatdate
 from types import TracebackType
-from typing import Any, Literal, TypeVar, cast, overload
+from typing import TYPE_CHECKING, Any, Literal, TypeVar, cast, overload
 
-import httpx
+if TYPE_CHECKING:
+    import httpx
 
 from ..auth.flows import Auth
 from ..auth.store import TokenStore
@@ -43,6 +44,7 @@ MIN_LIMITS_POLL_INTERVAL = 300.0
 
 M = TypeVar("M")
 _FROM = re.compile(r"\bFROM\s+([A-Za-z][A-Za-z0-9_]*)", re.IGNORECASE)
+_CLIENT_NAME = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")
 _VERSION = re.compile(r"^\d{2,3}\.\d$")
 
 
@@ -92,6 +94,8 @@ class Salesforce:
         log_soql: ``"hash"`` (default) logs only ``soql_hash``; ``"redacted"`` also logs the
             SOQL with literals replaced by ``?``.
         http2: Enable HTTP/2 on the owned client (needs the ``[http2]`` extra).
+        client_name: Sent as ``Sforce-Call-Options: client=<name>`` on every API call so admins
+            can attribute API usage to this integration (letters, digits, ``_ . : -``; max 64).
     """
 
     def __init__(
@@ -115,10 +119,13 @@ class Salesforce:
         describe_cache: DescribeCacheConfig | None = None,
         log_soql: Literal["hash", "redacted"] = "hash",
         http2: bool = False,
+        client_name: str | None = None,
     ) -> None:
         for tag, cls in (error_tags or {}).items():
             if not (isinstance(cls, type) and issubclass(cls, SalesforceError)):  # pyright: ignore[reportUnnecessaryIsInstance]
                 raise TypeError(f"error_tags[{tag!r}] must be a SalesforceError subclass")
+        if client_name is not None and not _CLIENT_NAME.match(client_name):
+            raise ValueError("client_name may only contain letters, digits, '_', '.', ':', '-' (max 64)")
         dc = describe_cache or DescribeCacheConfig()
         level = debug_level()
         hub = ObserverHub(observers)
@@ -142,6 +149,7 @@ class Salesforce:
             instance_url=instance_url,
             http2=http2,
             debug=level,
+            client_name=client_name,
         )
         self._store: TokenStore = store if store is not None else InMemoryTokenStore()
         self._runtime = AuthRuntime(auth, self._transport, self._store)
@@ -482,6 +490,8 @@ class Salesforce:
         ctype: str | None = None
         if json is not None and content is not None:
             raise ValueError("pass json= or content=, not both")
+        if method.upper() in ("GET", "HEAD") and (json is not None or content is not None):
+            raise ValueError(f"{method.upper()} requests can't carry a body")
         if json is not None:
             content, ctype = self._transport.encode(json)
         h = dict(headers or {})

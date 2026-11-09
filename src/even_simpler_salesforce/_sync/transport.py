@@ -45,6 +45,7 @@ if TYPE_CHECKING:
 __all__ = ["DEFAULT_USER_AGENT", "Transport"]
 
 DEFAULT_USER_AGENT = f"even-simpler-salesforce/{__version__}"
+_NEVER_SENT = (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout, httpx.UnsupportedProtocol)
 _REDACT_HEADERS = frozenset({"authorization", "cookie", "set-cookie"})
 
 
@@ -81,6 +82,7 @@ class Transport:
         instance_url: str | None,
         http2: bool,
         debug: int,
+        client_name: str | None = None,
     ) -> None:
         self.api_version = api_version
         if http_client is None:
@@ -110,6 +112,7 @@ class Transport:
         self.log_soql = log_soql
         self.instance_url = instance_url.rstrip("/") if instance_url else None
         self.debug = debug
+        self.call_options = f"client={client_name}" if client_name else None
         self.tokens: dict[str, Token] = {}
         self._locks: dict[str, Any] = {}
         self._locks_guard = threading.Lock()
@@ -134,6 +137,27 @@ class Transport:
 
     def encode(self, obj: Any) -> tuple[bytes, str]:
         return self.dumps(obj), "application/json"
+
+    def post_form(self, url: str, form: dict[str, str]) -> RawResponse:
+        """POST a form to an OAuth endpoint (token, introspect, revoke).
+
+        No bearer token and no retries: the auth runtime owns those semantics (§6.4).
+        Raises :class:`ConnectError` when the request was never sent, :class:`RequestTimeout`
+        or :class:`TransportError` when it may have reached Salesforce.
+        """
+        try:
+            r = self.http.post(
+                url, data=form, headers={"Accept": "application/json", "User-Agent": self.user_agent}
+            )
+        except _NEVER_SENT as exc:
+            raise ConnectError(f"could not connect: {exc}", operation="oauth", method="POST") from exc
+        except httpx.TimeoutException as exc:
+            raise RequestTimeout(
+                f"timed out: {type(exc).__name__}", operation="oauth", method="POST"
+            ) from exc
+        except httpx.HTTPError as exc:
+            raise TransportError(f"transport error: {exc!r}", operation="oauth", method="POST") from exc
+        return RawResponse(r.status_code, r.headers, r.content, str(r.url), loads=self.loads)
 
     def close(self) -> None:
         if not self.closed:
@@ -240,6 +264,8 @@ class Transport:
             "Accept-Encoding": "gzip, deflate",
             "User-Agent": self.user_agent,
         }
+        if self.call_options:
+            headers["Sforce-Call-Options"] = self.call_options
         headers.update(spec.headers)
         content = spec.content
         if content is not None:
@@ -256,7 +282,7 @@ class Transport:
         )
         try:
             response = self.http.send(request)
-        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout) as exc:
+        except _NEVER_SENT as exc:
             raise _AttemptFailed(
                 ConnectError(f"could not connect: {exc}", operation=spec.operation, method=spec.method),
                 sent=False,

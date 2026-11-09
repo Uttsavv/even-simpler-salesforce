@@ -149,11 +149,11 @@ def test_jsonlib_roundtrip_and_default() -> None:
         "tu": (3, 4),
         "u": "ü",
     }
-    for dumps in (jsonlib.dumps, jsonlib._std_dumps):
-        out = json.loads(dumps(obj))
+    for dumps in (jsonlib.dumps, jsonlib.std_dumps, jsonlib.orjson_dumps):
+        out = json.loads(dumps(obj), parse_float=decimal.Decimal)
         assert out["d"] == "2024-01-02"
         assert out["t"].startswith("2024-01-02T03:04:05")
-        assert out["n"] in ("1.50", 1.5)
+        assert out["n"] == decimal.Decimal("1.50")  # a JSON number with exact digits
         assert out["s"] == [1]
         assert out["f"] == [2]
         assert out["tu"] == [3, 4]
@@ -161,7 +161,7 @@ def test_jsonlib_roundtrip_and_default() -> None:
     assert jsonlib.loads(b'{"a": [1]}') == {"a": [1]}
     assert jsonlib.BACKEND in ("orjson", "json")
     with pytest.raises(TypeError):
-        jsonlib._std_dumps({"x": object()})
+        jsonlib.std_dumps({"x": object()})
     with pytest.raises(TypeError):
         jsonlib.dumps({"x": object()})
 
