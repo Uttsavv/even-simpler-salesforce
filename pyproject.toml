@@ -36,7 +36,7 @@ otel = ["opentelemetry-api>=1.20"]
 structlog = ["structlog>=24.1"]
 fastapi = ["fastapi>=0.110"]
 flask = ["flask>=3.0"]
-testing = ["respx>=0.21", "pytest>=8"]
+testing = ["respx>=0.21", "pytest>=8,<9.2"]
 all = [
     "even-simpler-salesforce[pydantic,speed,http2,jwt,otel,structlog,fastapi,flask,testing]",
 ]
@@ -55,7 +55,7 @@ Changelog = "https://github.com/Uttsavv/even-simpler-salesforce/blob/main/CHANGE
 
 [dependency-groups]
 dev = [
-    "pytest>=8",
+    "pytest>=8,<9.2",  # 9.2.0 crashes at startup on Python 3.10 (NodeId._str_cache)
     "pytest-cov>=5",
     "pytest-benchmark>=4",
     "respx>=0.21",
