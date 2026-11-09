@@ -1,0 +1,1 @@
+`esf query --csv` neutralises cells that spreadsheets would run as formulas, including ones starting with a line feed. Table output escapes control characters, so record data can't drive the terminal.

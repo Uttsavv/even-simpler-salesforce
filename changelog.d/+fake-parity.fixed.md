@@ -1,0 +1,1 @@
+`FakeSalesforce` now matches the real client: positional query values, `query_one`, `query_first`, `explain`, `instance_url`, `with_auth(instance_url=)` and `sf.auth`. A signature-parity test checks this, and the fake caps open query locators.

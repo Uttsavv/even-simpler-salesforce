@@ -1,1 +1,1 @@
-The `[testing]` extra no longer caps pytest below 9.2; the cap stays in the dev group only. `TokenStoreContract` and `AsyncTokenStoreContract` also check that `lock()` excludes a second holder and that a compare-and-swap save against a missing key conflicts. The sdist now ships only source, tests, the docs those tests read, and licence files. The `[testing]` extra skips pytest 9.2.0 on Python 3.10, where it crashes at startup.
+The `[testing]` extra no longer caps pytest below 9.2; it only skips 9.2.0 on Python 3.10, where that release crashes at startup.
