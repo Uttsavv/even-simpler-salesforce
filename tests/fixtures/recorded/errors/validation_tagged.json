@@ -1,0 +1,13 @@
+{
+  "synthetic": true,
+  "source": "hand-written from Salesforce REST API Developer Guide examples",
+  "body": [
+    {
+      "message": "[ADDR_REQUIRED] Street is required",
+      "errorCode": "FIELD_CUSTOM_VALIDATION_EXCEPTION",
+      "fields": [
+        "Street"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+{
+  "synthetic": true,
+  "source": "synthetic HTML maintenance page (stored as a JSON string)",
+  "body": "<html><head><title>Maintenance</title></head><body>Salesforce is down for maintenance</body></html>"
+}

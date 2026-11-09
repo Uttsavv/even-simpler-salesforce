@@ -1,0 +1,14 @@
+{
+  "synthetic": true,
+  "source": "hand-written from Salesforce REST API Developer Guide examples",
+  "body": {
+    "searchRecords": [
+      {
+        "attributes": {
+          "type": "Lead"
+        },
+        "Id": "00Qxx0000000001AAA"
+      }
+    ]
+  }
+}

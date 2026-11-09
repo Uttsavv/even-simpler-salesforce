@@ -1,0 +1,10 @@
+{
+  "synthetic": true,
+  "source": "RFC 7662 (exp is optional)",
+  "body": {
+    "active": true,
+    "scope": "api",
+    "client_id": "cid-web",
+    "token_type": "access_token"
+  }
+}

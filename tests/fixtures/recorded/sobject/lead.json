@@ -1,0 +1,13 @@
+{
+  "synthetic": true,
+  "source": "hand-written from Salesforce REST API Developer Guide examples",
+  "body": {
+    "attributes": {
+      "type": "Lead",
+      "url": "/services/data/v68.0/sobjects/Lead/00Qxx0000000001AAA"
+    },
+    "Id": "00Qxx0000000001AAA",
+    "Name": "Jane Doe",
+    "Status": "Open"
+  }
+}

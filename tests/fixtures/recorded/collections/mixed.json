@@ -1,0 +1,23 @@
+{
+  "synthetic": true,
+  "source": "hand-written from Salesforce REST API Developer Guide examples",
+  "body": [
+    {
+      "id": "001xx0000000001AAA",
+      "success": true,
+      "errors": []
+    },
+    {
+      "success": false,
+      "errors": [
+        {
+          "statusCode": "REQUIRED_FIELD_MISSING",
+          "message": "Required fields are missing: [Name]",
+          "fields": [
+            "Name"
+          ]
+        }
+      ]
+    }
+  ]
+}
