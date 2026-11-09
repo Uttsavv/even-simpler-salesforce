@@ -13,27 +13,46 @@ from types import TracebackType
 from typing import Any
 
 from .._async.client import DEFAULT_API_VERSION
-from ..auth.flows import Auth
+from ..auth.flows import Auth, WebServerFlow
+from ..auth.token import Token
 from ..config import Budget, Priority
 from ..core.cursor import Cursor
-from ..core.http import check_sobject
+from ..core.http import check_instance_url, check_sobject
 from ..core.limits import LimitInfo
 from ..core.records import apply_model
-from ..core.soql import soql_identifier
-from ..errors import SalesforceError
-from ..models import BatchResult, Limit, QueryResult, RecordResult, UpsertResult
+from ..core.soql import soql_identifier, soql_values
+from ..errors import MultipleMatches, NotFound, SalesforceError
+from ..models import BatchResult, Limit, QueryPlan, QueryResult, RecordResult, UpsertResult
 from ..observability.events import Observer, ObserverHub
 from ..usage import UsageTracker
 from ._state import FakeCall, FakeRequest, FakeState, Match, QueryScript, RowsSpec, Who, _sobject_of
 
 __all__ = [
+    "AsyncFakeAuthApi",
     "AsyncFakeCollections",
     "AsyncFakeSObject",
     "AsyncFakeSalesforce",
+    "FakeAuthApi",
     "FakeCollections",
     "FakeSObject",
     "FakeSalesforce",
 ]
+
+
+_DEFAULT_INSTANCE = "https://example.my.salesforce.com"
+
+
+def _instance_of(auth: Auth | None) -> str:
+    """The instance a real client with ``auth`` would end up on, without any I/O."""
+    if auth is None:
+        return _DEFAULT_INSTANCE
+    static: Any = getattr(auth, "instance_url", None)
+    if isinstance(static, str) and static:
+        return static
+    base: Any = getattr(auth, "base_url", None)
+    if isinstance(base, str) and base.endswith(".my.salesforce.com"):
+        return base
+    return _DEFAULT_INSTANCE
 
 
 class _FakeControls:
@@ -155,6 +174,10 @@ class _FakeControls:
     def set_api_usage(self, used: int, max: int) -> None:
         """Pretend a ``Sforce-Limit-Info: api-usage=used/max`` header was seen (drives budgets)."""
         self._state.usage.observe(LimitInfo(used, max))
+
+    def set_explain(self, plans: Iterable[QueryPlan]) -> None:
+        """Plans returned by every later ``explain()`` call."""
+        self._state.explain_plans = list(plans)
 
     def set_describe(self, sobject: str, describe: Mapping[str, Any]) -> None:
         """Set what ``sobject(name).describe()`` returns (otherwise a minimal one is synthesised)."""
@@ -523,6 +546,91 @@ class FakeCollections:
         )
 
 
+class FakeAuthApi:
+    """``fake.auth``: the real ``sf.auth`` surface, answered in memory (no OAuth server).
+
+    ``token()`` and ``exchange_code()`` return a fake :class:`Token` on the fake's instance;
+    ``revoke()`` records the call; ``userinfo()`` / ``introspect()`` return minimal bodies.
+    Every call is recorded in ``fake.calls`` like any other operation.
+    """
+
+    def __init__(self, client: FakeSalesforce) -> None:
+        self._sf = client
+
+    def _token(self) -> Token:
+        return Token(
+            access_token="fake-access-token",  # noqa: S106 - not a credential
+            instance_url=self._sf.instance_url,
+            issued_at=self._sf._state.clock(),
+        )
+
+    def _run(
+        self, operation: str, args: Mapping[str, Any], fn: Callable[[], Any], method: str, path: str
+    ) -> Any:
+        return self._sf._state.run(self._sf._who, operation, None, args, fn, method=method, path=path)
+
+    def exchange_code(self, flow: WebServerFlow, code: str, *, code_verifier: str | None = None) -> Token:
+        """A fake token, as if ``code`` had been exchanged."""
+        return self._run("oauth.exchange_code", {"code": code}, self._token, "POST", "/services/oauth2/token")
+
+    def revoke(self, token_key: str | None = None, *, auth: Auth | None = None) -> None:
+        """Records the revoke call."""
+        self._run("oauth.revoke", {"token_key": token_key}, lambda: None, "POST", "/services/oauth2/revoke")
+
+    def userinfo(self) -> dict[str, Any]:
+        """A minimal ``userinfo`` body."""
+        return self._run(
+            "oauth.userinfo",
+            {},
+            lambda: {"user_id": "005000000000001AAA", "organization_id": "00D000000000001AAA"},
+            "GET",
+            "/services/oauth2/userinfo",
+        )
+
+    def introspect(self, token_key: str | None = None, *, auth: Auth | None = None) -> dict[str, Any]:
+        """``{"active": True}``."""
+        return self._run(
+            "oauth.introspect",
+            {"token_key": token_key},
+            lambda: {"active": True},
+            "POST",
+            "/services/oauth2/introspect",
+        )
+
+    def token(self) -> Token:
+        """A fake token (no call is recorded: the real method does no I/O when a token is cached)."""
+        return self._token()
+
+
+class AsyncFakeAuthApi:
+    """Async ``fake.auth``; see :class:`FakeAuthApi`."""
+
+    def __init__(self, inner: FakeAuthApi) -> None:
+        self._inner = inner
+
+    async def exchange_code(
+        self, flow: WebServerFlow, code: str, *, code_verifier: str | None = None
+    ) -> Token:
+        """See :meth:`FakeAuthApi.exchange_code`."""
+        return self._inner.exchange_code(flow, code, code_verifier=code_verifier)
+
+    async def revoke(self, token_key: str | None = None, *, auth: Auth | None = None) -> None:
+        """See :meth:`FakeAuthApi.revoke`."""
+        self._inner.revoke(token_key, auth=auth)
+
+    async def userinfo(self) -> dict[str, Any]:
+        """See :meth:`FakeAuthApi.userinfo`."""
+        return self._inner.userinfo()
+
+    async def introspect(self, token_key: str | None = None, *, auth: Auth | None = None) -> dict[str, Any]:
+        """See :meth:`FakeAuthApi.introspect`."""
+        return self._inner.introspect(token_key, auth=auth)
+
+    async def token(self) -> Token:
+        """See :meth:`FakeAuthApi.token`."""
+        return self._inner.token()
+
+
 class FakeSalesforce(_FakeControls):
     """In-memory stand-in for :class:`even_simpler_salesforce.Salesforce` in unit tests.
 
@@ -571,16 +679,22 @@ class FakeSalesforce(_FakeControls):
         self._who = Who()
         self._root = True
         self.auth_config = auth
+        self._instance_url = _instance_of(auth)
         self.collections = FakeCollections(self._state, self._who)
+        self.auth = FakeAuthApi(self)
 
     @classmethod
-    def _view(cls, state: FakeState, who: Who, auth: Auth | None) -> FakeSalesforce:
+    def _view(
+        cls, state: FakeState, who: Who, auth: Auth | None, instance_url: str | None = None
+    ) -> FakeSalesforce:
         view = cls.__new__(cls)
         view._state = state
         view._who = who
         view._root = False
         view.auth_config = auth
+        view._instance_url = instance_url or _instance_of(auth)
         view.collections = FakeCollections(state, who)
+        view.auth = FakeAuthApi(view)
         return view
 
     def __repr__(self) -> str:
@@ -611,14 +725,22 @@ class FakeSalesforce(_FakeControls):
 
     # --- family -----------------------------------------------------------------------
 
-    def with_auth(self, auth: Auth, *, store: Any = None) -> FakeSalesforce:
+    def with_auth(self, auth: Auth, *, store: Any = None, instance_url: str | None = None) -> FakeSalesforce:
         """A child sharing the same records, scripts and call log."""
-        return type(self)._view(self._state, self._who, auth)
+        if instance_url is not None:
+            instance_url = check_instance_url(instance_url)
+        return type(self)._view(self._state, self._who, auth, instance_url)
 
     def tagged(self, caller: str | None = None, priority: Priority | None = None) -> FakeSalesforce:
         """A child whose calls carry ``caller`` / ``priority`` (visible in :attr:`calls`)."""
         who = Who(caller or self._who.caller, priority or self._who.priority)
-        return type(self)._view(self._state, who, self.auth_config)
+        return type(self)._view(self._state, who, self.auth_config, self._instance_url)
+
+    @property
+    def instance_url(self) -> str:
+        """``StaticToken.instance_url`` or ``https://`` + the auth's My Domain host, else
+        ``https://example.my.salesforce.com``."""
+        return self._instance_url
 
     # --- records ----------------------------------------------------------------------
 
@@ -641,9 +763,19 @@ class FakeSalesforce(_FakeControls):
     # --- query & search ---------------------------------------------------------------
 
     def query(
-        self, soql: str, *, page_size: int | None = None, include_deleted: bool = False, model: Any = None
+        self,
+        soql: str,
+        *values: Any,
+        page_size: int | None = None,
+        include_deleted: bool = False,
+        model: Any = None,
     ) -> QueryResult[Any]:
-        """Return the first page of the scripted rows (``page_size`` honoured, default 2000)."""
+        """Return the first page of the scripted rows (``page_size`` honoured, default 2000).
+
+        ``values`` fill ``{}`` placeholders exactly like the real client; scripts registered
+        with :meth:`on_query` match the resulting SOQL.
+        """
+        soql = soql_values(soql, values)
 
         def fn() -> QueryResult[Any]:
             rows, total, done, nxt = self._state.first_page(soql, page_size, include_deleted)
@@ -657,6 +789,41 @@ class FakeSalesforce(_FakeControls):
             fn,
             method="GET",
             path="queryAll" if include_deleted else "query",
+            soql=soql,
+        )
+
+    def query_one(self, soql: str, *values: Any, include_deleted: bool = False, model: Any = None) -> Any:
+        """Exactly one scripted row; ``NotFound`` for none, ``MultipleMatches`` for several."""
+        page = self.query(soql, *values, include_deleted=include_deleted)
+        sobject = _sobject_of(soql_values(soql, values))
+        if page.total_size == 0 or not page.records:
+            raise NotFound("query returned no rows; expected exactly one", operation="query", sobject=sobject)
+        if page.total_size > 1:
+            ids = tuple(str(r["Id"]) for r in page.records if r.get("Id"))
+            raise MultipleMatches(
+                f"query returned {page.total_size} rows; expected exactly one",
+                matches=ids,
+                operation="query",
+                sobject=sobject,
+            )
+        return apply_model(page.records[:1], model)[0]
+
+    def query_first(self, soql: str, *values: Any, include_deleted: bool = False, model: Any = None) -> Any:
+        """The first scripted row, or ``None``."""
+        page = self.query(soql, *values, include_deleted=include_deleted)
+        return apply_model(page.records[:1], model)[0] if page.records else None
+
+    def explain(self, soql: str, *values: Any) -> list[QueryPlan]:
+        """Plans set with :meth:`set_explain` (an empty list otherwise)."""
+        soql = soql_values(soql, values)
+        return self._state.run(
+            self._who,
+            "query.explain",
+            _sobject_of(soql),
+            {"soql": soql},
+            lambda: list(self._state.explain_plans),
+            method="GET",
+            path="query",
             soql=soql,
         )
 
@@ -683,14 +850,14 @@ class FakeSalesforce(_FakeControls):
     def query_iter(
         self,
         soql: str,
-        *,
+        *values: Any,
         page_size: int | None = None,
         include_deleted: bool = False,
         model: Any = None,
         expand_children: bool = False,
     ) -> Iterator[Any]:
         """Yield every scripted row, fetching "pages" lazily (one ``query_more`` call per page)."""
-        page = self.query(soql, page_size=page_size, include_deleted=include_deleted)
+        page = self.query(soql, *values, page_size=page_size, include_deleted=include_deleted)
         while True:
             for rec in page.records:
                 yield apply_model([rec], model)[0] if model is not None else rec
@@ -698,8 +865,9 @@ class FakeSalesforce(_FakeControls):
                 return
             page = self.query_more(page.cursor, page_size=page_size)
 
-    def count(self, soql: str) -> int:
+    def count(self, soql: str, *values: Any) -> int:
         """``totalSize`` of the scripted answer (``total_size=`` or the number of rows)."""
+        soql = soql_values(soql, values)
 
         def fn() -> int:
             return self._state.query_rows(soql)[1]
@@ -1001,6 +1169,12 @@ class AsyncFakeSalesforce(_FakeControls):
         self._who = inner._who
         self.auth_config = inner.auth_config
         self.collections = AsyncFakeCollections(inner.collections)
+        self.auth = AsyncFakeAuthApi(inner.auth)
+
+    @property
+    def instance_url(self) -> str:
+        """See :attr:`FakeSalesforce.instance_url`."""
+        return self._sync.instance_url
 
     @classmethod
     def _wrap(cls, inner: FakeSalesforce) -> AsyncFakeSalesforce:
@@ -1036,9 +1210,11 @@ class AsyncFakeSalesforce(_FakeControls):
         """Whether :meth:`aclose` was called on the root fake."""
         return self._state.closed
 
-    def with_auth(self, auth: Auth, *, store: Any = None) -> AsyncFakeSalesforce:
+    def with_auth(
+        self, auth: Auth, *, store: Any = None, instance_url: str | None = None
+    ) -> AsyncFakeSalesforce:
         """A child sharing the same records, scripts and call log."""
-        return type(self)._wrap(self._sync.with_auth(auth, store=store))
+        return type(self)._wrap(self._sync.with_auth(auth, store=store, instance_url=instance_url))
 
     def tagged(self, caller: str | None = None, priority: Priority | None = None) -> AsyncFakeSalesforce:
         """A child whose calls carry ``caller`` / ``priority``."""
@@ -1053,10 +1229,33 @@ class AsyncFakeSalesforce(_FakeControls):
         return self._sync.describe_global(cached=cached)
 
     async def query(
-        self, soql: str, *, page_size: int | None = None, include_deleted: bool = False, model: Any = None
+        self,
+        soql: str,
+        *values: Any,
+        page_size: int | None = None,
+        include_deleted: bool = False,
+        model: Any = None,
     ) -> QueryResult[Any]:
         """See :meth:`FakeSalesforce.query`."""
-        return self._sync.query(soql, page_size=page_size, include_deleted=include_deleted, model=model)
+        return self._sync.query(
+            soql, *values, page_size=page_size, include_deleted=include_deleted, model=model
+        )
+
+    async def query_one(
+        self, soql: str, *values: Any, include_deleted: bool = False, model: Any = None
+    ) -> Any:
+        """See :meth:`FakeSalesforce.query_one`."""
+        return self._sync.query_one(soql, *values, include_deleted=include_deleted, model=model)
+
+    async def query_first(
+        self, soql: str, *values: Any, include_deleted: bool = False, model: Any = None
+    ) -> Any:
+        """See :meth:`FakeSalesforce.query_first`."""
+        return self._sync.query_first(soql, *values, include_deleted=include_deleted, model=model)
+
+    async def explain(self, soql: str, *values: Any) -> list[QueryPlan]:
+        """See :meth:`FakeSalesforce.explain`."""
+        return self._sync.explain(soql, *values)
 
     async def query_more(
         self, cursor: Cursor | str, *, page_size: int | None = None, model: Any = None
@@ -1067,7 +1266,7 @@ class AsyncFakeSalesforce(_FakeControls):
     async def query_iter(
         self,
         soql: str,
-        *,
+        *values: Any,
         page_size: int | None = None,
         include_deleted: bool = False,
         model: Any = None,
@@ -1076,6 +1275,7 @@ class AsyncFakeSalesforce(_FakeControls):
         """See :meth:`FakeSalesforce.query_iter`."""
         for row in self._sync.query_iter(
             soql,
+            *values,
             page_size=page_size,
             include_deleted=include_deleted,
             model=model,
@@ -1083,9 +1283,9 @@ class AsyncFakeSalesforce(_FakeControls):
         ):
             yield row
 
-    async def count(self, soql: str) -> int:
+    async def count(self, soql: str, *values: Any) -> int:
         """See :meth:`FakeSalesforce.count`."""
-        return self._sync.count(soql)
+        return self._sync.count(soql, *values)
 
     async def search(self, sosl: str) -> list[dict[str, Any]]:
         """See :meth:`FakeSalesforce.search`."""

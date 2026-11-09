@@ -30,7 +30,7 @@ from ..errors import (
     RequiredFieldMissing,
     SalesforceError,
 )
-from ..models import BatchResult, Limit, QueryResult, RecordResult, UpsertResult
+from ..models import BatchResult, Limit, QueryPlan, QueryResult, RecordResult, UpsertResult
 from ..observability.events import Observer, ObserverHub
 from ..observability.summary import record_event
 from ..usage import UsageTracker
@@ -52,6 +52,7 @@ RowsSpec = Rows | Callable[[str], Rows]
 Match = str | re.Pattern[str] | Callable[[str], bool]
 
 _FROM = re.compile(r"\bFROM\s+([A-Za-z][A-Za-z0-9_]*)", re.IGNORECASE)
+MAX_OPEN_LOCATORS = 1000
 _LOCATOR = re.compile(r"/query(?:All)?/([0-9A-Za-z]{15,18})-(\d+)$")
 _VERSIONED = re.compile(r"^/services/data/v\d+\.\d/")
 DEFAULT_PAGE_SIZE = 2000
@@ -275,6 +276,8 @@ class FakeState:
         self.rejections: list[_Rejection] = []
         self.calls: list[FakeCall] = []
         self.locators: dict[str, _Locator] = {}
+        self._locator_seq = 0
+        self.explain_plans: list[QueryPlan] = []
         self.counter = 0
         self.closed = False
 
@@ -403,7 +406,10 @@ class FakeState:
                 f.remaining -= 1
                 if f.remaining <= 0:
                     self.failures.remove(f)
-                return f.error
+                    return f.error
+                # A fresh copy per raise: one shared instance would chain tracebacks and
+                # mutations (operation/sobject) across calls.
+                return copy.copy(f.error)
         return None
 
     # --- controls -------------------------------------------------------------------
@@ -737,8 +743,11 @@ class FakeState:
         nxt: str | None = None
         if not done:
             if loc_id is None:
-                loc_id = make_id("01g", len(self.locators) + 1)[:15]
+                self._locator_seq += 1
+                loc_id = make_id("01g", self._locator_seq)[:15]
                 self.locators[loc_id] = loc
+                while len(self.locators) > MAX_OPEN_LOCATORS:  # bounded: oldest are dropped first
+                    del self.locators[next(iter(self.locators))]
             kind = "queryAll" if loc.all_rows else "query"
             nxt = f"/services/data/v{self.api_version}/{kind}/{loc_id}-{offset + ps}"
         return chunk, loc.total, done, nxt

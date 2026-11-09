@@ -153,6 +153,10 @@ For each `sf.request` event it records:
   failure;
 - counters `esf.requests` and `esf.errors`, a histogram `esf.duration` (ms), and a gauge
   `esf.api_usage` (fraction of the daily limit, when your OpenTelemetry API supports gauges).
+  Metrics are labelled with `operation`, `method`, `status`, `outcome`, `error_code` and
+  `priority` only. `caller` and `sobject` can take many distinct values, and each value makes
+  a new time series, so they stay on spans. To add them, pass
+  `OpenTelemetry(metric_attributes=(*esf.observability.otel.DEFAULT_METRIC_ATTRIBUTES, "sobject"))`.
 
 The span is created after the call finishes, with its start time set back by the call's
 duration. It is not the parent of your own spans for the call.

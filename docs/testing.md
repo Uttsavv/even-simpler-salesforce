@@ -181,7 +181,7 @@ from even_simpler_salesforce import testing
 auth = esf.ClientCredentials(
     domain="https://acme.my.salesforce.com", client_id="3MVG9...", client_secret="..."
 )
-transport = testing.record("leads.json", mask_ids=True)
+transport = testing.record("leads.json", extra_keys={"Tax_Id__c"})
 with esf.Salesforce(auth, http_client=httpx.Client(transport=transport)) as sf:
     sf.query("SELECT Id, Name FROM Lead LIMIT 2")
 ```
@@ -194,12 +194,16 @@ Redaction happens **before anything is written to disk**:
 - session ids and `Bearer ...` values inside any string are redacted;
 - e-mail addresses become `user<N>@example.com` and phone/fax values `555-01NN`, consistently
   within a file (`mask_emails=` / `mask_phones=`);
+- in sObject records, names and postal addresses (`Name`, `FirstName`, `LastName`,
+  `MailingStreet`, `BillingCity`, `PostalCode`, ...) become `<Field> <N>`, consistently within
+  a file, and literals in SOQL/SOSL query parameters become `?` (`mask_personal=`);
 - instance host names become `example.my.salesforce.com` (`mask_hosts=`);
-- with `mask_ids=True`, Salesforce ids are replaced with fake ids that keep the key prefix,
-  consistently across paths, query strings and bodies;
+- Salesforce ids are replaced with fake ids that keep the key prefix, consistently across
+  paths, query strings and bodies (`mask_ids=False` keeps the real ids);
 - only a short allow-list of headers is kept; `Authorization` and cookies are never written.
 
-Review a new fixture before you commit it anyway.
+Redaction is pattern-based, so a custom field can still hold personal data. Pass its API name
+in `extra_keys=` and review every new fixture before you commit it.
 
 Replay serves the file through `httpx.MockTransport`. The same transport works with
 `httpx.Client` and `httpx.AsyncClient`:
@@ -214,8 +218,10 @@ assert len(page) == 2
 replayed.close()
 ```
 
-For each request, replay serves the first unused interaction with the same method and path.
-With `match_query=True`, the query string must match too. With `repeat=True`, the last match is
+For each request, replay serves the first unused interaction with the same method, path and
+query string. SOQL and SOSL in `q` and `explain` are compared with literals replaced by `?`,
+because recordings store them that way. `match_query=False` matches on method and path only
+and serves recordings in order. With `repeat=True`, the last match is
 served again when all matches have been used. A request with no match raises
 `ReplayMismatch`, which is an `AssertionError`. `transport.handler.remaining` counts the
 interactions not served yet.
@@ -249,7 +255,7 @@ Installing the package registers a pytest plugin (entry point `pytest11`) automa
 |---|---|
 | `esf_fake` | a fresh `FakeSalesforce`, closed after the test |
 | `esf_async_fake` | a fresh `AsyncFakeSalesforce` |
-| `esf_replay` | factory `esf_replay(path, match_query=False, repeat=False)` returning a replay transport; relative paths resolve against the test file's directory |
+| `esf_replay` | factory `esf_replay(path, match_query=True, repeat=False)` returning a replay transport; relative paths resolve against the test file's directory |
 | `esf_sandbox_auth` | an `Auth` built from `ESF_SANDBOX_*` variables (the test is skipped if they aren't set) |
 
 ```python

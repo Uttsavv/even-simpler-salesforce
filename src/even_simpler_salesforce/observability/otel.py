@@ -4,11 +4,23 @@ from __future__ import annotations
 
 import importlib
 import time
+from collections.abc import Iterable
 from typing import Any
 
 from .events import Event
 
-__all__ = ["OpenTelemetry"]
+__all__ = ["DEFAULT_METRIC_ATTRIBUTES", "OpenTelemetry"]
+
+_SPAN_ATTRIBUTES = ("operation", "sobject", "method", "status", "outcome", "error_code", "caller", "priority")
+# Bounded label sets only: every distinct combination becomes its own metric time series.
+DEFAULT_METRIC_ATTRIBUTES: tuple[str, ...] = (
+    "operation",
+    "method",
+    "status",
+    "outcome",
+    "error_code",
+    "priority",
+)
 
 
 class OpenTelemetry:
@@ -16,9 +28,20 @@ class OpenTelemetry:
 
     Metrics: counters ``esf.requests`` and ``esf.errors``, histogram ``esf.duration`` (ms),
     gauge ``esf.api_usage`` (fraction of the daily limit).
+
+    Spans carry every attribute. Metrics carry only ``metric_attributes``
+    (:data:`DEFAULT_METRIC_ATTRIBUTES`), leaving out ``caller`` and ``sobject``, which can take
+    many distinct values. Pass e.g. ``(*DEFAULT_METRIC_ATTRIBUTES, "sobject")`` to add them.
     """
 
-    def __init__(self, tracer_provider: Any = None, meter_provider: Any = None) -> None:
+    def __init__(
+        self,
+        tracer_provider: Any = None,
+        meter_provider: Any = None,
+        *,
+        metric_attributes: Iterable[str] = DEFAULT_METRIC_ATTRIBUTES,
+    ) -> None:
+        self.metric_attributes = tuple(metric_attributes)
         try:
             trace: Any = importlib.import_module("opentelemetry.trace")
             metrics: Any = importlib.import_module("opentelemetry.metrics")
@@ -41,20 +64,8 @@ class OpenTelemetry:
         if event.name != "sf.request":
             return
         f = event.fields
-        attrs = {
-            k: v
-            for k in (
-                "operation",
-                "sobject",
-                "method",
-                "status",
-                "outcome",
-                "error_code",
-                "caller",
-                "priority",
-            )
-            if (v := f.get(k)) is not None
-        }
+        attrs = {k: v for k in _SPAN_ATTRIBUTES if (v := f.get(k)) is not None}
+        labels = {k: v for k in self.metric_attributes if (v := f.get(k)) is not None}
         dur_ms = float(f.get("duration_ms") or 0)
         end_ns = time.time_ns()
         span: Any = self.tracer.start_span(
@@ -70,10 +81,10 @@ class OpenTelemetry:
         if f.get("outcome") == "error":
             span.set_status(self._trace.Status(self._trace.StatusCode.ERROR, str(f.get("error_code") or "")))
         span.end(end_time=end_ns)
-        self.requests.add(1, attrs)
+        self.requests.add(1, labels)
         if f.get("outcome") == "error":
-            self.errors.add(1, attrs)
-        self.duration.record(dur_ms, attrs)
+            self.errors.add(1, labels)
+        self.duration.record(dur_ms, labels)
         used, mx = f.get("api_used"), f.get("api_max")
         if self.usage is not None and used is not None and mx:
             self.usage.set(used / mx)

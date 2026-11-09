@@ -90,7 +90,7 @@ def esf_async_fake() -> Iterator[AsyncFakeSalesforce]:
 
 @pytest.fixture
 def esf_replay(request: pytest.FixtureRequest) -> Callable[..., httpx.MockTransport]:
-    """Factory: ``esf_replay("fixtures/x.json", match_query=False, repeat=False)``."""
+    """Factory: ``esf_replay("fixtures/x.json", match_query=True, repeat=False)``."""
     from .recorder import replay
 
     base = Path(str(request.path)).parent

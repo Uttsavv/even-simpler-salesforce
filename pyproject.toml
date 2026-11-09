@@ -36,7 +36,7 @@ otel = ["opentelemetry-api>=1.20"]
 structlog = ["structlog>=24.1"]
 fastapi = ["fastapi>=0.110"]
 flask = ["flask>=3.0"]
-testing = ["respx>=0.21", "pytest>=8,<9.2"]
+testing = ["respx>=0.21", "pytest>=8"]
 migrate = ["libcst>=1.4"]
 all = [
     "even-simpler-salesforce[pydantic,speed,http2,jwt,otel,structlog,fastapi,flask,testing,migrate]",
@@ -88,6 +88,19 @@ path = "src/even_simpler_salesforce/_version.py"
 [tool.hatch.build.targets.wheel]
 packages = ["src/even_simpler_salesforce"]
 
+[tool.hatch.build.targets.sdist]
+# Source, tests and the files a downstream packager needs; no CI config, caches or docs site.
+include = [
+    "/src/even_simpler_salesforce",
+    "/tests",
+    "/README.md",
+    "/CHANGELOG.md",
+    "/LICENSE",
+    "/NOTICE",
+    "/pyproject.toml",
+]
+exclude = ["**/__pycache__", "**/*.pyc", "/tests/sandbox/.env*"]
+
 [tool.ruff]
 line-length = 110
 target-version = "py310"
@@ -126,7 +139,7 @@ filterwarnings = ["error::DeprecationWarning:even_simpler_salesforce"]
 branch = true
 relative_files = true
 source = ["even_simpler_salesforce"]
-omit = ["*/_sync/*", "*/contrib/*", "*/cli/*"]
+omit = ["*/_sync/*", "*/contrib/*"]
 
 [tool.coverage.report]
 show_missing = true

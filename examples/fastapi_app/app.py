@@ -50,7 +50,9 @@ def client_from_env() -> esf.AsyncSalesforce:
             domain=os.environ["SF_DOMAIN"],
             client_id=os.environ["SF_CLIENT_ID"],
             client_secret=os.environ["SF_CLIENT_SECRET"],
-        )
+        ),
+        # Cursors go out to HTTP clients and come back; signing makes tampered ones a 400.
+        cursor_key=os.environ["SF_CURSOR_KEY"].encode(),
     )
 
 
@@ -122,6 +124,8 @@ def _clean(record: dict[str, Any]) -> dict[str, Any]:
 
 
 def _error_body(exc: esf.SalesforceError) -> dict[str, Any]:
+    # Validation messages help the caller fix input, but can quote record values: only return
+    # them to callers allowed to see that record.
     return {"error_code": exc.error_code, "message": exc.message, "fields": list(exc.fields)}
 
 

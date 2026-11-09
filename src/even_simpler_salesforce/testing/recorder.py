@@ -56,13 +56,20 @@ Redaction, applied before anything touches the disk:
 - Session ids (``00D…!…``) and ``Bearer …`` values inside any string become ``<redacted>``.
 - E-mail addresses become ``user<N>@example.com`` and phone/fax fields ``555-01NN``,
   consistently within one fixture.
+- In sObject records (JSON objects with ``attributes``), names and postal addresses
+  (``Name``, ``FirstName``, ``LastName``, ``*Street``, ``*City``, ``*PostalCode``...) become
+  ``<Field> <N>``, consistently within one fixture (``mask_personal=False`` keeps them).
+- Literals in SOQL/SOSL query parameters (``q``, ``explain``) become ``?``.
 - Instance hosts (``*.salesforce.com``, ``*.force.com``) become ``example.my.salesforce.com``.
-- With ``mask_ids=True``, Salesforce ids are replaced with fake ids keeping the key prefix
-  (consistently, in paths, queries and bodies, so recorded follow-up requests still match).
+- Salesforce ids are replaced with fake ids keeping the key prefix (consistently, in paths,
+  queries and bodies, so recorded follow-up requests still match); ``mask_ids=False`` keeps them.
 
-Replay serves, for each request, the first unused interaction with the same method and path
-(and, with ``match_query=True``, the same query string). Unmatched requests raise
-:class:`ReplayMismatch`.
+Redaction is pattern-based: custom fields can still hold personal data. Add their API names to
+``extra_keys`` and review every fixture before committing it.
+
+Replay serves, for each request, the first unused interaction with the same method, path and
+query string (SOQL compared with literals replaced by ``?``); ``match_query=False`` ignores the
+query string. Unmatched requests raise :class:`ReplayMismatch`.
 """
 
 from __future__ import annotations
@@ -79,6 +86,7 @@ from urllib.parse import parse_qsl, urlencode
 
 import httpx
 
+from ..core.soql import redact_soql
 from ._ids import make_id
 
 __all__ = ["FIXTURE_VERSION", "RecordingTransport", "Redactor", "ReplayMismatch", "record", "replay"]
@@ -123,6 +131,12 @@ _HOST = re.compile(
 _SAFE_HOSTS = frozenset({"login.salesforce.com", "test.salesforce.com", "example.my.salesforce.com"})
 _ID = re.compile(r"(?<![A-Za-z0-9])[a-zA-Z0-9]{5}0[a-zA-Z0-9]{9}(?:[a-zA-Z0-9]{3})?(?![A-Za-z0-9])")
 _PHONE_KEY = re.compile(r"(?i)(phone|fax)")
+_PERSONAL_KEY = re.compile(
+    r"(?i)^(?:name|firstname|lastname|middlename|suffix|salutation|title|"
+    r"[a-z]*street|[a-z]*city|[a-z]*postalcode|[a-z]*state|[a-z]*country|[a-z]*address(?:__c)?|"
+    r"[a-z]*name__c|birthdate)$"
+)
+_SOQL_PARAMS = frozenset({"q", "explain"})
 
 
 class ReplayMismatch(AssertionError):
@@ -133,29 +147,35 @@ class Redactor:
     """Scrubs secrets and personal data from recorded traffic (see the module docstring).
 
     Args:
-        mask_ids: Also replace Salesforce record ids (consistently) with fake ones.
+        mask_ids: Replace Salesforce record ids (consistently) with fake ones.
         mask_emails: Replace e-mail addresses.
         mask_phones: Replace values of ``*Phone*`` / ``*Fax*`` fields.
         mask_hosts: Replace instance host names.
-        extra_keys: More JSON/form keys whose values must be redacted.
+        mask_personal: Replace names and postal addresses in sObject records, and literals
+            in SOQL/SOSL query parameters.
+        extra_keys: More JSON/form keys whose values must be redacted (e.g. custom fields
+            holding personal data).
     """
 
     def __init__(
         self,
         *,
-        mask_ids: bool = False,
+        mask_ids: bool = True,
         mask_emails: bool = True,
         mask_phones: bool = True,
         mask_hosts: bool = True,
+        mask_personal: bool = True,
         extra_keys: frozenset[str] | set[str] = frozenset(),
     ) -> None:
         self.mask_ids = mask_ids
         self.mask_emails = mask_emails
         self.mask_phones = mask_phones
         self.mask_hosts = mask_hosts
+        self.mask_personal = mask_personal
         self.keys = _SECRET_KEYS | {k.lower() for k in extra_keys}
         self._emails: dict[str, str] = {}
         self._phones: dict[str, str] = {}
+        self._personal: dict[tuple[str, str], str] = {}
         self._ids: dict[str, str] = {}
         self._lock = threading.Lock()
 
@@ -182,6 +202,11 @@ class Redactor:
                 self._ids[key] = fake
         return fake if len(value) == 18 else fake[:15]
 
+    def _personal_value(self, key: str, value: str) -> str:
+        with self._lock:
+            n = sum(1 for k in self._personal if k[0] == key) + 1
+            return self._personal.setdefault((key, value), f"{key} {n}")
+
     @staticmethod
     def _host(m: re.Match[str]) -> str:
         host = m.group(0)
@@ -199,25 +224,39 @@ class Redactor:
             value = _ID.sub(self._id, value)
         return value
 
-    def value(self, obj: Any, key: str | None = None) -> Any:
-        """Redact a decoded JSON value recursively."""
+    def value(self, obj: Any, key: str | None = None, *, in_record: bool = False) -> Any:
+        """Redact a decoded JSON value recursively.
+
+        ``in_record`` marks the fields of an sObject record (a JSON object with ``attributes``).
+        """
         if key is not None and key.lower() in self.keys and obj is not None:
             return REDACTED
         if isinstance(obj, str):
             if self.mask_phones and key is not None and _PHONE_KEY.search(key) and obj:
                 return self._phone(obj)
+            if self.mask_personal and in_record and key is not None and obj and _PERSONAL_KEY.match(key):
+                return self._personal_value(key, obj)
             return self.text(obj)
         if isinstance(obj, Mapping):
             m = cast("Mapping[str, Any]", obj)
-            return {str(k): self.value(v, str(k)) for k, v in m.items()}
+            record = "attributes" in m
+            return {str(k): self.value(v, str(k), in_record=record) for k, v in m.items()}
         if isinstance(obj, list):
             items = cast("list[Any]", obj)
             return [self.value(v, key) for v in items]
         return obj
 
     def pairs(self, pairs: list[tuple[str, str]]) -> list[list[str]]:
-        """Redact decoded query/form pairs."""
-        return [[k, REDACTED if k.lower() in self.keys else self.text(v)] for k, v in pairs]
+        """Redact decoded query/form pairs (SOQL/SOSL literals in ``q``/``explain`` too)."""
+        out: list[list[str]] = []
+        for k, v in pairs:
+            if k.lower() in self.keys:
+                out.append([k, REDACTED])
+            elif self.mask_personal and k in _SOQL_PARAMS:
+                out.append([k, self.text(redact_soql(v))])
+            else:
+                out.append([k, self.text(v)])
+        return out
 
 
 def _body(content: bytes, content_type: str, redactor: Redactor) -> dict[str, Any]:
@@ -324,14 +363,19 @@ class RecordingTransport(httpx.BaseTransport, httpx.AsyncBaseTransport):
         if isinstance(transport, httpx.AsyncBaseTransport):
             self._async = transport
         self.interactions: list[dict[str, Any]] = []
+        self._encoded: list[str] = []  # each interaction serialised once, not on every write
         self._lock = threading.Lock()
         self._write()
 
     def _write(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        doc = {"esf_fixture": FIXTURE_VERSION, "interactions": self.interactions}
+        if self._encoded:
+            body = ",\n".join(self._encoded)
+            text = f'{{\n  "esf_fixture": {FIXTURE_VERSION},\n  "interactions": [\n{body}\n  ]\n}}\n'
+        else:
+            text = f'{{\n  "esf_fixture": {FIXTURE_VERSION},\n  "interactions": []\n}}\n'
         tmp = self.path.with_suffix(self.path.suffix + ".tmp")
-        tmp.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        tmp.write_text(text, encoding="utf-8")
         tmp.replace(self.path)
 
     def _record(self, request: httpx.Request, response: httpx.Response) -> None:
@@ -339,8 +383,12 @@ class RecordingTransport(httpx.BaseTransport, httpx.AsyncBaseTransport):
             "request": _request_entry(request, self.redactor),
             "response": _response_entry(response, self.redactor),
         }
+        encoded = "\n".join(
+            "    " + line for line in json.dumps(entry, indent=2, ensure_ascii=False).splitlines()
+        )
         with self._lock:
             self.interactions.append(entry)
+            self._encoded.append(encoded)
             self._write()
 
     def handle_request(self, request: httpx.Request) -> httpx.Response:
@@ -388,10 +436,11 @@ def record(
     path: str | Path,
     transport: httpx.BaseTransport | httpx.AsyncBaseTransport | None = None,
     *,
-    mask_ids: bool = False,
+    mask_ids: bool = True,
     mask_emails: bool = True,
     mask_phones: bool = True,
     mask_hosts: bool = True,
+    mask_personal: bool = True,
     extra_keys: frozenset[str] | set[str] = frozenset(),
 ) -> RecordingTransport:
     """An httpx transport that records redacted exchanges to ``path`` (sync and async).
@@ -403,7 +452,8 @@ def record(
         mask_emails: Replace e-mail addresses.
         mask_phones: Replace phone/fax field values.
         mask_hosts: Replace instance host names with ``example.my.salesforce.com``.
-        extra_keys: Additional JSON/form keys to redact.
+        mask_personal: Replace names/addresses in records and literals in SOQL parameters.
+        extra_keys: Additional JSON/form keys to redact (custom fields with personal data).
 
     Returns:
         The transport; pass it to ``httpx.Client(transport=...)`` or ``httpx.AsyncClient``.
@@ -416,6 +466,7 @@ def record(
             mask_emails=mask_emails,
             mask_phones=mask_phones,
             mask_hosts=mask_hosts,
+            mask_personal=mask_personal,
             extra_keys=extra_keys,
         ),
     )
@@ -447,6 +498,11 @@ def _response_from(entry: Mapping[str, Any], request: httpx.Request) -> httpx.Re
     return httpx.Response(int(entry["status"]), headers=headers, content=content, request=request)
 
 
+def _normalise(key: str, value: str) -> tuple[str, str]:
+    # Recordings store SOQL with literals replaced by "?", so compare query shapes.
+    return (key, redact_soql(value) if key in _SOQL_PARAMS else value)
+
+
 class _Replayer:
     def __init__(self, interactions: list[dict[str, Any]], match_query: bool, repeat: bool) -> None:
         self.interactions = interactions
@@ -461,8 +517,8 @@ class _Replayer:
             return False
         if self.match_query:
             pairs = cast("list[list[str]]", req.get("query") or [])
-            want = sorted((str(p[0]), str(p[1])) for p in pairs)
-            return want == sorted(request.url.params.multi_items())
+            want = sorted(_normalise(str(p[0]), str(p[1])) for p in pairs)
+            return want == sorted(_normalise(k, v) for k, v in request.url.params.multi_items())
         return True
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
@@ -490,14 +546,16 @@ class _Replayer:
 def replay(
     path: str | Path,
     *,
-    match_query: bool = False,
+    match_query: bool = True,
     repeat: bool = False,
 ) -> httpx.MockTransport:
     """An ``httpx.MockTransport`` serving the interactions recorded in ``path``.
 
     Args:
         path: Fixture written by :func:`record` (or by hand; see the module docstring).
-        match_query: Also require the query string to match.
+        match_query: Require the query string to match too (default). SOQL/SOSL in ``q`` and
+            ``explain`` is compared with literals replaced by ``?``. ``False`` matches on
+            method and path only, serving recordings in order.
         repeat: When all matching interactions were used, serve the last one again instead of
             raising :class:`ReplayMismatch`.
 

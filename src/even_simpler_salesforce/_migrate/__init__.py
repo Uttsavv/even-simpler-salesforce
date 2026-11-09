@@ -61,6 +61,23 @@ def _walk(root: Path) -> list[Path]:
     return out
 
 
+def _write_atomic(path: Path, text: str) -> None:
+    """Replace ``path`` with ``text`` in one step, keeping its line endings and permissions.
+
+    The new content goes to a temporary file in the same directory first, so an interrupted
+    run never leaves a half-written source file.
+    """
+    tmp = path.with_name(f".{path.name}.esf-migrate.tmp")
+    try:
+        with tmp.open("w", encoding="utf-8", newline="") as fh:
+            fh.write(text)
+        os.chmod(tmp, path.stat().st_mode & 0o7777)
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
 def migrate_files(
     files: Iterable[Path],
     *,
@@ -75,7 +92,8 @@ def migrate_files(
     out: list[FileResult] = []
     for path in files:
         try:
-            source = path.read_text(encoding="utf-8")
+            with path.open(encoding="utf-8", newline="") as fh:  # keep CRLF/LF as they are
+                source = fh.read()
         except (OSError, UnicodeDecodeError) as exc:
             out.append(FileResult(path.as_posix(), "", "", error=f"read error: {exc}"))
             continue
@@ -200,7 +218,7 @@ def _run(argv: Sequence[str] | None, out: TextIO, err: TextIO) -> int:
     if args.write:
         for r in results:
             if r.changed and not r.error:
-                Path(r.path).write_text(r.updated, encoding="utf-8")
+                _write_atomic(Path(r.path), r.updated)
             _remap_lines(r)
     elif not args.check:
         for r in results:
