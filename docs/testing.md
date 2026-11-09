@@ -1,23 +1,7 @@
 # Testing
 
-`even_simpler_salesforce.testing` gives you three ways to test code that uses the client
-without a real org:
-
-| Tool | Use it for | Network |
-|---|---|---|
-| `FakeSalesforce` / `AsyncFakeSalesforce` | unit tests of your own logic: an in-memory org with scripted queries and injected errors | none |
-| `record()` / `replay()` | contract tests: capture real traffic once (redacted), then replay it through the real client | only while recording |
-| pytest plugin | fixtures for the above, plus a marker for opt-in real-org tests | — |
-
-`import even_simpler_salesforce.testing` needs neither pytest nor respx. The pytest plugin and
-the token-store contract suite need pytest (the `[testing]` extra installs pytest and respx).
-
-## The fakes
-
-`FakeSalesforce` (sync) and `AsyncFakeSalesforce` (async) have the real clients' methods for
-records, query and search, Collections, `request`, `limits`, `usage`, `with_auth` and
-`tagged`, and they share one implementation. They are duck-typed, not subclasses, so use
-`typing.cast` where your code is type-checked against the real class.
+`even_simpler_salesforce.testing` lets you test code that uses the client without a real org. Use
+the fakes for unit tests, and record and replay for contract tests.
 
 ```python
 import even_simpler_salesforce as esf
@@ -38,30 +22,63 @@ def test_close_lead(esf_fake: FakeSalesforce) -> None:
     assert call.args["data"] == {"Status": "Closed - Not Converted"}
 ```
 
-### Records
+The `esf_fake` fixture comes from the [pytest plugin](#pytest-plugin), which the package installs.
 
-Records are stored per sObject. `create` returns valid-looking 18-character ids with the right
-key prefix (`00Q` for Lead, `001` for Account, ...), and `get`, `update`, `upsert`, `delete`
-and the Collections methods behave like the API: `NotFound` for missing ids,
-`NotFound(ENTITY_IS_DELETED)` for a second delete, `MultipleMatches` for ambiguous upserts and
-`Conflict` for `if_unmodified_since`.
+## Choose a tool
+
+| Tool | Use it for | Network |
+|---|---|---|
+| `FakeSalesforce`, `AsyncFakeSalesforce` | unit tests of your own logic: an in-memory org with scripted queries and injected errors | none |
+| `record()`, `replay()` | contract tests: capture real traffic once (redacted), then replay it through the real client | only while recording |
+| pytest plugin | fixtures for the above, plus a marker for opt-in real-org tests | none |
+
+`import even_simpler_salesforce.testing` needs neither pytest nor respx. The pytest plugin and the
+token store contract suite need pytest. The `[testing]` extra installs pytest and respx.
+
+## Use the fakes
+
+`FakeSalesforce` is the sync fake and `AsyncFakeSalesforce` is the async fake. They share one
+implementation. They have the methods of the real clients for these areas:
+
+- records
+- query and search
+- Collections
+- `request`, `limits` and `usage`
+- `with_auth` and `tagged`
+
+The fakes are duck-typed, not subclasses. If your code is type-checked against the real class, use
+`typing.cast`.
+
+## Seed and inspect records
+
+The fake stores records per sObject. `create` returns valid-looking 18-character ids with the right
+key prefix, such as `00Q` for Lead and `001` for Account.
+
+The other record methods behave like the API:
+
+- `get`, `update` and `delete` raise `NotFound` for missing ids.
+- A second delete raises `NotFound(ENTITY_IS_DELETED)`.
+- An ambiguous upsert raises `MultipleMatches`.
+- `if_unmodified_since` raises `Conflict`.
+
+The Collections methods follow the same rules.
 
 | Control | Does |
 |---|---|
-| `fake.add(sobject, data)` / `add_many(sobject, rows)` | seed records without recording a call; returns the id(s) |
-| `fake.records(sobject)` / `fake.record(sobject, id)` | copies of what is stored |
+| `fake.add(sobject, data)`, `add_many(sobject, rows)` | seed records without recording a call; returns the id or ids |
+| `fake.records(sobject)`, `fake.record(sobject, id)` | copies of what is stored |
 | `fake.new_id(sobject)` | a fresh id with the sObject's prefix |
-| `fake.set_describe(sobject, describe)` | what `describe()` returns (a minimal one is made up otherwise) |
+| `fake.set_describe(sobject, describe)` | what `describe()` returns; otherwise the fake makes up a minimal one |
 | `fake.set_limits({...})` | what `limits()` returns |
-| `fake.set_api_usage(used, max)` | pretend a `Sforce-Limit-Info` header was seen (drives budgets) |
+| `fake.set_api_usage(used, max)` | pretend the fake saw a `Sforce-Limit-Info` header; drives budgets |
 
-The fake does **not** run validation rules, triggers or required-field checks. To simulate
-them, use `reject()` or `fail_next()` (below).
+The fake doesn't run validation rules, triggers or required-field checks. To simulate them, use
+[`reject()` or `fail_next()`](#inject-errors).
 
-### Queries are scripted, not executed
+## Script queries
 
-The fake has no SOQL engine, because a fake engine would give answers your org wouldn't. You
-script the answers instead:
+The fake has no SOQL engine, because a fake engine would give answers your org wouldn't. You script
+the answers instead.
 
 ```python
 import re
@@ -81,25 +98,36 @@ def test_open_leads(esf_fake: FakeSalesforce) -> None:
     assert [c.operation for c in esf_fake.calls] == ["query", "query_more", "query_more"]
 ```
 
-- `on_query(match, rows=(), *, total_size=None, times=None)`: `match` is the SOQL text
-  (whitespace is collapsed before comparing), a compiled regex (`re.search`) or a predicate
-  `(soql) -> bool`. `rows` is a list or a callable. `total_size` defaults to the number of rows,
-  and is what `count()` returns. The newest matching script wins. `times` limits how often the
-  script may match.
-- `on_search(match, rows=(), *, times=None)`: the same for `search()` and
-  `parameterized_search()` (matched on `q`).
-- `on_request(method, path, response=None, *, times=None)`: answers `sf.request(...)`. `path`
-  is a string or a regex (`fullmatch`); a versioned `/services/data/vXX.X/` prefix is ignored.
-  `response` is a value (deep-copied), a callable receiving a `FakeRequest`, or an exception to
-  raise.
-- A query, search or request with no matching script raises `UnscriptedCall`. It is an
-  `AssertionError`, so `except esf.SalesforceError` in your code can't swallow it.
+If a query, search or request has no matching script, the fake raises `UnscriptedCall`. It is an
+`AssertionError`, so `except esf.SalesforceError` in your code can't swallow it.
 
-Pages honour `page_size` (default 2,000), and cursors work, including signing with
+| Method | Scripts | Matches on |
+|---|---|---|
+| `on_query(match, rows=(), *, total_size=None, times=None)` | `query()` and the methods built on it, such as `query_iter()` and `count()` | the SOQL text |
+| `on_search(match, rows=(), *, times=None)` | `search()` and `parameterized_search()` | `q` |
+| `on_request(method, path, response=None, *, times=None)` | `sf.request(...)` | `method` and `path` |
+
+The arguments work like this:
+
+- `match` is the SOQL text, a compiled regex or a predicate `(soql) -> bool`. The fake collapses
+  whitespace before it compares text. A regex uses `re.search`.
+- `rows` is a list or a callable.
+- `total_size` defaults to the number of rows. `count()` returns it.
+- `times` limits how often the script can match.
+- If more than one script matches, the newest one wins.
+- `path` is a string or a regex, which must match in full (`fullmatch`). The fake ignores a
+  versioned `/services/data/vXX.X/` prefix.
+- `response` is a value, a callable that gets a `FakeRequest`, or an exception to raise. The fake
+  deep-copies a value.
+
+Pages follow `page_size`, which defaults to 2,000. Cursors work, and so does signing with
 `FakeSalesforce(cursor_key=...)`. `query_iter(..., expand_children=True)` is accepted but does
-nothing: script child records already complete.
+nothing, because scripted child records are already complete.
 
-### Errors
+## Inject errors
+
+`fail_next()` makes the next call of an operation raise. `reject()` rejects record writes row by
+row.
 
 ```python
 def test_validation_error_is_reported(esf_fake: FakeSalesforce) -> None:
@@ -128,29 +156,35 @@ def test_partial_failure(esf_fake: FakeSalesforce) -> None:
     assert [r.ok for r in result] == [True, False]
 ```
 
-- `fail_next(operation, error, *, sobject=None, times=1)` makes the next call(s) of an
-  operation raise. Operation names are the real ones: `"sobject.update"`, `"query"`,
-  `"query_more"`, `"collections.create"`, `"limits"`, `"raw"` (or your `operation=`), or `"*"`
-  for any.
-- `reject(sobject, error, *, when=None)` rejects matching **record writes**, row by row. Single
-  writes raise the error, and Collections calls return `RecordResult(ok=False, ...)` for the
-  rejected rows. With `all_or_none=True`, the chunk is rolled back, as in the real API.
+`fail_next(operation, error, *, sobject=None, times=1)` uses the real operation names:
 
-### Assertions on calls
+- `"sobject.update"`
+- `"query"` and `"query_more"`
+- `"collections.create"`
+- `"limits"`
+- `"raw"`, or the name you pass as `operation=`
+- `"*"` for any operation
 
-`fake.calls` lists every call as a `FakeCall(operation, sobject, args, caller, priority,
-error)`. `calls_for(operation, sobject=None)` filters that list, and `reset_calls()` clears it.
-Calls through `tagged()` and `with_auth()` views are recorded on the same fake, with their
-`caller` and `priority`.
+`reject(sobject, error, *, when=None)` applies to record writes. A single write raises the error.
+A Collections call returns `RecordResult(ok=False, ...)` for each rejected row. With
+`all_or_none=True`, the fake rolls back the chunk, as the real API does.
 
-Every call also emits an `sf.request` event and counts in `fake.usage.snapshot()`, so
-`esf.capture()`, observers and [budgets](usage-and-budgets.md#budgets) work in tests.
+## Assert on calls
 
-### The async fake
+`fake.calls` lists every call as a `FakeCall(operation, sobject, args, caller, priority, error)`.
+`calls_for(operation, sobject=None)` filters that list. `reset_calls()` clears it.
 
-`AsyncFakeSalesforce` has the same controls. Its client methods are coroutines and
-`query_iter` is an async iterator. `fake.sync` is the underlying sync fake. Use it with
-pytest-asyncio, anyio, or plain `asyncio.run`:
+The fake also records calls through `tagged()` and `with_auth()` views, with their `caller` and
+`priority`.
+
+Every call emits an `sf.request` event and counts in `fake.usage.snapshot()`. So `esf.capture()`,
+observers and [budgets](usage-and-budgets.md#budgets) work in tests.
+
+## Test async code
+
+`AsyncFakeSalesforce` has the same controls. Its client methods are coroutines, and `query_iter` is
+an async iterator. `fake.sync` is the sync fake underneath. Use it with pytest-asyncio, anyio or
+plain `asyncio.run`.
 
 ```python
 import asyncio
@@ -167,11 +201,15 @@ def test_count_open(esf_async_fake: AsyncFakeSalesforce) -> None:
     assert asyncio.run(count_open(esf_async_fake)) == 42
 ```
 
-## Record and replay
+## Record traffic
 
-Contract tests run the **real** client against recorded responses. Record once against a
-sandbox. `record()` returns an httpx transport that forwards each request and appends the
-redacted exchange to a JSON file:
+Contract tests run the real client against recorded responses. Record them once against a sandbox.
+`record()` returns an httpx transport. The transport forwards each request and appends the redacted
+exchange to a JSON file.
+
+!!! warning "Review every new fixture before you commit it"
+    Redaction covers the keys and patterns listed below. Other personal data in a response stays in
+    the file.
 
 ```python
 import httpx
@@ -186,27 +224,30 @@ with esf.Salesforce(auth, http_client=httpx.Client(transport=transport)) as sf:
     sf.query("SELECT Id, Name FROM Lead LIMIT 2")
 ```
 
-Redaction happens **before anything is written to disk**:
+The recorder redacts before it writes anything to disk:
 
-- OAuth secrets anywhere in JSON or form bodies (`access_token`, `refresh_token`, `id_token`,
-  `client_secret`, `assertion`, `code`, `code_verifier`, `signature`, `password`, ...) become
-  `"<redacted>"`. Add your own keys with `extra_keys=`;
-- session ids and `Bearer ...` values inside any string are redacted;
-- e-mail addresses become `user<N>@example.com` and phone/fax values `555-01NN`, consistently
-  within a file (`mask_emails=` / `mask_phones=`);
-- in sObject records, names and postal addresses (`Name`, `FirstName`, `LastName`,
-  `MailingStreet`, `BillingCity`, `PostalCode`, ...) become `<Field> <N>`, consistently within
-  a file, and literals in SOQL/SOSL query parameters become `?` (`mask_personal=`);
-- instance host names become `example.my.salesforce.com` (`mask_hosts=`);
-- Salesforce ids are replaced with fake ids that keep the key prefix, consistently across
-  paths, query strings and bodies (`mask_ids=False` keeps the real ids);
-- only a short allow-list of headers is kept; `Authorization` and cookies are never written.
+- OAuth secrets anywhere in JSON or form bodies become `"<redacted>"`. Examples are
+  `access_token`, `refresh_token`, `id_token`, `client_secret`, `assertion`, `code`,
+  `code_verifier`, `signature` and `password`. Add your own keys with `extra_keys=`.
+- Session ids and `Bearer ...` values inside any string are redacted.
+- E-mail addresses become `user<N>@example.com`, and phone and fax values become `555-01NN`. The
+  values stay consistent within a file. Turn this off with `mask_emails=` and `mask_phones=`.
+- In sObject records, names and postal addresses become `<Field> <N>`. Examples are `Name`,
+  `FirstName`, `LastName`, `MailingStreet`, `BillingCity` and `PostalCode`. Literals in SOQL and
+  SOSL query parameters become `?`. Turn this off with `mask_personal=False`.
+- Instance host names become `example.my.salesforce.com`. Turn this off with `mask_hosts=`.
+- Fake ids that keep the key prefix replace Salesforce ids. The fake ids stay consistent across
+  paths, query strings and bodies. Turn this off with `mask_ids=False`.
+- The recorder keeps only a short allow-list of headers. It never writes `Authorization` or
+  cookies.
 
-Redaction is pattern-based, so a custom field can still hold personal data. Pass its API name
-in `extra_keys=` and review every new fixture before you commit it.
+Redaction uses patterns, so a custom field can still hold personal data. Add its API name to
+`extra_keys=`, and read every new fixture before you commit it.
 
-Replay serves the file through `httpx.MockTransport`. The same transport works with
-`httpx.Client` and `httpx.AsyncClient`:
+## Replay traffic
+
+`replay()` serves the file through `httpx.MockTransport`. The same transport works with
+`httpx.Client` and `httpx.AsyncClient`.
 
 ```python
 replayed = esf.Salesforce(
@@ -219,44 +260,28 @@ replayed.close()
 ```
 
 For each request, replay serves the first unused interaction with the same method, path and
-query string. SOQL and SOSL in `q` and `explain` are compared with literals replaced by `?`,
-because recordings store them that way. `match_query=False` matches on method and path only
-and serves recordings in order. With `repeat=True`, the last match is
-served again when all matches have been used. A request with no match raises
-`ReplayMismatch`, which is an `AssertionError`. `transport.handler.remaining` counts the
-interactions not served yet.
+query string. Replay compares SOQL and SOSL in `q` and `explain` with the literals replaced by
+`?`, because the recording stores them that way.
 
-??? info "Fixture format (version 1)"
-    ```json
-    {
-      "esf_fixture": 1,
-      "interactions": [
-        {
-          "request": {"method": "GET", "path": "/services/data/v68.0/query",
-                      "query": [["q", "SELECT Id FROM Lead"]], "headers": {}, "json": null},
-          "response": {"status": 200,
-                       "headers": {"content-type": "application/json",
-                                   "sforce-limit-info": "api-usage=1/15000"},
-                       "json": {"totalSize": 0, "done": true, "records": []}}
-        }
-      ]
-    }
-    ```
+| Option | Effect |
+|---|---|
+| `match_query=False` | match on method and path only, and serve the recordings in order |
+| `repeat=True` | serve the last match again after all matches are used |
 
-    A body is stored under exactly one of `json`, `form`, `text` or `base64`. A missing key
-    means an empty body. Hosts are never stored. You may write fixtures by hand, for example for
-    errors that are hard to trigger. If you do, mark them as synthetic.
+If no interaction matches, replay raises `ReplayMismatch`, which is an `AssertionError`.
+`transport.handler.remaining` counts the interactions that replay hasn't served yet.
 
 ## pytest plugin
 
-Installing the package registers a pytest plugin (entry point `pytest11`) automatically:
+The package registers a pytest plugin automatically, through the `pytest11` entry point. It gives
+you these fixtures:
 
 | Fixture | Gives |
 |---|---|
 | `esf_fake` | a fresh `FakeSalesforce`, closed after the test |
 | `esf_async_fake` | a fresh `AsyncFakeSalesforce` |
 | `esf_replay` | factory `esf_replay(path, match_query=True, repeat=False)` returning a replay transport; relative paths resolve against the test file's directory |
-| `esf_sandbox_auth` | an `Auth` built from `ESF_SANDBOX_*` variables (the test is skipped if they aren't set) |
+| `esf_sandbox_auth` | an `Auth` built from `ESF_SANDBOX_*` variables; the test is skipped if they aren't set |
 
 ```python
 def test_with_replay(esf_replay) -> None:
@@ -268,15 +293,10 @@ def test_with_replay(esf_replay) -> None:
         assert sf.query("SELECT Id, Name FROM Lead LIMIT 2").total_size == 2
 ```
 
-### Real-org tests: `@pytest.mark.esf_sandbox`
+## Real-org tests
 
-Mark tests that need a real org. They are **skipped** unless a complete login is configured with
-`ESF_SANDBOX_*` variables. These use the same three sets as the [CLI](cli.md#login), with the
-`ESF_SANDBOX_` prefix:
-
-- `ESF_SANDBOX_ACCESS_TOKEN` + `ESF_SANDBOX_INSTANCE_URL`, or
-- `ESF_SANDBOX_DOMAIN` + `ESF_SANDBOX_CLIENT_ID` + `ESF_SANDBOX_USERNAME` + `ESF_SANDBOX_PRIVATE_KEY_FILE`, or
-- `ESF_SANDBOX_DOMAIN` + `ESF_SANDBOX_CLIENT_ID` + `ESF_SANDBOX_CLIENT_SECRET`.
+Mark tests that need a real org with `@pytest.mark.esf_sandbox`. If no complete login is configured
+with `ESF_SANDBOX_*` variables, pytest skips them.
 
 ```python
 import pytest
@@ -288,30 +308,73 @@ def test_sandbox_smoke(esf_sandbox_auth) -> None:
         assert sf.count("SELECT COUNT() FROM User") > 0
 ```
 
-Never run these on pull requests from forks, because they need real credentials.
+The variables are the same three sets as for the [CLI](cli.md#login), with the `ESF_SANDBOX_`
+prefix:
 
-## Testing your token store
+| Login flow | Variables |
+|---|---|
+| Existing session | `ESF_SANDBOX_ACCESS_TOKEN`, `ESF_SANDBOX_INSTANCE_URL` |
+| JWT bearer | `ESF_SANDBOX_DOMAIN`, `ESF_SANDBOX_CLIENT_ID`, `ESF_SANDBOX_USERNAME`, `ESF_SANDBOX_PRIVATE_KEY_FILE` |
+| Client credentials | `ESF_SANDBOX_DOMAIN`, `ESF_SANDBOX_CLIENT_ID`, `ESF_SANDBOX_CLIENT_SECRET` |
 
-`TokenStoreContract` and `AsyncTokenStoreContract` check a custom store against the token-store
-contract (round trip, versions, compare-and-swap conflicts, delete, key isolation, the lock, and
-exactly one winner among concurrent writers). See
-[Token stores](authentication/token-stores.md#checking-your-store-tokenstorecontract) for a full
-example.
+Don't run these tests on pull requests from forks. They need real credentials.
+
+## Test your token store
+
+`TokenStoreContract` and `AsyncTokenStoreContract` check a custom store against the token store
+contract. They check:
+
+- the round trip
+- versions
+- compare-and-swap conflicts
+- delete
+- key isolation
+- the lock
+- exactly one winner among concurrent writers
+
+See [Token stores](authentication/token-stores.md#checking-your-store-tokenstorecontract) for a
+full example.
+
+## Fixture format
+
+A fixture file uses version 1 of this format:
+
+```json
+{
+  "esf_fixture": 1,
+  "interactions": [
+    {
+      "request": {"method": "GET", "path": "/services/data/v68.0/query",
+                  "query": [["q", "SELECT Id FROM Lead"]], "headers": {}, "json": null},
+      "response": {"status": 200,
+                   "headers": {"content-type": "application/json",
+                               "sforce-limit-info": "api-usage=1/15000"},
+                   "json": {"totalSize": 0, "done": true, "records": []}}
+    }
+  ]
+}
+```
+
+- A body is stored under exactly one of `json`, `form`, `text` or `base64`. A missing key means an
+  empty body.
+- Fixtures never store hosts.
+- You can write fixtures by hand, for example for errors that are hard to trigger. If you do, mark
+  them as synthetic.
 
 ## How the library tests itself
 
 | Layer | Location | What |
 |---|---|---|
 | Unit | `tests/unit` | pure `core/` logic (SOQL quoting with property tests, cursors, error mapping, retry decisions, limit headers), no network |
-| Contract | `tests/contract` | every public method of **both** clients against respx and recorded responses (`tests/fixtures/recorded`) |
+| Contract | `tests/contract` | every public method of both clients against respx and recorded responses (`tests/fixtures/recorded`) |
 | Testing module | `tests/testing_module` | the fakes, recorder, plugin and contract suite |
 | Docs | `tests/docs` | runs every `python` block in these pages and the README against a synthetic org |
-| Codemod | `tests/migrate` | `esf migrate`: golden before/after files per rule, CLI, idempotence and formatting property tests |
+| Codemod | `tests/migrate` | `esf migrate`: golden before and after files per rule, CLI, idempotence and formatting property tests |
 | CLI, benchmarks | `tests/cli`, `tests/benchmarks` | the `esf` command; performance (opt-in) |
 | Sandbox | `tests/sandbox` | real-org smoke tests and the rotation acceptance test (opt-in) |
 | Examples | `examples/*/tests` | the FastAPI and Flask example apps |
 
-Real-org tests live in `tests/sandbox` (marker `sandbox`). They are skipped unless
-`ESF_SANDBOX_*` variables are set; `tests/sandbox/README.md` explains the setup, including the
-4-process refresh-token rotation test and `scripts/verify_sandbox.py`, which records evidence for
-the spec's open verification items.
+Real-org tests live in `tests/sandbox`, with the marker `sandbox`. They are skipped unless
+`ESF_SANDBOX_*` variables are set. `tests/sandbox/README.md` explains the setup. It also covers the
+refresh-token rotation test with 4 processes, and `scripts/verify_sandbox.py`, which records
+evidence for the open verification items in the spec.

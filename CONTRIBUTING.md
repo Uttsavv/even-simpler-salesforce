@@ -47,6 +47,93 @@ CI (`.github/workflows/ci.yml`) additionally enforces **≥ 90 % line + branch c
 overall and 100 % for `core/` and `errors.py`**, runs Python 3.10–3.14 on Linux plus 3.12
 on macOS and Windows, and greps fixtures and docs for Salesforce token patterns.
 
+## Writing documentation
+
+The docs should read like a calm colleague showing you how something works: code first,
+short sentences, no detours. Every page follows the same shape.
+
+**Page shape**
+
+1. `# Title`: a noun or a task, two to four words (`Records`, `Token stores`).
+2. One or two sentences: what this is and when you use it. No history, no caveats.
+3. A minimal code example that works when copied.
+4. `## ` sections, one per task or option, ordered from most to least common. Each one is a
+   short paragraph followed by an example.
+5. Reference tables (options, methods, exceptions) after the examples that use them, not
+   before.
+6. Edge cases, limits and internals last, under headings such as `## Limitations` or
+   `## How it works`.
+
+**Sentences**
+
+These rules take the parts of ASD-STE100 Simplified Technical English that suit developer
+docs. They keep the text easy to scan and easy to translate.
+
+- Address the reader as "you". Use simple tenses (present, past, future) and the active
+  voice. Write "the client refreshes the token", not "the token is refreshed" or "has been
+  refreshed".
+- Keep sentences short: at most 20 words for an instruction, 25 for a description.
+- One instruction or one idea per sentence. Start an instruction with the verb: "Create one
+  client per process."
+- Put the condition first: "If Salesforce returns `401`, the client refreshes once."
+- Say what to do, then why if it matters: "Create one client per process. Each client owns a
+  connection pool."
+- At most six sentences in a paragraph, usually one to three. One topic per paragraph, stated
+  in its first sentence.
+- More than three related items go in a list or a table, not in a sentence.
+- Use one term for one thing on every page: always "client", "login flow", "token store",
+  "record". No synonyms for variety.
+- Write "before you send the request", not "before sending the request".
+- At most three nouns in a row. Write "the cache for describe results", not "describe result
+  cache entry".
+- No parentheses for a second idea: write a second sentence. No em dashes. No slash between
+  words in prose ("async and sync", not "async/sync"); paths and code are fine.
+- Prefer plain words:
+
+  | Don't write | Write |
+  |---|---|
+  | utilize, leverage | use |
+  | in order to | to |
+  | prior to, subsequent to | before, after |
+  | in the event that | if |
+  | ensure | make sure |
+  | is capable of | can |
+  | attempt | try |
+  | obtain, retrieve | get |
+  | additional | more |
+  | due to the fact that | because |
+
+- Drop "simply", "just", "easily", "note that", "please" and "basically".
+- Bold is for the one word the reader must not miss in a paragraph. Most paragraphs need none.
+
+**Headings**
+
+- Use `##` and `###` only. A page needing `####` should be split.
+- Short and parallel: `## Create a record`, `## Update a record`; or the option name in
+  code, `` ## `fields` ``.
+- No numbering, no trailing punctuation, no question headings.
+
+**Code**
+
+- Every fenced `python` block runs in `tests/docs`, so keep examples real and minimal.
+- Show the async client. Add an `=== "Async"` / `=== "Sync"` pair only when the two differ in
+  more than `await`.
+- Comments explain *why*, or show a result: `# '00Q...'`.
+
+**Admonitions**
+
+- At most one or two per page. `!!! tip` for a shortcut, `!!! warning` for something that
+  loses data, leaks a secret or costs money. Never for page intros, status banners or long
+  text.
+- Put a warning before the step it applies to. Start it with the condition or the command,
+  and say what goes wrong: "Don't log `sf.auth.token`. Anyone with the token can act as the
+  user."
+
+**Tables**
+
+- For reference data the reader scans: options, defaults, error classes. Not for prose.
+- Columns: name, then default or type, then a short description without a full stop.
+
 ## Codebase rules
 
 These are non-negotiable; review will ask for them.
