@@ -60,6 +60,7 @@ dev = [
     "pytest-benchmark>=4",
     "respx>=0.21",
     "hypothesis>=6",
+    "pyyaml>=6",  # docs/salesforce-dependencies.yaml (tests + scripts/render_sf_index.py)
     "ruff>=0.6",
     "pyright>=1.1.380",
     "nox>=2024.4",

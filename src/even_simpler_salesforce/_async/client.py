@@ -53,10 +53,11 @@ def _sobject_of(soql: str) -> str | None:
 
 def _check_version(v: str) -> str:
     if not _VERSION.match(v):
-        raise ValueError(f"api_version must look like '68.0', got {v!r}")
+        raise ValueError(f"api_version must look like {DEFAULT_API_VERSION!r}, got {v!r}")
     major, minor = (int(x) for x in v.split("."))
     if (major, minor) < MIN_API_VERSION:
-        raise ValueError(f"api_version {v} is older than the minimum supported v59.0")
+        minimum = ".".join(str(x) for x in MIN_API_VERSION)
+        raise ValueError(f"api_version {v} is older than the minimum supported v{minimum}")
     return v
 
 
