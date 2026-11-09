@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import time
 from typing import Any
 
@@ -19,7 +20,8 @@ class OpenTelemetry:
 
     def __init__(self, tracer_provider: Any = None, meter_provider: Any = None) -> None:
         try:
-            from opentelemetry import metrics, trace  # pyright: ignore[reportMissingImports]
+            trace: Any = importlib.import_module("opentelemetry.trace")
+            metrics: Any = importlib.import_module("opentelemetry.metrics")
         except ImportError as exc:  # pragma: no cover
             raise ImportError("OpenTelemetry observer needs the [otel] extra") from exc
         from .._version import __version__
@@ -30,7 +32,9 @@ class OpenTelemetry:
         self.requests: Any = meter.create_counter("esf.requests", unit="1")
         self.errors: Any = meter.create_counter("esf.errors", unit="1")
         self.duration: Any = meter.create_histogram("esf.duration", unit="ms")
-        self.usage: Any = meter.create_gauge("esf.api_usage", unit="1") if hasattr(meter, "create_gauge") else None
+        self.usage: Any = (
+            meter.create_gauge("esf.api_usage", unit="1") if hasattr(meter, "create_gauge") else None
+        )
 
     def on_event(self, event: Event) -> None:
         if event.name != "sf.request":
@@ -38,7 +42,16 @@ class OpenTelemetry:
         f = event.fields
         attrs = {
             k: v
-            for k in ("operation", "sobject", "method", "status", "outcome", "error_code", "caller", "priority")
+            for k in (
+                "operation",
+                "sobject",
+                "method",
+                "status",
+                "outcome",
+                "error_code",
+                "caller",
+                "priority",
+            )
             if (v := f.get(k)) is not None
         }
         dur_ms = float(f.get("duration_ms") or 0)

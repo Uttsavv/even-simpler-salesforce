@@ -309,7 +309,10 @@ class JwtBearer(Auth):
 
     @property
     def token_key(self) -> str:
-        return self.key or f"jwt_bearer:{_short_hash(self.base_url + '|' + self.client_id + '|' + self.username)}"
+        return (
+            self.key
+            or f"jwt_bearer:{_short_hash(self.base_url + '|' + self.client_id + '|' + self.username)}"
+        )
 
     @property
     def aud(self) -> str:

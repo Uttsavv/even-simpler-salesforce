@@ -178,4 +178,3 @@ def redact_soql(query: str) -> str:
 def soql_hash(query: str) -> str:
     """SHA-256 of the redacted, normalised SOQL; first 12 hex characters."""
     return hashlib.sha256(redact_soql(query).encode()).hexdigest()[:12]
-

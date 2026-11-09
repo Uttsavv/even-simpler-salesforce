@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import json as _json
-from typing import Any
+from collections.abc import Iterable
+from typing import Any, cast
 
 __all__ = ["BACKEND", "dumps", "loads"]
 
@@ -28,12 +29,12 @@ def _default(obj: Any) -> Any:
     if isinstance(obj, decimal.Decimal):
         return str(obj)
     if isinstance(obj, (set, frozenset, tuple)):
-        return list(obj)  # pyright: ignore[reportUnknownArgumentType]
+        return list(cast("Iterable[Any]", obj))
     raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 
 if _orjson is not None:  # pragma: no cover - depends on the environment
-    BACKEND = "orjson"
+    _backend = "orjson"
 
     def dumps(obj: Any) -> bytes:
         return _orjson.dumps(obj, default=_default)  # pyright: ignore
@@ -42,10 +43,13 @@ if _orjson is not None:  # pragma: no cover - depends on the environment
         return _orjson.loads(data)  # pyright: ignore
 
 else:
-    BACKEND = "json"
+    _backend = "json"
 
     def dumps(obj: Any) -> bytes:
         return _std_dumps(obj)
 
     def loads(data: bytes | str) -> Any:
         return _json.loads(data)
+
+
+BACKEND: str = _backend

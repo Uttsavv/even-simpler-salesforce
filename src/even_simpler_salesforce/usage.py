@@ -166,9 +166,9 @@ class UsageTracker:
         if frac is None:
             return
         blocked = False
-        if b.block_all_above is not None and frac > b.block_all_above and priority != "high":
-            blocked = True
-        elif b.pause_low_priority_above is not None and frac > b.pause_low_priority_above and priority == "low":
+        if (b.block_all_above is not None and frac > b.block_all_above and priority != "high") or (
+            b.pause_low_priority_above is not None and frac > b.pause_low_priority_above and priority == "low"
+        ):
             blocked = True
         if blocked:
             raise BudgetExceeded(

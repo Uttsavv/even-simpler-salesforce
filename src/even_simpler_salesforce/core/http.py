@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import gzip
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import quote as _urlquote
@@ -31,7 +31,7 @@ _ID_SEGMENT = re.compile(r"(?<=/)(?=[a-zA-Z0-9]*\d)[a-zA-Z0-9]{15}(?:[a-zA-Z0-9]
 _LOCATOR_SEGMENT = re.compile(r"(?<=/)[0-9A-Za-z]{15,18}-\d+(?=/|$)")
 _VERSION_PREFIX = re.compile(r"^/services/data/v\d+\.\d")
 
-Params = Mapping[str, Any] | Sequence[tuple[str, Any]]
+Params = Mapping[str, Any] | list[tuple[str, Any]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,14 +85,19 @@ class RequestSpec:
         return self.method.upper() != "POST"
 
 
-@dataclass(frozen=True, slots=True)
+_UNPARSED: Any = object()
+
+
+@dataclass(frozen=True)
 class RawResponse:
-    """A fully read HTTP response, decoupled from httpx."""
+    """A fully read HTTP response, decoupled from httpx. ``json()`` is parsed once and cached."""
 
     status: int
     headers: Mapping[str, str]
     content: bytes
     url: str = ""
+    loads: Any = field(default=None, repr=False, compare=False)
+    _parsed: Any = field(default=_UNPARSED, repr=False, compare=False)
 
     @property
     def content_type(self) -> str:
@@ -104,7 +109,11 @@ class RawResponse:
         return ct == "application/json" or ct.endswith("+json")
 
     def json(self) -> Any:
-        return jsonlib.loads(self.content) if self.content else None
+        """Decoded JSON body (``None`` when empty). Raises ``ValueError`` on invalid JSON."""
+        if self._parsed is _UNPARSED:
+            value = (self.loads or jsonlib.loads)(self.content) if self.content else None
+            object.__setattr__(self, "_parsed", value)
+        return self._parsed
 
     @property
     def request_id(self) -> str | None:

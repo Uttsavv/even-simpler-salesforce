@@ -18,7 +18,7 @@ class CallContext:
     priority: Priority | None = None
 
 
-_CTX: ContextVar[CallContext] = ContextVar("esf_call_context", default=CallContext())
+_CTX: ContextVar[CallContext] = ContextVar("esf_call_context", default=CallContext())  # noqa: B039 - frozen
 
 
 def current_call_context() -> CallContext:

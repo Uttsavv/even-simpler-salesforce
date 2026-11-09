@@ -1,4 +1,4 @@
-"""Builders and parsers for records, query and collections (§9.1–9.3). No I/O."""
+"""Builders and parsers for records, query and collections (§9.1-9.3). No I/O."""
 
 from __future__ import annotations
 
@@ -55,10 +55,10 @@ def parse_record_results(body: Any, expected: int) -> list[RecordResult]:
         )
     out: list[RecordResult] = []
     for item in body:  # pyright: ignore[reportUnknownVariableType]
-        if not isinstance(item, Mapping):
+        if not isinstance(item, Mapping):  # pyright: ignore[reportUnknownArgumentType]
             raise UnexpectedResponse("malformed sObject Collections result", raw=repr(item)[:4096])  # pyright: ignore[reportUnknownArgumentType]
         errs: tuple[ErrorDetail, ...] = parse_details(item.get("errors") or [])  # pyright: ignore[reportUnknownMemberType]
-        created = item.get("created")  # pyright: ignore[reportUnknownMemberType]
+        created: Any = item.get("created")  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
         out.append(
             RecordResult(
                 ok=bool(item.get("success")),  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
@@ -72,11 +72,9 @@ def parse_record_results(body: Any, expected: int) -> list[RecordResult]:
 
 def parse_upsert(status: int, body: Any) -> UpsertResult:
     """Parse the response of ``PATCH sobjects/{o}/{field}/{value}``."""
-    rid = body.get("id") if isinstance(body, Mapping) else None  # pyright: ignore[reportUnknownMemberType]
-    if isinstance(body, Mapping) and "created" in body:
-        created = bool(body["created"])  # pyright: ignore[reportUnknownArgumentType]
-    else:
-        created = status == 201
+    rid: Any = body.get("id") if isinstance(body, Mapping) else None  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+    has_flag = isinstance(body, Mapping) and "created" in body
+    created = bool(body["created"]) if has_flag else status == 201  # pyright: ignore[reportUnknownArgumentType]
     return UpsertResult(id=rid, created=created)  # pyright: ignore[reportUnknownArgumentType]
 
 
