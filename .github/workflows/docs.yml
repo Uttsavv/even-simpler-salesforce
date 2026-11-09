@@ -1,0 +1,84 @@
+name: docs
+
+# GitHub Pages (source: GitHub Actions). On 0.x two copies are published (O13):
+#   /dev/     built from main
+#   /latest/  built from the newest final (non-pre-release) v* tag
+# The site root redirects to /latest/ (or /dev/ before the first release).
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  PAGES_BASE: https://uttsavv.github.io/even-simpler-salesforce
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+
+      - name: Build dev (main)
+        run: |
+          sed -i "s#^site_url = .*#site_url = \"${PAGES_BASE}/dev/\"#" zensical.toml
+          uvx --with mkdocstrings-python zensical build --clean
+          mkdir -p _site && mv site _site/dev
+          git checkout -- zensical.toml
+
+      - name: Build latest (newest release tag)
+        run: |
+          tag=$(git tag --list 'v*' --sort=-version:refname | grep -vE '(a|b|rc|dev)[0-9]+$' | head -n1 || true)
+          if [ -z "$tag" ]; then echo "no final release tag yet; latest -> dev"; exit 0; fi
+          git worktree add ../latest "$tag"
+          if [ ! -f ../latest/zensical.toml ]; then echo "$tag has no zensical.toml; skipping"; exit 0; fi
+          cd ../latest
+          sed -i "s#^site_url = .*#site_url = \"${PAGES_BASE}/latest/\"#" zensical.toml
+          uvx --with mkdocstrings-python zensical build --clean
+          mv site "$GITHUB_WORKSPACE/_site/latest"
+          echo "built latest from $tag"
+
+      - name: Root redirect
+        run: |
+          target=latest; [ -d _site/latest ] || target=dev
+          cat > _site/index.html <<HTML
+          <!doctype html>
+          <meta charset="utf-8">
+          <title>even-simpler-salesforce</title>
+          <meta http-equiv="refresh" content="0; url=${target}/">
+          <link rel="canonical" href="${PAGES_BASE}/${target}/">
+          <a href="${target}/">Redirecting to the ${target} documentation…</a>
+          HTML
+          [ -d _site/latest ] || ln -s dev _site/latest
+          touch _site/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
