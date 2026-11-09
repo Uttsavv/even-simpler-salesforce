@@ -26,10 +26,16 @@ class AsyncInMemoryTokenStore:
         self._locks: dict[str, Any] = {}
 
     async def load(self, key: str) -> Token | None:
+        """Return the stored token for ``key``, or ``None``."""
         with self._guard:
             return self._data.get(key)
 
     async def save(self, key: str, token: Token, *, expected_version: int | None) -> Token:
+        """Store ``token`` with the next version; compare-and-swap when ``expected_version`` is given.
+
+        Raises:
+            TokenConflict: ``expected_version`` doesn't match the stored version.
+        """
         with self._guard:
             current = self._data.get(key)
             if expected_version is not None:
@@ -44,6 +50,7 @@ class AsyncInMemoryTokenStore:
             return stored
 
     async def delete(self, key: str) -> None:
+        """Remove the token record for ``key`` (no-op if missing)."""
         with self._guard:
             self._data.pop(key, None)
 

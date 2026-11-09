@@ -21,6 +21,7 @@ class StdlibLogging:
         self.level = level
 
     def on_event(self, event: Event) -> None:
+        """Log ``event`` on the configured logger."""
         f = event.fields
         level = (
             logging.WARNING

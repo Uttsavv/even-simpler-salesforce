@@ -50,6 +50,7 @@ class Token:
     __str__ = __repr__
 
     def replace(self, **changes: Any) -> Token:
+        """A copy with ``changes`` applied (``dataclasses.replace``)."""
         return dataclasses.replace(self, **changes)
 
 
