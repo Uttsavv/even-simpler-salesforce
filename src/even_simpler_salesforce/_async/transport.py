@@ -202,7 +202,10 @@ class AsyncTransport:
                     except _AttemptFailed as f:
                         raw, err, sent = None, f.error, f.sent
                     if err is None:
-                        return raw  # pyright: ignore[reportReturnType]
+                        assert raw is not None
+                        if spec.expect_json and raw.content and raw.status != 304:
+                            raw.json()  # raises InvalidJSONResponse inside the pipeline
+                        return raw
 
                     if isinstance(err, SessionExpired) and err.status == 401:
                         if refreshed or not runtime.can_refresh:
@@ -216,8 +219,8 @@ class AsyncTransport:
                     decision = decide_retry(spec, err, sent=sent)
                     if not decision.retry or retries_used + 1 >= self.retry.max_attempts:
                         raise err
-                    if decision.delay is not None:
-                        if not self.retry.respect_retry_after or decision.delay > self.retry.max_retry_after:
+                    if decision.delay is not None and self.retry.respect_retry_after:
+                        if decision.delay > self.retry.max_retry_after:
                             raise err
                         delay = decision.delay
                     else:
@@ -324,9 +327,11 @@ class AsyncTransport:
         raw = RawResponse(response.status_code, response.headers, response.content, url, loads=self.loads)
         return raw, response.num_bytes_downloaded, len(content) if content else 0
 
-    @staticmethod
-    def _error_message(spec: RequestSpec, error: SalesforceError | None) -> str | None:
-        if error is None or not error.message:
+    def _error_message(self, spec: RequestSpec, error: SalesforceError | None) -> str | None:
+        # Salesforce DML messages can quote record values (e.g. STRING_TOO_LONG), and §11.3 says
+        # record bodies are never logged: the message is only added for ESF_DEBUG, which the
+        # developer turns on explicitly. The raised exception always keeps the full message.
+        if error is None or not error.message or not self.debug:
             return None
         message = error.message
         if spec.soql:

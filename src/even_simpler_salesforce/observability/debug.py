@@ -20,7 +20,9 @@ def debug_level() -> int:
 
 
 def _k(n: int) -> str:
-    return f"{n / 1000:.1f}k" if n >= 1000 else str(n)
+    if n < 1000:
+        return str(n)
+    return f"{n // 1000}k" if n % 1000 == 0 else f"{n / 1000:.1f}k"
 
 
 class DebugPrinter:

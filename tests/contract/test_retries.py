@@ -220,9 +220,11 @@ def test_retry_after_longer_than_cap_raises(h: Harness, mock: respx.MockRouter) 
 def test_retry_after_ignored_when_disabled(h: Harness, mock: respx.MockRouter) -> None:
     g = mock.get(GET_URL).respond(429, headers={"Retry-After": "1"})
     sf = h.client(retry=esf.RetryPolicy(respect_retry_after=False, jitter=False))
+    sleeps = h.install_clock(sf)
     with pytest.raises(esf.RequestLimitExceeded):
         get(h, sf)
-    assert g.call_count == 1
+    assert g.call_count == 3  # normal backoff instead of the header
+    assert sleeps == [0.25, 0.5]
 
 
 # --- row locks --------------------------------------------------------------------------------------

@@ -72,6 +72,7 @@ class UsageTracker:
             frac = self._fraction_locked()
             if self.budget and frac is not None:
                 day = now.date()
+                self._warned = {w for w in self._warned if w[0] == day}  # keep only today
                 for t in sorted(self.budget.warn_at):
                     if frac >= t and (day, t) not in self._warned:
                         self._warned.add((day, t))

@@ -109,7 +109,13 @@ def test_soql_literals_not_leaked_through_error_messages(
     assert SECRET_EMAIL not in everything(rec)
     assert SECRET_EMAIL not in buf.getvalue()
     assert rec.requests[0]["error_code"] == "INVALID_FIELD"
-    assert "No such column" in rec.requests[0]["error_message"]
+    # Messages can quote record values, so they only reach events with ESF_DEBUG on.
+    assert rec.requests[0]["error_message"] is None
+    sf._transport.debug = 1
+    with pytest.raises(esf.InvalidField):
+        h.run(sf.query(soql))
+    assert "No such column" in rec.requests[1]["error_message"]
+    assert SECRET_EMAIL not in everything(rec)
 
 
 def test_error_event_fields(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:

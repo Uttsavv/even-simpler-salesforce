@@ -61,6 +61,8 @@ class RequestSpec:
         soql: SOQL text, for ``soql_hash`` / redacted logging.
         priority: Overrides the caller priority for this call.
         allow_not_modified: Treat 304 as success (conditional GETs).
+        expect_json: A non-empty 2xx body must be JSON; otherwise the call fails inside the
+            pipeline with ``UnexpectedResponse`` (so the ``sf.request`` event says ``error``).
     """
 
     method: str
@@ -79,6 +81,7 @@ class RequestSpec:
     soql: str | None = None
     priority: str | None = None
     allow_not_modified: bool = False
+    expect_json: bool = True
 
     @property
     def is_idempotent(self) -> bool:
