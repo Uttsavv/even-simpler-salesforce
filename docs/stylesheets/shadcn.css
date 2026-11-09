@@ -133,10 +133,19 @@
   font-weight: 500;
 }
 
+/* Section labels ("Authentication", "Working with data", ...): small, uppercase and quiet, so
+   they read as group headings and never compete with the page links under them. */
+.md-sidebar--primary .md-nav__item--section {
+  margin-top: 1.4em;
+}
+
 .md-sidebar--primary .md-nav__item--section > .md-nav__link {
   color: var(--esf-fg);
+  font-size: 0.6rem;
   font-weight: 600;
-  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.7;
 }
 
 /* ---- content -------------------------------------------------------------------- */

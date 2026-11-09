@@ -9,6 +9,9 @@ here under private module paths (the objects returned by `sf.sobject()`, `sf.col
 `Salesforce` is generated from `AsyncSalesforce` and has the same methods without `async`, so
 only the async classes are shown in full.
 
+The reasons behind the design are written down in the
+[architecture decision records](../adr/index.md).
+
 ## Clients
 
 ::: even_simpler_salesforce.AsyncSalesforce

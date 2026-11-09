@@ -1,6 +1,6 @@
 # Client credentials
 
-The app logs in as itself and every call runs as the app's **Run As** user. Use it for backend
+The app logs in as itself, and every call runs as the app's Run As user. Use it for backend
 services, jobs and integrations that don't act for a particular person.
 
 ```python
@@ -9,7 +9,7 @@ import os
 import even_simpler_salesforce as esf
 
 auth = esf.ClientCredentials(
-    domain=os.environ["SF_DOMAIN"],  # must be https://<mydomain>.my.salesforce.com
+    domain=os.environ["SF_DOMAIN"],  # https://<mydomain>.my.salesforce.com
     client_id=os.environ["SF_CLIENT_ID"],
     client_secret=os.environ["SF_CLIENT_SECRET"],
 )
@@ -19,24 +19,40 @@ async with esf.AsyncSalesforce(auth) as sf:
     print(me["preferred_username"])
 ```
 
-| Argument | Required | Notes |
+You need an app with the Client Credentials Flow and a Run As user.
+[Salesforce setup](salesforce-setup.md#client-credentials) shows how.
+
+## Arguments
+
+| Argument | Default | What it does |
 |---|---|---|
-| `domain` | yes | the **My Domain** URL; `"login"` and `"test"` raise `ValueError` |
-| `client_id`, `client_secret` | yes | consumer key and secret of the [app](salesforce-setup.md#client-credentials-esfclientcredentials) |
-| `token_key` | no | store key; defaults to a hash of domain and client id |
-| `refresh_ahead` | no | refresh proactively after this `timedelta` |
-| `expiry` | no | `"unknown"` (default) or `"introspect"` |
+| `domain` | required | the My Domain URL; `"login"` and `"test"` raise `ValueError` |
+| `client_id` | required | consumer key of the app |
+| `client_secret` | required | consumer secret of the app; `repr(auth)` never shows it |
+| `token_key` | hash of domain and client id | [token store](token-stores.md) key |
+| `refresh_ahead` | `None` | [refresh proactively](index.md#proactive-refresh-opt-in) after this `timedelta` |
+| `expiry` | `"unknown"` | `"introspect"` reads the expiry from the introspection endpoint |
 
-`repr(auth)` never shows the secret.
+## Share the token between processes
 
-## Refresh
+The default in-memory token store is fine for this flow. After a restart, the process requests
+a new token. To share one token across processes and save token requests, pass a durable
+[token store](token-stores.md):
 
-Salesforce issues no refresh token for this flow, so a "refresh" requests a new token with the
-same credentials. A new-token request has no side effects in the org, so the library retries it
-after timeouts, connection errors and token-endpoint 5xx responses (up to
-`RetryPolicy.max_attempts`). An `invalid_grant` response means a configuration problem, such as
-no Run As user. It raises `OAuthError`, not `ReauthorizationRequired`.
+```python
+store = esf.AsyncInMemoryTokenStore()  # use a durable store here
+async with esf.AsyncSalesforce(auth, store=store) as sf:
+    await sf.limits()
+```
 
-The default in-memory token store is fine for this flow. After a restart the process simply
-requests a new token. To share one token across processes and save token requests, pass a
-durable [token store](token-stores.md).
+## How it works
+
+Salesforce issues no refresh token for this flow. A refresh requests a new token with the same
+credentials.
+
+A token request has no side effects in the org, so the client retries it. It retries after
+timeouts, connection errors and 5xx responses from the token endpoint, up to
+`RetryPolicy.max_attempts` times.
+
+If Salesforce answers `invalid_grant`, the app has a configuration problem, such as no Run As
+user. The client raises `OAuthError`, not `ReauthorizationRequired`.
