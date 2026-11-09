@@ -53,7 +53,7 @@ class RotationConfig:
     base_version: int = 0  # store version of ``token_key`` before the run
     max_attempts: int = 0  # per-worker cap on refresh() calls (0 = 4 * rotations)
     kind: str = "sync"  # "async" | "sync"
-    verify_every: int = 25  # call userinfo after every N-th refresh (0 = never)
+    verify_every: int = 25  # call limits() after every N-th refresh (0 = never)
     pause: float = 0.0  # seconds to sleep between cycles
     install: str | None = None  # "module:function" -> context manager, entered in the child
     install_arg: str | None = None
@@ -68,7 +68,7 @@ class WorkerReport:
     posts: int = 0  # refreshes this worker actually sent (``sf.auth.refreshed`` events)
     rotated: int = 0  # of those, how many returned a new refresh token
     adopted: int = 0  # refresh() calls answered by a token another process had saved
-    verified: int = 0  # successful userinfo calls
+    verified: int = 0  # successful API calls (GET limits) with the refreshed token
     reauth_required: int = 0  # ReauthorizationRequired (invalid_grant) - must stay 0
     errors: list[str] = field(default_factory=lambda: [])
     seconds: float = 0.0
@@ -151,7 +151,7 @@ def _sync_loop(cfg: RotationConfig, report: WorkerReport, barrier: Any) -> None:
                 continue
             _after_refresh(report, held, new, posts_before)
             if cfg.verify_every and report.cycles_done % cfg.verify_every == 0:
-                sf.auth.userinfo()
+                sf.limits()
                 report.verified += 1
             if cfg.pause:
                 time.sleep(cfg.pause)
@@ -182,7 +182,7 @@ async def _async_loop(cfg: RotationConfig, report: WorkerReport, barrier: Any) -
                 continue
             _after_refresh(report, held, new, posts_before)
             if cfg.verify_every and report.cycles_done % cfg.verify_every == 0:
-                await sf.auth.userinfo()
+                await sf.limits()
                 report.verified += 1
             if cfg.pause:
                 await asyncio.sleep(cfg.pause)

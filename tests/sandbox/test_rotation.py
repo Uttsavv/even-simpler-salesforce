@@ -67,5 +67,4 @@ def test_rotation_four_processes_no_invalid_grant(settings: Settings) -> None:
     with settings.sync_client() as sf:
         new = sf._runtime.refresh(final)  # pyright: ignore[reportPrivateUsage]
         assert new.refresh_token != final.refresh_token
-        info = sf.auth.userinfo()
-        assert info.get("user_id") or info.get("sub")
+        assert sf.limits()["DailyApiRequests"].max > 0
