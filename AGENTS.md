@@ -51,8 +51,9 @@ that breaks one of them will not be merged. See also [CONTRIBUTING.md](CONTRIBUT
 
 - **Never log secrets.** Access/refresh tokens, client secrets, private keys and session
   IDs must be redacted in every event, exception message and debug line.
-- **Record, don't invent.** Capture new Salesforce responses with the recorder (it
-  redacts). Hand-written responses are allowed only when marked `synthetic` (in the
+- **Record, don't invent.** Capture new Salesforce responses with the recorder. It redacts
+  secrets, ids, names, addresses and SOQL literals, but custom fields can still hold personal
+  data: read every fixture before committing it. Hand-written responses are allowed only when marked `synthetic` (in the
   fixture and the test).
 - Never commit anything matching `00D[A-Za-z0-9]{12,15}!`; CI and pre-commit reject it.
 

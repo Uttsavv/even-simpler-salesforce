@@ -112,30 +112,30 @@ def test_record_redacts_and_replays_sync(tmp_path: Path) -> None:
     assert row["Email"] == "user1@example.com"
     assert row["Phone"].startswith("555-01")
     assert "<redacted>" in row["Description"]
-    assert dict(query["request"]["query"])["q"].endswith("'user1@example.com'")
-    assert row["Id"] == LEAD_ID  # ids kept by default
+    assert dict(query["request"]["query"])["q"].endswith("WHERE Email = ?")  # literals redacted
+    assert row["Id"] != LEAD_ID
+    assert row["Id"].startswith("00Q")
     assert patch["request"]["json"]["Email"] == "user1@example.com"
     assert patch["response"]["status"] == 204
     assert "json" not in patch["response"]
 
-    # replay through the real client: no network, same results
-    assert _exercise_sync(replay(path)) == LEAD_ID
+    # replay through the real client: no network, same results (with the masked id)
+    assert _exercise_sync(replay(path)) == row["Id"]
 
 
 def test_record_and_replay_async(tmp_path: Path) -> None:
     path = tmp_path / "async.json"
 
-    async def run(transport: httpx.AsyncBaseTransport) -> int:
+    async def run(transport: httpx.AsyncBaseTransport) -> tuple[str, int]:
         async with esf.AsyncSalesforce(_auth(), http_client=httpx.AsyncClient(transport=transport)) as sf:
             lead_id = await sf.sobject("Lead").create({"LastName": "Doe"})
-            assert lead_id == LEAD_ID
             page = await sf.query("SELECT Id FROM Lead")
-            return page.total_size
+            return lead_id, page.total_size
 
-    rec = record(path, httpx.MockTransport(_org))
-    assert asyncio.run(run(rec)) == 1
+    rec = record(path, httpx.MockTransport(_org), mask_ids=False)
+    assert asyncio.run(run(rec)) == (LEAD_ID, 1)
     assert len(load_fixture(path)) == 3
-    assert asyncio.run(run(replay(path))) == 1
+    assert asyncio.run(run(replay(path))) == (LEAD_ID, 1)
 
 
 def test_mask_ids_is_consistent(tmp_path: Path) -> None:
@@ -205,7 +205,7 @@ def test_replay_mismatch_and_options(tmp_path: Path) -> None:
             }
         )
     )
-    t = replay(path)
+    t = replay(path, match_query=False)
     with httpx.Client(transport=t) as c:
         assert c.get("https://h/a").json() == {"n": 1}
         assert c.get("https://h/a").text == "two"
@@ -213,7 +213,7 @@ def test_replay_mismatch_and_options(tmp_path: Path) -> None:
         with pytest.raises(ReplayMismatch, match="GET /a"):
             c.get("https://h/a")
     assert t.handler.remaining == 0  # type: ignore[attr-defined]
-    with httpx.Client(transport=replay(path, match_query=True, repeat=True)) as c:
+    with httpx.Client(transport=replay(path, repeat=True)) as c:  # match_query is the default
         assert c.get("https://h/a?x=2").text == "two"
         assert c.get("https://h/a?x=2").text == "two"
         with pytest.raises(ReplayMismatch):
@@ -271,3 +271,64 @@ def test_redactor_unit() -> None:
     )
     assert r.text("x@example.com") == "x@example.com"
     assert gzip  # imported for the >64 KiB request path above
+
+
+def test_personal_fields_in_records_are_masked_consistently() -> None:
+    r = Redactor()
+    body = {
+        "records": [
+            {
+                "attributes": {"type": "Contact"},
+                "FirstName": "Ada",
+                "LastName": "Lovelace",
+                "MailingCity": "London",
+            },
+            {"attributes": {"type": "Contact"}, "FirstName": "Ada", "LastName": "Byron", "Status": "Open"},
+        ],
+        # describe-style objects without "attributes" keep their "name" keys
+        "fields": [{"name": "FirstName", "label": "First Name"}],
+    }
+    out = r.value(body)
+    a, b = out["records"]
+    assert a["FirstName"] == b["FirstName"] == "FirstName 1"
+    assert (a["LastName"], b["LastName"]) == ("LastName 1", "LastName 2")
+    assert a["MailingCity"] == "MailingCity 1"
+    assert b["Status"] == "Open"
+    assert out["fields"] == [{"name": "FirstName", "label": "First Name"}]
+    kept = Redactor(mask_personal=False).value(body)
+    assert kept["records"][0]["FirstName"] == "Ada"
+
+
+def test_soql_literals_redacted_and_replay_matches_shape(tmp_path: Path) -> None:
+    pairs = Redactor().pairs([("q", "SELECT Id FROM Lead WHERE Name = 'Ada'"), ("x", "1")])
+    assert pairs == [["q", "SELECT Id FROM Lead WHERE Name = ?"], ["x", "1"]]
+    path = tmp_path / "q.json"
+    path.write_text(
+        json.dumps(
+            {
+                "esf_fixture": 1,
+                "interactions": [
+                    {
+                        "request": {"method": "GET", "path": "/query", "query": pairs},
+                        "response": {"status": 200, "json": {"ok": 1}},
+                    }
+                ],
+            }
+        )
+    )
+    with httpx.Client(transport=replay(path, repeat=True)) as c:
+        ok = c.get("https://h/query", params={"q": "SELECT Id FROM Lead WHERE Name = 'Bob'", "x": "1"})
+        assert ok.json() == {"ok": 1}
+        with pytest.raises(ReplayMismatch):
+            c.get("https://h/query", params={"q": "SELECT Id FROM Contact WHERE Name = 'Bob'", "x": "1"})
+
+
+def test_fixture_file_is_valid_json_after_each_exchange(tmp_path: Path) -> None:
+    path = tmp_path / "grow.json"
+    t = record(path, httpx.MockTransport(lambda req: httpx.Response(200, json={"n": 1})))
+    assert load_fixture(path) == []
+    with httpx.Client(transport=t) as c:
+        for i in range(3):
+            c.get(f"https://h/x{i}")
+            assert len(load_fixture(path)) == i + 1
+    assert [i["request"]["path"] for i in load_fixture(path)] == ["/x0", "/x1", "/x2"]

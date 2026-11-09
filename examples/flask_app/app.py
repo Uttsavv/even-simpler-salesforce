@@ -3,6 +3,8 @@
 Run it (from the ``examples/`` directory)::
 
     export SF_DOMAIN=https://acme.my.salesforce.com SF_CLIENT_ID=... SF_CLIENT_SECRET=...
+    # Signs pagination cursors. Generate it once, keep it secret, share it across workers:
+    export SF_CURSOR_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
     flask --app flask_app.app:create_app run
 
 What it shows:
@@ -47,7 +49,9 @@ def client_from_env() -> esf.Salesforce:
             domain=os.environ["SF_DOMAIN"],
             client_id=os.environ["SF_CLIENT_ID"],
             client_secret=os.environ["SF_CLIENT_SECRET"],
-        )
+        ),
+        # Cursors go out to HTTP clients and come back; signing makes tampered ones a 400.
+        cursor_key=os.environ["SF_CURSOR_KEY"].encode(),
     )
 
 
@@ -121,6 +125,8 @@ def create_app(client: Any = None, on_summary: OnSummary = log_summary) -> Flask
     @app.errorhandler(esf.RecordError)
     def record_error(exc: esf.RecordError) -> tuple[Response, int]:
         return jsonify(
+            # Validation messages help the caller fix input, but can quote record values: only
+            # return them to callers allowed to see that record.
             {"error_code": exc.error_code, "message": exc.message, "fields": list(exc.fields)}
         ), 422
 

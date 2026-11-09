@@ -62,14 +62,14 @@ jobs:
           fi
 
   secrets:
-    name: no secrets in fixtures/docs
+    name: no secrets in source, fixtures or docs
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Grep for Salesforce session-id / access-token patterns
         run: |
           paths=""
-          for p in tests/fixtures docs; do [ -e "$p" ] && paths="$paths $p"; done
+          for p in src tests/fixtures docs examples scripts; do [ -e "$p" ] && paths="$paths $p"; done
           if [ -z "$paths" ]; then echo "nothing to scan"; exit 0; fi
           if grep -rEn '00D[A-Za-z0-9]{12,15}!' $paths; then
             echo "::error::possible Salesforce access token found (pattern 00D...!). Redact it."
@@ -166,9 +166,9 @@ jobs:
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         with:
           python-version: "3.12"
-      - run: uv sync --all-extras --group dev
+      - run: uv sync --all-extras --group dev --group docs
       - name: zensical build
-        run: uv run --with 'zensical>=0.1' --with 'mkdocstrings-python>=2' zensical build --clean --strict
+        run: uv run zensical build --clean --strict
       - name: Docs examples
         run: |
           if [ -d tests/docs ]; then uv run pytest tests/docs; else echo "no tests/docs yet"; fi

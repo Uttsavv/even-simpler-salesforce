@@ -12,6 +12,7 @@ import fnmatch
 import json
 import os
 import sys
+import tempfile
 from collections.abc import Iterable, Iterator, Sequence
 from pathlib import Path
 from typing import Any, TextIO
@@ -61,6 +62,25 @@ def _walk(root: Path) -> list[Path]:
     return out
 
 
+def _write_atomic(path: Path, text: str) -> None:
+    """Replace ``path`` with ``text`` in one step, keeping its line endings and permissions.
+
+    The new content goes to a temporary file in the same directory first, so an interrupted
+    run never leaves a half-written source file.
+    """
+    # A unique name: concurrent runs can't share it, and it is never an existing symlink.
+    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".esf-migrate.tmp")
+    tmp = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as fh:
+            fh.write(text)
+        os.chmod(tmp, path.stat().st_mode & 0o7777)
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
 def migrate_files(
     files: Iterable[Path],
     *,
@@ -75,7 +95,8 @@ def migrate_files(
     out: list[FileResult] = []
     for path in files:
         try:
-            source = path.read_text(encoding="utf-8")
+            with path.open(encoding="utf-8", newline="") as fh:  # keep CRLF/LF as they are
+                source = fh.read()
         except (OSError, UnicodeDecodeError) as exc:
             out.append(FileResult(path.as_posix(), "", "", error=f"read error: {exc}"))
             continue
@@ -200,7 +221,11 @@ def _run(argv: Sequence[str] | None, out: TextIO, err: TextIO) -> int:
     if args.write:
         for r in results:
             if r.changed and not r.error:
-                Path(r.path).write_text(r.updated, encoding="utf-8")
+                try:
+                    _write_atomic(Path(r.path), r.updated)
+                except OSError as exc:  # report it like a read error; keep going
+                    r.error = f"write error: {exc}"
+                    continue
             _remap_lines(r)
     elif not args.check:
         for r in results:

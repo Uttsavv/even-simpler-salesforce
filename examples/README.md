@@ -18,7 +18,7 @@ Each HTTP request runs inside `esf.capture()` and the roll-up (`sf_calls`, `sf_m
 - [`fastapi_app/`](fastapi_app/app.py): one `AsyncSalesforce` created and closed in the lifespan.
 - [`flask_app/`](flask_app/app.py): one sync `Salesforce` per process, closed at exit.
 
-Run (from this directory, with `SF_DOMAIN`, `SF_CLIENT_ID`, `SF_CLIENT_SECRET` set):
+Run (from this directory, with `SF_DOMAIN`, `SF_CLIENT_ID`, `SF_CLIENT_SECRET` and `SF_CURSOR_KEY` set. `SF_CURSOR_KEY` signs [cursors](../docs/guides/query.md#cursors): generate it once with `python -c 'import secrets; print(secrets.token_urlsafe(32))'`, keep it secret, and use the same value on every worker):
 
 ```sh
 uvicorn fastapi_app.app:app --reload

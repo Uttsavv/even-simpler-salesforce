@@ -229,6 +229,40 @@ def test_opentelemetry_observer() -> None:
         for m in sm.metrics
     }
     assert {"esf.requests", "esf.errors", "esf.duration"} <= names
+    labels = [
+        dict(p.attributes or {})
+        for rm in reader.get_metrics_data().resource_metrics
+        for sm in rm.scope_metrics
+        for m in sm.metrics
+        if m.name == "esf.requests"
+        for p in m.data.data_points
+    ]
+    assert labels
+    assert all("caller" not in a and "sobject" not in a for a in labels)
+
+
+def test_otel_metric_attributes_opt_in() -> None:
+    pytest.importorskip("opentelemetry.sdk")
+    from opentelemetry.sdk.metrics import MeterProvider
+    from opentelemetry.sdk.metrics.export import InMemoryMetricReader
+
+    from even_simpler_salesforce.observability.otel import DEFAULT_METRIC_ATTRIBUTES
+
+    reader = InMemoryMetricReader()
+    o = OpenTelemetry(
+        meter_provider=MeterProvider(metric_readers=[reader]),
+        metric_attributes=(*DEFAULT_METRIC_ATTRIBUTES, "sobject"),
+    )
+    o.on_event(req())
+    points = [
+        dict(p.attributes or {})
+        for rm in reader.get_metrics_data().resource_metrics
+        for sm in rm.scope_metrics
+        for m in sm.metrics
+        if m.name == "esf.requests"
+        for p in m.data.data_points
+    ]
+    assert points == [{**{k: v for k, v in points[0].items() if k != "sobject"}, "sobject": "Lead"}]
 
 
 # --- capture() ------------------------------------------------------------------------------------

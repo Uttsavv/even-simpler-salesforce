@@ -219,7 +219,7 @@ from even_simpler_salesforce import testing
 auth = esf.ClientCredentials(
     domain="https://acme.my.salesforce.com", client_id="3MVG9...", client_secret="..."
 )
-transport = testing.record("leads.json", mask_ids=True)
+transport = testing.record("leads.json", extra_keys={"Tax_Id__c"})
 with esf.Salesforce(auth, http_client=httpx.Client(transport=transport)) as sf:
     sf.query("SELECT Id, Name FROM Lead LIMIT 2")
 ```
@@ -232,11 +232,17 @@ The recorder redacts before it writes anything to disk:
 - Session ids and `Bearer ...` values inside any string are redacted.
 - E-mail addresses become `user<N>@example.com`, and phone and fax values become `555-01NN`. The
   values stay consistent within a file. Turn this off with `mask_emails=` and `mask_phones=`.
+- In sObject records, names and postal addresses become `<Field> <N>`. Examples are `Name`,
+  `FirstName`, `LastName`, `MailingStreet`, `BillingCity` and `PostalCode`. Literals in SOQL and
+  SOSL query parameters become `?`. Turn this off with `mask_personal=False`.
 - Instance host names become `example.my.salesforce.com`. Turn this off with `mask_hosts=`.
-- With `mask_ids=True`, fake ids that keep the key prefix replace Salesforce ids. The fake ids stay
-  consistent across paths, query strings and bodies.
+- Fake ids that keep the key prefix replace Salesforce ids. The fake ids stay consistent across
+  paths, query strings and bodies. Turn this off with `mask_ids=False`.
 - The recorder keeps only a short allow-list of headers. It never writes `Authorization` or
   cookies.
+
+Redaction uses patterns, so a custom field can still hold personal data. Add its API name to
+`extra_keys=`, and read every new fixture before you commit it.
 
 ## Replay traffic
 
@@ -253,11 +259,13 @@ assert len(page) == 2
 replayed.close()
 ```
 
-For each request, replay serves the first unused interaction with the same method and path.
+For each request, replay serves the first unused interaction with the same method, path and
+query string. Replay compares SOQL and SOSL in `q` and `explain` with the literals replaced by
+`?`, because the recording stores them that way.
 
 | Option | Effect |
 |---|---|
-| `match_query=True` | the query string must match too |
+| `match_query=False` | match on method and path only, and serve the recordings in order |
 | `repeat=True` | serve the last match again after all matches are used |
 
 If no interaction matches, replay raises `ReplayMismatch`, which is an `AssertionError`.
@@ -272,7 +280,7 @@ you these fixtures:
 |---|---|
 | `esf_fake` | a fresh `FakeSalesforce`, closed after the test |
 | `esf_async_fake` | a fresh `AsyncFakeSalesforce` |
-| `esf_replay` | factory `esf_replay(path, match_query=False, repeat=False)` returning a replay transport; relative paths resolve against the test file's directory |
+| `esf_replay` | factory `esf_replay(path, match_query=True, repeat=False)` returning a replay transport; relative paths resolve against the test file's directory |
 | `esf_sandbox_auth` | an `Auth` built from `ESF_SANDBOX_*` variables; the test is skipped if they aren't set |
 
 ```python

@@ -52,7 +52,7 @@ def sample_token(n: int = 1, *, refresh: bool = True) -> Token:
     """A realistic token for contract tests (``n`` makes the values distinct)."""
     issued = datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(minutes=n)
     return Token(
-        access_token=f"00D000000000001!AQ.access-{n}",
+        access_token=f"00Dfake!AQ.access-{n}",
         instance_url="https://example.my.salesforce.com",
         issued_at=issued,
         refresh_token=f"5Aep861.refresh-{n}" if refresh else None,
@@ -120,6 +120,12 @@ class TokenStoreContract:
         assert loaded is not None
         assert _same(loaded, sample_token(2))
 
+    def test_cas_on_missing_key_conflicts(self, store: TokenStore) -> None:
+        """Expecting a version for a key that has none raises ``TokenConflict``."""
+        with pytest.raises(TokenConflict):
+            store.save(_KEY, sample_token(1), expected_version=1)
+        assert store.load(_KEY) is None
+
     def test_delete_removes_both_tokens(self, store: TokenStore) -> None:
         """``delete`` removes access and refresh token; deleting again is a no-op."""
         store.save(_KEY, sample_token(), expected_version=None)
@@ -148,6 +154,35 @@ class TokenStoreContract:
             pytest.skip("store has no lock()")
         with lock(_KEY):
             pass
+
+    def test_lock_excludes_a_second_holder(self, store: TokenStore) -> None:
+        """While one thread holds ``lock(key)``, another cannot enter it."""
+        lock = getattr(store, "lock", None)
+        if lock is None:
+            pytest.skip("store has no lock()")
+        held, release, entered = threading.Event(), threading.Event(), threading.Event()
+
+        def first() -> None:
+            with lock(_KEY):
+                held.set()
+                release.wait(5)
+
+        def second() -> None:
+            held.wait(5)
+            with lock(_KEY):
+                entered.set()
+
+        a, b = threading.Thread(target=first), threading.Thread(target=second)
+        a.start()
+        b.start()
+        try:
+            assert held.wait(5)
+            assert not entered.wait(0.2), "a second holder entered lock() while it was held"
+        finally:
+            release.set()
+            a.join(5)
+            b.join(5)
+        assert entered.is_set()
 
     def test_concurrent_cas_has_one_winner(self, store: TokenStore) -> None:
         """N threads CAS-saving against the same version: exactly one wins."""
@@ -250,6 +285,16 @@ class AsyncTokenStoreContract:
 
         self._run(make_store, body)
 
+    def test_cas_on_missing_key_conflicts(self, make_store: Callable[[], Any]) -> None:
+        """Expecting a version for a key that has none raises ``TokenConflict``."""
+
+        async def body(store: AsyncTokenStore) -> None:
+            with pytest.raises(TokenConflict):
+                await store.save(_KEY, sample_token(1), expected_version=1)
+            assert await store.load(_KEY) is None
+
+        self._run(make_store, body)
+
     def test_delete_removes_both_tokens(self, make_store: Callable[[], Any]) -> None:
         """``delete`` removes access and refresh token; deleting again is a no-op."""
 
@@ -284,9 +329,31 @@ class AsyncTokenStoreContract:
         async def body(store: AsyncTokenStore) -> None:
             lock = getattr(store, "lock", None)
             if lock is None:
-                return
+                pytest.skip("store has no lock()")
             async with lock(_KEY):
                 pass
+
+        self._run(make_store, body)
+
+    def test_lock_excludes_a_second_holder(self, make_store: Callable[[], Any]) -> None:
+        """While one task holds ``lock(key)``, another cannot enter it."""
+
+        async def body(store: AsyncTokenStore) -> None:
+            lock = getattr(store, "lock", None)
+            if lock is None:
+                pytest.skip("store has no lock()")
+            entered = asyncio.Event()
+
+            async def second() -> None:
+                async with lock(_KEY):
+                    entered.set()
+
+            async with lock(_KEY):
+                task = asyncio.ensure_future(second())
+                await asyncio.sleep(0.05)
+                assert not entered.is_set(), "a second holder entered lock() while it was held"
+            await asyncio.wait_for(task, 5)
+            assert entered.is_set()
 
         self._run(make_store, body)
 

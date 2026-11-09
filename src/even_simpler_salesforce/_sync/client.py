@@ -91,7 +91,7 @@ def _check_version(v: str) -> str:
 
 
 class Salesforce:
-    """Salesforce client (``Salesforce`` is async; ``Salesforce`` is its generated sync twin).
+    """Salesforce REST client. The async and sync clients share this API; the sync one is generated.
 
     Example:
         auth = esf.ClientCredentials(domain="https://acme.my.salesforce.com",

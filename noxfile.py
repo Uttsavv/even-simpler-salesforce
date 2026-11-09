@@ -23,7 +23,6 @@ nox.options.sessions = ["lint", "types", "unasync_check", "tests"]
 
 PYTHONS = ["3.10", "3.11", "3.12", "3.13", "3.14"]
 SYNC_DIR = "src/even_simpler_salesforce/_sync"
-DOCS_DEPS = ["zensical>=0.1", "mkdocstrings-python>=2"]
 
 
 def _sync(session: nox.Session, *extra: str) -> None:
@@ -54,8 +53,8 @@ def tests(session: nox.Session) -> None:
 
 @nox.session(python="3.12")
 def lint(session: nox.Session) -> None:
-    """ruff check + ruff format --check."""
-    session.install("ruff")
+    """ruff check + ruff format --check (the locked ruff, same as CI and pre-commit)."""
+    _sync(session)
     session.run("ruff", "check", ".")
     session.run("ruff", "format", "--check", ".")
 
@@ -89,8 +88,7 @@ def unasync_check(session: nox.Session) -> None:
 @nox.session(python="3.12")
 def docs(session: nox.Session) -> None:
     """Build the documentation site into site/."""
-    _sync(session)
-    session.install(*DOCS_DEPS)
+    _sync(session, "--group", "docs")
     session.run("zensical", "build", "--clean", "--strict", *session.posargs)
 
 

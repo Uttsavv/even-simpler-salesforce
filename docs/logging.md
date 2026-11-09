@@ -87,6 +87,11 @@ For each `sf.request` event it records a span and some metrics:
 - A gauge `esf.api_usage` with the used fraction of the daily limit. You get it only if your
   OpenTelemetry API supports gauges.
 
+The metrics have only the labels `operation`, `method`, `status`, `outcome`, `error_code` and
+`priority`. `caller` and `sobject` can have many different values, and each value makes a new
+time series, so only the spans have them. To add them to the metrics, pass
+`OpenTelemetry(metric_attributes=(*esf.observability.otel.DEFAULT_METRIC_ATTRIBUTES, "sobject"))`.
+
 The span is not the parent of your own spans for the call. [How it works](#how-it-works) explains
 why.
 

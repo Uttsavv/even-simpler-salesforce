@@ -1,0 +1,1 @@
+The recorder now masks record ids and SOQL/SOSL literals by default, and names and postal addresses in sObject records (JSON objects with `attributes`); a plain create or update body keeps its values. `mask_ids=False` and `mask_personal=False` turn this off, `extra_keys=` adds fields, and you should read every fixture before you share it.

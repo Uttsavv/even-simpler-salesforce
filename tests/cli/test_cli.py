@@ -351,3 +351,39 @@ def test_module_entry_point() -> None:
     )
     assert out.returncode == 0
     assert out.stdout.startswith("esf ")
+
+
+@respx.mock
+def test_csv_neutralises_formulas(capsys: pytest.CaptureFixture[str], static_env: None) -> None:
+    rows = _rows(0, 1)
+    rows[0].update(
+        {
+            "Name": '=HYPERLINK("http://evil")',
+            "Note__c": "+1",
+            "At__c": "@SUM(A1)",
+            "Nl__c": "\n=1+1",
+            "Wide__c": "\uff1d1+1",
+            "Score__c": -5,
+        }
+    )
+    respx.get(f"{API}/query").respond(json={"totalSize": 1, "done": True, "records": rows})
+    assert main(["query", "SELECT Id FROM Lead", "--csv"]) == EXIT_OK
+    out, _ = _assert_no_token(capsys)
+    row = next(csv.DictReader(io.StringIO(out)))
+    assert row["Name"] == '\'=HYPERLINK("http://evil")'
+    assert row["Note__c"] == "'+1"
+    assert row["At__c"] == "'@SUM(A1)"
+    assert row["Nl__c"] == "'\n=1+1"
+    assert row["Wide__c"] == "'\uff1d1+1"  # full-width "=": a formula in some locales
+    assert row["Score__c"] == "-5"  # numbers are data, not formulas
+
+
+@respx.mock
+def test_table_escapes_control_characters(capsys: pytest.CaptureFixture[str], static_env: None) -> None:
+    rows = _rows(0, 1)
+    rows[0]["Name"] = "evil\x1b[2J\nname"
+    respx.get(f"{API}/query").respond(json={"totalSize": 1, "done": True, "records": rows})
+    assert main(["query", "SELECT Id FROM Lead"]) == EXIT_OK
+    out, _ = _assert_no_token(capsys)
+    assert "\x1b" not in out
+    assert "evil\\x1b[2J\\nname" in out

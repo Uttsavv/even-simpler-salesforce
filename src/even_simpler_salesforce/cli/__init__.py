@@ -25,6 +25,7 @@ import argparse
 import csv
 import json
 import os
+import re
 import sys
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, TextIO
@@ -120,8 +121,27 @@ def _cell(value: Any) -> str:
     return str(value)
 
 
+_CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+# ASCII markers, plus the full-width forms some spreadsheet locales also treat as formulas.
+_FORMULA_START = ("=", "+", "-", "@", "\t", "\r", "\n", "\uff1d", "\uff0b", "\uff0d", "\uff20")
+
+
+def _printable(text: str) -> str:
+    """Escape control characters (ANSI escapes, newlines) so org data can't drive the terminal."""
+    return _CONTROL.sub(lambda m: repr(m.group(0))[1:-1], text)
+
+
+def _csv_cell(value: Any) -> str:
+    """A CSV cell that spreadsheets won't run as a formula (OWASP CSV injection guidance)."""
+    text = _cell(value)
+    if isinstance(value, str) and text.startswith(_FORMULA_START):
+        return "'" + text
+    return text
+
+
 def _table(rows: Sequence[Mapping[str, Any]], cols: Sequence[str], out: TextIO) -> None:
-    cells = [[_cell(r.get(c)) for c in cols] for r in rows]
+    cells = [[_printable(_cell(r.get(c))) for c in cols] for r in rows]
+    cols = [_printable(c) for c in cols]
     widths = [max([len(c), *(len(row[i]) for row in cells)]) for i, c in enumerate(cols)]
     widths = [min(w, 60) for w in widths]
 
@@ -177,7 +197,7 @@ def _cmd_whoami(args: argparse.Namespace, env: Mapping[str, str], out: TextIO) -
     else:
         width = max(len(k) for k in result)
         for k, v in result.items():
-            out.write(f"{k.replace('_', ' ').ljust(width)}  {_cell(v)}\n")
+            out.write(f"{k.replace('_', ' ').ljust(width)}  {_printable(_cell(v))}\n")
     return EXIT_OK
 
 
@@ -218,7 +238,7 @@ def _cmd_query(args: argparse.Namespace, env: Mapping[str, str], out: TextIO, er
         writer = csv.DictWriter(out, fieldnames=_columns(rows), extrasaction="ignore", lineterminator="\n")
         writer.writeheader()
         for r in rows:
-            writer.writerow({k: _cell(v) for k, v in r.items()})
+            writer.writerow({k: _csv_cell(v) for k, v in r.items()})
     else:
         rows = [flatten(r) for r in records]
         if rows:

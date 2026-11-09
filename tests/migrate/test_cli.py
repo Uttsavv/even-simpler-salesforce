@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -259,3 +260,37 @@ def test_not_migrated_label_for_internal_errors(tmp_path: Path, monkeypatch: pyt
     code, _, err = run([str(tmp_path)])
     assert code == 2
     assert "not migrated: a rewrite would produce invalid code" in err
+
+
+@pytest.mark.parametrize("newline", ["\r\n", "\n"])
+def test_write_keeps_line_endings_and_mode(tmp_path: Path, newline: str) -> None:
+    f = tmp_path / "app.py"
+    f.write_bytes(CLEAN.replace("\n", newline).encode())
+    f.chmod(0o640)
+    run(["--write", str(f)])
+    data = f.read_bytes()
+    assert b'sf.sobject("Lead")' in data
+    if newline == "\r\n":
+        assert data.count(b"\n") == data.count(b"\r\n")  # no bare LF introduced
+    else:
+        assert b"\r" not in data
+    if sys.platform != "win32":  # Windows has no POSIX permission bits to keep
+        assert f.stat().st_mode & 0o777 == 0o640
+    assert [p.name for p in tmp_path.iterdir()] == ["app.py"]  # no temp file left behind
+
+
+def test_failed_write_leaves_original_and_no_temp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import os
+
+    f = tmp_path / "app.py"
+    f.write_text(CLEAN)
+
+    def boom(src: object, dst: object) -> None:
+        raise OSError("disk full")
+
+    monkeypatch.setattr(os, "replace", boom)
+    code, out, _ = run(["--write", "--report", "-", str(f)])
+    assert code != 0
+    assert "write error: disk full" in out
+    assert f.read_text() == CLEAN
+    assert [p.name for p in tmp_path.iterdir()] == ["app.py"]
