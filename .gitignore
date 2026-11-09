@@ -12,3 +12,6 @@ site/
 .coverage.*
 coverage.xml
 .benchmarks/
+
+# Sandbox token store (holds a live refresh token) - tests/sandbox/README.md
+.esf-sandbox/
