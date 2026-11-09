@@ -243,6 +243,19 @@ class Salesforce:
         return self._transport.api_version
 
     @property
+    def instance_url(self) -> str | None:
+        """Base URL of the org this client talks to (e.g. ``https://acme.my.salesforce.com``).
+
+        The ``instance_url=`` override if one was given, else the instance of the current token;
+        ``None`` before the first call (no token yet). Read-only; no I/O. Use it to build links;
+        make calls with :meth:`request`.
+        """
+        if self._runtime.instance_url:
+            return self._runtime.instance_url
+        tok = self._runtime.current()
+        return tok.instance_url if tok is not None else None
+
+    @property
     def observers(self) -> ObserverHub:
         """The observer hub shared by the client family; ``sf.observers.add(obs)`` adds one."""
         return self._transport.hub

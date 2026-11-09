@@ -78,6 +78,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("version", help="print versions")
 
+    sub.add_parser(
+        "migrate", help="rewrite simple-salesforce code (needs the [migrate] extra)", add_help=False
+    )
+
     g = sub.add_parser("generate", help="code generation (available from 0.2)")
     g.add_argument("what", nargs="?", default="actions")
     g.add_argument("rest", nargs=argparse.REMAINDER)
@@ -253,6 +257,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     out, err = sys.stdout, sys.stderr
     from ..errors import SalesforceError
 
+    raw = list(argv) if argv is not None else sys.argv[1:]
+    if raw[:1] == ["migrate"]:  # its own parser (§9.19); no Salesforce login involved
+        from .._migrate import main as migrate_main
+
+        return migrate_main(raw[1:], out=out, err=err)
     try:
         args = _build_parser().parse_args(list(argv) if argv is not None else None)
     except _UsageError as exc:

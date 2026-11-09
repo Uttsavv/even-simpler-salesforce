@@ -37,8 +37,9 @@ structlog = ["structlog>=24.1"]
 fastapi = ["fastapi>=0.110"]
 flask = ["flask>=3.0"]
 testing = ["respx>=0.21", "pytest>=8,<9.2"]
+migrate = ["libcst>=1.4"]
 all = [
-    "even-simpler-salesforce[pydantic,speed,http2,jwt,otel,structlog,fastapi,flask,testing]",
+    "even-simpler-salesforce[pydantic,speed,http2,jwt,otel,structlog,fastapi,flask,testing,migrate]",
 ]
 
 [project.scripts]
@@ -74,6 +75,7 @@ dev = [
     "fastapi>=0.110",
     "flask>=3.0",
     "pre-commit>=3.7",
+    "libcst>=1.4",
 ]
 docs = [
     "zensical>=0.1; python_version >= '3.11'",
@@ -103,6 +105,8 @@ ignore = ["S101", "S311", "RUF022", "B904", "SIM105"]
 
 [tool.pyright]
 include = ["src"]
+venvPath = "."
+venv = ".venv"
 pythonVersion = "3.10"
 typeCheckingMode = "strict"
 reportMissingTypeStubs = false
