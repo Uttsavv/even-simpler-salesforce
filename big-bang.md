@@ -1716,7 +1716,6 @@ before the release named.
 | V24 | `Sforce-Auto-Assign` and `Sforce-Duplicate-Rule-Header` take effect on sObject Collections create/update/upsert | 0.1 | **Open** — not stated in the *Headers* or *sObject Collections* pages; sandbox: Lead assignment rule fires (or not) and a duplicate alert is bypassed with `allowSave=true` via `composite/sobjects` |
 | V25 | `If-Unmodified-Since` on `DELETE sobjects/{o}/{id}` is ignored (record deleted) or rejected | 0.1 | **Partly done** — *Conditional Request Headers*: "DELETE requests aren't supported". Record the sandbox response for the test docstring |
 | V26 | Namespace prefix format accepted by `defaultNamespace` | 0.1 | **Open** — Salesforce help on registering a namespace prefix + sandbox with a managed package |
-
 | V27 | CDC bitmap bit order (bit 0 = least-significant bit of the hex value) and compound `{pos}-0x…` decoding | 0.5 | **Partly done**: format from *Event Deserialization Considerations*; bit order inferred from Salesforce's Python sample. Record a CDC event with several changed and nulled fields (including a compound field) in a sandbox |
 | V28 | How Pub/Sub Avro schemas mark Date/DateTime fields (logicalType or otherwise), so epoch values are converted only where the type is known | 0.5 | **Open**: `GetSchema` on a sandbox platform event and a change event |
 
