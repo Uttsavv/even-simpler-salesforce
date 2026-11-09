@@ -181,7 +181,8 @@ def test_no_secrets_in_any_event(h: Harness, mock: respx.MockRouter, rec: Record
         assert secret not in text, secret
     debug = rec.named("sf.debug.attempt")[0]
     assert debug["request_headers"]["Authorization"] == "<redacted>"
-    assert "?" not in debug["url"]
+    assert "url" not in debug.fields  # only the path template: paths can carry external id values
+    assert "?" not in debug["path_template"]
 
 
 def test_retry_event_fields(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:

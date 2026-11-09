@@ -287,3 +287,24 @@ def test_poller_refused_after_close(h: Harness) -> None:
     h.run(sf.aclose() if h.is_async else sf.close())
     with pytest.raises(RuntimeError, match="closed"):
         sf.start_limits_poller()
+
+
+def test_html_5xx_chunk_marked_unknown(h: Harness, mock: respx.MockRouter) -> None:
+    """A proxy's HTML 502 may have reached Salesforce: the chunk's outcome is unknown."""
+    route = mock.post(f"{DATA}/composite/sobjects")
+    ok = httpx.Response(200, json=[{"id": "001000000000001AAA", "success": True, "errors": []}] * 200)
+    html = httpx.Response(502, text="<html>bad gateway</html>", headers={"content-type": "text/html"})
+    route.side_effect = [html, ok]
+    sf = h.client(retry=esf.RetryPolicy(max_attempts=1))
+    with pytest.raises(esf.PartialFailure) as ei:
+        h.run(sf.collections.create([{"Name": i} for i in range(400)], sobject="Account", concurrency=1))
+    assert ei.value.results is not None
+    assert ei.value.results[0].errors[0].extended["outcome"] == "unknown"
+
+
+def test_debug_attempt_event_masks_external_id(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:
+    mock.get(f"{DATA}/sobjects/Lead/Ext__c/secret-value").respond(json={"Id": LEAD})
+    sf = h.client(recorder=rec)
+    sf._transport.debug = 2
+    h.run(sf.sobject("Lead").get_by_external_id("Ext__c", "secret-value"))
+    assert "secret-value" not in repr([e.fields for e in rec.events])

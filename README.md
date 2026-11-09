@@ -63,7 +63,7 @@ auth = esf.ClientCredentials(
 async def main() -> None:
     async with esf.AsyncSalesforce(auth) as sf:
         lead_id = await sf.sobject("Lead").create({"LastName": "Lovelace", "Company": "Engines"})
-        page = await sf.query(esf.soql("SELECT Id, Name FROM Lead WHERE Id = {}", lead_id))
+        page = await sf.query("SELECT Id, Name FROM Lead WHERE Id = {}", lead_id)
         print(page.records[0]["Name"], sf.usage.snapshot().api_used)
 
 
@@ -75,7 +75,7 @@ The sync client has the same methods, without `await`:
 ```python
 with esf.Salesforce(auth) as sf:
     lead_id = sf.sobject("Lead").create({"LastName": "Hopper", "Company": "Navy"})
-    for lead in sf.query_iter(esf.soql("SELECT Id, Name FROM Lead WHERE Status = {}", "Open")):
+    for lead in sf.query_iter("SELECT Id, Name FROM Lead WHERE Status = {}", "Open"):
         print(lead["Name"])
 ```
 
@@ -90,9 +90,10 @@ with esf.Salesforce(auth) as sf:
   your own store.
 - **Records:** get, get by external id, create, update, upsert, delete, describe (cached and
   revalidated), updated/deleted windows, and conditional requests.
-- **Query and search:** `esf.soql()` quotes values for you. Also query pages with opaque
-  cursors you can sign, `query_iter` (optionally following child subqueries), `count`, SOSL
-  `search` and `parameterized_search`.
+- **Query and search:** pass values after the SOQL (`sf.query("... WHERE Email = {}", email)`)
+  and they're quoted for you. `query_one` / `query_first`, pages with opaque cursors you can
+  sign, `query_iter` (optionally following child subqueries), `count`, `explain` (query plans),
+  `esf.flatten` for CSV/DataFrame export, SOSL `search` and `parameterized_search`.
 - **sObject Collections:** create, update, upsert, delete and retrieve, chunked (200 rows per
   write, 2,000 ids per read) and run concurrently. Results keep the input order, and a failure
   in one chunk raises `PartialFailure` with every row's result.

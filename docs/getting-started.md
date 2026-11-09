@@ -126,7 +126,7 @@ lead_id = await leads.create({"FirstName": "Ada", "LastName": "Lovelace", "Compa
 await leads.update(lead_id, {"Status": "Working"})
 lead = await leads.get(lead_id, fields=["Id", "Name", "Status"])
 
-page = await sf.query(esf.soql("SELECT Id, Name FROM Lead WHERE Status = {}", "Working"))
+page = await sf.query("SELECT Id, Name FROM Lead WHERE Status = {}", "Working")
 print(page.total_size, [r["Name"] for r in page])
 
 result = await sf.collections.update("Lead", [{"Id": lead_id, "Rating": "Hot"}])

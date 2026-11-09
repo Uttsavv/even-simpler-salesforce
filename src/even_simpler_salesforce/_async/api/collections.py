@@ -18,6 +18,7 @@ from ...core.records import (
 )
 from ...core.soql import soql_identifier
 from ...errors import (
+    ConnectError,
     ErrorDetail,
     PartialFailure,
     RequestTimeout,
@@ -44,8 +45,11 @@ def _chunk_failed(exc: SalesforceError) -> RecordResult:
     ``extended["outcome"]`` is ``"unknown"`` when the request may have reached Salesforce
     (timeouts, resets, 5xx): those rows may or may not have been written.
     """
-    unknown = isinstance(exc, (RequestTimeout, ServerError)) or (
-        isinstance(exc, TransportError) and exc.retryable and not exc.message.startswith("could not connect")
+    reached = exc.status is not None and exc.status >= 500  # e.g. an HTML 502/503 proxy page
+    unknown = (
+        reached
+        or isinstance(exc, (RequestTimeout, ServerError))
+        or (isinstance(exc, TransportError) and not isinstance(exc, ConnectError) and exc.retryable)
     )
     detail = ErrorDetail(
         error_code=exc.error_code or type(exc).__name__,

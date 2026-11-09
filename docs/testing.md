@@ -301,7 +301,10 @@ example.
 | Testing module | `tests/testing_module` | the fakes, recorder, plugin and contract suite |
 | Docs | `tests/docs` | runs every `python` block in these pages and the README against a synthetic org |
 | CLI, benchmarks | `tests/cli`, `tests/benchmarks` | the `esf` command; performance (opt-in) |
+| Sandbox | `tests/sandbox` | real-org smoke tests and the rotation acceptance test (opt-in) |
 | Examples | `examples/*/tests` | the FastAPI and Flask example apps |
 
-There is no `tests/sandbox` suite in 0.1 yet. Real-org checks are still open items in the
-spec's verification backlog.
+Real-org tests live in `tests/sandbox` (marker `sandbox`). They are skipped unless
+`ESF_SANDBOX_*` variables are set; `tests/sandbox/README.md` explains the setup, including the
+4-process refresh-token rotation test and `scripts/verify_sandbox.py`, which records evidence for
+the spec's open verification items.

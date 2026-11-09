@@ -1,0 +1,1 @@
+Collections chunks that fail with an HTML 5xx (proxy/maintenance page) are marked `outcome="unknown"` (the request may have reached Salesforce). `ESF_DEBUG=2` attempt events log the path template instead of the URL, so external id values stay out of logs. `parameterized_search` events carry `soql_hash`.

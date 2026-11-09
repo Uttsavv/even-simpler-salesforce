@@ -9,10 +9,45 @@ auth = esf.ClientCredentials(
 sf = esf.AsyncSalesforce(auth)
 ```
 
-## Building SOQL safely: `esf.soql()`
+## Which method for which job
 
-Never paste values into SOQL with f-strings. `esf.soql()` works like `str.format`: each `{}`
-or `{name}` placeholder is replaced with the value quoted as a SOQL literal.
+Each method does a different job; they are not alternatives for the same one.
+
+| You want | Use | Returns |
+|---|---|---|
+| exactly one row, and it's an error otherwise | `query_one()` | the row; `NotFound` / `MultipleMatches` |
+| the first row if there is one | `query_first()` | the row or `None` |
+| one page, plus a cursor to continue later (e.g. a frontend) | `query()` then `query_more(cursor)` | `QueryResult` |
+| every row, fetched page by page as you go | `query_iter()` | an (async) iterator of rows |
+| how many rows match | `count()` with `SELECT COUNT() ...` | `int` |
+| how Salesforce would run a query (indexes, cost) | `explain()` | `list[QueryPlan]` |
+| rows as flat dicts for CSV / DataFrames | `esf.flatten(row)` on any of the above | `dict` |
+
+## Values in the query
+
+Every method that takes SOQL also takes the values for its `{}` placeholders, after the query.
+Each value is quoted and escaped as a SOQL literal, by the same code as `esf.soql()`:
+
+```python
+email = "o'brien@example.com"
+page = await sf.query("SELECT Id, Name FROM Lead WHERE Email = {} AND Status IN {}", email, ["Open"])
+print(page.total_size)
+```
+
+!!! warning "An f-string looks the same and escapes nothing"
+    `f"SELECT Id FROM Lead WHERE Email = '{email}'"` breaks on `o'brien@example.com` and lets
+    whoever controls `email` change your query. Pass the value after the query instead.
+
+- Only positional `{}` placeholders work here; the number of `{}` must equal the number of
+  values (`ValueError` otherwise), so a forgotten placeholder can't silently drop a filter.
+- Without values, the query is sent exactly as written (braces included).
+- For named placeholders, `{:like}` or building a query in pieces, use `esf.soql()` below.
+
+## Building a query in pieces: `esf.soql()`
+
+`esf.soql()` works like `str.format`: each `{}` or `{name}` placeholder is replaced with the
+value quoted as a SOQL literal. Use it when you assemble a query from parts or need `{name}` /
+`{:like}`; otherwise pass values to the method directly.
 
 ```python
 status, companies = "Open", ["Acme", "O'Reilly"]
@@ -68,7 +103,7 @@ print(q)
 ## `query()`: one page
 
 ```python
-page = await sf.query(esf.soql("SELECT Id, Name, Status FROM Lead WHERE Status = {}", "Open"))
+page = await sf.query("SELECT Id, Name, Status FROM Lead WHERE Status = {}", "Open")
 print(page.total_size, page.done, len(page))
 for lead in page:  # iterating a page iterates its records
     print(lead["Name"])
@@ -133,7 +168,7 @@ print(len(emails))
 ```
 
 On the sync client: `for lead in sf.query_iter(...)`, or `list(sf.query_iter(...))`.
-`query_iter` takes `page_size`, `include_deleted` and `model` like `query`.
+`query_iter` takes values, `page_size`, `include_deleted` and `model` like `query`.
 
 ### Child subqueries: `expand_children=True`
 
@@ -154,6 +189,39 @@ async for account in sf.query_iter(soql, expand_children=True):
 Without it, the children arrive exactly as Salesforce sent them. Each extra child page costs
 one API call (`operation="query_more"`).
 
+## `query_one()`: exactly one row
+
+For "this must match exactly one record", e.g. a lookup by a unique field:
+
+```python
+lead = await sf.query_one("SELECT Id, Name FROM Lead WHERE Email = {}", "ada@example.com")
+print(lead["Name"])
+
+try:
+    await sf.query_one("SELECT Id FROM Lead WHERE Status = {}", "Open")
+except esf.MultipleMatches as exc:
+    print(len(exc.matches), "Ids on the first page")
+except esf.NotFound:
+    print("no lead")
+```
+
+It reads only the first page and decides from `totalSize`: no rows raise `esf.NotFound`, more
+than one raise `esf.MultipleMatches` (`.matches` holds the Ids on that page). Both are raised
+by the client, so `status` is `None` and `operation` is `"query"`. The SOQL is sent as written;
+nothing (no `LIMIT`) is added. Takes `include_deleted=` and `model=`.
+
+## `query_first()`: the first row, if any
+
+For "one if there is one", e.g. the newest record. Returns `None` instead of raising:
+
+```python
+newest = await sf.query_first("SELECT Id, Name FROM Lead ORDER BY CreatedDate DESC LIMIT 1")
+print(newest is None or "Id" in newest)
+```
+
+It reads only the first page; add `LIMIT 1` yourself so Salesforce doesn't return more rows
+than you need.
+
 ## `count()`
 
 ```python
@@ -164,6 +232,48 @@ print(n)
 `count()` runs a `SELECT COUNT() ...` query and returns `totalSize` as an `int`. A response
 without an integer `totalSize` raises `esf.UnexpectedResponse`. For `COUNT(Id)` and other
 aggregates, use `query()` and read the aggregate row.
+
+## `explain()`: how Salesforce would run a query
+
+`explain()` asks Salesforce for its query plans without running the query
+(`GET query?explain=`; Salesforce labels this feature Beta). Plans come most optimal first:
+
+```python
+plans = await sf.explain("SELECT Id FROM Lead WHERE Email = {}", "ada@example.com")
+best = plans[0]
+print(best.leading_operation, best.relative_cost, best.sobject_type)
+for note in plans[-1].notes:
+    print(note.description, note.fields)
+```
+
+Each `esf.QueryPlan` has `leading_operation` (`"Index"`, `"Other"` or `"TableScan"`),
+`relative_cost` (above 1.0 is not selective), `cardinality`, `sobject_cardinality`,
+`sobject_type`, `fields` (indexed fields used) and `notes` (`esf.QueryPlanNote`: why a field
+couldn't use an index).
+
+## Exporting rows: `esf.flatten()`
+
+Query rows are nested: `attributes` at every level, lookups as nested dicts, child subqueries
+as `{"totalSize", "done", "records"}`. `esf.flatten()` turns one row into a flat dict for CSV,
+DataFrames or JSON:
+
+```python
+row = {
+    "attributes": {"type": "Account"},
+    "Name": "Acme",
+    "Owner": {"attributes": {"type": "User"}, "Name": "Ada"},
+    "Parent": None,
+    "Contacts": {"totalSize": 1, "done": True, "records": [{"attributes": {}, "LastName": "Byron"}]},
+}
+print(esf.flatten(row))
+# {'Name': 'Acme', 'Owner.Name': 'Ada', 'Parent': None, 'Contacts': [{'LastName': 'Byron'}]}
+```
+
+- Lookups become dotted keys (`"Owner.Name"`, `"Owner.Manager.Email"`).
+- A null lookup stays one key (`"Parent": None`), so read with `row.get("Parent.Name")`.
+- A child subquery becomes a list of flattened child rows, only those present; use
+  `query_iter(..., expand_children=True)` to get all of them.
+- `model=` instances aren't dicts: `flatten` raises `TypeError` for them.
 
 ## Search
 

@@ -20,7 +20,7 @@ that breaks one of them will not be merged. See also [CONTRIBUTING.md](CONTRIBUT
 | `src/even_simpler_salesforce/_async/` | Hand-written async I/O code. **The only place that awaits.** Source of truth for both clients. |
 | `src/even_simpler_salesforce/_sync/` | **Generated** by `scripts/unasync.py`. Never edit by hand (except the hand-written `_sync/_compat.py`). |
 | `core/`, `auth/` config classes, `errors.py`, `models.py` | **No I/O.** Pure functions/data shared unchanged by both clients. |
-| `__init__.py` `__all__` + documented submodules (`testing`, `contrib.fastapi`, `contrib.flask`) | The public SemVer surface. Everything else is private, even without `_`. |
+| `__init__.py` `__all__` + documented submodules (`observability`, `testing`, `contrib.fastapi`, `contrib.flask`) | The public SemVer surface. Everything else is private, even without `_`. |
 | `tests/unit` | No network, no httpx mocking. |
 | `tests/contract` | respx + recorded responses, parametrised over **both** clients. |
 | `tests/fixtures/recorded/` | Redacted recorded responses, one directory per API area. |

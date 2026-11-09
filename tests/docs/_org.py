@@ -305,6 +305,44 @@ class FakeOrg:
         projected = [self._project(sobject, r, fields, version) for r in rows]
         return self._page(projected, batch, version)
 
+    def explain(self, soql: str) -> dict[str, Any]:
+        """Synthetic ``query?explain=`` (shape from the REST API Developer Guide, v264)."""
+        m = _FIELD_LIST.match(_SUBQUERY.sub("__SUBQUERY__", soql))
+        sobject = m.group("obj") if m else "Lead"
+        total = len(self.records.get(sobject, {}))
+        indexed = "Email" in soql or "Id =" in soql
+        plans: list[dict[str, Any]] = []
+        if indexed:
+            plans.append(
+                {
+                    "cardinality": 1,
+                    "fields": ["Email" if "Email" in soql else "Id"],
+                    "leadingOperationType": "Index",
+                    "notes": [],
+                    "relativeCost": 0.0,
+                    "sobjectCardinality": total,
+                    "sobjectType": sobject,
+                }
+            )
+        plans.append(
+            {
+                "cardinality": total,
+                "fields": [],
+                "leadingOperationType": "TableScan",
+                "notes": [
+                    {
+                        "description": "Not considering filter for optimization because unindexed",
+                        "fields": ["IsDeleted"],
+                        "tableEnumOrId": sobject,
+                    }
+                ],
+                "relativeCost": 2.8,
+                "sobjectCardinality": total,
+                "sobjectType": sobject,
+            }
+        )
+        return {"plans": plans, "sourceQuery": soql}
+
     def more(self, locator: str, batch: int, version: str) -> dict[str, Any]:
         rows = self.locators.pop(locator, None)
         if rows is None:
@@ -405,6 +443,8 @@ class FakeOrg:
         if parts[0] in ("query", "queryAll"):
             if len(parts) == 2:
                 return self._json(self.more(parts[1], batch, version))
+            if "explain" in params:
+                return self._json(self.explain(params["explain"]))
             return self._json(self.query(params["q"], batch, version))
         if rest == "search":
             return self._json(

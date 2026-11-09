@@ -17,8 +17,9 @@ esf version
 | `esf query SOQL` | Runs a query and prints a table (default), a JSON array (`--json`) or CSV (`--csv`). Prints the first page only, unless you pass `--all` | one per page |
 | `esf version` | Prints the library, default API version, httpx and Python versions | none |
 
-`esf query` flattens parent relationships into dotted columns (`Owner.Name`) and prints child
-subquery results as JSON in a single cell. It writes the row count to stderr, so stdout stays
+`esf query` flattens each row with [`esf.flatten`](guides/query.md#exporting-rows-esfflatten):
+parent relationships become dotted columns (`Owner.Name`), and child subquery rows are printed
+as JSON in a single cell. It writes the row count to stderr, so stdout stays
 clean for pipes:
 
 ```sh

@@ -13,7 +13,7 @@ auth = esf.ClientCredentials(
 )
 
 async with esf.AsyncSalesforce(auth) as sf:
-    page = await sf.query(esf.soql("SELECT Id, Name FROM Lead WHERE Status = {}", "Open"))
+    page = await sf.query("SELECT Id, Name FROM Lead WHERE Status = {}", "Open")
     for lead in page:
         print(lead["Id"], lead["Name"])
 ```

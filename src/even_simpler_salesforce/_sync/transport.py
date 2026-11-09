@@ -348,7 +348,8 @@ class Transport:
                 "sf.debug.attempt",
                 {
                     "method": spec.method,
-                    "url": url.split("?", 1)[0],
+                    # path template, not the URL: paths can carry external id values
+                    "path_template": spec.path_template or path_template(spec.path),
                     "status": response.status_code,
                     "request_headers": {
                         k: ("<redacted>" if k.lower() in _REDACT_HEADERS else v) for k, v in headers.items()

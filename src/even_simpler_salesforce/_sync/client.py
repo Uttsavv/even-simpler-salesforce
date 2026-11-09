@@ -555,6 +555,7 @@ class Salesforce:
                 content_type=ctype,
                 idempotent=True,
                 operation="parameterized_search",
+                soql=q,
             )
         )
         body: Any = raw.json()
