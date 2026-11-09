@@ -1,0 +1,606 @@
+"""A small, stateful, *synthetic* Salesforce org used to run the documentation examples.
+
+Every response here is hand-written (``synthetic``): it mimics the shapes the library parses
+(see the recorded fixtures under ``tests/fixtures/recorded`` for real ones) closely enough for
+the examples in ``docs/`` and ``README.md`` to run end to end. It is not a Salesforce emulator:
+SOQL support is limited to ``SELECT <fields> FROM <object>`` with simple ``=`` / ``IN`` filters
+joined by ``AND``, ``LIMIT``, ``COUNT()`` and one level of child subqueries.
+
+The org enforces a few rules so error examples have something to hit:
+
+- ``Lead`` needs ``LastName`` and ``Company`` (``REQUIRED_FIELD_MISSING``);
+- a ``Lead`` with ``Country`` but no ``Street`` fails the validation rule
+  ``[ADDR_REQUIRED] Street is required when Country is set`` (``FIELD_CUSTOM_VALIDATION_EXCEPTION``);
+- custom fields other than ``External_Id__c`` / ``Score__c`` don't exist (``INVALID_FIELD``);
+- objects other than Lead, Account, Contact and Opportunity don't exist (``INVALID_TYPE``).
+"""
+
+from __future__ import annotations
+
+import gzip
+import itertools
+import json
+import re
+from datetime import datetime, timedelta, timezone
+from email.utils import format_datetime
+from typing import Any
+from urllib.parse import parse_qsl
+
+import httpx
+
+INSTANCE = "https://acme.my.salesforce.com"
+ORG_ID = "00Dxx0000000001EAA"
+USER_ID = "005xx0000000001AAA"
+ID_URL = f"https://login.salesforce.com/id/{ORG_ID}/{USER_ID}"
+API_MAX = 100_000
+
+PREFIXES = {"Lead": "00Q", "Account": "001", "Contact": "003", "Opportunity": "006"}
+CUSTOM_FIELDS = {"External_Id__c", "Score__c"}
+CHILD_RELATIONSHIPS = {"Contacts": ("Contact", "AccountId"), "Opportunities": ("Opportunity", "AccountId")}
+CHILD_PAGE = 2  # tiny on purpose, so ``expand_children`` has something to follow
+
+_DATA = re.compile(r"^/services/data/v(?P<v>\d+\.\d)/(?P<rest>.*)$")
+_FIELD_LIST = re.compile(r"^\s*SELECT\s+(?P<fields>.+?)\s+FROM\s+(?P<obj>\w+)(?P<tail>.*)$", re.I | re.S)
+_EQ = re.compile(r"(\w+)\s*=\s*('(?:[^'\\]|\\.)*'|true|false|null|-?\d+(?:\.\d+)?)", re.I)
+_IN = re.compile(r"(\w+)\s+IN\s*\(([^)]*)\)", re.I)
+_LIMIT = re.compile(r"\bLIMIT\s+(\d+)", re.I)
+_SUBQUERY = re.compile(r"\(\s*SELECT\s+(?P<fields>[^()]+?)\s+FROM\s+(?P<rel>\w+)\s*\)", re.I)
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _iso(dt: datetime) -> str:
+    return dt.strftime("%Y-%m-%dT%H:%M:%S.000+0000")
+
+
+def _literal(text: str) -> Any:
+    low = text.lower()
+    if low in ("true", "false"):
+        return low == "true"
+    if low == "null":
+        return None
+    if text.startswith("'"):
+        return re.sub(r"\\(.)", r"\1", text[1:-1])
+    return float(text) if "." in text else int(text)
+
+
+def _split_top(text: str) -> list[str]:
+    """Split a SELECT list on commas that are not inside parentheses."""
+    out, depth, cur = [], 0, ""
+    for ch in text:
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        if ch == "," and depth == 0:
+            out.append(cur.strip())
+            cur = ""
+        else:
+            cur += ch
+    if cur.strip():
+        out.append(cur.strip())
+    return out
+
+
+class Rejected(Exception):
+    def __init__(self, code: str, message: str, fields: list[str] | None = None, status: int = 400) -> None:
+        super().__init__(message)
+        self.code, self.message, self.fields, self.status = code, message, fields or [], status
+
+    def body(self) -> list[dict[str, Any]]:
+        return [{"errorCode": self.code, "message": self.message, "fields": self.fields}]
+
+
+class FakeOrg:
+    """In-memory org; :meth:`handle` is an httpx request handler."""
+
+    def __init__(self) -> None:
+        self.records: dict[str, dict[str, dict[str, Any]]] = {name: {} for name in PREFIXES}
+        self.deleted: list[tuple[str, str, datetime]] = []
+        self.locators: dict[str, list[dict[str, Any]]] = {}
+        self.api_used = 12_000
+        self.tokens = itertools.count(1)
+        self.ids = itertools.count(1)
+        self.locs = itertools.count(1)
+        self.revoked: set[str] = set()
+        self.requests: list[httpx.Request] = []
+        self.describe_modified = _now() - timedelta(days=3)
+        self._seed()
+
+    # --- data ------------------------------------------------------------------------
+
+    def new_id(self, sobject: str) -> str:
+        return f"{PREFIXES[sobject]}8d{next(self.ids):013d}"
+
+    def _store(self, sobject: str, data: dict[str, Any]) -> dict[str, Any]:
+        rid = data.get("Id") or self.new_id(sobject)
+        now = _iso(_now())
+        rec = {k: v for k, v in data.items() if k != "attributes"}
+        rec.update(Id=rid, CreatedDate=now, LastModifiedDate=now)
+        self.records[sobject][rid] = rec
+        return rec
+
+    def _seed(self) -> None:
+        accounts = [self._store("Account", {"Name": n}) for n in ("Acme", "Globex", "Initech")]
+        for i, last in enumerate(("Doe", "Roe", "Poe")):
+            self._store(
+                "Contact", {"LastName": last, "AccountId": accounts[0]["Id"], "Email": f"c{i}@acme.test"}
+            )
+        self._store("Opportunity", {"Name": "Acme renewal", "AccountId": accounts[0]["Id"], "Amount": 5000})
+        statuses = ("Open", "Working", "Closed - Not Converted")
+        named = [
+            ("Ada", "Lovelace", "Analytical Engines"),
+            ("Grace", "Hopper", "Navy"),
+            ("Alan", "Turing", "Bletchley"),
+        ]
+        for first, last, company in named:
+            self._store(
+                "Lead",
+                {
+                    "FirstName": first,
+                    "LastName": last,
+                    "Company": company,
+                    "Status": "Open",
+                    "Email": f"{first.lower()}@example.com",
+                    "External_Id__c": f"ext-{last.lower()}",
+                },
+            )
+        for i in range(447):
+            self._store(
+                "Lead",
+                {
+                    "FirstName": "Test",
+                    "LastName": f"Lead {i:03d}",
+                    "Company": "Example Inc",
+                    "Status": statuses[i % 3],
+                    "Email": f"lead{i}@example.com",
+                },
+            )
+
+    def _with_attrs(self, sobject: str, rec: dict[str, Any], version: str) -> dict[str, Any]:
+        url = f"/services/data/v{version}/sobjects/{sobject}/{rec['Id']}"
+        return {"attributes": {"type": sobject, "url": url}, **rec}
+
+    def _validate(
+        self, sobject: str, data: dict[str, Any], *, creating: bool, current: dict[str, Any] | None = None
+    ) -> None:
+        for key in data:
+            if key.endswith("__c") and key not in CUSTOM_FIELDS:
+                raise Rejected("INVALID_FIELD", f"No such column '{key}' on sobject of type {sobject}", [key])
+        merged = {**(current or {}), **data}
+        if sobject == "Lead":
+            missing = [f for f in ("LastName", "Company") if not merged.get(f)]
+            if missing and (creating or any(f in data for f in missing)):
+                raise Rejected(
+                    "REQUIRED_FIELD_MISSING", f"Required fields are missing: [{', '.join(missing)}]", missing
+                )
+            if merged.get("Country") and not merged.get("Street"):
+                raise Rejected(
+                    "FIELD_CUSTOM_VALIDATION_EXCEPTION",
+                    "[ADDR_REQUIRED] Street is required when Country is set",
+                    ["Street"],
+                )
+
+    def _known(self, sobject: str) -> None:
+        if sobject not in self.records:
+            raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+
+    def create(self, sobject: str, data: dict[str, Any]) -> dict[str, Any]:
+        self._validate(sobject, data, creating=True)
+        return self._store(sobject, data)
+
+    def update(self, sobject: str, rid: str, data: dict[str, Any]) -> None:
+        rec = self.records[sobject].get(rid)
+        if rec is None:
+            raise Rejected(
+                "ENTITY_IS_DELETED" if self._was_deleted(rid) else "NOT_FOUND",
+                "entity is deleted"
+                if self._was_deleted(rid)
+                else "Provided external ID field does not exist or is not accessible",
+                status=404,
+            )
+        clean = {k: v for k, v in data.items() if k not in ("attributes", "Id")}
+        self._validate(sobject, clean, creating=False, current=rec)
+        rec.update(clean, LastModifiedDate=_iso(_now()))
+
+    def upsert(self, sobject: str, field: str, value: str, data: dict[str, Any]) -> tuple[str, bool]:
+        matches = [r for r in self.records[sobject].values() if str(r.get(field)) == value]
+        if len(matches) > 1:
+            raise Rejected("MULTIPLE_CHOICES", "multiple matches", status=300)
+        if matches:
+            self.update(sobject, matches[0]["Id"], data)
+            return matches[0]["Id"], False
+        rec = self.create(sobject, {**data, field: value})
+        return rec["Id"], True
+
+    def delete(self, sobject: str | None, rid: str) -> None:
+        for name, table in self.records.items():
+            if (sobject is None or name == sobject) and rid in table:
+                del table[rid]
+                self.deleted.append((name, rid, _now()))
+                return
+        if self._was_deleted(rid):
+            raise Rejected("ENTITY_IS_DELETED", "entity is deleted", status=404)
+        raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+
+    def _was_deleted(self, rid: str) -> bool:
+        return any(d[1] == rid for d in self.deleted)
+
+    # --- query -----------------------------------------------------------------------
+
+    def _project(self, sobject: str, rec: dict[str, Any], fields: list[str], version: str) -> dict[str, Any]:
+        out: dict[str, Any] = {
+            "attributes": {
+                "type": sobject,
+                "url": f"/services/data/v{version}/sobjects/{sobject}/{rec['Id']}",
+            }
+        }
+        for f in fields:
+            sub = _SUBQUERY.fullmatch(f)
+            if sub:
+                rel = sub.group("rel")
+                child_obj, fk = CHILD_RELATIONSHIPS.get(rel, (None, None))
+                if child_obj is None:
+                    raise Rejected("INVALID_TYPE", f"Didn't understand relationship '{rel}'")
+                cfields = _split_top(sub.group("fields"))
+                kids = [
+                    self._project(child_obj, c, cfields, version)
+                    for c in self.records[child_obj].values()
+                    if c.get(fk) == rec["Id"]
+                ]
+                out[rel] = self._page(kids, CHILD_PAGE, version) if kids else None
+            elif "." in f:
+                out[f.split(".", 1)[0]] = None
+            else:
+                out[f] = rec.get(f)
+        return out
+
+    def _page(self, rows: list[dict[str, Any]], size: int, version: str) -> dict[str, Any]:
+        first, rest = rows[:size], rows[size:]
+        body: dict[str, Any] = {"totalSize": len(rows), "done": not rest, "records": first}
+        if rest:
+            loc = f"01g8d{next(self.locs):013d}"
+            self.locators[f"{loc}-{size}"] = rest
+            body["nextRecordsUrl"] = f"/services/data/v{version}/query/{loc}-{size}"
+        return body
+
+    def query(self, soql: str, batch: int, version: str) -> dict[str, Any]:
+        m = _FIELD_LIST.match(soql)
+        if not m:
+            raise Rejected("MALFORMED_QUERY", "unexpected token: " + (soql.split() or ["''"])[0])
+        sobject, tail = m.group("obj"), m.group("tail")
+        if sobject not in self.records:
+            raise Rejected("INVALID_TYPE", f"sObject type '{sobject}' is not supported.")
+        rows = list(self.records[sobject].values())
+        where = re.split(r"\b(?:ORDER\s+BY|LIMIT|GROUP\s+BY)\b", tail, flags=re.I)[0]
+        where_wo_sub = _SUBQUERY.sub("", where)
+        for field, lit in _EQ.findall(where_wo_sub):
+            rows = [r for r in rows if r.get(field) == _literal(lit)]
+        for field, items in _IN.findall(where_wo_sub):
+            values = {_literal(x.strip()) for x in items.split(",") if x.strip()}
+            rows = [r for r in rows if r.get(field) in values]
+        lim = _LIMIT.search(tail)
+        if lim:
+            rows = rows[: int(lim.group(1))]
+        fields = _split_top(m.group("fields"))
+        if [f.upper() for f in fields] == ["COUNT()"]:
+            return {"totalSize": len(rows), "done": True, "records": []}
+        for f in fields:
+            if not _SUBQUERY.fullmatch(f) and f.endswith("__c") and f not in CUSTOM_FIELDS:
+                raise Rejected("INVALID_FIELD", f"No such column '{f}' on entity '{sobject}'.")
+        projected = [self._project(sobject, r, fields, version) for r in rows]
+        return self._page(projected, batch, version)
+
+    def more(self, locator: str, batch: int, version: str) -> dict[str, Any]:
+        rows = self.locators.pop(locator, None)
+        if rows is None:
+            raise Rejected("INVALID_QUERY_LOCATOR", "invalid query locator")
+        body = self._page(rows, batch, version)
+        return body
+
+    # --- HTTP ------------------------------------------------------------------------
+
+    def handle(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        path = request.url.path
+        try:
+            if path.startswith("/services/oauth2/"):
+                return self._oauth(request, path.rsplit("/", 1)[1])
+            auth = request.headers.get("authorization", "")
+            if not auth.startswith("Bearer ") or auth[7:] in self.revoked:
+                raise Rejected("INVALID_SESSION_ID", "Session expired or invalid", status=401)
+            self.api_used += 1
+            if path.startswith("/services/apexrest/"):
+                return self._json({"ok": True, "path": path.removeprefix("/services/apexrest")})
+            m = _DATA.match(path)
+            if not m:
+                raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+            return self._data(request, m.group("v"), m.group("rest").rstrip("/"))
+        except Rejected as exc:
+            if exc.status == 300:
+                return self._json(["/services/data/v68.0/sobjects/Lead/00Q8d0000000000001"], 300)
+            return self._json(exc.body(), exc.status)
+
+    def _json(self, body: Any, status: int = 200, headers: dict[str, str] | None = None) -> httpx.Response:
+        h = {
+            "content-type": "application/json;charset=UTF-8",
+            "sforce-limit-info": f"api-usage={self.api_used}/{API_MAX}",
+        }
+        h.update(headers or {})
+        content = b"" if body is None else json.dumps(body).encode()
+        return httpx.Response(status, headers=h, content=content)
+
+    def _body(self, request: httpx.Request) -> Any:
+        raw = request.content
+        if request.headers.get("content-encoding") == "gzip":
+            raw = gzip.decompress(raw)
+        return json.loads(raw) if raw else None
+
+    def _oauth(self, request: httpx.Request, what: str) -> httpx.Response:
+        form = dict(parse_qsl(request.content.decode())) if request.method == "POST" else {}
+        if what == "token":
+            grant = form.get("grant_type", "")
+            n = next(self.tokens)
+            body: dict[str, Any] = {
+                "access_token": f"AT-docs-{n:04d}",
+                "instance_url": INSTANCE,
+                "id": ID_URL,
+                "token_type": "Bearer",
+                "issued_at": str(int(_now().timestamp() * 1000)),
+                "signature": "c2lnbmF0dXJl",
+                "scope": "api refresh_token",
+            }
+            if grant in ("authorization_code", "refresh_token"):
+                body["refresh_token"] = f"RT-docs-{n:04d}"
+            return self._json(body)
+        if what == "revoke":
+            self.revoked.add(form.get("token", ""))
+            return httpx.Response(200)
+        if what == "introspect":
+            exp = int((_now() + timedelta(hours=2)).timestamp())
+            return self._json(
+                {
+                    "active": True,
+                    "scope": "api refresh_token",
+                    "client_id": form.get("client_id"),
+                    "token_type": "access_token",
+                    "exp": exp,
+                }
+            )
+        if what == "userinfo":
+            return self._json(
+                {
+                    "user_id": USER_ID,
+                    "organization_id": ORG_ID,
+                    "name": "Integration User",
+                    "preferred_username": "integration@acme.example",
+                    "email": "integration@acme.example",
+                }
+            )
+        return self._json({"error": "unsupported", "error_description": what}, 400)
+
+    def _data(self, request: httpx.Request, version: str, rest: str) -> httpx.Response:
+        method = request.method
+        params = dict(request.url.params)
+        parts = rest.split("/")
+        batch = 2000
+        opts = request.headers.get("sforce-query-options", "")
+        if opts.startswith("batchSize="):
+            batch = int(opts.split("=", 1)[1])
+
+        if parts[0] in ("query", "queryAll"):
+            if len(parts) == 2:
+                return self._json(self.more(parts[1], batch, version))
+            return self._json(self.query(params["q"], batch, version))
+        if rest == "search":
+            return self._json(
+                {
+                    "searchRecords": [
+                        self._with_attrs("Lead", r, version) for r in list(self.records["Lead"].values())[:3]
+                    ]
+                }
+            )
+        if rest == "parameterizedSearch":
+            return self._json(
+                {
+                    "searchRecords": [
+                        self._with_attrs("Lead", r, version) for r in list(self.records["Lead"].values())[:2]
+                    ]
+                }
+            )
+        if rest == "limits":
+            return self._json(
+                {
+                    "DailyApiRequests": {"Max": API_MAX, "Remaining": API_MAX - self.api_used},
+                    "DailyBulkV2QueryJobs": {"Max": 10000, "Remaining": 10000},
+                    "DataStorageMB": {"Max": 1024, "Remaining": 1000},
+                    "SingleEmail": {"Max": 5000, "Remaining": 4990},
+                }
+            )
+        if rest == "limits/recordCount":
+            names = params.get("sObjects", "").split(",")
+            return self._json(
+                {"sObjects": [{"name": n, "count": len(self.records.get(n, {}))} for n in names if n]}
+            )
+        if parts[0] == "composite" and len(parts) >= 2 and parts[1] == "sobjects":
+            return self._collections(request, method, parts[2:], params)
+        if parts[0] == "sobjects":
+            return self._sobjects(request, method, parts[1:], params, version)
+        raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+
+    def _sobjects(
+        self, request: httpx.Request, method: str, parts: list[str], params: dict[str, str], version: str
+    ) -> httpx.Response:
+        if not parts or parts == [""]:
+            return self._json(
+                {
+                    "encoding": "UTF-8",
+                    "maxBatchSize": 200,
+                    "sobjects": [
+                        {"name": n, "label": n, "keyPrefix": p, "queryable": True}
+                        for n, p in PREFIXES.items()
+                    ],
+                }
+            )
+        sobject = parts[0]
+        self._known(sobject)
+        if len(parts) == 1:
+            if method == "POST":
+                rec = self.create(sobject, self._body(request) or {})
+                return self._json({"id": rec["Id"], "success": True, "errors": []}, 201)
+            return self._json(
+                {"objectDescribe": {"name": sobject, "keyPrefix": PREFIXES[sobject]}, "recentItems": []}
+            )
+        if parts[1] == "describe":
+            since = request.headers.get("if-modified-since")
+            if since:
+                return httpx.Response(
+                    304, headers={"sforce-limit-info": f"api-usage={self.api_used}/{API_MAX}"}
+                )
+            fields = [
+                {"name": "Id", "type": "id"},
+                {"name": "Name", "type": "string"},
+                {"name": "LastName", "type": "string", "length": 80},
+            ]
+            return self._json(
+                {"name": sobject, "label": sobject, "createable": True, "fields": fields},
+                headers={"last-modified": format_datetime(self.describe_modified, usegmt=True)},
+            )
+        if parts[1] in ("updated", "deleted"):
+            if parts[1] == "updated":
+                return self._json(
+                    {"ids": list(self.records[sobject])[:5], "latestDateCovered": params.get("end")}
+                )
+            gone = [
+                {"id": rid, "deletedDate": _iso(when)} for name, rid, when in self.deleted if name == sobject
+            ]
+            return self._json(
+                {
+                    "deletedRecords": gone,
+                    "earliestDateAvailable": params.get("start"),
+                    "latestDateCovered": params.get("end"),
+                }
+            )
+        if len(parts) == 3:  # external id
+            field, value = parts[1], parts[2]
+            if method == "PATCH":
+                rid, created = self.upsert(sobject, field, value, self._body(request) or {})
+                return self._json(
+                    {"id": rid, "success": True, "errors": [], "created": created}, 201 if created else 200
+                )
+            for rec in self.records[sobject].values():
+                if str(rec.get(field)) == value:
+                    return self._json(self._with_attrs(sobject, rec, version))
+            raise Rejected(
+                "NOT_FOUND", "Provided external ID field does not exist or is not accessible", status=404
+            )
+        rid = parts[1]
+        if method == "GET":
+            rec = self.records[sobject].get(rid)
+            if rec is None:
+                raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+            wanted = params.get("fields")
+            data = {k: rec.get(k) for k in wanted.split(",")} if wanted else dict(rec)
+            data["Id"] = rid
+            return self._json(self._with_attrs(sobject, data, version))
+        if method == "PATCH":
+            self.update(sobject, rid, self._body(request) or {})
+            return httpx.Response(204, headers={"sforce-limit-info": f"api-usage={self.api_used}/{API_MAX}"})
+        if method == "DELETE":
+            self.delete(sobject, rid)
+            return httpx.Response(204, headers={"sforce-limit-info": f"api-usage={self.api_used}/{API_MAX}"})
+        raise Rejected("METHOD_NOT_ALLOWED", "method not allowed", status=405)
+
+    # --- collections -------------------------------------------------------------------
+
+    def _collections(
+        self, request: httpx.Request, method: str, parts: list[str], params: dict[str, str]
+    ) -> httpx.Response:
+        if method == "DELETE":
+            ids = params.get("ids", "").split(",")
+            return self._json(
+                self._batch(
+                    ids, params.get("allOrNone") == "true", lambda rid: (self.delete(None, rid), rid)[1]
+                )
+            )
+        body = self._body(request) or {}
+        if method == "POST" and len(parts) == 1:  # retrieve
+            sobject = parts[0]
+            self._known(sobject)
+            out = []
+            for rid in body.get("ids", []):
+                rec = self.records[sobject].get(rid)
+                out.append(
+                    None
+                    if rec is None
+                    else {"attributes": {"type": sobject}, **{f: rec.get(f) for f in body.get("fields", [])}}
+                )
+            return self._json(out)
+        rows = body.get("records", [])
+        aon = bool(body.get("allOrNone"))
+        if method == "POST":
+            return self._json(self._batch(rows, aon, lambda r: self.create(r["attributes"]["type"], r)["Id"]))
+        if method == "PATCH" and not parts:
+
+            def upd(r: dict[str, Any]) -> str:
+                self.update(r["attributes"]["type"], r["Id"], r)
+                return r["Id"]
+
+            return self._json(self._batch(rows, aon, upd))
+        if method == "PATCH" and len(parts) == 2:
+            sobject, field = parts
+            out_created: list[bool] = []
+
+            def ups(r: dict[str, Any]) -> str:
+                rid, created = self.upsert(
+                    sobject, field, str(r[field]), {k: v for k, v in r.items() if k != field}
+                )
+                out_created.append(created)
+                return rid
+
+            results = self._batch(rows, aon, ups)
+            it = iter(out_created)
+            for res in results:
+                if res["success"]:
+                    res["created"] = next(it)
+            return self._json(results)
+        raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+
+    def _batch(self, items: list[Any], all_or_none: bool, op: Any) -> list[dict[str, Any]]:
+        snapshot = (
+            {k: {i: dict(r) for i, r in v.items()} for k, v in self.records.items()} if all_or_none else None
+        )
+        results: list[dict[str, Any]] = []
+        failed = False
+        for item in items:
+            try:
+                rid = op(item)
+                results.append({"id": rid, "success": True, "errors": []})
+            except Rejected as exc:
+                failed = True
+                results.append(
+                    {
+                        "id": None,
+                        "success": False,
+                        "errors": [{"statusCode": exc.code, "message": exc.message, "fields": exc.fields}],
+                    }
+                )
+        if all_or_none and failed and snapshot is not None:
+            self.records = snapshot
+            for res in results:
+                if res["success"]:
+                    res.update(
+                        id=None,
+                        success=False,
+                        errors=[
+                            {
+                                "statusCode": "ALL_OR_NONE_OPERATION_ROLLED_BACK",
+                                "message": "Record rolled back because not all records were valid "
+                                "and the request was using AllOrNone header",
+                                "fields": [],
+                            }
+                        ],
+                    )
+        return results
