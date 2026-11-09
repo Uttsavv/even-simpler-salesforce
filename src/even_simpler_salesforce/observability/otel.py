@@ -37,6 +37,7 @@ class OpenTelemetry:
         )
 
     def on_event(self, event: Event) -> None:
+        """Record a span and metrics for each ``sf.request`` event."""
         if event.name != "sf.request":
             return
         f = event.fields

@@ -29,6 +29,7 @@ class Summary:
         self.records_failed = 0
 
     def add(self, event: Event) -> None:
+        """Add one event to the roll-up (only ``sf.request`` and ``sf.auth.refreshed`` count)."""
         if event.name == "sf.auth.refreshed":
             if event.fields.get("initial"):
                 return  # first token acquisition is not a refresh

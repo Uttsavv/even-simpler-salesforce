@@ -33,6 +33,7 @@ class DebugPrinter:
         self.stream = stream
 
     def on_event(self, event: Event) -> None:
+        """Print a readable line for ``event``."""
         out = self.stream or sys.stderr
         f = event.fields
         if event.name == "sf.request":
