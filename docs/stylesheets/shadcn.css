@@ -395,13 +395,12 @@
   opacity: 0.9;
 }
 
-/* Two code windows side by side (FastAPI async, Flask sync); stacked below 76rem. */
+/* One code window; Async / Sync tabs in its bar switch between the two versions. */
 .esf-windows {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr);
   width: 100%;
-  max-width: 66rem;
+  max-width: 44rem;
   margin-top: 2.4rem;
   text-align: left;
 }
@@ -454,7 +453,7 @@
   padding: 1.2rem 1.2rem 1.3rem;
   overflow-x: auto;
   font-family: var(--md-code-font-family), ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 0.66rem;
+  font-size: 0.7rem;
   font-weight: 400;
   line-height: 1.7;
   font-feature-settings: "liga" 0, "calt" 0;
@@ -487,8 +486,7 @@
 .esf-window__code .c,
 .esf-window__code .c1 { color: var(--tok-comment); font-style: italic; }
 
-/* FastAPI / Flask switcher (shadcn Tabs look). Hidden on wide screens, where both windows
-   sit side by side; below 76em one window shows and its bar carries the switcher. */
+/* Async / Sync switcher (shadcn Tabs look). The radios sit before the windows. */
 .esf-tab-input {
   position: absolute;
   width: 1px;
@@ -503,7 +501,7 @@
 }
 
 .esf-tabs {
-  display: none;
+  display: inline-flex;
   align-items: center;
   height: 1.6rem;
   padding: 0.15rem;
@@ -532,42 +530,23 @@
   color: var(--hero-fg);
 }
 
-#esf-tab-fastapi:checked ~ .esf-windows .esf-tab--fastapi,
-#esf-tab-flask:checked ~ .esf-windows .esf-tab--flask {
+#esf-tab-async:checked ~ .esf-windows .esf-tab--async,
+#esf-tab-sync:checked ~ .esf-windows .esf-tab--sync {
   color: var(--hero-fg);
   background-color: var(--hero-window-bg);
   border-color: var(--hero-border);
   box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
 }
 
-#esf-tab-fastapi:focus-visible ~ .esf-windows .esf-tab--fastapi,
-#esf-tab-flask:focus-visible ~ .esf-windows .esf-tab--flask {
+#esf-tab-async:focus-visible ~ .esf-windows .esf-tab--async,
+#esf-tab-sync:focus-visible ~ .esf-windows .esf-tab--sync {
   outline: 2px solid var(--hero-muted);
   outline-offset: 1px;
 }
 
-@media screen and (max-width: 76em) {
-  .esf-windows {
-    grid-template-columns: minmax(0, 1fr);
-    max-width: 46rem;
-  }
-
-  .esf-tabs {
-    display: inline-flex;
-  }
-
-  .esf-window__label {
-    display: none;
-  }
-
-  #esf-tab-fastapi:checked ~ .esf-windows .esf-window--flask,
-  #esf-tab-flask:checked ~ .esf-windows .esf-window--fastapi {
-    display: none;
-  }
-
-  .esf-window__code {
-    font-size: 0.7rem;
-  }
+#esf-tab-async:checked ~ .esf-windows .esf-window--sync,
+#esf-tab-sync:checked ~ .esf-windows .esf-window--async {
+  display: none;
 }
 
 @media screen and (max-width: 44.9375em) {
@@ -691,4 +670,22 @@ a.md-header__title:focus {
 /* No logo in the drawer title either: the site name is enough. */
 .md-nav__title[for="__drawer"] .md-logo {
   display: none;
+}
+
+/* "Beyond simple-salesforce" table on the landing page: the row label is strong, the
+   simple-salesforce column is quiet, so the eye lands on the right-hand column. */
+.md-typeset .esf-compare table:not([class]) {
+  display: table;
+  width: 100%;
+  font-size: 0.72rem;
+}
+
+.md-typeset .esf-compare table:not([class]) td:first-child {
+  font-weight: 600;
+  color: var(--esf-fg);
+  white-space: nowrap;
+}
+
+.md-typeset .esf-compare table:not([class]) td:nth-child(2) {
+  color: var(--esf-muted-fg);
 }
