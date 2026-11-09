@@ -87,3 +87,11 @@ thresholds, pyright strictness or ruff rules to make a check pass.
 - No SOAP `login()`, no zeep, no attribute magic (D10). SOAP is used only internally for
   lead convert/merge (D14).
 - Core depends on httpx only; anything else is an optional extra (O7).
+
+## Licensing
+
+- This is an original Apache-2.0 implementation of our own spec and ideas. Never copy code,
+  docstrings or tests from projects with an incompatible or unclear licence (including
+  simple-salesforce and aiosalesforce). Read other libraries for behaviour only; write your own.
+- Third-party text that is compatible (e.g. the Contributor Covenant, CC BY 4.0) keeps its
+  attribution. If you are unsure about a source, don't use it; flag it in the PR instead.
