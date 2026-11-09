@@ -14,6 +14,7 @@ from . import jsonlib
 
 __all__ = [
     "GZIP_THRESHOLD",
+    "LOOPBACK_MOUNTS",
     "InvalidJSONResponse",
     "RawResponse",
     "RequestSpec",
@@ -210,6 +211,8 @@ def check_record_id(record_id: str) -> str:
 
 
 _LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+# httpx mount patterns for the same hosts (any port).
+LOOPBACK_MOUNTS = ("localhost", "127.0.0.1", "[::1]")
 
 
 def check_instance_url(url: str, *, what: str = "instance_url") -> str:

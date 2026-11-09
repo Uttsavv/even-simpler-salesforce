@@ -77,6 +77,94 @@ def test_describe_cache_miss_is_single_flight(mock: respx.MockRouter) -> None:
         h.close()
 
 
+def test_describe_cache_miss_is_single_flight_across_threads(mock: respx.MockRouter) -> None:
+    import threading
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    from ..conftest import Harness as _H
+
+    def slow(request: httpx.Request) -> httpx.Response:
+        time.sleep(0.05)  # keep the first fetch in flight while the other threads arrive
+        return httpx.Response(200, json=DESCRIBE)
+
+    h = _H("sync")
+    try:
+        route = mock.get(f"{DATA}/sobjects/Lead/describe").mock(side_effect=slow)
+        sf = h.client()
+        start = threading.Barrier(8)
+
+        def one(_: int) -> Any:
+            start.wait()
+            return sf.sobject("Lead").describe()
+
+        with ThreadPoolExecutor(8) as pool:
+            results = list(pool.map(one, range(8)))
+        assert all(r == DESCRIBE for r in results)
+        assert route.call_count == 1
+        assert sf._transport._flights == {}  # pyright: ignore[reportPrivateUsage]
+    finally:
+        h.close()
+
+
+def test_describe_locks_are_retired(h: Harness, mock: respx.MockRouter) -> None:
+    mock.get(f"{DATA}/sobjects/Lead/describe").respond(json=DESCRIBE)
+    mock.get(f"{DATA}/sobjects/Account/describe").respond(json=DESCRIBE)
+    sf = h.client()
+    h.run(sf.sobject("Lead").describe())
+    h.run(sf.sobject("Account").describe())
+    assert sf._transport._flights == {}  # pyright: ignore[reportPrivateUsage]
+
+
+# --- response decoding --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("content_type", "text"),
+    [
+        ("application/json", True),
+        ("application/json; charset=utf-8", True),
+        ("application/vnd.api+json", True),
+        ("application/atom+xml", True),
+        ("text/csv", True),
+        ("text/plain", True),
+        ("application/javascript", True),
+        ("application/octet-stream; charset=binary", True),
+        ("application/vnd.foo+xml-binary", False),
+        ("application/x-protobuf; foo=json", False),
+        ("application/octet-stream", False),
+        ("image/png", False),
+        ("application/pdf", False),
+    ],
+)
+def test_is_text_matches_media_types(content_type: str, text: bool) -> None:
+    from even_simpler_salesforce._async.client import _is_text  # pyright: ignore[reportPrivateUsage]
+
+    assert _is_text(content_type) is text
+
+
+# --- loopback http never goes through an environment proxy --------------------------------------
+
+
+@pytest.mark.parametrize("kind", ["async", "sync"])
+def test_loopback_http_bypasses_env_proxy(kind: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HTTP_PROXY", "http://proxy.invalid:3128")
+    monkeypatch.setenv("ALL_PROXY", "http://proxy.invalid:3128")
+    monkeypatch.delenv("NO_PROXY", raising=False)
+    monkeypatch.delenv("no_proxy", raising=False)
+    cls = esf.AsyncSalesforce if kind == "async" else esf.Salesforce
+    sf = cls(esf.StaticToken("00D!x", "http://localhost:8080"))
+    http = sf._transport.http  # pyright: ignore[reportPrivateUsage]
+
+    def via_proxy(url: str) -> bool:
+        t = http._transport_for_url(httpx.URL(url))  # pyright: ignore[reportPrivateUsage]
+        return "Proxy" in type(getattr(t, "_pool", None)).__name__
+
+    assert via_proxy("http://example.com/")  # the environment proxy is in effect...
+    for url in ("http://localhost:8080/x", "http://127.0.0.1/x", "http://[::1]:9/x"):
+        assert not via_proxy(url), url  # ...but never for loopback
+
+
 # --- per-identity state is bounded and cleaned up -----------------------------------------------
 
 

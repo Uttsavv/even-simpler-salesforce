@@ -6,11 +6,12 @@ auth → budget guard → concurrency gate → compress → send → parse limit
 
 from __future__ import annotations
 
+import contextlib
 import random
 import threading
 import time
 from collections import OrderedDict
-from collections.abc import Callable, Mapping
+from collections.abc import AsyncIterator, Callable, Mapping
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, TypeVar, cast
 
@@ -23,6 +24,7 @@ from ..core import jsonlib
 from ..core.classify import classify
 from ..core.http import (
     GZIP_THRESHOLD,
+    LOOPBACK_MOUNTS,
     RawResponse,
     RequestSpec,
     build_url,
@@ -138,6 +140,9 @@ class AsyncTransport:
                 limits=httpx.Limits(max_connections=50, max_keepalive_connections=20, keepalive_expiry=30.0),
                 http2=http2,
                 headers={"Accept-Encoding": "gzip, deflate"},
+                # Plain-http loopback (local proxies, test servers) always connects directly, so
+                # an HTTP_PROXY from the environment never sees a bearer token in cleartext.
+                mounts={f"http://{h}": httpx.AsyncHTTPTransport(http2=http2) for h in LOOPBACK_MOUNTS},
             )
             self.owns_http = True
         else:
@@ -167,6 +172,8 @@ class AsyncTransport:
         )
         self._locks: dict[str, Any] = {}
         self._locks_guard = threading.Lock()
+        # key -> [lock, holders + waiters]; dropped when the count reaches 0.
+        self._flights: dict[str, list[Any]] = {}
         self._deferred: list[tuple[str, dict[str, Any]]] = []
         self.sleep: Callable[[float], Any] = _compat.sleep
         self.now: Callable[[], datetime] = _utcnow
@@ -183,6 +190,26 @@ class AsyncTransport:
             if lock is None:
                 lock = self._locks[key] = _compat.Lock()
             return lock
+
+    @contextlib.asynccontextmanager
+    async def single_flight(self, key: str) -> AsyncIterator[None]:
+        """Serialise work for ``key``; the lock is retired once no caller holds or awaits it.
+
+        For keys with unbounded cardinality (describe per identity), unlike :meth:`lock_for`.
+        """
+        with self._locks_guard:
+            entry = self._flights.get(key)
+            if entry is None:
+                entry = self._flights[key] = [_compat.Lock(), 0]
+            entry[1] += 1
+        try:
+            async with entry[0]:
+                yield
+        finally:
+            with self._locks_guard:
+                entry[1] -= 1
+                if entry[1] == 0 and self._flights.get(key) is entry:
+                    del self._flights[key]
 
     def emit(self, name: str, fields: Mapping[str, Any]) -> None:
         event = self.hub.emit(name, fields)

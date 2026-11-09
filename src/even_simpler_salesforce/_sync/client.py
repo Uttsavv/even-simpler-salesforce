@@ -65,16 +65,19 @@ def _sobject_of(soql: str) -> str | None:
     return m.group(1) if m else None
 
 
+_TEXT_SUBTYPES = frozenset({"json", "xml", "javascript", "ecmascript", "x-www-form-urlencoded", "csv"})
+
+
 def _is_text(content_type: str) -> bool:
-    ct = content_type.lower()
-    return (
-        ct.startswith("text/")
-        or "charset=" in ct
-        or "json" in ct
-        or "xml" in ct
-        or "javascript" in ct
-        or "x-www-form-urlencoded" in ct
-    )
+    """Whether a body should be decoded: ``text/*``, JSON/XML (incl. ``+json``/``+xml``), or a charset."""
+    media, _, params = content_type.lower().partition(";")
+    if any(p.strip().startswith("charset=") for p in params.split(";")):
+        return True
+    kind, _, subtype = media.strip().partition("/")
+    if kind == "text":
+        return True
+    suffix = subtype.rpartition("+")[2]
+    return subtype in _TEXT_SUBTYPES or suffix in ("json", "xml")
 
 
 def _check_version(v: str) -> str:
@@ -310,7 +313,7 @@ class Salesforce:
         if not cached:
             return copy.deepcopy(self._describe_fetch(path, key, False, sobject))
         # Single flight: concurrent misses for one key wait for the first fetch, then hit the cache.
-        with t.lock_for(key):
+        with t.single_flight(key):
             return copy.deepcopy(self._describe_fetch(path, key, True, sobject))
 
     def _describe_fetch(self, path: str, key: str, cached: bool, sobject: str | None) -> Any:
