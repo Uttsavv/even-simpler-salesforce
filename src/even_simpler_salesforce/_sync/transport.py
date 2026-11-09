@@ -67,11 +67,30 @@ _V = TypeVar("_V")
 
 
 class LruDict(OrderedDict[_K, _V]):
-    """A dict that keeps at most ``maxsize`` entries, dropping the least recently used."""
+    """A dict that keeps at most ``maxsize`` entries, dropping the least recently used.
+
+    Keys held with :meth:`pin` are never dropped (the dict may exceed ``maxsize`` while
+    every candidate is pinned).
+    """
 
     def __init__(self, maxsize: int) -> None:
         super().__init__()
         self.maxsize = maxsize
+        self._pins: dict[_K, int] = {}
+        self._pins_guard = threading.Lock()
+
+    def pin(self, key: _K) -> None:
+        """Keep ``key`` (now, or once it is set) from being evicted until :meth:`unpin`. Counted."""
+        with self._pins_guard:
+            self._pins[key] = self._pins.get(key, 0) + 1
+
+    def unpin(self, key: _K) -> None:
+        with self._pins_guard:
+            n = self._pins.get(key, 0) - 1
+            if n > 0:
+                self._pins[key] = n
+            else:
+                self._pins.pop(key, None)
 
     def get(self, key: _K, default: Any = None) -> Any:  # pyright: ignore[reportIncompatibleMethodOverride]
         try:
@@ -87,11 +106,20 @@ class LruDict(OrderedDict[_K, _V]):
     def __setitem__(self, key: _K, value: _V) -> None:
         super().__setitem__(key, value)
         self.move_to_end(key)
-        while len(self) > self.maxsize:
-            try:
-                self.popitem(last=False)
-            except KeyError:  # pragma: no cover - emptied by another thread
-                break
+        excess = len(self) - self.maxsize
+        if excess <= 0:
+            return
+        victims: list[_K] = []
+        try:
+            for k in self:  # oldest first
+                if k != key and not self._pins.get(k):
+                    victims.append(k)
+                    if len(victims) >= excess:
+                        break
+        except RuntimeError:  # pragma: no cover - resized by another thread; evict next time
+            pass
+        for k in victims:
+            self.pop(k, None)
 
 
 class _AttemptFailed(Exception):
@@ -284,6 +312,8 @@ class Transport:
         failure: BaseException | None = None
         bytes_out = len(spec.content) if spec.content else 0
         bytes_in = 0
+        # A refresh failure this call may have to share must stay until the call ends.
+        self.refresh_outcomes.pin(runtime.key)
         try:
             self.usage.check(priority, operation=spec.operation)
             with self.gate if self.gate is not None else _compat.nullcontext():
@@ -345,6 +375,7 @@ class Transport:
             failure = exc
             raise
         finally:
+            self.refresh_outcomes.unpin(runtime.key)
             self._finish(
                 spec,
                 runtime,

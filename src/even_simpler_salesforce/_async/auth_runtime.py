@@ -114,6 +114,7 @@ class AsyncAuthRuntime:
                 error_code="INVALID_SESSION_ID",
                 status=401,
             )
+        self.transport.refresh_outcomes.pin(self.key)
         if entered is None:
             entered = self._generation()
         try:
@@ -126,6 +127,7 @@ class AsyncAuthRuntime:
                 self.transport.tokens[self.key] = new
                 return new
         finally:
+            self.transport.refresh_outcomes.unpin(self.key)
             self.transport.flush_deferred()
 
     async def set_token(self, token: Token) -> Token:
@@ -158,6 +160,7 @@ class AsyncAuthRuntime:
         if static is not None:
             self.transport.tokens.setdefault(self.key, static)
             return self.transport.tokens[self.key]
+        self.transport.refresh_outcomes.pin(self.key)
         entered = self._generation()
         try:
             async with self.transport.lock_for(self.key):
@@ -171,6 +174,7 @@ class AsyncAuthRuntime:
                 self.transport.tokens[self.key] = tok
                 return tok
         finally:
+            self.transport.refresh_outcomes.unpin(self.key)
             self.transport.flush_deferred()
 
     # Concurrent callers queue on the per-key lock while one of them refreshes. If that refresh
