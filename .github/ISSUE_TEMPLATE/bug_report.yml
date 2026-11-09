@@ -1,0 +1,55 @@
+name: Bug report
+description: Something does not work as documented.
+labels: [bug, triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. **Never paste access tokens, session IDs (`00D...!...`),
+        refresh tokens, client secrets, private keys or org-identifying data.**
+        Security issues go to a [private advisory](https://github.com/Uttsavv/even-simpler-salesforce/security/advisories/new).
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: Smallest code that shows the problem. Say whether you use `AsyncSalesforce` or `Salesforce`.
+      render: python
+    validations:
+      required: true
+  - type: textarea
+    id: traceback
+    attributes:
+      label: Traceback / error output
+      description: Full traceback. `ESF_DEBUG=1` output helps (secrets are redacted, but check anyway).
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: even-simpler-salesforce version
+      placeholder: "python -c 'import even_simpler_salesforce as e; print(e.__version__)'"
+    validations:
+      required: true
+  - type: input
+    id: python
+    attributes:
+      label: Python version and OS
+      placeholder: "3.12.7 on Ubuntu 24.04"
+    validations:
+      required: true
+  - type: input
+    id: api
+    attributes:
+      label: Salesforce API version and auth flow
+      placeholder: "v68.0, ClientCredentials"
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: httpx version, installed extras, framework (FastAPI/Flask), etc.

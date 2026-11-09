@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/Uttsavv/even-simpler-salesforce/security/advisories/new
+    about: Report security issues privately. Please do not open a public issue.
+  - name: Question / usage help
+    url: https://github.com/Uttsavv/even-simpler-salesforce/discussions
+    about: Ask questions and share ideas in Discussions.
+  - name: Documentation
+    url: https://uttsavv.github.io/even-simpler-salesforce/
+    about: Read the docs first; many answers are there.
