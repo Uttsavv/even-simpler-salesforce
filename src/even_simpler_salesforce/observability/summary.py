@@ -29,6 +29,8 @@ class Summary:
 
     def add(self, event: Event) -> None:
         if event.name == "sf.auth.refreshed":
+            if event.fields.get("initial"):
+                return  # first token acquisition is not a refresh
             with self._lock:
                 self.refreshed = True
             return

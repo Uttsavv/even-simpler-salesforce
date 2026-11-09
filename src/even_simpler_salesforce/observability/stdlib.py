@@ -22,7 +22,11 @@ class StdlibLogging:
 
     def on_event(self, event: Event) -> None:
         f = event.fields
-        level = logging.WARNING if f.get("outcome") == "error" or event.name.endswith("reauth_required") else self.level
+        level = (
+            logging.WARNING
+            if f.get("outcome") == "error" or event.name.endswith("reauth_required")
+            else self.level
+        )
         if not self.logger.isEnabledFor(level):
             return
         flat = " ".join(f"{k}={v}" for k, v in f.items() if v is not None and v != [] and v != {})
