@@ -43,15 +43,13 @@ def _sync(session: nox.Session, *extra: str) -> None:
 def tests(session: nox.Session) -> None:
     """Unit + contract (+ docs) tests with branch coverage."""
     _sync(session, f"--python={session.python}")
-    args = session.posargs or ["tests", "-m", "not sandbox"]
-    session.run(
-        "pytest",
-        "--cov",
-        "--cov-report=term-missing",
-        "--cov-report=xml",
-        *args,
-        env={"COVERAGE_FILE": f".coverage.{session.python}"},
-    )
+    args = session.posargs or ["tests", "examples", "-m", "not sandbox"]
+    env = {"COVERAGE_FILE": f".coverage.{session.python}"}
+    # `coverage run` (not `pytest --cov`): the pytest11 plugin imports the package before
+    # pytest-cov starts, which would hide module-level lines from coverage.
+    session.run("coverage", "run", "-m", "pytest", *args, env=env)
+    session.run("coverage", "report", env=env)
+    session.run("coverage", "xml", env=env)
 
 
 @nox.session(python="3.12")
