@@ -317,3 +317,40 @@ def test_call_context_nesting() -> None:
             assert (c2.caller, c2.priority) == ("route:/a", "low")
         assert current_call_context().priority == "high"
     assert current_call_context().priority is None
+
+
+def test_async_periodic_start_stop_idempotent(arun: Any) -> None:
+    from even_simpler_salesforce._async._compat import Periodic, gather_limited
+
+    calls: list[int] = []
+
+    async def fn() -> None:
+        calls.append(1)
+        raise RuntimeError("swallowed")
+
+    async def main() -> None:
+        p = Periodic(fn, 3600)
+        await p.stop()  # not started: no-op
+        p.start()
+        p.start()  # already running: no-op
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        await p.stop()
+        assert await gather_limited(1, []) == []
+
+    arun(main())
+    assert calls == [1]
+
+
+def test_sync_compat_helpers() -> None:
+    from even_simpler_salesforce._sync._compat import Periodic, gather_limited
+
+    assert gather_limited(4, [lambda: 1, lambda: 2, lambda: 3]) == [1, 2, 3]
+    assert gather_limited(1, [lambda: 1]) == [1]
+    done = threading.Event()
+    Periodic(done.set, 3600).stop()  # never started: no-op
+    p = Periodic(done.set, 3600)
+    p.start()
+    p.start()
+    assert done.wait(2)
+    p.stop()

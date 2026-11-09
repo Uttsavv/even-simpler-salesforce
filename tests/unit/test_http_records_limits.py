@@ -262,3 +262,31 @@ def test_apply_model() -> None:
     out = apply_model(rows, LeadPD)
     assert out[0].Id == "1"
     assert isinstance(out[0], LeadPD)
+
+
+def test_jsonlib_stdlib_backend(monkeypatch: pytest.MonkeyPatch) -> None:
+    import importlib
+    import sys
+
+    monkeypatch.setitem(sys.modules, "orjson", None)  # simulate the [speed] extra not installed
+    try:
+        mod = importlib.reload(jsonlib)
+        assert mod.BACKEND == "json"
+        assert json.loads(mod.dumps({"d": dt.date(2024, 1, 2)})) == {"d": "2024-01-02"}
+        assert mod.loads('{"a": 1}') == {"a": 1}
+    finally:
+        monkeypatch.undo()
+        importlib.reload(jsonlib)
+
+
+def test_invalid_json_is_unexpected_response_and_value_error() -> None:
+    from even_simpler_salesforce.core.http import InvalidJSONResponse
+
+    r = RawResponse(200, {"content-type": "text/html"}, b"<html/>")
+    with pytest.raises(esf.UnexpectedResponse) as ei:
+        r.json()
+    assert isinstance(ei.value, ValueError)
+    assert isinstance(ei.value, InvalidJSONResponse)
+    assert ei.value.status == 200
+    assert ei.value.raw == b"<html/>"
+    assert "text/html" in ei.value.message
