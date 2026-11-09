@@ -1,0 +1,10 @@
+{
+  "synthetic": true,
+  "source": "hand-written from Salesforce REST API Developer Guide examples",
+  "body": [
+    {
+      "message": "TotalRequests Limit exceeded.",
+      "errorCode": "REQUEST_LIMIT_EXCEEDED"
+    }
+  ]
+}

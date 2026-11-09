@@ -408,7 +408,10 @@ class AsyncSalesforce:
     async def count(self, soql: str) -> int:
         """Run ``SELECT COUNT() ...`` and return ``totalSize``."""
         body: Any = await self._query_body(soql, None, False)
-        return int(body.get("totalSize", 0))
+        total: Any = cast("dict[str, Any]", body).get("totalSize") if isinstance(body, dict) else None
+        if not isinstance(total, int) or isinstance(total, bool):
+            raise UnexpectedResponse("unexpected COUNT() response shape", raw=repr(body)[:4096])  # pyright: ignore[reportUnknownArgumentType]
+        return total
 
     async def search(self, sosl: str) -> list[dict[str, Any]]:
         """``GET search?q=``. Returns the matching records."""
@@ -480,8 +483,11 @@ class AsyncSalesforce:
         if json is not None:
             content, ctype = self._transport.encode(json)
         h = dict(headers or {})
-        if content is not None and ctype is None:
-            ctype = h.pop("Content-Type", None) or "application/octet-stream"
+        # Header names are case-insensitive: a Content-Type the caller passes (in any spelling)
+        # replaces the default instead of being sent alongside it.
+        given = [h.pop(k) for k in [k for k in h if k.lower() == "content-type"]]
+        if content is not None:
+            ctype = (given[-1] if given else None) or ctype or "application/octet-stream"
         raw = await self._send(
             RequestSpec(
                 method.upper(),

@@ -1,0 +1,22 @@
+{
+  "synthetic": true,
+  "source": "hand-written from Salesforce REST API Developer Guide examples",
+  "body": {
+    "name": "Lead",
+    "label": "Lead",
+    "fields": [
+      {
+        "name": "Id",
+        "type": "id"
+      },
+      {
+        "name": "LastName",
+        "type": "string",
+        "length": 80
+      }
+    ],
+    "urls": {
+      "describe": "/services/data/v68.0/sobjects/Lead/describe"
+    }
+  }
+}

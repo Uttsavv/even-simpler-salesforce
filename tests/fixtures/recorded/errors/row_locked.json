@@ -1,0 +1,11 @@
+{
+  "synthetic": true,
+  "source": "hand-written from Salesforce REST API Developer Guide examples",
+  "body": [
+    {
+      "message": "unable to obtain exclusive access to this record",
+      "errorCode": "UNABLE_TO_LOCK_ROW",
+      "fields": []
+    }
+  ]
+}

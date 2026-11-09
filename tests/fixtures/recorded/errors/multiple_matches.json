@@ -1,0 +1,8 @@
+{
+  "synthetic": true,
+  "source": "hand-written from Salesforce REST API Developer Guide examples (HTTP 300)",
+  "body": [
+    "/services/data/v68.0/sobjects/Account/001xx0000000001AAA",
+    "/services/data/v68.0/sobjects/Account/001xx0000000002AAA"
+  ]
+}

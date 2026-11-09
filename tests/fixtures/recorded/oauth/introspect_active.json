@@ -1,0 +1,15 @@
+{
+  "synthetic": true,
+  "source": "RFC 7662 / Salesforce introspection help page",
+  "body": {
+    "active": true,
+    "scope": "api refresh_token",
+    "client_id": "cid-web",
+    "username": "user@example.com",
+    "sub": "https://login.salesforce.com/id/00Dxx0000000001EAA/005xx0000000001AAA",
+    "token_type": "access_token",
+    "exp": 1893456000,
+    "iat": 1893448800,
+    "nbf": 1893448800
+  }
+}
