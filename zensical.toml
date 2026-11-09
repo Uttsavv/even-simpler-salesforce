@@ -56,6 +56,7 @@ nav = [
   ] },
   { "Testing" = "testing.md" },
   { "Migrating from simple-salesforce" = "migrating-from-simple-salesforce.md" },
+  { "Salesforce dependency index" = "salesforce-dependencies.md" },
   { "Reference" = "reference/index.md" },
   { "Changelog" = "changelog.md" },
   { "ADRs" = "adr/index.md" },
