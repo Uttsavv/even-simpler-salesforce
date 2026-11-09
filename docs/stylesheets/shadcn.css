@@ -1,8 +1,7 @@
 /*
  * shadcn/ui-inspired look for the Zensical "modern" variant.
- * Zinc neutrals, 1px hairline borders, 0.5rem radius, Geist type, no coloured chrome.
- * Only CSS custom properties and a few component rules; no template changes needed
- * (except overrides/home.html for the landing hero).
+ * Zinc neutrals, 1px hairline borders, 0.5rem radius, Geist text, JetBrains Mono code.
+ * The header is left to the theme. overrides/home.html adds the landing hero.
  */
 
 /* ---- tokens ------------------------------------------------------------------- */
@@ -112,33 +111,6 @@
   --md-code-hl-comment-color: #71717a;
 }
 
-/* ---- header ------------------------------------------------------------------- */
-
-.md-header {
-  background-color: color-mix(in srgb, var(--esf-bg) 80%, transparent);
-  color: var(--esf-fg);
-  border-bottom: 1px solid var(--esf-border);
-  box-shadow: none;
-  backdrop-filter: saturate(180%) blur(8px);
-  -webkit-backdrop-filter: saturate(180%) blur(8px);
-}
-
-.md-header__title {
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-
-.md-search__form {
-  background-color: transparent;
-  border: 1px solid var(--esf-border);
-  border-radius: var(--esf-radius);
-  box-shadow: none;
-}
-
-.md-search__form:hover {
-  background-color: var(--esf-muted);
-}
-
 /* ---- sidebar navigation ------------------------------------------------------- */
 
 .md-nav__link {
@@ -167,6 +139,30 @@
 }
 
 /* ---- content -------------------------------------------------------------------- */
+
+.md-typeset {
+  line-height: 1.75;
+}
+
+.md-typeset p,
+.md-typeset li {
+  max-width: 46rem;
+}
+
+/* No ligatures in code: "->" and "!=" stay as typed. */
+.md-typeset code,
+.md-typeset kbd,
+.md-typeset pre {
+  font-feature-settings: "liga" 0, "calt" 0;
+}
+
+.md-typeset pre > code {
+  line-height: 1.7;
+}
+
+.md-typeset table:not([class]) {
+  line-height: 1.5;
+}
 
 .md-typeset h1,
 .md-typeset h2,
@@ -240,34 +236,62 @@
 
 /* ---- landing hero (overrides/home.html) ------------------------------------------- */
 
-/* The hero is always dark (in both colour schemes), like the README banner. */
-.esf-hero {
-  --hero-bg: #07070a;
+/* The hero follows the light/dark toggle. Colours live in variables per scheme. */
+:root,
+[data-md-color-scheme="default"] {
+  --hero-fg: #09090b;
+  --hero-muted: #52525b;
+  --hero-border: #e4e4e7;
+  --hero-glow-a: rgb(59 130 246 / 14%);
+  --hero-glow-b: rgb(139 92 246 / 12%);
+  --hero-window-bg: #fafafa;
+  --hero-window-bar: #f4f4f5;
+  --hero-window-shadow: 0 20px 40px -16px rgb(0 0 0 / 12%);
+  --hero-dot: #d4d4d8;
+  --hero-btn-bg: #ffffff;
+  --hero-btn-hover: #f4f4f5;
+  --hero-primary-bg: #09090b;
+  --hero-primary-fg: #fafafa;
+  --tok-text: #18181b;
+  --tok-keyword: #7c3aed;
+  --tok-function: #2563eb;
+  --tok-string: #15803d;
+  --tok-number: #c2410c;
+  --tok-punct: #52525b;
+  --tok-comment: #71717a;
+}
+
+[data-md-color-scheme="slate"] {
   --hero-fg: #fafafa;
   --hero-muted: #b4b4bd;
   --hero-border: rgb(255 255 255 / 10%);
-  --md-code-fg-color: #eeeff4;
-  --md-code-hl-name-color: #eeeff4;
-  --md-code-hl-variable-color: #eeeff4;
-  --md-code-hl-generic-color: #eeeff4;
-  --md-code-hl-keyword-color: #c792ea;
-  --md-code-hl-function-color: #82aaff;
-  --md-code-hl-string-color: #c3e88d;
-  --md-code-hl-number-color: #f78c6c;
-  --md-code-hl-constant-color: #f78c6c;
-  --md-code-hl-special-color: #89ddff;
-  --md-code-hl-operator-color: #a6accd;
-  --md-code-hl-punctuation-color: #a6accd;
-  --md-code-hl-comment-color: #8087a8;
-  position: relative;
-  overflow: hidden;
+  --hero-glow-a: rgb(37 99 235 / 40%);
+  --hero-glow-b: rgb(124 58 237 / 30%);
+  --hero-window-bg: #111218;
+  --hero-window-bar: rgb(255 255 255 / 3%);
+  --hero-window-shadow: 0 24px 60px -12px rgb(0 0 0 / 60%);
+  --hero-dot: rgb(255 255 255 / 16%);
+  --hero-btn-bg: rgb(255 255 255 / 4%);
+  --hero-btn-hover: rgb(255 255 255 / 10%);
+  --hero-primary-bg: #fafafa;
+  --hero-primary-fg: #09090b;
+  --tok-text: #eeeff4;
+  --tok-keyword: #c792ea;
+  --tok-function: #82aaff;
+  --tok-string: #c3e88d;
+  --tok-number: #f78c6c;
+  --tok-punct: #a6accd;
+  --tok-comment: #8087a8;
+}
+
+.esf-hero {
   padding: 4.5rem 0 3.5rem;
   color: var(--hero-fg);
-  color-scheme: dark;
   background:
-    radial-gradient(70% 60% at 0% 0%, rgb(37 99 235 / 50%), transparent 70%),
-    radial-gradient(60% 55% at 100% 100%, rgb(124 58 237 / 38%), transparent 70%),
-    var(--hero-bg);
+    radial-gradient(70% 60% at 0% 0%, var(--hero-glow-a), transparent 70%),
+    radial-gradient(60% 55% at 100% 100%, var(--hero-glow-b), transparent 70%),
+    var(--esf-bg);
+  border-bottom: 1px solid var(--esf-border);
 }
 
 .esf-hero__inner {
@@ -294,7 +318,7 @@
 }
 
 .esf-hero__accent {
-  background: linear-gradient(90deg, #60a5fa, #a78bfa);
+  background: linear-gradient(90deg, var(--esf-accent-a), var(--esf-accent-b));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -322,22 +346,22 @@
   color: var(--hero-fg);
   border: 1px solid var(--hero-border);
   border-radius: var(--esf-radius);
-  background-color: rgb(255 255 255 / 4%);
+  background-color: var(--hero-btn-bg);
   transition: background-color 0.15s, opacity 0.15s;
 }
 
 .esf-btn:hover,
 .esf-btn:focus {
   color: var(--hero-fg);
-  background-color: rgb(255 255 255 / 10%);
+  background-color: var(--hero-btn-hover);
 }
 
 .esf-btn--primary,
 .esf-btn--primary:hover,
 .esf-btn--primary:focus {
-  color: #09090b;
-  background-color: #fafafa;
-  border-color: #fafafa;
+  color: var(--hero-primary-fg);
+  background-color: var(--hero-primary-bg);
+  border-color: var(--hero-primary-bg);
 }
 
 .esf-btn--primary:hover {
@@ -350,7 +374,7 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
   width: 100%;
-  max-width: 68rem;
+  max-width: 66rem;
   margin-top: 2.4rem;
   text-align: left;
 }
@@ -360,8 +384,8 @@
   margin: 0;
   border: 1px solid var(--hero-border);
   border-radius: 0.75rem;
-  background-color: #111218;
-  box-shadow: 0 24px 60px -12px rgb(0 0 0 / 60%), 0 0 0 1px rgb(0 0 0 / 40%);
+  background-color: var(--hero-window-bg);
+  box-shadow: var(--hero-window-shadow);
   overflow: hidden;
 }
 
@@ -371,7 +395,7 @@
   justify-content: space-between;
   padding: 0.6rem 0.9rem;
   border-bottom: 1px solid var(--hero-border);
-  background-color: rgb(255 255 255 / 2%);
+  background-color: var(--hero-window-bar);
 }
 
 .esf-window__dots {
@@ -383,7 +407,7 @@
   width: 0.55rem;
   height: 0.55rem;
   border-radius: 50%;
-  background-color: rgb(255 255 255 / 16%);
+  background-color: var(--hero-dot);
 }
 
 .esf-window__label {
@@ -400,44 +424,46 @@
 
 .esf-window__code {
   margin: 0;
-  padding: 1.2rem 1.4rem 1.3rem;
+  padding: 1.2rem 1.2rem 1.3rem;
   overflow-x: auto;
-  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, "JetBrains Mono", Consolas, monospace;
-  font-size: 0.64rem;
+  font-family: var(--md-code-font-family), ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.66rem;
   font-weight: 400;
-  line-height: 1.65;
-  color: #eeeff4;
+  line-height: 1.7;
+  font-feature-settings: "liga" 0, "calt" 0;
+  color: var(--tok-text);
   background: none;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Token colours (Pygments classes), hero only: overrides the docs code palette. */
-.esf-hero .esf-window__code span { color: #eeeff4; }
-.esf-hero .esf-window__code .k,
-.esf-hero .esf-window__code .kn,
-.esf-hero .esf-window__code .kd,
-.esf-hero .esf-window__code .kc,
-.esf-hero .esf-window__code .ow { color: #c792ea; }
-.esf-hero .esf-window__code .nf,
-.esf-hero .esf-window__code .nb,
-.esf-hero .esf-window__code .fm { color: #82aaff; }
-.esf-hero .esf-window__code .s,
-.esf-hero .esf-window__code .s1,
-.esf-hero .esf-window__code .s2,
-.esf-hero .esf-window__code .sa,
-.esf-hero .esf-window__code .si { color: #c3e88d; }
-.esf-hero .esf-window__code .mi,
-.esf-hero .esf-window__code .mf { color: #f78c6c; }
-.esf-hero .esf-window__code .o,
-.esf-hero .esf-window__code .p { color: #a6accd; }
-.esf-hero .esf-window__code .nd { color: #a6accd; }
-.esf-hero .esf-window__code .c,
-.esf-hero .esf-window__code .c1 { color: #8087a8; font-style: italic; }
+/* Token colours (Pygments classes), hero only. */
+.esf-window__code span { color: var(--tok-text); }
+.esf-window__code .k,
+.esf-window__code .kn,
+.esf-window__code .kd,
+.esf-window__code .kc,
+.esf-window__code .ow { color: var(--tok-keyword); }
+.esf-window__code .nf,
+.esf-window__code .nb,
+.esf-window__code .fm,
+.esf-window__code .vm { color: var(--tok-function); }
+.esf-window__code .s,
+.esf-window__code .s1,
+.esf-window__code .s2,
+.esf-window__code .sa,
+.esf-window__code .si { color: var(--tok-string); }
+.esf-window__code .mi,
+.esf-window__code .mf { color: var(--tok-number); }
+.esf-window__code .o,
+.esf-window__code .p,
+.esf-window__code .nd { color: var(--tok-punct); }
+.esf-window__code .c,
+.esf-window__code .c1 { color: var(--tok-comment); font-style: italic; }
 
 @media screen and (max-width: 76em) {
   .esf-windows {
     grid-template-columns: minmax(0, 1fr);
-    max-width: 44rem;
+    max-width: 46rem;
   }
 
   .esf-window__code {
@@ -477,8 +503,4 @@
 /* palette.css sets link colours per primary colour with a more specific selector. */
 [data-md-color-scheme][data-md-color-primary] {
   --md-typeset-a-color: var(--esf-fg);
-}
-
-.md-search__input {
-  background-color: transparent;
 }
