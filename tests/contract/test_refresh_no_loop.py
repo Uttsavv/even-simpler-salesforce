@@ -239,13 +239,28 @@ def test_concurrent_initial_acquisition_shares_one_failure(
     h: Harness, mock: respx.MockRouter, failure: httpx.Response
 ) -> None:
     api = Counter(httpx.Response(200, json={}))
-    endpoint = Counter(failure)
+    started = Counter()
+
+    def all_waiting() -> bool:
+        # Threads: hold the token response until every caller has started (plus a moment to
+        # reach the lock), so none arrives after the failure and legitimately tries again.
+        if started.count < N:
+            return False
+        time.sleep(0.05)
+        return True
+
+    endpoint = Counter(failure, wait_for=None if h.is_async else all_waiting)
     mock.get(URL).mock(side_effect=api)
     mock.post(TOKEN_URL).mock(side_effect=endpoint)
     sf = h.client(cc_auth(), token=False)
     slow_transport(h, sf, 0.01)
 
-    results = outcomes(h, [sf.limits for _ in range(N)])
+    def call() -> Any:
+        with started.lock:
+            started.count += 1
+        return sf.limits()
+
+    results = outcomes(h, [call if not h.is_async else sf.limits for _ in range(N)])
 
     assert all(isinstance(r, esf.AuthError) for r in results), results
     assert endpoint.count == 1
