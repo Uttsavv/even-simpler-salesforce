@@ -123,7 +123,7 @@ except esf.PartialFailure as exc:
         if not res.ok and res.errors[0].extended.get("outcome") == "unknown"
     ]
     print(f"{len(unknown)} rows may or may not exist; check before re-sending them")
-print(len(result.ok))
+print(len(result.succeeded))
 ```
 
 `extended["chunk_error"]` holds the name of the exception class. `PartialFailure.__cause__` is
@@ -185,7 +185,7 @@ call. To change it for the client, set `sf.collections.concurrency = 8`.
 
 ```python
 result = await sf.collections.update(
-    "Lead", [{"Id": r.id, "Rating": "Warm"} for r in created.ok], concurrency=2
+    "Lead", [{"Id": r.id, "Rating": "Warm"} for r in created.succeeded], concurrency=2
 )
 print(len(result))
 await sf.aclose()
