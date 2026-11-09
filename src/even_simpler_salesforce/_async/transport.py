@@ -11,7 +11,7 @@ import threading
 import time
 from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import httpx
 
@@ -51,6 +51,10 @@ class _AttemptFailed(Exception):
     def __init__(self, error: TransportError, sent: bool) -> None:
         self.error = error
         self.sent = sent
+
+
+def _failed_row(item: Any) -> bool:
+    return isinstance(item, dict) and cast("dict[str, Any]", item).get("success") is False
 
 
 def _utcnow() -> datetime:
@@ -348,6 +352,7 @@ class AsyncTransport:
         used, mx = self.usage.latest()
         error = failure if isinstance(failure, SalesforceError) else None
         records = spec.records
+        records_failed: int | None = None
         if failure is None and raw is not None and raw.is_json:
             try:
                 body = raw.json()
@@ -355,8 +360,12 @@ class AsyncTransport:
                 body = None
             if isinstance(body, dict) and isinstance(body.get("records"), list):  # pyright: ignore[reportUnknownMemberType]
                 records = len(body["records"])  # pyright: ignore[reportUnknownArgumentType]
-            elif isinstance(body, list) and spec.records is None:
-                records = len(body)  # pyright: ignore[reportUnknownArgumentType]
+            elif isinstance(body, list):
+                items = cast("list[Any]", body)
+                if spec.records is None:
+                    records = len(items)
+                if spec.operation.startswith("collections."):
+                    records_failed = sum(1 for x in items if _failed_row(x))
         fields: dict[str, Any] = {
             "operation": spec.operation,
             "sobject": spec.sobject,
@@ -372,6 +381,7 @@ class AsyncTransport:
             "retry_reasons": reasons,
             "refreshed": refreshed,
             "records": records,
+            "records_failed": records_failed,
             "bytes_in": bytes_in,
             "bytes_out": bytes_out,
             "api_used": used,

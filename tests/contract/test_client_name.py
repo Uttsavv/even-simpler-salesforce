@@ -34,3 +34,27 @@ def test_request_get_never_sends_a_body(h: Harness, method: str) -> None:
         h.run(sf.request(method, "x", json={"a": 1}))
     with pytest.raises(ValueError, match="body"):
         h.run(sf.request(method, "x", content=b"a"))
+
+
+def test_collections_event_counts_failed_records(h: Harness, mock: respx.MockRouter) -> None:
+    """Partial failures show up in logs even if raise_for_errors() is never called (D28, #817)."""
+    import even_simpler_salesforce as esf
+
+    from ..conftest import Recorder
+
+    mock.post(f"{DATA}/composite/sobjects").respond(
+        json=[
+            {"id": "001000000000001AAA", "success": True, "errors": []},
+            {
+                "success": False,
+                "errors": [{"statusCode": "REQUIRED_FIELD_MISSING", "message": "x", "fields": []}],
+            },
+        ]
+    )
+    rec = Recorder()
+    sf = h.client(recorder=rec)
+    with esf.capture() as summary:
+        res = h.run(sf.collections.create([{"Name": "a"}, {}], sobject="Account"))
+    assert len(res.failed) == 1
+    assert rec.requests[-1]["records_failed"] == 1
+    assert summary.as_fields()["sf_records_failed"] == 1

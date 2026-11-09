@@ -26,6 +26,7 @@ class Summary:
         self.api_used: int | None = None
         self.api_max: int | None = None
         self.ops: dict[str, int] = {}
+        self.records_failed = 0
 
     def add(self, event: Event) -> None:
         if event.name == "sf.auth.refreshed":
@@ -50,6 +51,7 @@ class Summary:
                 self.api_max = f.get("api_max")
             op = str(f.get("operation") or "raw")
             self.ops[op] = self.ops.get(op, 0) + 1
+            self.records_failed += int(f.get("records_failed") or 0)
 
     def as_fields(self) -> dict[str, Any]:
         """Flat fields for the app's own canonical log line."""
@@ -63,6 +65,7 @@ class Summary:
                 "sf_api_used": self.api_used,
                 "sf_api_max": self.api_max,
                 "sf_ops": dict(self.ops),
+                "sf_records_failed": self.records_failed,
             }
 
 

@@ -131,6 +131,7 @@ release since June 2024, has a single maintainer, and also lacks refresh-token f
 | D25 | The repo starts with only this file. |
 | D26 | Org automation: generic calls to invocable actions (standard, Flow, Apex) and Apex REST; `esf generate actions` produces typed stubs from an org; anonymous Apex lives under Tooling and only runs when called explicitly. Triggers cannot be called directly (they fire on DML). |
 | D27 | **Usage tracking:** read `Sforce-Limit-Info` on every response; counters by operation, object and caller; `sf.usage.snapshot()`; budget threshold events; optional guard that pauses low-priority callers; `/limits` polling opt-in. |
+| D28 | **Lessons from simple-salesforce's issue tracker** (482 issues analysed, 2026-11-09): every design-caused bug class there gets a guard test here, and the decisions below cite the issue numbers. Summary in §15.1. |
 
 ### 2.2 Resolved open questions
 
@@ -501,6 +502,13 @@ Rules:
 
 ### 7.1 Request pipeline (in order)
 
+**One path, one version.** Every request (REST, OAuth, and later Bulk, SOAP, Metadata, Files) goes
+through the transport, so refresh, timeouts, proxies and logging can't be skipped by a new API area
+(simple-salesforce #619, #686, #91). Every URL takes its API version from the client's pinned
+`api_version`, including the SOAP endpoint used for convert/merge (D14); no version is ever
+hard-coded (#506, #78, #268). Both rules are enforced by an AST test (`tests/unit/test_architecture.py`).
+
+
 1. **Build**: absolute URL from `instance_url` + `/services/data/v{api_version}/...` unless the spec says otherwise (OAuth, Apex REST `/services/apexrest`, SOAP `/services/Soap/u/{v}`, Pub/Sub host).
 2. **Auth**: attach `Authorization: Bearer <token>`.
 3. **Budget guard** (§10.4): may raise `BudgetExceeded` for low-priority calls.
@@ -523,6 +531,17 @@ streaming read with read-timeout per chunk. All overridable via `Timeouts` / inj
 
 Use `orjson` when the `[speed]` extra is installed, else stdlib `json`. Results are plain
 `dict`/`list` (never `OrderedDict`). Datetimes stay as Salesforce strings unless `model=` is used.
+
+Both backends MUST behave identically (implemented in `core/jsonlib.py`):
+
+- **NaN and ±Infinity are rejected** (`float` or `Decimal`, at any depth) with a `ValueError`
+  before anything is sent. orjson would send `null` and silently blank the field; the stdlib would
+  send `NaN`, which is not JSON (simple-salesforce #442, #309).
+- **`Decimal` is encoded as a JSON number** with its exact digits, never via `float` and never as a
+  string, so currency/percent values keep their precision on the way in (#135).
+- **Reading numbers as `Decimal`** is opt-in: pass `json=` a codec whose `loads` uses
+  `parse_float=decimal.Decimal` (stdlib). orjson can't parse to `Decimal`, so the default stays
+  `float`; docs show the codec. With `model=`, Pydantic `Decimal` fields are the recommended route.
 
 ### 7.4 Retry policy
 
@@ -685,6 +704,13 @@ Every area exists on both clients with identical names. Signatures below are asy
 | `updated(start, end)` / `deleted(start, end)` | `GET sobjects/{o}/updated|deleted` | |
 | `sf.describe_global(cached=True)` | `GET sobjects` | |
 
+**External id values in paths** are percent-encoded as one path segment (`url_segment`: space →
+`%20`, `/` → `%2F`, `+` → `%2B`; httpx keeps them as sent). `quote_plus` is never used (it turns
+spaces into `+`, which Salesforce reads literally; simple-salesforce #801). Values containing `.`
+(e.g. ending in `.json` or `.xml`) may be read by Salesforce as a format suffix (#22): ⚠️ **VERIFY**
+in a sandbox (V19); if confirmed, `get_by_external_id`/`upsert` fall back to a SOQL lookup or the
+Collections upsert for such values.
+
 Headers supported via keyword args: `assignment_rule_id`, `duplicate_rule_header`
 (`allow_save=True`), `if_modified_since`, `if_unmodified_since` → `Conflict` on 412.
 
@@ -726,6 +752,11 @@ which validates `^[A-Za-z][A-Za-z0-9_]*(__[a-z]+)?$` (dotted paths allowed).
 | `retrieve(sobject, ids, fields)` | `POST composite/sobjects/{o}` | chunks of 2000 |
 
 - Returns `BatchResult` (ordered as input): `.results: list[RecordResult(ok, id, created, errors)]`, `.ok`, `.failed`, `.raise_for_errors()` → `PartialFailure`.
+- **Failures can't go unnoticed** (simple-salesforce #817, #544, #502, #442): every
+  Collections `sf.request` event carries `records_failed`, so partial failures show up in logs and
+  the `capture()` roll-up even if the app never calls `raise_for_errors()`. A "never inspected"
+  warning from `__del__` was considered and rejected: it fires at unpredictable times (or never, on
+  interpreter exit), is noisy in tests, and can't name the call site.
 - Chunks run with bounded concurrency (`concurrency=4` default). With `all_or_none=True`, a single failing chunk raises a typed error; earlier chunks are **already committed**. This is documented prominently, and `all_or_none=True` with more than 200 rows logs a warning.
 
 ### 9.4 Composite family (0.3; `sf.request` in 0.1)
@@ -835,6 +866,23 @@ async for row in sf.bulk.query("SELECT Id, Name FROM Lead", parallel_downloads=4
     ...                                              # streams result locators, CSV → dict
 ```
 
+- **Parameter names match REST** (#510, #760): `sf.bulk.query(soql, include_deleted=False)` uses the
+  `queryAll` operation when `True`; iterators are named `*_iter` like `query_iter` where they are
+  plain iterators.
+- **Encoding** (#706, #710): uploads are sent as `Content-Type: text/csv; charset=UTF-8`; result
+  CSVs are always decoded as UTF-8, whatever charset httpx guesses.
+- **Nulls** (#309, #769): in Bulk 2.0 CSV an empty cell leaves the field unchanged and `#N/A` sets it
+  to null. Rows given as dicts map `None` → `#N/A` and a missing key → empty cell; a literal
+  string `"#N/A"` value is rejected with `ValueError` (ambiguous). ⚠️ **VERIFY** against the official
+  Bulk 2.0 docs and a sandbox (V18).
+- **Streaming uploads** (#738, #629): `rows=csv_path` and iterables are streamed in ≤ 100 MB parts;
+  the client never reads a whole file into memory before uploading. Benchmarks assert flat memory.
+- **Job states** (#517): states parse into an enum (`Open`, `UploadComplete`, `InProgress`,
+  `JobComplete`, `Failed`, `Aborted`). An unknown state raises `UnexpectedResponse` instead of being
+  polled forever, and `wait()` always has a timeout (default 3600 s).
+- **Compound fields** (#182): Bulk query rejects address and geolocation compound fields. The
+  client maps that job failure to `BulkJobFailed` with a hint naming the component fields, and
+  offers `sf.bulk.expand_compound_fields(sobject, fields)` (describe-based) to rewrite a field list.
 - Ingest uploads: one request may carry at most 150 MB **after** Salesforce's base64 conversion, so the client splits raw CSV at **100 MB** per job, as the docs advise. Gzip request compression is still applied on the wire.
 - Results are fetched with `?locator=&maxRecords=` using the **same API version that created the job**; a different version returns 409, so the job object pins its version.
 - Query results use `Sforce-Locator` pagination; with `parallel_downloads>1`, locators are fetched ahead with bounded concurrency while preserving order.
@@ -898,6 +946,12 @@ await sf.pubsub.publish("/event/Order_Event__e", [payload, ...])
 | `ApiTotalUsage` event log | per-app/per-user usage | needs Event Monitoring | out of scope (O15) |
 
 ### 10.2 Caller tags and priority
+
+**Integration name for admins** (#726): `AsyncSalesforce(..., client_name="acme-sync")` sends
+`Sforce-Call-Options: client=acme-sync` on every API call, so the org's API usage can be
+attributed to this integration on the Salesforce side. Opt-in; validated to
+`[A-Za-z0-9_.:-]{1,64}`. ⚠️ **VERIFY** where the `client` value shows up for admins (V20).
+
 
 `sf.tagged(caller="job:backfill", priority="low")` returns a child view whose calls carry those
 attributes (for counters, logs and the guard). Default `priority="normal"`. A contextvar alternative
@@ -1092,6 +1146,19 @@ One sync client per process, shared across threads; `teardown_appcontext` emits 
 
 Coverage gate: **≥ 90 % lines and branches** overall, **100 %** for `core/` and `errors.py`.
 
+### 15.1 Guard tests from simple-salesforce's issue history (D28)
+
+| Guard | Protects against | simple-salesforce issues |
+|---|---|---|
+| Both JSON backends reject NaN/±Inf; `Decimal` is an exact number | fields silently blanked; precision loss | #442, #309, #135 |
+| Every exception class pickles, `str()`s and keeps its fields; odd error bodies never raise `KeyError` | Celery/multiprocessing breakage; crashes while building an error | #208, #827, #794, #791, #768 |
+| Refresh happens at most once per call; token-endpoint 401/`invalid_grant` never triggers another refresh | infinite refresh recursion | #569, #804, #709 |
+| AST test: only the transport imports httpx and sends requests; no hard-coded API versions | API areas that skip refresh/timeouts/proxies/logging; stale versions | #619, #686, #91, #523, #148, #726, #506, #78, #268 |
+| Property tests for every chunker (Collections 200/2000, Bulk 100 MB) | off-by-one chunking, lost or duplicated rows | #590, #693, #739, #280 |
+| Snapshot of public result types | return shapes changing in minor releases | #469, #557 |
+| `sf.request`: any 2xx is success, 204/empty → `None`, non-JSON → text, GET never sends a body, no `X-PrettyPrint` | crashes on valid responses | #146, #122, #501, #386, #596 |
+| Wheel smoke test in CI (build, clean venv, import, one call) | files missing from the published package | #533, #641, #437, #715 |
+
 ---
 
 ## 16. Documentation site
@@ -1255,8 +1322,11 @@ before the release named.
 | V15 | Zensical renders mkdocstrings API reference | first docs release | **Done** — Zensical *MkDocs plugins* compatibility page (native mkdocstrings; no gen-files; use autoapi/api-autonav) |
 | V16 | Pub/Sub host/port, auth metadata keys, flow control | 0.5 | **Done** — ports 443/7443, EU endpoint, `accesstoken`/`instanceurl`/`tenantid`, `num_requested` (default 100) |
 | V17 | Tooling `executeAnonymous` result fields | 0.3 | **Open** — the REST resource is documented (GET, API 29.0+, blocked from managed packages) but no result-field page was found; record a response in a sandbox |
+| V18 | Bulk 2.0 CSV: empty cell = unchanged, `#N/A` = null; UTF-8 handling | 0.3 | **Open** — official Bulk 2.0 docs + sandbox (simple-salesforce #309, #769, #706) |
+| V19 | External id values containing `.` (e.g. `x.json`) in `sobjects/{o}/{field}/{value}` are read as a format suffix | 0.1 | **Open** — sandbox (simple-salesforce #22) |
+| V20 | `Sforce-Call-Options: client=<name>` on REST calls: accepted on every resource, and where admins see it | 0.1 | **Open** — REST API headers reference + sandbox |
 
-Remaining open: V4, V5b, V11 (sandbox half), V17 — all need a sandbox, not more reading.
+Remaining open: V4, V5b, V11 (sandbox half), V17, V18, V19, V20 — all need a sandbox (V18/V20 also a docs check).
 
 Note: developer.salesforce.com blocks non-browser clients (403). In a real browser, each docs page
 has a Markdown version at the same path with `.md` instead of `.html` (fetch it from the page's
