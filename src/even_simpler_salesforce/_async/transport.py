@@ -294,6 +294,16 @@ class AsyncTransport:
         raw = RawResponse(response.status_code, response.headers, response.content, url, loads=self.loads)
         return raw, response.num_bytes_downloaded, len(content) if content else 0
 
+    @staticmethod
+    def _error_message(spec: RequestSpec, error: SalesforceError | None) -> str | None:
+        if error is None or not error.message:
+            return None
+        message = error.message
+        if spec.soql:
+            # MALFORMED_QUERY / INVALID_FIELD messages echo the query text, literals included.
+            message = redact_soql(message)
+        return message[:200]
+
     def _finish(
         self,
         spec: RequestSpec,
@@ -330,7 +340,7 @@ class AsyncTransport:
             "outcome": "error" if failure is not None else "ok",
             "error_code": error.error_code if error else None,
             "error_class": type(failure).__name__ if failure is not None else None,
-            "error_message": (error.message[:200] if error and error.message else None),
+            "error_message": self._error_message(spec, error),
             "duration_ms": round((time.perf_counter() - started) * 1000, 1),
             "attempts": attempts,
             "retry_reasons": reasons,
