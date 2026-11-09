@@ -1,0 +1,38 @@
+name: Feature request
+description: Suggest a new capability or API area.
+labels: [enhancement, triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check the [release plan](https://github.com/Uttsavv/even-simpler-salesforce/blob/main/big-bang.md#19-release-plan)
+        first: many Salesforce API areas are already scheduled for a specific 0.x release.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do, and why is it hard today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed API
+      description: How would you like to call it? A short code sketch helps.
+      render: python
+  - type: textarea
+    id: salesforce-docs
+    attributes:
+      label: Salesforce documentation
+      description: Links to the official Salesforce docs for the endpoint or behaviour involved.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: e.g. `sf.request(...)`, existing methods, workarounds.
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contribution
+      options:
+        - label: I am willing to open a pull request for this.
