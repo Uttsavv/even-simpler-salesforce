@@ -30,7 +30,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 VERSION_FILE = ROOT / "src" / "even_simpler_salesforce" / "_version.py"
-VERSION_LINE = re.compile(r'^__version__\s*=\s*["\']([^"\']+)["\']\s*$', re.MULTILINE)
+VERSION_LINE = re.compile(r'^__version__\s*=\s*["\']([^"\']+)["\'][ \t]*$', re.MULTILINE)
 
 # PEP 440 public version (no epoch, no local segment), canonical spelling only.
 PEP440 = re.compile(
