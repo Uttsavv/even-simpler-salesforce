@@ -98,7 +98,7 @@ what exists in **0.1**; rows for later releases are marked.
 | `SalesforceRefusedRequest` | `Forbidden` (or `RequestLimitExceeded` for `REQUEST_LIMIT_EXCEEDED`) |
 | `SalesforceMoreThanOneRecord` | `MultipleMatches` (`.matches`) |
 | `SalesforceGeneralError` | `ServerError`, `UnexpectedResponse`, or the class for the error code |
-| `SalesforceAuthenticationFailed` | `OAuthError` (`.error`, `.error_description`) |
+| `SalesforceAuthenticationFailed` | `AuthError` (what `esf migrate` writes); errors from the OAuth endpoint are its subclass `OAuthError` (`.error`, `.error_description`) |
 
 Every class above derives from `esf.SalesforceError`.
 

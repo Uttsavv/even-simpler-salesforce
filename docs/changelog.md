@@ -30,6 +30,16 @@ uvx towncrier build --draft --version Unreleased
 
 ## Released versions
 
-This section is empty until the first release, 0.1.0 (alpha).
+Final releases are compiled from the fragments into
+[`CHANGELOG.md`](https://github.com/Uttsavv/even-simpler-salesforce/blob/main/CHANGELOG.md),
+which is included below as-is.
+
+Pre-releases (`aN`, `bN`, `rcN`) keep their fragments in `changelog.d/`. Their notes are the
+towncrier draft that the release workflow attaches to the
+[GitHub Release](https://github.com/Uttsavv/even-simpler-salesforce/releases), and the same
+entries appear here under the final version once it ships. The 0.1.0 release candidates
+(starting with `v0.1.0rc1`, tagged on 2026-11-09) are in this state, so their changes are
+still listed as fragments, and nothing appears below until 0.1.0 final.
+`0.0.1` was a placeholder that reserved the PyPI name; it has no release notes.
 
 --8<-- "CHANGELOG.md:18:"

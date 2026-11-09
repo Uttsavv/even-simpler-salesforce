@@ -15,12 +15,12 @@ leads = sf.sobject("Lead")
 
 | Method | REST call | Returns |
 |---|---|---|
-| `get(id, fields=None, *, model=None, if_modified_since=None)` | `GET sobjects/{o}/{id}` | the record (`None` on `304`) |
+| `get(record_id, fields=None, *, model=None, if_modified_since=None)` | `GET sobjects/{o}/{id}` | the record (`None` on `304`) |
 | `get_by_external_id(field, value, fields=None, *, model=None)` | `GET sobjects/{o}/{field}/{value}` | the record |
 | `create(data, *, assignment_rule_id=None, allow_save=None)` | `POST sobjects/{o}` | the new id (`str`) |
-| `update(id, data, *, assignment_rule_id=None, allow_save=None, if_unmodified_since=None)` | `PATCH sobjects/{o}/{id}` | `None` |
+| `update(record_id, data, *, assignment_rule_id=None, allow_save=None, if_unmodified_since=None)` | `PATCH sobjects/{o}/{id}` | `None` |
 | `upsert(field, value, data, *, assignment_rule_id=None, allow_save=None)` | `PATCH sobjects/{o}/{field}/{value}` | `UpsertResult(id, created)` |
-| `delete(id, *, if_unmodified_since=None)` | `DELETE sobjects/{o}/{id}` | `None` |
+| `delete(record_id, *, if_unmodified_since=None)` | `DELETE sobjects/{o}/{id}` | `None` |
 | `describe(*, cached=True)` | `GET sobjects/{o}/describe` | describe `dict` (cached) |
 | `metadata()` | `GET sobjects/{o}` | basic info and recent items |
 | `updated(start, end)` / `deleted(start, end)` | `GET sobjects/{o}/updated/` / `deleted/` | ids changed or deleted in the window |
@@ -111,7 +111,8 @@ except esf.Conflict:
 
 ## Typed records (`model=`)
 
-`get`, `get_by_external_id`, `query`, `query_more` and `query_iter` take `model=`:
+`get`, `get_by_external_id`, `query`, `query_one`, `query_first`, `query_more` and `query_iter`
+take `model=`:
 
 - a **Pydantic** model (anything with `model_validate`) receives the whole record, including
   `attributes`, which Pydantic ignores by default;

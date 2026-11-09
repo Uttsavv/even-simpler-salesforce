@@ -1,7 +1,8 @@
 # Errors
 
-Every exception the library raises is an `esf.SalesforceError`, whichever Salesforce API
-produced it (REST, OAuth or Collections). All of them have the same attributes, so one
+Every error from Salesforce or the network is an `esf.SalesforceError`, whichever Salesforce
+API produced it (REST, OAuth or Collections). Invalid arguments raise `ValueError` /
+`TypeError` when you construct the object, before any request is made. All of them have the same attributes, so one
 `except` clause can log any of them.
 
 ```python
@@ -85,7 +86,7 @@ SalesforceError
 ├── LimitError
 │   ├── RequestLimitExceeded       REQUEST_LIMIT_EXCEEDED (403) or 429; .retry_after
 │   └── BudgetExceeded             the library's own budget guard; .usage
-├── ServerError                    500 / 502 / 503 / 504, SERVER_UNAVAILABLE
+├── ServerError                    420 and 5xx, SERVER_UNAVAILABLE
 ├── PartialFailure                 some records or chunks failed; .results
 ├── BulkJobFailed                  Bulk 2.0 job failed; .job_id, .state, .error_message   (used from 0.3)
 ├── ApexError                      APEX_ERROR, or an error from an Apex REST class; .body
@@ -216,7 +217,8 @@ flows and e-mails a second time. It could also turn the success into a false `Co
 `sf.request(..., idempotent=True)` for calls you know are safe to repeat.
 
 `exc.retryable` says whether an error is transient **in principle**: `True` for
-`TransportError`, `RowLocked` and 5xx `ServerError`s. It doesn't mean the library retried that
+`TransportError`, `RowLocked`, and `ServerError` / `UnexpectedResponse` with status 500, 502,
+503 or 504 (or `SERVER_UNAVAILABLE`). It doesn't mean the library retried that
 error. A write that timed out has `retryable=True`, but it is not resent. After the last
 attempt, the last error is raised. Each retry emits an `sf.retry` event, and the final
 `sf.request` event lists `attempts` and `retry_reasons`.

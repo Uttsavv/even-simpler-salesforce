@@ -59,6 +59,8 @@ only the async classes are shown in full.
 
 ::: even_simpler_salesforce.Cursor
 
+::: even_simpler_salesforce.flatten
+
 ## Results
 
 ::: even_simpler_salesforce.QueryResult
@@ -68,6 +70,10 @@ only the async classes are shown in full.
 ::: even_simpler_salesforce.RecordResult
 
 ::: even_simpler_salesforce.UpsertResult
+
+::: even_simpler_salesforce.QueryPlan
+
+::: even_simpler_salesforce.QueryPlanNote
 
 ::: even_simpler_salesforce.Limit
 
@@ -125,6 +131,16 @@ only the async classes are shown in full.
 ::: even_simpler_salesforce.testing.AsyncFakeSalesforce
     options:
       members: false
+
+::: even_simpler_salesforce.testing.FakeSObject
+
+::: even_simpler_salesforce.testing.AsyncFakeSObject
+
+::: even_simpler_salesforce.testing.FakeCollections
+
+::: even_simpler_salesforce.testing.AsyncFakeCollections
+
+::: even_simpler_salesforce.testing.key_prefix
 
 ::: even_simpler_salesforce.testing.FakeCall
 

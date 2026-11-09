@@ -137,6 +137,8 @@ second = await sf.query_more(first.cursor)  # or the string the browser sent bac
 print(len(first), len(second), second.done)
 ```
 
+`query_more()` also takes `page_size=` and `model=`, like `query()`.
+
 Pass `cursor_key=` to **sign** cursors with HMAC-SHA256. A signed cursor that was changed, or
 was signed with a different key, raises `esf.MalformedQuery` (`error_code="INVALID_CURSOR"`),
 and so does an unsigned cursor given to a client that expects signed ones:

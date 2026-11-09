@@ -8,7 +8,7 @@ esf whoami [--json]
 esf limits [--json]
 esf query "SELECT Id, Name FROM Lead LIMIT 10" [--json | --csv] [--all] [--include-deleted] [--page-size N]
 esf version
-esf migrate src/ [--write] [--report FILE] [--check] [--client-names NAME,...]
+esf migrate src/ [--write | --check] [--report FILE] [--client-names NAME,...] [--rules RULE,...] [--exclude GLOB,...]
 ```
 
 | Command | What it does | API calls |
@@ -61,3 +61,6 @@ esf whoami
 | `1` | Salesforce or API error (the exception class and message are printed to stderr) |
 | `2` | usage or configuration error (bad arguments, missing variables, invalid API version) |
 | `130` | interrupted (Ctrl-C) |
+
+`esf migrate` uses its own codes: `0` nothing left to do, `1` review/TODO items or pending
+rewrites remain, `2` error (see [esf migrate](migrate.md#options)).
