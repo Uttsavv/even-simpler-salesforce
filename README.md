@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src="https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/assets/banner.png" alt="even-simpler-salesforce: the Salesforce client your web app deserves." width="100%">
+  <img src="https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/assets/banner.png" alt="even-simpler-salesforce: async-first Salesforce on httpx. Skip the boilerplate." width="100%">
 </h1>
 
 <p align="center">

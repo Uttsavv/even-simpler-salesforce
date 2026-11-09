@@ -240,15 +240,34 @@
 
 /* ---- landing hero (overrides/home.html) ------------------------------------------- */
 
+/* The hero is always dark (in both colour schemes), like the README banner. */
 .esf-hero {
+  --hero-bg: #07070a;
+  --hero-fg: #fafafa;
+  --hero-muted: #b4b4bd;
+  --hero-border: rgb(255 255 255 / 10%);
+  --md-code-fg-color: #eeeff4;
+  --md-code-hl-name-color: #eeeff4;
+  --md-code-hl-variable-color: #eeeff4;
+  --md-code-hl-generic-color: #eeeff4;
+  --md-code-hl-keyword-color: #c792ea;
+  --md-code-hl-function-color: #82aaff;
+  --md-code-hl-string-color: #c3e88d;
+  --md-code-hl-number-color: #f78c6c;
+  --md-code-hl-constant-color: #f78c6c;
+  --md-code-hl-special-color: #89ddff;
+  --md-code-hl-operator-color: #a6accd;
+  --md-code-hl-punctuation-color: #a6accd;
+  --md-code-hl-comment-color: #8087a8;
   position: relative;
   overflow: hidden;
-  padding: 4.5rem 0 2.5rem;
-  border-bottom: 1px solid var(--esf-border);
+  padding: 4.5rem 0 3.5rem;
+  color: var(--hero-fg);
+  color-scheme: dark;
   background:
-    radial-gradient(60% 55% at 0% 0%, color-mix(in srgb, var(--esf-accent-a) 22%, transparent), transparent 70%),
-    radial-gradient(55% 50% at 100% 100%, color-mix(in srgb, var(--esf-accent-b) 20%, transparent), transparent 70%),
-    var(--esf-bg);
+    radial-gradient(70% 60% at 0% 0%, rgb(37 99 235 / 50%), transparent 70%),
+    radial-gradient(60% 55% at 100% 100%, rgb(124 58 237 / 38%), transparent 70%),
+    var(--hero-bg);
 }
 
 .esf-hero__inner {
@@ -256,7 +275,12 @@
   flex-direction: column;
   align-items: center;
   text-align: center;
-  padding: 0 1rem;
+  padding: 0 1.5rem;
+}
+
+.esf-hero__inner > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .esf-hero__title {
@@ -265,11 +289,12 @@
   font-weight: 700;
   letter-spacing: -0.04em;
   line-height: 1.1;
-  color: var(--esf-fg);
+  color: var(--hero-fg);
+  overflow-wrap: anywhere;
 }
 
 .esf-hero__accent {
-  background: linear-gradient(90deg, var(--esf-accent-a), var(--esf-accent-b));
+  background: linear-gradient(90deg, #60a5fa, #a78bfa);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -278,7 +303,7 @@
 .esf-hero__tagline {
   margin: 0.8rem 0 0;
   font-size: 0.95rem;
-  color: var(--esf-muted-fg);
+  color: var(--hero-muted);
 }
 
 .esf-hero__actions {
@@ -294,38 +319,49 @@
   padding: 0 0.9rem;
   font-size: 0.7rem;
   font-weight: 500;
-  color: var(--esf-fg);
-  border: 1px solid var(--esf-border);
+  color: var(--hero-fg);
+  border: 1px solid var(--hero-border);
   border-radius: var(--esf-radius);
-  background-color: var(--esf-bg);
+  background-color: rgb(255 255 255 / 4%);
   transition: background-color 0.15s, opacity 0.15s;
 }
 
-.esf-btn:hover {
-  color: var(--esf-fg);
-  background-color: var(--esf-muted);
+.esf-btn:hover,
+.esf-btn:focus {
+  color: var(--hero-fg);
+  background-color: rgb(255 255 255 / 10%);
 }
 
 .esf-btn--primary,
-.esf-btn--primary:hover {
-  color: var(--esf-bg);
-  background-color: var(--esf-fg);
-  border-color: var(--esf-fg);
+.esf-btn--primary:hover,
+.esf-btn--primary:focus {
+  color: #09090b;
+  background-color: #fafafa;
+  border-color: #fafafa;
 }
 
 .esf-btn--primary:hover {
   opacity: 0.9;
 }
 
-.esf-window {
+/* Two code windows side by side (FastAPI async, Flask sync); stacked below 76rem. */
+.esf-windows {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
   width: 100%;
-  max-width: 52rem;
-  margin: 2.2rem 0 0;
+  max-width: 68rem;
+  margin-top: 2.4rem;
   text-align: left;
-  border: 1px solid var(--esf-border);
+}
+
+.esf-window {
+  min-width: 0;
+  margin: 0;
+  border: 1px solid var(--hero-border);
   border-radius: 0.75rem;
-  background-color: color-mix(in srgb, var(--esf-code-bg) 92%, transparent);
-  box-shadow: var(--md-shadow-z3);
+  background-color: #111218;
+  box-shadow: 0 24px 60px -12px rgb(0 0 0 / 60%), 0 0 0 1px rgb(0 0 0 / 40%);
   overflow: hidden;
 }
 
@@ -333,47 +369,91 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.55rem 0.8rem;
-  border-bottom: 1px solid var(--esf-border);
+  padding: 0.6rem 0.9rem;
+  border-bottom: 1px solid var(--hero-border);
+  background-color: rgb(255 255 255 / 2%);
 }
 
 .esf-window__dots {
   display: flex;
-  gap: 0.3rem;
+  gap: 0.35rem;
 }
 
 .esf-window__dots i {
-  width: 0.5rem;
-  height: 0.5rem;
+  width: 0.55rem;
+  height: 0.55rem;
   border-radius: 50%;
-  background-color: var(--esf-border);
+  background-color: rgb(255 255 255 / 16%);
 }
 
 .esf-window__label {
-  font-size: 0.6rem;
+  font-size: 0.62rem;
   font-weight: 600;
-  color: var(--esf-fg);
+  color: var(--hero-fg);
 }
 
 .esf-window__label small {
-  margin-left: 0.25rem;
+  margin-left: 0.3rem;
   font-weight: 400;
-  color: var(--esf-muted-fg);
+  color: var(--hero-muted);
 }
 
 .esf-window__code {
   margin: 0;
-  padding: 1rem 1.2rem;
+  padding: 1.2rem 1.4rem 1.3rem;
   overflow-x: auto;
-  font-family: var(--md-code-font-family);
-  font-size: 0.68rem;
-  line-height: 1.6;
-  color: var(--md-code-hl-name-color, var(--md-code-fg-color));
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, "JetBrains Mono", Consolas, monospace;
+  font-size: 0.64rem;
+  font-weight: 400;
+  line-height: 1.65;
+  color: #eeeff4;
   background: none;
+  -webkit-font-smoothing: antialiased;
 }
 
-.esf-window__code .c1 {
-  font-style: italic;
+/* Token colours (Pygments classes), hero only: overrides the docs code palette. */
+.esf-hero .esf-window__code span { color: #eeeff4; }
+.esf-hero .esf-window__code .k,
+.esf-hero .esf-window__code .kn,
+.esf-hero .esf-window__code .kd,
+.esf-hero .esf-window__code .kc,
+.esf-hero .esf-window__code .ow { color: #c792ea; }
+.esf-hero .esf-window__code .nf,
+.esf-hero .esf-window__code .nb,
+.esf-hero .esf-window__code .fm { color: #82aaff; }
+.esf-hero .esf-window__code .s,
+.esf-hero .esf-window__code .s1,
+.esf-hero .esf-window__code .s2,
+.esf-hero .esf-window__code .sa,
+.esf-hero .esf-window__code .si { color: #c3e88d; }
+.esf-hero .esf-window__code .mi,
+.esf-hero .esf-window__code .mf { color: #f78c6c; }
+.esf-hero .esf-window__code .o,
+.esf-hero .esf-window__code .p { color: #a6accd; }
+.esf-hero .esf-window__code .nd { color: #a6accd; }
+.esf-hero .esf-window__code .c,
+.esf-hero .esf-window__code .c1 { color: #8087a8; font-style: italic; }
+
+@media screen and (max-width: 76em) {
+  .esf-windows {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 44rem;
+  }
+
+  .esf-window__code {
+    font-size: 0.7rem;
+  }
+}
+
+@media screen and (max-width: 44.9375em) {
+  .esf-hero {
+    padding: 2.5rem 0 2rem;
+  }
+
+  .esf-window__code {
+    font-size: 0.64rem;
+    padding: 1rem;
+  }
 }
 
 /* Feature cards on the landing page (grid cards from md_in_html). */
@@ -401,24 +481,4 @@
 
 .md-search__input {
   background-color: transparent;
-}
-
-/* Keep the hero inside narrow viewports: the code scrolls, the page does not. */
-.esf-hero__inner > * {
-  min-width: 0;
-  max-width: 100%;
-}
-
-.esf-hero__title {
-  overflow-wrap: anywhere;
-}
-
-@media screen and (max-width: 44.9375em) {
-  .esf-hero {
-    padding-top: 2.5rem;
-  }
-
-  .esf-window__code {
-    font-size: 0.6rem;
-  }
 }

@@ -1,5 +1,25 @@
 # Getting started
 
+## Project status
+
+!!! warning "Project status: alpha (0.1)"
+    Breaking changes are possible in 0.x minor releases. They are always listed under
+    *Changed* / *Removed* in the [changelog](changelog.md) with migration notes.
+
+    So far the library has been tested against **one production org** only:
+
+    | Tested on | |
+    |---|---|
+    | Edition | _TBD_ |
+    | API version | 68.0 (library default) |
+    | Auth flows exercised | _TBD_ |
+
+    If you can run it against another edition, a sandbox, a scratch org or another login
+    setup, please share your results by opening an
+    [issue or pull request](https://github.com/Uttsavv/even-simpler-salesforce).
+
+
+
 ## Requirements
 
 - Python 3.10 or newer.

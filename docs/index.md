@@ -7,14 +7,6 @@ hide:
 
 # even-simpler-salesforce
 
-A typed Salesforce client for Python. It is async-first, and a sync client with the same
-methods is generated from the async code. Both are built on [httpx](https://www.python-httpx.org/).
-Every call goes through one request pipeline: a token, the budget guard and concurrency limit,
-usage tracking, typed errors, one refresh on an expired session, retries only when they are
-safe, and one log event. [`sf.request()`](guides/requests.md) uses the same pipeline.
-
-## What you get
-
 <div class="grid cards" markdown>
 
 -   **Login flows as config objects**
@@ -63,41 +55,6 @@ safe, and one log event. [`sf.request()`](guides/requests.md) uses the same pipe
 
 </div>
 
-!!! warning "Project status: alpha (0.1)"
-    Breaking changes are possible in 0.x minor releases. They are always listed under
-    *Changed* / *Removed* in the [changelog](changelog.md) with migration notes.
-
-    So far the library has been tested against **one production org** only:
-
-    | Tested on | |
-    |---|---|
-    | Edition | _TBD_ |
-    | API version | 68.0 (library default) |
-    | Auth flows exercised | _TBD_ |
-
-    If you can run it against another edition, a sandbox, a scratch org or another login
-    setup, please share your results by opening an
-    [issue or pull request](https://github.com/Uttsavv/even-simpler-salesforce).
-
-## Where to go next
-
-| If you want to… | Read |
-|---|---|
-| install and make a first call | [Getting started](getting-started.md) |
-| create the External Client App in Salesforce | [Salesforce setup](authentication/salesforce-setup.md) |
-| pick a login flow | [Authentication](authentication/index.md) |
-| move an existing simple-salesforce codebase | [Migrating from simple-salesforce](migrating-from-simple-salesforce.md) |
-| look up a signature | [Reference](reference/index.md) |
-
-## What is in 0.1
-
-0.1 covers the clients, authentication, records, query and search, Collections, raw requests,
-`limits()`, usage tracking, observability, the testing module and the [CLI](cli.md). The
-remaining API areas (Composite, GraphQL, Bulk API 2.0, files, actions, Apex REST helpers, lead
-convert and merge, platform events, Tooling, UI API, reports, Metadata and Pub/Sub) and the
-FastAPI and Flask integrations are planned for later 0.x releases. Each of them has a page in the
-navigation that says which release it is planned for.
-
----
-
-Not affiliated with or endorsed by Salesforce, Inc. Licensed under the Apache License 2.0.
+!!! note "Alpha (0.1)"
+    Breaking changes are possible in 0.x releases. See the
+    [project status](getting-started.md#project-status) for what is covered and where it has been tested.
