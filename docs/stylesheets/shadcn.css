@@ -368,13 +368,20 @@
   opacity: 0.9;
 }
 
-/* One code window with a FastAPI / Flask switcher in its title bar (CSS-only radio tabs). */
-.esf-window {
+/* Two code windows side by side (FastAPI async, Flask sync); stacked below 76rem. */
+.esf-windows {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
   width: 100%;
-  max-width: 46rem;
-  min-width: 0;
-  margin: 2.4rem 0 0;
+  max-width: 66rem;
+  margin-top: 2.4rem;
   text-align: left;
+}
+
+.esf-window {
+  min-width: 0;
+  margin: 0;
   border: 1px solid var(--hero-border);
   border-radius: 0.75rem;
   background-color: var(--hero-window-bg);
@@ -415,67 +422,12 @@
   color: var(--hero-muted);
 }
 
-/* Radios stay focusable for keyboard users but are not shown. */
-.esf-tab-input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-.esf-tabs {
-  display: inline-flex;
-  gap: 0.15rem;
-  padding: 0.15rem;
-  border: 1px solid var(--hero-border);
-  border-radius: 0.45rem;
-}
-
-.esf-tab {
-  padding: 0.15rem 0.6rem;
-  border-radius: 0.3rem;
-  font-size: 0.6rem;
-  font-weight: 500;
-  line-height: 1.4;
-  color: var(--hero-muted);
-  cursor: pointer;
-  user-select: none;
-  transition: color 120ms, background-color 120ms;
-}
-
-.esf-tab:hover {
-  color: var(--hero-fg);
-}
-
-#esf-tab-fastapi:checked ~ .esf-window__bar .esf-tab--fastapi,
-#esf-tab-flask:checked ~ .esf-window__bar .esf-tab--flask {
-  color: var(--hero-fg);
-  background-color: var(--hero-border);
-}
-
-#esf-tab-fastapi:focus-visible ~ .esf-window__bar .esf-tab--fastapi,
-#esf-tab-flask:focus-visible ~ .esf-window__bar .esf-tab--flask {
-  outline: 2px solid var(--hero-fg);
-  outline-offset: 1px;
-}
-
-#esf-tab-fastapi:checked ~ * .esf-only-flask,
-#esf-tab-fastapi:checked ~ .esf-only-flask,
-#esf-tab-flask:checked ~ * .esf-only-fastapi,
-#esf-tab-flask:checked ~ .esf-only-fastapi {
-  display: none;
-}
-
 .esf-window__code {
   margin: 0;
   padding: 1.2rem 1.2rem 1.3rem;
   overflow-x: auto;
   font-family: var(--md-code-font-family), ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 0.7rem;
+  font-size: 0.66rem;
   font-weight: 400;
   line-height: 1.7;
   font-feature-settings: "liga" 0, "calt" 0;
@@ -507,6 +459,89 @@
 .esf-window__code .nd { color: var(--tok-punct); }
 .esf-window__code .c,
 .esf-window__code .c1 { color: var(--tok-comment); font-style: italic; }
+
+/* FastAPI / Flask switcher (shadcn Tabs look). Hidden on wide screens, where both windows
+   sit side by side; below 76em one window shows and its bar carries the switcher. */
+.esf-tab-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+  opacity: 0;
+}
+
+.esf-tabs {
+  display: none;
+  align-items: center;
+  height: 1.6rem;
+  padding: 0.15rem;
+  border-radius: 0.5rem;
+  background-color: var(--hero-border);
+}
+
+.esf-tab {
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 0.6rem;
+  border: 1px solid transparent;
+  border-radius: 0.35rem;
+  font-size: 0.6rem;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--hero-muted);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  transition: color 150ms, background-color 150ms, box-shadow 150ms;
+}
+
+.esf-tab:hover {
+  color: var(--hero-fg);
+}
+
+#esf-tab-fastapi:checked ~ .esf-windows .esf-tab--fastapi,
+#esf-tab-flask:checked ~ .esf-windows .esf-tab--flask {
+  color: var(--hero-fg);
+  background-color: var(--hero-window-bg);
+  border-color: var(--hero-border);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
+}
+
+#esf-tab-fastapi:focus-visible ~ .esf-windows .esf-tab--fastapi,
+#esf-tab-flask:focus-visible ~ .esf-windows .esf-tab--flask {
+  outline: 2px solid var(--hero-muted);
+  outline-offset: 1px;
+}
+
+@media screen and (max-width: 76em) {
+  .esf-windows {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 46rem;
+  }
+
+  .esf-tabs {
+    display: inline-flex;
+  }
+
+  .esf-window__label {
+    display: none;
+  }
+
+  #esf-tab-fastapi:checked ~ .esf-windows .esf-window--flask,
+  #esf-tab-flask:checked ~ .esf-windows .esf-window--fastapi {
+    display: none;
+  }
+
+  .esf-window__code {
+    font-size: 0.7rem;
+  }
+}
 
 @media screen and (max-width: 44.9375em) {
   .esf-hero {
