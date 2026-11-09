@@ -1,5 +1,10 @@
 [
   {
+    "rule": "unsupported",
+    "status": "todo",
+    "line": 1
+  },
+  {
     "rule": "client-internals",
     "status": "todo",
     "line": 5

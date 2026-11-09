@@ -1,5 +1,8 @@
+# esf-migrate: TODO[unsupported] still uses simple-salesforce (Salesforce); replace before uninstalling it
 from simple_salesforce import Salesforce
+# esf-migrate: TODO[unsupported] still uses simple-salesforce (SalesforceExpiredSession, SalesforceMalformedRequest); replace before uninstalling it
 from simple_salesforce.exceptions import (
+    SalesforceExpiredSession,
     SalesforceMalformedRequest,
 )
 import even_simpler_salesforce as esf
@@ -13,8 +16,9 @@ def get(lead_id):
         return sf.sobject("Lead").get(lead_id)
     except esf.NotFound:
         return None
-    except esf.SessionExpired as exc:
+    # esf-migrate: TODO[exceptions] SalesforceExpiredSession has no 1:1 class; refresh is automatic: SessionExpired means a 401 survived a refresh, and a dead refresh token raises ReauthorizationRequired; catch esf.AuthError or both (often the handler can go)
+    except SalesforceExpiredSession as exc:
         raise RuntimeError("expired") from exc
-    # esf-migrate: TODO[exceptions] SalesforceMalformedRequest has no 1:1 class; catch esf.RequestError (or a specific class: InvalidField, MalformedQuery, ValidationRuleFailed, ...)
+    # esf-migrate: TODO[exceptions] SalesforceMalformedRequest has no 1:1 class; catch esf.RequestError / esf.RecordError or a specific class (InvalidField, MalformedQuery, ValidationRuleFailed, ...)
     except SalesforceMalformedRequest:
         raise

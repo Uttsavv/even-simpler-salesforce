@@ -1,0 +1,12 @@
+[
+  {
+    "rule": "unsupported",
+    "status": "todo",
+    "line": 1
+  },
+  {
+    "rule": "exceptions",
+    "status": "rewritten",
+    "line": 15
+  }
+]

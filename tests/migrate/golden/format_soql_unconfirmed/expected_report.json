@@ -1,0 +1,12 @@
+[
+  {
+    "rule": "unsupported",
+    "status": "todo",
+    "line": 1
+  },
+  {
+    "rule": "format-soql",
+    "status": "todo",
+    "line": 5
+  }
+]

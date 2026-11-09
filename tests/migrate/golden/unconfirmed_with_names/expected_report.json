@@ -1,0 +1,12 @@
+[
+  {
+    "rule": "sobject-attr",
+    "status": "rewritten",
+    "line": 2
+  },
+  {
+    "rule": "not-a-client",
+    "status": "todo",
+    "line": 3
+  }
+]

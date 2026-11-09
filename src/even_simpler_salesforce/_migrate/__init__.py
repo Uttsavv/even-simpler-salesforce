@@ -10,13 +10,14 @@ import argparse
 import difflib
 import fnmatch
 import json
+import os
 import sys
 from collections.abc import Iterable, Iterator, Sequence
 from pathlib import Path
 from typing import Any, TextIO
 
 from .._version import __version__
-from ._findings import MARKER_RE, RULES, FileResult, Finding
+from ._findings import MARKER_RE, RULES, FileResult
 
 __all__ = ["main", "migrate_files"]
 
@@ -39,7 +40,7 @@ def iter_python_files(paths: Iterable[str], exclude: Sequence[str] = ()) -> Iter
     seen: set[Path] = set()
     for raw in paths:
         root = Path(raw)
-        files = [root] if root.is_file() else sorted(root.rglob("*.py"))
+        files = [root] if root.is_file() else _walk(root)
         for f in files:
             if f.suffix != ".py" or any(part in ALWAYS_SKIP for part in f.parts):
                 continue
@@ -49,6 +50,15 @@ def iter_python_files(paths: Iterable[str], exclude: Sequence[str] = ()) -> Iter
             if f not in seen:
                 seen.add(f)
                 yield f
+
+
+def _walk(root: Path) -> list[Path]:
+    """``*.py`` under ``root``, never descending into virtualenvs or VCS directories."""
+    out: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = sorted(d for d in dirnames if d not in ALWAYS_SKIP)
+        out.extend(Path(dirpath) / f for f in sorted(filenames) if f.endswith(".py"))
+    return out
 
 
 def migrate_files(
@@ -72,9 +82,12 @@ def migrate_files(
         opts = Options(client_names=names, rules=rule_set, is_test_file=_is_test_file(path))
         try:
             updated, findings = transform_source(source, opts)
-        except Exception as exc:  # libcst.ParserSyntaxError and anything unexpected in one file
+        except Exception as exc:  # one bad file never stops the run
+            from libcst import ParserSyntaxError
+
             first = str(exc).strip().splitlines()[0] if str(exc).strip() else type(exc).__name__
-            out.append(FileResult(path.as_posix(), source, source, error=f"parse error: {first}"))
+            label = "parse error" if isinstance(exc, ParserSyntaxError) else "not migrated"
+            out.append(FileResult(path.as_posix(), source, source, error=f"{label}: {first}"))
             continue
         for f in findings:
             f.file = path.as_posix()
@@ -82,13 +95,29 @@ def migrate_files(
     return out
 
 
-def _shift_lines(findings: list[Finding]) -> None:
-    """Line numbers after ``--write``: markers inserted above earlier (or the same) statements."""
-    inserted = sorted({(f.holder_line, f.markers_added) for f in findings if f.markers_added})
-    for f in findings:
-        shift = sum(n for line, n in inserted if line <= f.line)
-        f.line += shift
-        f.end_line += shift
+def _remap_lines(result: FileResult) -> None:
+    """Line numbers after ``--write``: map original lines to the written file with a line diff
+    (handles inserted markers, added/removed imports and changed lines alike)."""
+    old = result.original.splitlines()
+    new = result.updated.splitlines()
+    mapping: dict[int, int] = {}
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(a=old, b=new, autojunk=False).get_opcodes():
+        if tag == "equal":
+            for k in range(i2 - i1):
+                mapping[i1 + k + 1] = j1 + k + 1
+        elif tag == "replace":
+            # each old line goes to the most similar new line of the block (never a marker line)
+            candidates = [j for j in range(j1, j2) if not MARKER_RE.search(new[j])] or list(range(j1, j2))
+            for i in range(i1, i2):
+                best = max(candidates, key=lambda j: difflib.SequenceMatcher(None, old[i], new[j]).ratio())
+                mapping[i + 1] = best + 1
+        elif tag == "delete":
+            for k in range(i2 - i1):
+                mapping[i1 + k + 1] = j1 + 1
+    for f in result.findings:
+        span = f.end_line - f.line
+        f.line = mapping.get(f.line, f.line)
+        f.end_line = f.line + span
 
 
 def _remaining_markers(text: str) -> int:
@@ -160,6 +189,9 @@ def _run(argv: Sequence[str] | None, out: TextIO, err: TextIO) -> int:
     if missing:
         err.write(f"esf migrate: no such file or directory: {', '.join(missing)}\n")
         return EXIT_ERROR
+    if args.report and args.report != "-" and not Path(args.report).resolve().parent.is_dir():
+        err.write(f"esf migrate: can't write the report: no directory for {args.report}\n")
+        return EXIT_ERROR
 
     files = list(iter_python_files(args.paths, _split(args.exclude)))
     results = migrate_files(files, client_names=_split(args.client_names), rules=rules)
@@ -169,7 +201,7 @@ def _run(argv: Sequence[str] | None, out: TextIO, err: TextIO) -> int:
         for r in results:
             if r.changed and not r.error:
                 Path(r.path).write_text(r.updated, encoding="utf-8")
-            _shift_lines(r.findings)
+            _remap_lines(r)
     elif not args.check:
         for r in results:
             if r.changed:
@@ -207,4 +239,5 @@ def _run(argv: Sequence[str] | None, out: TextIO, err: TextIO) -> int:
         return EXIT_ERROR
     if args.check:
         return EXIT_REMAINING if remaining else EXIT_OK
-    return EXIT_REMAINING if (s["needs_review"] or s["todo"]) else EXIT_OK
+    pending = not args.write and any(r.changed for r in results)  # dry run: rewrites not applied yet
+    return EXIT_REMAINING if (s["needs_review"] or s["todo"] or pending) else EXIT_OK

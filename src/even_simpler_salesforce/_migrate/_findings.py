@@ -47,20 +47,50 @@ DOCS_BASE = "https://uttsavv.github.io/even-simpler-salesforce/latest/migrate/"
 #: ``# esf-migrate: TODO[rule] message`` / ``REVIEW[rule]`` / ``ignore[rule]``.
 MARKER_RE = re.compile(r"#\s*esf-migrate:\s*(?P<kind>TODO|REVIEW|ignore)\[(?P<rule>[a-z-]+)\]")
 
-_LONG_STRING = re.compile(r"""(?P<q>["'])(?:(?!(?P=q))[^\\\n]|\\.){81,}(?P=q)""")
+# Any string literal (optional prefix, triple or single quotes, possibly multi-line).
+_STRING = re.compile(
+    r"""(?P<p>(?:(?<![A-Za-z0-9_])[rRbBuUfF]{1,2})?)(?P<q>\"\"\"|\'\'\'|"|')(?P<body>(?:\\.|(?!(?P=q)).)*?)(?P=q)""",
+    re.DOTALL,
+)
+_REDACTED_NAMES = [  # names whose values are redacted
+    "password",
+    "passwd",
+    "secret",
+    "client_secret",
+    "token",
+    "access_token",
+    "refresh_token",
+    "security_token",
+    "session_id",
+    "private_?key",
+    "api_?key",
+    "key",
+]
+_SECRET_NAMES = "(?:" + "|".join(_REDACTED_NAMES) + ")"
 _SECRETS = (
     re.compile(r"00D[A-Za-z0-9]{12,15}![A-Za-z0-9._\-]+"),  # Salesforce session id / access token
     re.compile(r"(?i)\b(bearer)\s+[A-Za-z0-9._\-!]{16,}"),
-    re.compile(r"(?i)(password|secret|token|security_token)(\s*=\s*)(['\"])[^'\"]+\3"),
+    # name="value" / name='value' (keyword arguments, assignments)
+    re.compile(r"(?i)\b(" + _SECRET_NAMES + r")(\s*=\s*)(['\"])[^'\"]*\3"),
+    # "name": "value" (dict literals, JSON)
+    re.compile(r"(?i)(['\"]" + _SECRET_NAMES + r"['\"]\s*:\s*)(['\"])[^'\"]*\2"),
 )
+
+
+def _shorten(m: re.Match[str]) -> str:
+    body = m.group("body")
+    if len(body) <= 80:
+        return m.group(0)
+    return f"{m.group('p')}{m.group('q')}…{m.group('q')}"
 
 
 def redact(code: str) -> str:
     """Drop string literals longer than 80 characters and anything that looks like a secret."""
-    out = _LONG_STRING.sub(lambda m: f"{m.group('q')}…{m.group('q')}", code)
-    out = _SECRETS[0].sub("<redacted>", out)
+    out = _SECRETS[0].sub("<redacted>", code)
     out = _SECRETS[1].sub(lambda m: f"{m.group(1)} <redacted>", out)
-    return _SECRETS[2].sub(lambda m: f"{m.group(1)}{m.group(2)}{m.group(3)}<redacted>{m.group(3)}", out)
+    out = _SECRETS[2].sub(lambda m: f"{m.group(1)}{m.group(2)}{m.group(3)}<redacted>{m.group(3)}", out)
+    out = _SECRETS[3].sub(lambda m: f"{m.group(1)}{m.group(2)}<redacted>{m.group(2)}", out)
+    return _STRING.sub(_shorten, out)
 
 
 def marker_text(status: Status, rule: str, message: str) -> str:

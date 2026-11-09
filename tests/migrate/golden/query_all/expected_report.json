@@ -1,5 +1,15 @@
 [
   {
+    "rule": "unsupported",
+    "status": "todo",
+    "line": 1
+  },
+  {
+    "rule": "unsupported",
+    "status": "todo",
+    "line": 2
+  },
+  {
     "rule": "login",
     "status": "todo",
     "line": 4

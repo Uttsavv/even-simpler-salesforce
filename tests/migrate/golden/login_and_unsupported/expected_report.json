@@ -1,5 +1,10 @@
 [
   {
+    "rule": "unsupported",
+    "status": "todo",
+    "line": 1
+  },
+  {
     "rule": "login",
     "status": "todo",
     "line": 3

@@ -1,0 +1,37 @@
+[
+  {
+    "rule": "unsupported",
+    "status": "todo",
+    "line": 1
+  },
+  {
+    "rule": "login",
+    "status": "todo",
+    "line": 3
+  },
+  {
+    "rule": "sobject-attr",
+    "status": "rewritten",
+    "line": 5
+  },
+  {
+    "rule": "sobject-attr",
+    "status": "rewritten",
+    "line": 6
+  },
+  {
+    "rule": "return-value",
+    "status": "needs-review",
+    "line": 7
+  },
+  {
+    "rule": "sobject-attr",
+    "status": "rewritten",
+    "line": 7
+  },
+  {
+    "rule": "upsert-path",
+    "status": "rewritten",
+    "line": 7
+  }
+]

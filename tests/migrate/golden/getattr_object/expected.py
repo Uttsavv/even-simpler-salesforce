@@ -1,3 +1,4 @@
+# esf-migrate: TODO[unsupported] still uses simple-salesforce (AsyncSalesforce); replace before uninstalling it
 from simple_salesforce.aio import AsyncSalesforce
 
 

@@ -1,12 +1,7 @@
 [
   {
     "rule": "not-a-client",
-    "status": "needs-review",
+    "status": "todo",
     "line": 2
-  },
-  {
-    "rule": "not-a-client",
-    "status": "needs-review",
-    "line": 3
   }
 ]

@@ -1,5 +1,10 @@
 [
   {
+    "rule": "unsupported",
+    "status": "todo",
+    "line": 1
+  },
+  {
     "rule": "sobject-attr",
     "status": "rewritten",
     "line": 9
@@ -10,8 +15,8 @@
     "line": 12
   },
   {
-    "rule": "sobject-attr",
-    "status": "rewritten",
+    "rule": "unsupported",
+    "status": "todo",
     "line": 15
   }
 ]

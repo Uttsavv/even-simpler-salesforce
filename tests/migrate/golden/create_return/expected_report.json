@@ -1,5 +1,10 @@
 [
   {
+    "rule": "unsupported",
+    "status": "todo",
+    "line": 1
+  },
+  {
     "rule": "create-return",
     "status": "rewritten",
     "line": 5
