@@ -1,31 +1,7 @@
 # Authentication
 
-A client gets one **login flow** object. Flows are frozen config objects. They hold no tokens
-and make no requests. The client gets the token, keeps it in memory, saves it to a
-[token store](token-stores.md) and refreshes it.
-
-| Flow | Use it when | Refresh | Page |
-|---|---|---|---|
-| `esf.ClientCredentials` | a backend acts as its own integration user | requests a new token | [Client credentials](client-credentials.md) |
-| `esf.JwtBearer` | server-to-server with a certificate, acting as a named user | signs a new assertion and requests a new token | [JWT bearer](jwt-bearer.md) |
-| `esf.WebServerFlow` | people log in through the browser and your app acts as each of them | refresh-token grant, safe under rotation | [Web server flow (PKCE)](web-server-flow.md) |
-| `esf.StaticToken` | scripts and tests with a token you got elsewhere | none: a `401` raises `SessionExpired` | [Static token](static-token.md) |
-
-Username/password login and the SOAP `login()` call are **not supported**. Salesforce is
-retiring SOAP `login()` and recommends External Client Apps with OAuth.
-
-## The `domain` argument
-
-Each flow except `StaticToken` takes `domain=`:
-
-- `"login"`: `https://login.salesforce.com` (production and Developer Edition);
-- `"test"`: `https://test.salesforce.com` (sandboxes);
-- a full origin such as `"https://acme.my.salesforce.com"` or
-  `"https://acme--uat.sandbox.my.salesforce.com"` (your My Domain).
-
-Anything else (`http://`, a path, a bare host name) raises `ValueError` when the flow is
-created. `ClientCredentials` **requires** the My Domain URL, because Salesforce doesn't support
-`login` / `test` for that flow.
+You give the client one login flow. The client gets the token, keeps it in memory, saves it to
+a [token store](token-stores.md) and refreshes it for you.
 
 ```python
 import even_simpler_salesforce as esf
@@ -33,42 +9,50 @@ import even_simpler_salesforce as esf
 auth = esf.ClientCredentials(
     domain="https://acme.my.salesforce.com", client_id="3MVG9...", client_secret="..."
 )
-print(auth.token_url)
+
+async with esf.AsyncSalesforce(auth) as sf:
+    print((await sf.auth.userinfo())["preferred_username"])
 ```
 
-## How tokens are handled
+A login flow is a frozen config object. It holds no tokens and makes no requests.
 
-1. **First call.** The client looks the token up in memory, then in the token store, and
-   otherwise requests a new one. Salesforce's token response has `issued_at` but no
-   `expires_in`, so the client doesn't know when the token expires.
-2. **Each call** sends the token it holds. When Salesforce answers `401` (`INVALID_SESSION_ID`),
-   the client refreshes **once** and resends the call. A second `401` raises `SessionExpired`.
-3. **Concurrent calls share one refresh.** When many tasks or threads hit an expired token at
-   the same time, exactly one token request is made and the rest wait for it. If that request
-   fails, the callers that were waiting all get the same error instead of each sending another
-   token request. A call made after the failure tries again.
-4. **Rotation-safe.** For `WebServerFlow`, a rotated refresh token is saved to the store
-   **before** the new access token is used. The refresh request is **never resent** once it
-   may have reached Salesforce, because resending a rotated-out refresh token makes Salesforce
-   revoke the whole token chain. If such a request times out, the client re-reads the store,
-   and raises `RefreshFailed(ambiguous=True)` if no other process stored a new token.
-5. **"Token request is already being processed."** Salesforce returns this when the same
-   refresh token is used concurrently. The client waits, re-reads the store and tries again,
-   with at most 3 token requests in total.
-6. A dead refresh token (`invalid_grant`) raises `ReauthorizationRequired` and emits the
-   `sf.auth.reauth_required` event: the user has to log in again. For `ClientCredentials` and
-   `JwtBearer`, `invalid_grant` means a configuration problem and raises `OAuthError`. A
-   `WebServerFlow` with no stored refresh token raises `ReauthorizationRequired`
-   (`error_code="no_refresh_token"`) without a token request.
+## Choose a flow
 
-Token requests to `/services/oauth2/token` are not counted as API calls in `sf.request`
-events. They emit `sf.auth.refreshed` instead (see [Logging](../logging.md)).
+Pick the login flow that matches who your code acts as.
+
+| Login flow | Use it when | Refresh |
+|---|---|---|
+| [`esf.ClientCredentials`](client-credentials.md) | a backend acts as its own integration user | requests a new token |
+| [`esf.JwtBearer`](jwt-bearer.md) | a server acts as a named user, with a certificate | signs a new assertion and requests a new token |
+| [`esf.WebServerFlow`](web-server-flow.md) | people log in through the browser and your app acts as each of them | refresh-token grant, safe under rotation |
+| [`esf.StaticToken`](static-token.md) | scripts and tests with a token you got elsewhere | none: a `401` raises `SessionExpired` |
+
+Each login flow needs an app in your org. [Salesforce setup](salesforce-setup.md) lists what
+each one needs.
+
+## The `domain` argument
+
+Every login flow except `StaticToken` takes `domain=`. It names the host the client logs in to.
+
+| Value | Login host | Use for |
+|---|---|---|
+| `"login"` | `https://login.salesforce.com` | production and Developer Edition |
+| `"test"` | `https://test.salesforce.com` | sandboxes |
+| `"https://acme.my.salesforce.com"` | your My Domain | any org; also `https://acme--uat.sandbox.my.salesforce.com` |
+
+```python
+print(auth.token_url)  # https://acme.my.salesforce.com/services/oauth2/token
+```
+
+If you pass anything else, the login flow raises `ValueError` when you create it. That includes
+`http://` URLs, paths and bare host names. `ClientCredentials` needs the My Domain URL, because
+Salesforce doesn't support `login` or `test` for that flow.
 
 ## Proactive refresh (opt-in)
 
 By default the client refreshes only after Salesforce rejects the token. This is always
 correct, because an admin can end sessions at any time. If you know your app's session timeout,
-you can refresh ahead of it to save the rejected request:
+set `refresh_ahead` a little shorter. This saves the rejected request.
 
 ```python
 from datetime import timedelta
@@ -81,46 +65,81 @@ auth = esf.ClientCredentials(
 )
 ```
 
-`expiry="introspect"` is another option. After each token is acquired, the client calls the
-introspection endpoint once and stores the returned `exp` in `Token.expires_at`. It then
-refreshes within 60 seconds of that time. If introspection fails or returns no `exp`, the client
-falls back to 401-driven refresh and logs this once at INFO on the `esf` logger.
-
-!!! warning "Unverified"
-    Salesforce's introspection documentation doesn't list the response fields, so it is not yet
-    confirmed that `exp` is always present (verification item V4 in the spec).
+You can also pass `expiry="introspect"`. After the client gets a new token, it calls the
+introspection endpoint once. It stores the returned `exp` in `Token.expires_at` and refreshes
+within 60 seconds of that time. If introspection fails or returns no `exp`, the client refreshes
+on `401` instead. It logs this once at INFO on the `esf` logger.
 
 ## Token keys
 
-Every flow has a `token_key`, which names the record in the token store:
+Every login flow has a `token_key`. It names the token's record in the token store.
 
-| Flow | Default `token_key` |
+| Login flow | Default `token_key` |
 |---|---|
 | `ClientCredentials` | `client_credentials:<hash of domain and client id>` |
 | `JwtBearer` | `jwt_bearer:<hash of domain, client id and username>` |
-| `WebServerFlow` | **required**; one per Salesforce identity, e.g. `f"user:{user_id}"` |
+| `WebServerFlow` | none; pass one per Salesforce identity, such as `f"user:{user_id}"` |
 | `StaticToken` | `static:<hash of instance URL and token>` |
 
-Clients in one family that use the same key share one in-memory token and one refresh. Only a
-12-character SHA-256 prefix of the key (`token_key_hash`) ever appears in events.
+Clients in one family that use the same key share one in-memory token and one refresh. Events
+show only `token_key_hash`, a 12-character SHA-256 prefix of the key.
 
 ## The `sf.auth` helpers
 
-| Call | Does |
-|---|---|
-| `await sf.auth.token()` | the current `Token`, acquiring one if needed (treat it as a secret) |
-| `await sf.auth.userinfo()` | `GET /services/oauth2/userinfo` for the current token |
-| `await sf.auth.introspect(token_key=None, *, auth=None)` | `POST /services/oauth2/introspect` |
-| `await sf.auth.revoke(token_key=None, *, auth=None)` | `POST /services/oauth2/revoke`, then deletes the token from memory and the store |
-| `await sf.auth.exchange_code(flow, code, code_verifier=...)` | finishes the [web server flow](web-server-flow.md) |
+`sf.auth` gives you the current token and the OAuth endpoints.
 
 ```python
 async with esf.AsyncSalesforce(auth) as sf:
     token = await sf.auth.token()
     print(token)  # repr() shows only the last 4 characters of each token
-    print((await sf.auth.userinfo())["preferred_username"])
 ```
 
+| Call | What it does |
+|---|---|
+| `await sf.auth.token()` | the current `Token`, acquiring one if needed; treat it as a secret |
+| `await sf.auth.userinfo()` | `GET /services/oauth2/userinfo` for the current token |
+| `await sf.auth.introspect(token_key=None, *, auth=None)` | `POST /services/oauth2/introspect` |
+| `await sf.auth.revoke(token_key=None, *, auth=None)` | `POST /services/oauth2/revoke`, then deletes the token from memory and the store |
+| `await sf.auth.exchange_code(flow, code, code_verifier=...)` | finishes the [web server flow](web-server-flow.md) |
+
 `Token` is a frozen dataclass with `access_token`, `instance_url`, `issued_at`,
-`refresh_token`, `id_url`, `org_id`, `user_id` (parsed from the identity URL), `scope`,
-`signature`, `expires_at` and the store-managed `version`.
+`refresh_token`, `id_url`, `org_id`, `user_id`, `scope`, `signature`, `expires_at` and
+`version`. The client parses `user_id` from the identity URL. The token store manages `version`.
+
+## Limitations
+
+- The library doesn't support username and password login or the SOAP `login()` call. Salesforce is retiring
+  SOAP `login()` and recommends External Client Apps with OAuth.
+- Salesforce's token response has `issued_at` but no `expires_in`, so the client can't know when
+  a token expires unless you opt in to [proactive refresh](#proactive-refresh-opt-in).
+- `expiry="introspect"` is unverified. Salesforce's introspection docs don't list the response
+  fields, so nobody has confirmed that `exp` is always present. This is spec verification item V4.
+
+## How tokens are handled
+
+1. On the first call, the client looks for a token in memory, then in the token store. If it
+   finds none, it requests a new one.
+2. Each call sends the token the client holds. If Salesforce answers `401` with
+   `INVALID_SESSION_ID`, the client refreshes once and resends the call. A second `401` raises
+   `SessionExpired`.
+3. Concurrent calls share one refresh. If many tasks or threads hit an expired token at once,
+   the client sends exactly one token request. The rest wait for it. If it fails, every waiting
+   caller gets the same error. The next call tries again.
+4. For `WebServerFlow`, the client saves a rotated refresh token to the store before it uses the
+   new access token. It never resends a refresh request that may have reached Salesforce,
+   because resending a rotated-out refresh token makes Salesforce revoke the whole token chain.
+   If such a request times out, the client re-reads the store. If no other process stored a new
+   token, it raises `RefreshFailed(ambiguous=True)`.
+5. If two requests use the same refresh token at once, Salesforce answers "token request is
+   already being processed". The client waits, re-reads the store and tries again, with at most 3 token
+   requests in total.
+6. If the refresh token is dead, Salesforce answers `invalid_grant`. The client raises
+   `ReauthorizationRequired` and emits the `sf.auth.reauth_required` event. The user has to log
+   in again.
+7. If a `WebServerFlow` has no stored refresh token, the client raises `ReauthorizationRequired`
+   with `error_code="no_refresh_token"`. It sends no token request.
+8. For `ClientCredentials` and `JwtBearer`, `invalid_grant` means a configuration problem and
+   raises `OAuthError`.
+
+Token requests to `/services/oauth2/token` don't count as API calls in `sf.request` events.
+They emit `sf.auth.refreshed` instead. See [Logging](../logging.md).

@@ -1,8 +1,6 @@
 # Raw requests
 
-`sf.request()` calls any REST resource through the same pipeline as every other method: token,
-refresh on `401`, budget guard, concurrency limit, retries, typed errors, usage tracking and one
-`sf.request` event. Use it for resources the library doesn't wrap yet.
+`sf.request()` calls any REST resource. Use it for resources the library doesn't wrap yet.
 
 ```python
 import even_simpler_salesforce as esf
@@ -16,32 +14,16 @@ counts = await sf.request("GET", "limits/recordCount", params={"sObjects": "Lead
 print(counts["sObjects"])
 ```
 
-| Argument | Meaning |
-|---|---|
-| `method` | `"GET"`, `"POST"`, `"PATCH"`, `"PUT"`, `"DELETE"`, `"HEAD"` |
-| `path` | relative to `/services/data/vXX.X/`, or absolute under `/services/` |
-| `params=` | query-string parameters |
-| `json=` | body, JSON-encoded with the client's codec |
-| `content=` | raw body bytes (default `Content-Type: application/octet-stream`) |
-| `headers=` | extra headers; a `Content-Type` given here (in any letter case) wins |
-| `idempotent=` | override the retry-safety rule (see [below](#retries-and-idempotent)) |
-| `operation=` | operation name for events, usage counters and errors (default `"raw"`) |
+A raw request goes through the same pipeline as every other method. You get these for free:
 
-## Paths
+- the token, and one refresh on `401`
+- the budget guard and the concurrency limit
+- retries and typed errors
+- usage tracking and one `sf.request` event
 
-- `"sobjects/Lead/describe"` is relative and becomes
-  `{instance}/services/data/v{api_version}/sobjects/Lead/describe`;
-- `"/services/apexrest/LeadScore"` is absolute, and is used as given under the instance URL;
-- absolute URLs (`https://...`), paths outside `/services/`, and `..` / `.` segments raise
-  `ValueError`, so a path built from user input can't reach another host.
+## Send a body
 
-## Bodies and return values
-
-- Pass `json=` or `content=`, not both (`ValueError`).
-- `GET` and `HEAD` can't have a body (`ValueError`).
-- The return value is the decoded JSON for JSON responses, `None` for an empty body (e.g.
-  `204`), and the text for any other body. Every 2xx status counts as success. `X-PrettyPrint`
-  is never sent.
+Pass a JSON body with `json=`. The client encodes it with its JSON codec.
 
 ```python
 score = await sf.request("POST", "/services/apexrest/LeadScore", json={"email": "ada@example.com"})
@@ -51,21 +33,62 @@ lead_id = (await sf.query("SELECT Id FROM Lead LIMIT 1")).records[0]["Id"]
 assert await sf.request("PATCH", f"sobjects/Lead/{lead_id}", json={"Rating": "Hot"}) is None
 ```
 
-## Retries and `idempotent`
+To send raw bytes, pass `content=`. The default `Content-Type` is `application/octet-stream`.
+To send another type, set `Content-Type` in `headers=`.
 
-After a request **may have reached Salesforce** (a timeout or reset after sending, or a 5xx),
-it is resent only if it is a read. This rule is set in
-[ADR 0001](../adr/0001-retry-safety.md):
+Pass `json=` or `content=`, not both. `GET` and `HEAD` can't have a body. Both mistakes raise
+`ValueError`.
 
-| Request | Inferred `idempotent` | Resent after timeout / 5xx? |
+## Read the response
+
+The return value depends on the response body:
+
+| Body | Return value |
+|---|---|
+| JSON | the decoded JSON |
+| empty, for example `204` | `None` |
+| anything else | the text |
+
+Every 2xx status counts as success. The client never sends `X-PrettyPrint`.
+
+## Choose a path
+
+A relative path starts after `/services/data/vXX.X/`. An absolute path starts with
+`/services/`, and the client uses it as given under the instance URL.
+
+| `path` | URL |
+|---|---|
+| `"sobjects/Lead/describe"` | `{instance}/services/data/v{api_version}/sobjects/Lead/describe` |
+| `"/services/apexrest/LeadScore"` | `{instance}/services/apexrest/LeadScore` |
+
+The client raises `ValueError` for these paths:
+
+- absolute URLs such as `https://...`
+- paths outside `/services/`
+- paths with `..` or `.` segments
+
+So a path built from user input can't reach another host.
+
+## Retry a write safely {#retries-and-idempotent}
+
+If a request may have reached Salesforce, the client resends it only if it is a read. This
+covers a timeout or reset after the send, and a 5xx response.
+[ADR 0001](../adr/0001-retry-safety.md) sets this rule.
+
+| Request | Inferred `idempotent` | Resent after a timeout or 5xx |
 |---|---|---|
 | `GET`, `HEAD` | `True` | yes |
-| `GET /services/apexrest/...`, `GET tooling/executeAnonymous` | `False` (they run code) | no |
+| `GET /services/apexrest/...`, `GET tooling/executeAnonymous` | `False`, because they run code | no |
 | `POST`, `PATCH`, `PUT`, `DELETE` | `False` | no |
 
-`idempotent=True` or `idempotent=False` overrides the inferred value. Only pass `True` when
-running the request twice is harmless: no triggers, flows or e-mails, and a repeat gives the
-same result. Some reads are sent as POST and are safe to repeat:
+To override the inferred value, pass `idempotent=True` or `idempotent=False`.
+
+!!! warning "Pass `idempotent=True` only if a repeat is harmless"
+    If the request runs triggers, flows or e-mails, a retry can run them twice. If a repeat
+    gives a different result, a retry can change your data. Leave `idempotent` unset for such
+    requests.
+
+Some reads use POST and are safe to repeat:
 
 ```python
 found = await sf.request(
@@ -78,23 +101,42 @@ found = await sf.request(
 print(len(found["searchRecords"]))
 ```
 
-Some failures are retried **for every method**, whatever `idempotent` says, because the request
-didn't run:
+Some failures mean the request didn't run. The client retries these for every method, whatever
+`idempotent` says:
 
-- connect errors (the request was never sent);
-- `UNABLE_TO_LOCK_ROW` (`RowLocked`);
-- `429` / `REQUEST_LIMIT_EXCEEDED` when Salesforce sends `Retry-After`.
+- connect errors, because the client never sent the request
+- `UNABLE_TO_LOCK_ROW` (`RowLocked`)
+- `429` or `REQUEST_LIMIT_EXCEEDED`, if Salesforce sends `Retry-After`
 
 See [Errors → Retries](../errors.md#retries) for the policy settings.
 
-## Operation names
+## Name the operation
 
-`operation=` names the call in `sf.request` events, in `sf.usage.snapshot().calls_by_operation`,
-in error objects (`exc.operation`) and in `FakeSalesforce.fail_next()`. Choose stable,
-low-cardinality names such as `"apex.lead_score"`. Don't put ids or user input in them.
+`operation=` names the call. The default is `"raw"`. The name appears in these places:
+
+- `sf.request` events
+- `sf.usage.snapshot().calls_by_operation`
+- error objects, as `exc.operation`
+- `FakeSalesforce.fail_next()`
+
+Choose stable names with few distinct values, such as `"apex.lead_score"`. Don't put ids or
+user input in them.
 
 ```python
 await sf.request("GET", "sobjects/Account/describe", operation="account.describe")
 print(sf.usage.snapshot().calls_by_operation)
 await sf.aclose()
 ```
+
+## Arguments
+
+| Argument | Meaning |
+|---|---|
+| `method` | `"GET"`, `"POST"`, `"PATCH"`, `"PUT"`, `"DELETE"`, `"HEAD"` |
+| `path` | relative to `/services/data/vXX.X/`, or absolute under `/services/` |
+| `params=` | query-string parameters |
+| `json=` | body, encoded with the JSON codec of the client |
+| `content=` | raw body bytes (default `Content-Type: application/octet-stream`) |
+| `headers=` | extra headers; a `Content-Type` here, in any letter case, wins |
+| `idempotent=` | override the retry-safety rule (see [above](#retries-and-idempotent)) |
+| `operation=` | operation name for events, usage counters and errors (default `"raw"`) |

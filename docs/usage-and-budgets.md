@@ -1,18 +1,8 @@
 # Usage and budgets
 
-Salesforce limits how many API calls an org can make in a rolling 24 hours, and every
-integration in the org shares that allowance. The client tracks usage **at no extra cost**:
-each REST response carries a `Sforce-Limit-Info: api-usage=used/max` header, and the client
-reads it.
-
-| Source | Gives | Cost |
-|---|---|---|
-| `Sforce-Limit-Info` header on every response | org-wide daily API calls used / max (and `api-bursts` when present) | free |
-| library counters | calls by operation, sObject and caller; errors by code; retries; refreshes | free |
-| `sf.limits()` | every org limit (API, storage, Bulk, e-mail, ...) | 1 API call |
-| `sf.start_limits_poller()` | `sf.limits()` on a timer, at least 5 minutes apart | 1 API call per poll |
-
-## `sf.usage.snapshot()`
+Salesforce limits the API calls an org can make in a rolling 24 hours. Every integration in the
+org shares that limit. The client tracks your usage at no extra cost, and a budget can stop
+low-priority calls before the org runs out.
 
 ```python
 import even_simpler_salesforce as esf
@@ -29,25 +19,15 @@ print(f"{usage.api_used}/{usage.api_max} ({usage.api_fraction:.1%}) as of {usage
 print(usage.calls_by_operation)  # {'query': 1, 'sobject.describe': 1}
 ```
 
-| `UsageSnapshot` field | Meaning |
-|---|---|
-| `api_used`, `api_max`, `api_fraction` | from the latest `Sforce-Limit-Info` header: **org-wide**, all integrations |
-| `api_bursts_used`, `api_bursts_max` | `api-bursts` from the same header, when Salesforce sends it |
-| `as_of` | when that header was seen (UTC) |
-| `calls_by_operation`, `calls_by_sobject`, `calls_by_caller` | calls made by **this client family in this process** (`"-"` = no caller tag) |
-| `errors_by_code` | failed calls by `error_code`, or by exception class name when there is no code |
-| `retries`, `refreshes` | retries made, and token refreshes after a rejected or expired token |
-| `projected_exhaustion` | when the org will hit `api_max` at the current rate, or `None` |
-
-The projection is linear and uses the header values seen in the last hour. It is `None` until
-at least two samples one minute apart show usage growing. Usage values are `None` until the
-first response arrives. Describe calls served from the cache, and calls that the budget guard
-blocks, send nothing, so they don't change the header values.
+`api_used` and `api_max` count the calls of the whole org, from all integrations. The
+`calls_by_*` counters count only the calls of this client family in this process. Until the
+first response arrives, the usage values are `None`. The [`UsageSnapshot`](#usagesnapshot)
+table lists every field.
 
 ## Caller tags and priority
 
-Tag calls so you can see where your usage goes, and so the budget guard can tell important
-calls from deferrable ones:
+Tag your calls to see where your usage goes. The budget guard also uses the priority to tell
+important calls from calls that can wait.
 
 ```python
 backfill = sf.tagged(caller="job:backfill", priority="low")
@@ -59,28 +39,38 @@ with esf.call_context(caller="route:/leads", priority="high"):
 print(sf.usage.snapshot().calls_by_caller)  # {'-': 2, 'job:backfill': 1, 'route:/leads': 1}
 ```
 
-- `sf.tagged(caller=..., priority=...)` returns a child view. It shares everything with `sf`
+- `sf.tagged(caller=..., priority=...)` returns a child client. It shares everything with `sf`
   and adds the tags to each call.
-- `esf.call_context(caller=..., priority=...)` sets the tags for every call made inside the
-  block, in any client. It uses a context variable, so it works across `await`, and
-  Collections threads in the sync client inherit it.
-- Priority is `"low"`, `"normal"` (the default) or `"high"`. The precedence is: the view's tags
-  (`tagged`), then the context (`call_context`), then the default.
-- Tags appear in `sf.request` events as `caller` and `priority`.
+- `esf.call_context(caller=..., priority=...)` sets the tags for every call inside the block,
+  in any client. It uses a context variable, so it works across `await`. The Collections
+  threads of the sync client inherit it.
+- The priority is `"low"`, `"normal"` or `"high"`. The default is `"normal"`.
+- The tags of a `tagged()` child win over `call_context()`, and `call_context()` wins over the
+  default.
+- The tags appear in `sf.request` events as `caller` and `priority`.
 
-To show the integration's name to **Salesforce admins**, pass `client_name="acme-sync"` to the
-client. It is sent as `Sforce-Call-Options: client=acme-sync` on every API call. The name may
-contain letters, digits and `_ . : -`, and be up to 64 characters. If you set your own
-`Sforce-Call-Options` header on a call, the two are merged.
+In `calls_by_caller`, `"-"` counts the calls without a caller tag.
 
-!!! note "Unverified"
-    Where admins see the `client` value has not been checked against a live org yet
-    (verification item V20 in the spec).
+## Name your integration
+
+To show your integration's name to Salesforce admins, pass `client_name` to the client:
+
+```python
+named = esf.AsyncSalesforce(auth, client_name="acme-sync")
+await named.aclose()
+```
+
+The client sends it as `Sforce-Call-Options: client=acme-sync` on every API call. The name can
+have up to 64 characters: letters, digits and `_ . : -`. If you set your own
+`Sforce-Call-Options` header on a call, the client merges the two.
+
+We have not yet checked on a live org where admins see the `client` value. This is
+verification item V20 in the spec.
 
 ## Budgets
 
-`budget=esf.Budget(...)` turns on threshold events and a guard. Both use the latest header
-value. Neither makes extra calls.
+To get threshold events and a guard, pass `budget=esf.Budget(...)`. Both use the latest usage
+header, so neither makes extra calls.
 
 ```python
 budget = esf.Budget(
@@ -92,14 +82,18 @@ guarded = esf.AsyncSalesforce(auth, budget=budget)
 await guarded.aclose()
 ```
 
-| Field | Default | Effect |
+| Field | Default | Description |
 |---|---|---|
-| `warn_at` | `(0.5, 0.8, 0.95)` | when the fraction reaches a threshold, emit `sf.usage.threshold` (`threshold`, `fraction`, `used`, `max`), at most once per threshold per UTC day |
-| `pause_low_priority_above` | `0.8` | above this fraction, `priority="low"` calls raise `esf.BudgetExceeded` **before sending** |
+| `warn_at` | `(0.5, 0.8, 0.95)` | if the fraction reaches a threshold, emit `sf.usage.threshold` with `threshold`, `fraction`, `used` and `max`; at most once per threshold per UTC day |
+| `pause_low_priority_above` | `0.8` | above this fraction, `priority="low"` calls raise `esf.BudgetExceeded` before the client sends them |
 | `block_all_above` | `None` | above this fraction, every call except `priority="high"` raises `BudgetExceeded` |
 
+Without `budget=`, you get no threshold events and no guard. The client still tracks usage.
+
+### Pause a job when the budget runs low
+
 `BudgetExceeded` is a `LimitError` with `error_code="BUDGET_EXCEEDED"`. Its `.usage` holds the
-snapshot, so a job can sleep and resume:
+snapshot, so a job can sleep and try again later:
 
 ```python
 from even_simpler_salesforce.testing import FakeSalesforce
@@ -114,9 +108,10 @@ except esf.BudgetExceeded as exc:
     print(f"paused at {exc.usage.api_fraction:.0%}")  # paused at 85%
 ```
 
-Without `budget=`, there are no threshold events and no guard. Usage is still tracked.
+## Get every org limit
 
-## `sf.limits()`
+`sf.limits()` gets every org limit, such as API calls, storage, Bulk and e-mail. It costs one
+API call, and the client never calls it for you.
 
 ```python
 limits = await sf.limits()
@@ -125,17 +120,54 @@ print(daily.max, daily.remaining, daily.used)
 print(sorted(limits)[:3])
 ```
 
-`limits()` costs one API call and is never called implicitly. It returns
-`dict[str, esf.Limit]`, where `Limit` has `max`, `remaining`, `used` and `details` (any other
-keys in the entry, such as per-app breakdowns). It also updates the usage tracker from
-`DailyApiRequests`.
+It returns `dict[str, esf.Limit]`. A `Limit` has `max`, `remaining`, `used` and `details`.
+`details` holds any other keys in the entry, such as the breakdown per app. `limits()` also
+updates the usage tracker from `DailyApiRequests`.
 
-To refresh the numbers while the process is idle, start the opt-in poller. The interval must be
-at least 300 seconds. There is one poller per client family, and it stops when the root client
-is closed. With `AsyncSalesforce`, call it from inside a running event loop. `Salesforce`
-uses a daemon thread.
+### Poll the limits
+
+To keep the numbers fresh while the process is idle, start the poller:
 
 ```python
 sf.start_limits_poller(interval=900)
 await sf.aclose()  # stops the poller
 ```
+
+- The interval must be at least 300 seconds. Each poll costs one API call.
+- Each client family has one poller. It stops when you close the root client.
+- With `AsyncSalesforce`, call it from inside a running event loop.
+- With `Salesforce`, the poller runs in a daemon thread.
+
+## Sources
+
+| Source | Gives | Cost |
+|---|---|---|
+| `Sforce-Limit-Info` header on every response | daily API calls used and max for the whole org, and `api-bursts` if present | free |
+| library counters | calls by operation, sObject and caller; errors by code; retries; refreshes | free |
+| `sf.limits()` | every org limit (API, storage, Bulk, e-mail, ...) | 1 API call |
+| `sf.start_limits_poller()` | `sf.limits()` on a timer, at least 5 minutes apart | 1 API call per poll |
+
+## `UsageSnapshot`
+
+| Field | Description |
+|---|---|
+| `api_used`, `api_max`, `api_fraction` | from the latest `Sforce-Limit-Info` header; org-wide, all integrations |
+| `api_bursts_used`, `api_bursts_max` | `api-bursts` from the same header, when Salesforce sends it |
+| `as_of` | when the client saw that header (UTC) |
+| `calls_by_operation`, `calls_by_sobject`, `calls_by_caller` | calls made by this client family in this process (`"-"` = no caller tag) |
+| `errors_by_code` | failed calls by `error_code`, or by exception class name if there is no code |
+| `retries`, `refreshes` | retries made, and token refreshes after a rejected or expired token |
+| `projected_exhaustion` | when the org reaches `api_max` at the current rate, or `None` |
+
+## How it works
+
+Each REST response carries a `Sforce-Limit-Info: api-usage=used/max` header. The client reads
+it, so tracking costs no extra calls.
+
+The projection in `projected_exhaustion` is linear. It uses the header values from the last
+hour. It stays `None` until at least two samples, one minute apart, show growing usage.
+
+Some calls send nothing, so they don't change the header values:
+
+- describe calls that the cache answers;
+- calls that the budget guard blocks.
