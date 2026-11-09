@@ -1,0 +1,27 @@
+[
+  {
+    "rule": "unsupported",
+    "status": "todo",
+    "line": 3
+  },
+  {
+    "rule": "login",
+    "status": "todo",
+    "line": 5
+  },
+  {
+    "rule": "sobject-attr",
+    "status": "rewritten",
+    "line": 7
+  },
+  {
+    "rule": "sobject-attr",
+    "status": "rewritten",
+    "line": 8
+  },
+  {
+    "rule": "sobject-attr",
+    "status": "todo",
+    "line": 9
+  }
+]

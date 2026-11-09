@@ -1,0 +1,12 @@
+[
+  {
+    "rule": "not-a-client",
+    "status": "needs-review",
+    "line": 5
+  },
+  {
+    "rule": "not-a-client",
+    "status": "needs-review",
+    "line": 6
+  }
+]

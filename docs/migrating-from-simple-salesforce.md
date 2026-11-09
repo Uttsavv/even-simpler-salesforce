@@ -4,6 +4,10 @@ even-simpler-salesforce is a new library, not a fork, and there is no compatibil
 code moves over with mechanical changes. This page maps the calls people use most. It covers
 what exists in **0.1**; rows for later releases are marked.
 
+!!! tip "Let the codemod do the mechanical part"
+    [`esf migrate src/`](migrate.md) rewrites the mechanical rows of these tables and marks
+    everything else with `# esf-migrate: TODO[...]` / `REVIEW[...]` comments and a JSON report.
+
 ## The main differences
 
 - **No username/password login.** Use an External Client App with
@@ -30,7 +34,9 @@ what exists in **0.1**; rows for later releases are marked.
 | `Salesforce(..., domain="test")` | `domain="test"` on the flow (`JwtBearer`, `WebServerFlow`); `ClientCredentials` needs the My Domain URL |
 | `Salesforce(..., version="59.0")` | `esf.Salesforce(auth, api_version="59.0")` (default 68.0, minimum 59.0) |
 | `Salesforce(..., session=requests.Session())` | `esf.Salesforce(auth, http_client=httpx.Client(...))` |
-| `sf.session_id` | `sf.auth.token().access_token` (treat it as a secret) |
+| `sf.sf_version` | `sf.api_version` |
+| `sf.sf_instance` / `sf.base_url` (to build links or URLs) | `sf.instance_url` (read-only: the instance of the current token, `None` before the first call); make calls with `sf.request(...)` |
+| `sf.session_id`, `sf.headers`, `sf.session` (to make your own HTTP calls) | `sf.request(...)`: auth, refresh, retries and logging are applied for you; the access token is not public by design |
 
 ## Records
 

@@ -1,0 +1,42 @@
+[
+  {
+    "rule": "unsupported",
+    "status": "todo",
+    "line": 1
+  },
+  {
+    "rule": "login",
+    "status": "todo",
+    "line": 3
+  },
+  {
+    "rule": "query-result",
+    "status": "rewritten",
+    "line": 8
+  },
+  {
+    "rule": "query-result",
+    "status": "rewritten",
+    "line": 9
+  },
+  {
+    "rule": "query-result",
+    "status": "rewritten",
+    "line": 10
+  },
+  {
+    "rule": "query-more",
+    "status": "todo",
+    "line": 11
+  },
+  {
+    "rule": "query-result",
+    "status": "todo",
+    "line": 11
+  },
+  {
+    "rule": "query-result",
+    "status": "rewritten",
+    "line": 12
+  }
+]

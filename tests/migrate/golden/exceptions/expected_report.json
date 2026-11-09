@@ -1,0 +1,37 @@
+[
+  {
+    "rule": "unsupported",
+    "status": "todo",
+    "line": 1
+  },
+  {
+    "rule": "unsupported",
+    "status": "todo",
+    "line": 2
+  },
+  {
+    "rule": "login",
+    "status": "todo",
+    "line": 8
+  },
+  {
+    "rule": "sobject-attr",
+    "status": "rewritten",
+    "line": 13
+  },
+  {
+    "rule": "exceptions",
+    "status": "rewritten",
+    "line": 14
+  },
+  {
+    "rule": "exceptions",
+    "status": "todo",
+    "line": 16
+  },
+  {
+    "rule": "exceptions",
+    "status": "todo",
+    "line": 18
+  }
+]

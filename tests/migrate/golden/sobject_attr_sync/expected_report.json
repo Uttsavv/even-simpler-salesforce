@@ -1,0 +1,52 @@
+[
+  {
+    "rule": "unsupported",
+    "status": "todo",
+    "line": 1
+  },
+  {
+    "rule": "login",
+    "status": "todo",
+    "line": 3
+  },
+  {
+    "rule": "sobject-attr",
+    "status": "rewritten",
+    "line": 7
+  },
+  {
+    "rule": "sobject-attr",
+    "status": "rewritten",
+    "line": 8
+  },
+  {
+    "rule": "sobject-attr",
+    "status": "rewritten",
+    "line": 9
+  },
+  {
+    "rule": "sobject-attr",
+    "status": "rewritten",
+    "line": 10
+  },
+  {
+    "rule": "sobject-attr",
+    "status": "rewritten",
+    "line": 11
+  },
+  {
+    "rule": "sobject-attr",
+    "status": "rewritten",
+    "line": 11
+  },
+  {
+    "rule": "get-by-custom-id",
+    "status": "rewritten",
+    "line": 12
+  },
+  {
+    "rule": "sobject-attr",
+    "status": "rewritten",
+    "line": 12
+  }
+]

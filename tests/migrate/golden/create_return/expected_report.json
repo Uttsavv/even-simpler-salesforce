@@ -1,0 +1,52 @@
+[
+  {
+    "rule": "unsupported",
+    "status": "todo",
+    "line": 1
+  },
+  {
+    "rule": "create-return",
+    "status": "rewritten",
+    "line": 5
+  },
+  {
+    "rule": "sobject-attr",
+    "status": "rewritten",
+    "line": 5
+  },
+  {
+    "rule": "create-return",
+    "status": "rewritten",
+    "line": 6
+  },
+  {
+    "rule": "create-return",
+    "status": "rewritten",
+    "line": 6
+  },
+  {
+    "rule": "create-return",
+    "status": "rewritten",
+    "line": 10
+  },
+  {
+    "rule": "sobject-attr",
+    "status": "rewritten",
+    "line": 10
+  },
+  {
+    "rule": "create-return",
+    "status": "todo",
+    "line": 14
+  },
+  {
+    "rule": "sobject-attr",
+    "status": "rewritten",
+    "line": 14
+  },
+  {
+    "rule": "sobject-attr",
+    "status": "rewritten",
+    "line": 20
+  }
+]
