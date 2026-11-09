@@ -375,6 +375,7 @@ generic `Async<Name>→<Name>` rule (`AsyncTokenStore→TokenStore`, ...).
 | `[fastapi]` | `fastapi` | `contrib.fastapi` |
 | `[flask]` | `flask` | `contrib.flask` |
 | `[testing]` | `respx`, `pytest` | `testing` module, pytest plugin |
+| `[migrate]` | `libcst` | `esf migrate` (§9.19) |
 | `[all]` | all of the above | |
 
 The Metadata API (0.4) uses only the stdlib (`zipfile`, `xml.etree`) and needs no extra.
@@ -1012,19 +1013,157 @@ settings come from `ESF_*` environment variables (§5.3).
 | `esf request <METHOD> <path> [--json ...]` | 0.2 | `sf.request` from the terminal |
 | `esf generate actions ...` | 0.2 | typed action stubs (§9.7) |
 | `esf generate models <sObject>... --out file.py [--pydantic]` | 0.2 | typed sObject models |
-| `esf migrate <path> [--write]` | 0.3 | rewrites simple-salesforce code |
+| `esf migrate <path>... [--write] [--report FILE] [--check]` | 0.1 | rewrites simple-salesforce code; marks what it can't (§9.19) |
 
 - **`generate models`** reads `describe` for each sObject and writes one `TypedDict`
   (`total=False`; nullable fields as `X | None`; picklists as `Literal[...]` when restricted) or,
   with `--pydantic`, one model. `model=` accepts a `TypedDict` (typing only, no runtime conversion),
   so pydantic is not required for autocomplete. The file header names the org, API version and
   timestamp, like action stubs.
-- **`migrate`** rewrites the mechanical rows of the §20 table (`sf.Lead.get(id)` →
-  `sf.sobject("Lead").get(id)`, `query_all` → `list(sf.query_iter(...))`, `format_soql` → values in
-  SOQL methods, `upsert("Ext__c/42", ...)` → `upsert("Ext__c", "42", ...)`). It is a dry run by
-  default (prints a diff); `--write` edits files. Calls it can't convert get an
-  `# esf-migrate: TODO` comment and are listed at the end. Uses libcst behind a `[migrate]` extra;
-  original code (AGENTS.md licensing).
+- **`migrate`**: see §9.19.
+
+### 9.19 Migration codemod — `esf migrate` (0.1, `[migrate]`)
+
+`esf migrate` rewrites simple-salesforce code (sync `simple_salesforce.Salesforce` and async
+`simple_salesforce.aio.AsyncSalesforce`) to this library. It changes only what it can prove is
+safe. Everything else is found and marked, so a person or an agent can finish the job from a
+checklist. It is built on libcst (keeps comments and formatting) behind the `[migrate]` extra, and
+it is original code (AGENTS.md licensing).
+
+```
+esf migrate <path>... [--write] [--report FILE] [--check]
+            [--client-names NAME,...] [--rules RULE,...] [--exclude GLOB,...]
+```
+
+| Flag | Effect |
+|---|---|
+| *(default)* | dry run: prints a unified diff and a summary; changes no files |
+| `--write` | applies rewrites and inserts `esf-migrate` markers in place |
+| `--report FILE` | writes the machine-readable report (below); `-` for stdout |
+| `--check` | changes nothing; exit 1 if any marker or unconverted pattern remains, else 0 (for CI) |
+| `--client-names` | names (last attribute segment, e.g. `sf_client` matches `self.sf_client`) that are Salesforce clients; matches on other names become `not-a-client` |
+| `--rules` | run only these rule ids |
+| `--exclude` | skip paths (`.venv`, `site-packages`, `node_modules`, `.git` are always skipped) |
+
+Exit codes: `0` nothing left to do; `1` items need review or are TODO (with `--check`, or after a
+run that left markers); `2` usage error or a file that doesn't parse (reported, other files still
+processed). A second run over already-migrated code makes no changes (idempotent).
+
+#### 9.19.1 Detection
+
+A site is **client-shaped** when it is `<expr>.<Name>.<method>(...)` and `<method>` is one of
+simple-salesforce's per-object methods: `get`, `get_by_custom_id`, `create`, `update`, `upsert`,
+`delete`, `describe`, `describe_layout`, `metadata`, `updated`, `deleted`. `<expr>` is any
+expression (`sf`, `self.sf_client`, `deps.admin_client`, a call result). `<Name>` is any
+identifier, so standard, custom (`__c`), event (`__e`) and metadata (`__mdt`) objects are all
+covered without a list of object names. The same shape with `await` in front is the async form.
+
+A site is **confirmed** (not just shaped) when any of these hold, in order:
+1. the last attribute segment of `<expr>` is in `--client-names`;
+2. `<expr>` is a name or attribute annotated with, assigned from, or returned by a
+   simple-salesforce client type or constructor in the same module (libcst scope analysis; no
+   cross-module type inference);
+3. no `--client-names` was given and `<Name>` starts with an uppercase letter.
+
+Shaped but unconfirmed sites are rewritten only with rule `not-a-client` status `needs-review`
+(case 3 without `--client-names`) or left alone (when `--client-names` is given and doesn't match).
+
+#### 9.19.2 Rules
+
+Every finding carries a stable rule id. Ids are part of the public interface (docs pages link to
+`.../migrate/#<rule>`); new rules may be added, ids are never renamed.
+
+| Rule | Finds | Action | Status |
+|---|---|---|---|
+| `sobject-attr` | `X.Obj.method(...)` | → `X.sobject("Obj").method(...)` | `rewritten` |
+| `sobject-getattr` | `getattr(X, name)` where the result is used as an object type (a per-object method is called on it, or it is assigned and then called) | → `X.sobject(name)` | `rewritten` |
+| `upsert-path` | `upsert("Ext__c/42", data)` | → `upsert("Ext__c", "42", data)`; f-strings split on the first literal `/` | `rewritten`; `todo` if the path isn't a literal or splittable f-string |
+| `get-by-custom-id` | `get_by_custom_id(field, value)` | → `get_by_external_id(field, value)` | `rewritten` |
+| `create-return` | result of `create()` used only as `r["id"]` / `r.get("id")` in the same function | assignment kept, those subscripts → `r` | `rewritten` |
+| `create-return` | result of `create()` used any other way (passed on, returned, `r["success"]`, stored) | marker only | `todo` |
+| `stored-ref` | `v = X.Obj` (an object accessor stored in a name or attribute) | → `v = X.sobject("Obj")` if every use of `v` in scope is a per-object method call | `rewritten`; otherwise `todo` |
+| `mock-sobject` | in test files (`test_*.py`, `*_test.py`, `conftest.py`, under `tests/`): `X.Obj.method.<mock attr>` where `<mock attr>` is `assert_*`, `return_value`, `side_effect`, `call_args*`, `call_count`, `await_count`, `await_args*`, `mock_calls` | text rewritten like `sobject-attr` | `needs-review` (see below) |
+| `query-all` | `X.query_all(q)` / `X.query_all_iter(q, ...)` | → `list(X.query_iter(q))` (sync) / `[r async for r in X.query_iter(q)]` (async) / `X.query_iter(q, ...)` | `rewritten` |
+| `query-more` | `X.query_more(url, True)` | marker only (needs a `Cursor`, not a URL) | `todo` |
+| `format-soql` | `format_soql("... {} ...", v)` passed directly to a query method | → values in SOQL methods | `rewritten`; `todo` when the formatted string is built elsewhere |
+| `restful` | `X.restful(path, method=..., json=...)` | → `X.request(method, path, json=...)` | `rewritten` |
+| `apexecute` | `X.apexecute(path, method=, data=)` | → `X.apex.<method>("/" + path, json=data)` | `rewritten` |
+| `exceptions` | `except SalesforceExpiredSession`, `SalesforceMalformedRequest`, `SalesforceResourceNotFound`, ... and the imports | → the §8 error class from the §20 table | `rewritten` when 1:1, else `todo` |
+| `client-internals` | `X.sf_version` | → `X.api_version` | `rewritten` |
+| `client-internals` | `X.session_id`, `X.base_url`, `X.sf_instance`, `X.headers`, `X.session` | marker only, with the §20 replacement in the message | `todo` |
+| `login` | `Salesforce(...)` / `AsyncSalesforce(...)` / `SalesforceLogin(...)` construction | marker only (auth is a design choice, §6) | `todo` |
+| `not-a-client` | a shaped site that couldn't be confirmed (§9.19.1 case 3) | rewritten like its rule | `needs-review` |
+
+Rules not listed (Bulk v1, `toolingexecute`, SOAP-only calls) produce a generic `unsupported`
+`todo` pointing at §20.
+
+**Why `mock-sobject` is review, not done.** `MagicMock().sobject("Lead")` and
+`MagicMock().sobject("Task")` return the same child mock, so after the text rewrite an assertion no
+longer proves *which* object was touched. The marker message recommends
+`esf.testing.FakeSalesforce` (§14), which stores records per object.
+
+#### 9.19.3 Markers
+
+Every `todo` and `needs-review` finding gets a comment on the line above the statement:
+
+```python
+# esf-migrate: TODO[create-return] result is passed to save_audit(); create() now returns the id (str), not a dict
+res = await sf_client.sobject("Lead").create(data)
+
+# esf-migrate: REVIEW[mock-sobject] sobject() mocks don't distinguish objects; prefer esf.testing.FakeSalesforce
+sf_client.sobject("Lead").update.assert_awaited_once_with(LEAD_ID, {"Status": "Working"})
+```
+
+- Format: `# esf-migrate: (TODO|REVIEW)[<rule>] <message>`. One marker per finding; a rerun never
+  duplicates a marker that is already there.
+- A person or agent resolves a finding by fixing the code and deleting the marker.
+  `# esf-migrate: ignore[<rule>]` on the line above suppresses that rule for that statement
+  (e.g. a real false positive).
+- `--check` counts remaining `TODO`/`REVIEW` markers plus any client-shaped site still in old form.
+
+#### 9.19.4 Report
+
+`--report` writes JSON (one object, stable key order) so an agent can work through it:
+
+```json
+{
+  "version": 1,
+  "esf_version": "0.1.0",
+  "mode": "write",
+  "summary": {"files": 18, "rewritten": 47, "needs_review": 9, "todo": 6, "errors": 0},
+  "findings": [
+    {
+      "file": "app/follow_ups/repository.py",
+      "line": 42, "col": 15, "end_line": 42, "end_col": 58,
+      "rule": "sobject-attr",
+      "status": "rewritten",
+      "before": "await self.task_client.Task.update(task_id, body)",
+      "after": "await self.task_client.sobject(\"Task\").update(task_id, body)",
+      "message": "object accessed through sobject()",
+      "suggestion": null,
+      "docs_url": "https://.../migrate/#sobject-attr"
+    }
+  ],
+  "errors": [{"file": "...", "message": "parse error: ..."}]
+}
+```
+
+- `status` is one of `rewritten`, `needs-review`, `todo`. Line numbers refer to the file **after**
+  the run (with `--write`) or the original file (dry run); `mode` (`"write"` or `"dry-run"`) says which.
+- `suggestion` holds suggested replacement code when the tool has one but can't prove it safe.
+- The report never contains string literal contents longer than 80 characters or anything that
+  looks like a secret (same redaction as §11).
+
+#### 9.19.5 Acceptance
+
+- Golden-file tests per rule: input, expected output, expected report entries; covering sync and
+  async, `self.`-prefixed clients, custom objects, nested calls, already-migrated code (no change),
+  and the `ignore` marker.
+- Idempotence property test: `migrate(migrate(x)) == migrate(x)`.
+- Formatting test: comments and blank lines outside rewritten nodes are byte-identical.
+- Run against a real production codebase that uses `simple_salesforce.aio`: every client-shaped
+  site is either rewritten or marked, `--check` is green after the marked items are resolved, and
+  the project's tests pass.
 
 ---
 
@@ -1343,6 +1482,7 @@ Scope:
 - Transport: §7 complete.
 - Errors: §8 complete including custom error tags.
 - Areas: Records (§9.1), Query/Search + `soql` + Cursor (§9.2) incl. values in SOQL methods, `query_one`, `query_first`, `explain`, `esf.flatten`, Collections (§9.3), raw `request` (§9.5), `limits()` (§9.17).
+- CLI: `esf query`, `whoami`, `limits`, `version`, and `esf migrate` (§9.19) so users moving off simple-salesforce have it from the first release.
 - Usage (§10) and observability (§11) complete, stdlib observer; structlog/otel adapters.
 - Testing module (§14) for the areas above.
 - Docs: getting started, auth pages, records/query/collections guides, errors, logging, usage, migration guide (partial).
@@ -1351,6 +1491,7 @@ Scope:
 Acceptance criteria:
 - Every §21 item tagged *0.1* verified.
 - Concurrency test: 100 callers, expired token → 1 token POST; with rotation enabled in a sandbox, no `invalid_grant` across 1,000 refresh cycles from 4 processes sharing a CAS store.
+- `esf migrate` meets §9.19.5.
 - A sample FastAPI app and a sample Flask app in `examples/` use only public APIs for query, records and collections, with tests passing.
 
 ### 0.2 — files, actions, integrations
@@ -1359,7 +1500,7 @@ Files, platform events publish, actions + Apex REST + `esf generate actions`, le
 `request`, `generate models` (§9.18).
 
 ### 0.3 — Bulk, Tooling, GraphQL, Composite
-Bulk 2.0 ingest/query, Tooling incl. execute anonymous (with `capture_log`), GraphQL, Composite/Graph/Tree/Batch builders, `esf migrate` (§9.18).
+Bulk 2.0 ingest/query, Tooling incl. execute anonymous (with `capture_log`), GraphQL, Composite/Graph/Tree/Batch builders.
 
 ### 0.4 — UI API, Reports, Metadata
 ### 0.5 — Pub/Sub API
@@ -1391,7 +1532,7 @@ The docs page contains this table (extended per release). No compatibility shim 
 | `sf.query_all(q)` | `[r async for r in sf.query_iter(q)]` or `list(sf.query_iter(q))` |
 | `sf.query_all_iter(q, include_deleted=True)` | `sf.query_iter(q, include_deleted=True)` |
 | `format_soql(...)` | values in SOQL methods: `sf.query("... = {}", value)`; `esf.soql(...)` to build a query in pieces |
-| a whole codebase | `esf migrate src/` (0.3) rewrites the mechanical rows of this table |
+| a whole codebase | `esf migrate src/` rewrites the mechanical rows of this table and marks the rest (§9.19) |
 | `sf.restful("composite/sobjects", method="PATCH", json=...)` | `sf.collections.update(...)` |
 | `sf.restful(path, ...)` | `sf.request(method, path, ...)` |
 | `sf.apexecute("path", method="POST", data=...)` | `sf.apex.post("/path", json=...)` |
@@ -1402,6 +1543,9 @@ The docs page contains this table (extended per release). No compatibility shim 
 | `SalesforceMalformedRequest` (inspect `.content`) | specific classes (`InvalidField`, `ValidationRuleFailed`, ...) with `.error_code`, `.fields` |
 | `SalesforceExpiredSession` | handled automatically; `ReauthorizationRequired` if the refresh token is dead |
 | `OrderedDict` results | plain `dict` |
+| `sf.sf_version` | `sf.api_version` |
+| `sf.sf_instance` / `sf.base_url` (to build links or URLs) | `sf.instance_url` (read-only; the instance of the current token, `None` before the first call) and `sf.request(...)` for calls |
+| `sf.session_id`, `sf.headers`, `sf.session` (to make your own HTTP calls) | `sf.request(...)` / `sf.apex.*`; the access token is not public by design |
 
 ---
 
