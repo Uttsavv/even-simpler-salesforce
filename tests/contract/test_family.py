@@ -155,6 +155,16 @@ def test_api_version_validation(h: Harness, version: str) -> None:
         h.Client(esf.StaticToken("x", INSTANCE), api_version=version)
 
 
+def test_api_version_messages_come_from_the_constants(h: Harness) -> None:
+    from even_simpler_salesforce._async.client import DEFAULT_API_VERSION, MIN_API_VERSION
+
+    with pytest.raises(ValueError, match=f"must look like '{DEFAULT_API_VERSION}'"):
+        h.Client(esf.StaticToken("x", INSTANCE), api_version="v1")
+    minimum = ".".join(map(str, MIN_API_VERSION))
+    with pytest.raises(ValueError, match=f"minimum supported v{minimum}$"):
+        h.Client(esf.StaticToken("x", INSTANCE), api_version="58.0")
+
+
 def test_custom_api_version_in_urls(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:
     route = mock.get(f"{INSTANCE}/services/data/v62.0/limits").respond(json={})
     sf = h.client(api_version="62.0", recorder=rec)
