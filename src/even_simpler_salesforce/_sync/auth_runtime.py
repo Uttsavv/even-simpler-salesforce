@@ -34,7 +34,7 @@ __all__ = ["AuthRuntime"]
 _log = logging.getLogger("esf")
 
 EXPIRY_SKEW = timedelta(seconds=60)
-BUSY_ATTEMPTS = 3
+BUSY_ATTEMPTS = 3  # total token POSTs while Salesforce says "already being processed"
 _BUSY_TEXT = "already being processed"
 _NEVER_SENT = (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout, httpx.UnsupportedProtocol)
 
@@ -189,7 +189,7 @@ class AuthRuntime:
                 err, desc = self._oauth_error(resp)
                 if _BUSY_TEXT in desc.lower() or _BUSY_TEXT in err.lower():
                     busy += 1
-                    if busy > BUSY_ATTEMPTS:
+                    if busy >= BUSY_ATTEMPTS:  # BUSY_ATTEMPTS POSTs in total
                         raise RefreshFailed(desc or err, error_code=err or None, status=resp.status)
                     self.transport.sleep(backoff_delay(policy, busy))
                     reloaded = self._reload_if_changed(base)
