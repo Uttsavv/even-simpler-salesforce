@@ -1,3 +1,7 @@
+---
+template: home.html
+---
+
 # even-simpler-salesforce
 
 A typed Salesforce client for Python. It is async-first, and a sync client with the same
