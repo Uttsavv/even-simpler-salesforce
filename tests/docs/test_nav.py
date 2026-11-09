@@ -60,7 +60,9 @@ def test_every_page_is_in_the_nav() -> None:
 def test_pages_outside_the_nav_are_linked() -> None:
     header = HEADER.read_text(encoding="utf-8")
     assert "'changelog/' | url" in header
-    assert "'adr/' | url" in header
+    assert "'adr/' | url" not in header  # ADRs are linked from the API reference, not the header
+    reference = (DOCS / "reference" / "index.md").read_text(encoding="utf-8")
+    assert "../adr/index.md" in reference
     index = (DOCS / "adr" / "index.md").read_text(encoding="utf-8")
     adrs = sorted(p.name for p in (DOCS / "adr").glob("*.md") if p.name != "index.md")
     unlinked = [name for name in adrs if f"({name})" not in index]

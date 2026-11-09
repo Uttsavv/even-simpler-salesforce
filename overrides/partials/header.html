@@ -3,7 +3,7 @@
   - no logo button: the title already links to the home page, and the menu (hamburger)
     button takes its place;
   - the title block is a link to the home page (an <a> instead of a <div>);
-  - quiet "Changelog" and "ADRs" links next to the repository link (they are not in the nav).
+  - a quiet "Changelog" link next to the repository link (the changelog is not in the nav).
 -#}
 {% set class = "md-header" %}
 {% if "navigation.tabs.sticky" in features %}
@@ -60,7 +60,6 @@
     {% endif %}
     <div class="esf-header-links">
       <a href="{{ 'changelog/' | url }}">Changelog</a>
-      <a href="{{ 'adr/' | url }}">ADRs</a>
     </div>
     <div class="md-header__source">
       {% if config.repo_url %}

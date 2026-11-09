@@ -40,7 +40,8 @@ that breaks one of them will not be merged. See also [CONTRIBUTING.md](CONTRIBUT
 - **tests for both clients** (async and sync contract tests), plus unit tests for any
   `core/` logic, keeping 100 % coverage of `core/` and `errors.py` and ≥ 90 % overall;
 - **docs**: Google-style docstrings on every public symbol and an updated `docs/` page
-  with runnable examples;
+  with runnable examples, written to the style in
+  [CONTRIBUTING.md](CONTRIBUTING.md#writing-documentation);
 - **a changelog fragment**: `changelog.d/<PR-or-issue>.<type>.md` (or `+<slug>.<type>.md`),
   type ∈ `added changed deprecated removed fixed security performance`;
 - a deprecation path (`EsfDeprecationWarning` for at least one minor) before removing

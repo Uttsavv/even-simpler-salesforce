@@ -47,6 +47,58 @@ CI (`.github/workflows/ci.yml`) additionally enforces **≥ 90 % line + branch c
 overall and 100 % for `core/` and `errors.py`**, runs Python 3.10–3.14 on Linux plus 3.12
 on macOS and Windows, and greps fixtures and docs for Salesforce token patterns.
 
+## Writing documentation
+
+The docs should read like a calm colleague showing you how something works: code first,
+short sentences, no detours. Every page follows the same shape.
+
+**Page shape**
+
+1. `# Title`: a noun or a task, two to four words (`Records`, `Token stores`).
+2. One or two sentences: what this is and when you use it. No history, no caveats.
+3. A minimal code example that works when copied.
+4. `## ` sections, one per task or option, ordered from most to least common. Each one is a
+   short paragraph followed by an example.
+5. Reference tables (options, methods, exceptions) after the examples that use them, not
+   before.
+6. Edge cases, limits and internals last, under headings such as `## Limitations` or
+   `## How it works`.
+
+**Sentences**
+
+- Address the reader as "you". Use the present tense and the active voice.
+- One idea per sentence, one to three sentences per paragraph.
+- Say what to do, then why if it matters: "Create one client per process. Each client owns a
+  connection pool."
+- Use plain words: "use", not "utilise"; "so", not "in order to". Drop "simply", "just",
+  "easily", "note that" and "please".
+- Bold is for the one word the reader must not miss in a paragraph, not for emphasis in
+  general. Most paragraphs need none.
+
+**Headings**
+
+- Use `##` and `###` only. A page needing `####` should be split.
+- Short and parallel: `## Create a record`, `## Update a record`; or the option name in
+  code, `` ## `fields` ``.
+- No numbering, no trailing punctuation, no question headings.
+
+**Code**
+
+- Every fenced `python` block runs in `tests/docs`, so keep examples real and minimal.
+- Show the async client. Add an `=== "Async"` / `=== "Sync"` pair only when the two differ in
+  more than `await`.
+- Comments explain *why*, or show a result: `# '00Q...'`.
+
+**Admonitions**
+
+- At most one or two per page. `!!! tip` for a shortcut, `!!! warning` for something that
+  loses data or money. Never for page intros, status banners or long text.
+
+**Tables**
+
+- For reference data the reader scans: options, defaults, error classes. Not for prose.
+- Columns: name, then default or type, then a short description without a full stop.
+
 ## Codebase rules
 
 These are non-negotiable; review will ask for them.
