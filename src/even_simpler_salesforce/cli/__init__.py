@@ -122,7 +122,7 @@ def _cell(value: Any) -> str:
 
 
 _CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f]")
-_FORMULA_START = ("=", "+", "-", "@", "\t", "\r")
+_FORMULA_START = ("=", "+", "-", "@", "\t", "\r", "\n")
 
 
 def _printable(text: str) -> str:

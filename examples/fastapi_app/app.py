@@ -3,7 +3,8 @@
 Run it (from the ``examples/`` directory)::
 
     export SF_DOMAIN=https://acme.my.salesforce.com SF_CLIENT_ID=... SF_CLIENT_SECRET=...
-    export SF_CURSOR_KEY="a long random secret"   # signs pagination cursors
+    # Signs pagination cursors. Generate it once, keep it secret, share it across workers:
+    export SF_CURSOR_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
     uvicorn fastapi_app.app:app --reload
 
 What it shows:

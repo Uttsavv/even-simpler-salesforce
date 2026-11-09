@@ -357,7 +357,13 @@ def test_module_entry_point() -> None:
 def test_csv_neutralises_formulas(capsys: pytest.CaptureFixture[str], static_env: None) -> None:
     rows = _rows(0, 1)
     rows[0].update(
-        {"Name": '=HYPERLINK("http://evil")', "Note__c": "+1", "At__c": "@SUM(A1)", "Score__c": -5}
+        {
+            "Name": '=HYPERLINK("http://evil")',
+            "Note__c": "+1",
+            "At__c": "@SUM(A1)",
+            "Nl__c": "\n=1+1",
+            "Score__c": -5,
+        }
     )
     respx.get(f"{API}/query").respond(json={"totalSize": 1, "done": True, "records": rows})
     assert main(["query", "SELECT Id FROM Lead", "--csv"]) == EXIT_OK
@@ -366,6 +372,7 @@ def test_csv_neutralises_formulas(capsys: pytest.CaptureFixture[str], static_env
     assert row["Name"] == '\'=HYPERLINK("http://evil")'
     assert row["Note__c"] == "'+1"
     assert row["At__c"] == "'@SUM(A1)"
+    assert row["Nl__c"] == "'\n=1+1"
     assert row["Score__c"] == "-5"  # numbers are data, not formulas
 
 
