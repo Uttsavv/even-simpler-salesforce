@@ -47,6 +47,7 @@ class Periodic:
 
     def start(self) -> None:
         if self._thread is None:
+            self._stop = threading.Event()  # fresh event so a stopped poller can restart
             self._thread = threading.Thread(target=self._run, name="esf-limits-poller", daemon=True)
             self._thread.start()
 

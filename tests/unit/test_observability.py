@@ -139,7 +139,7 @@ def test_debug_printer_lines() -> None:
         "2000",
         "rows",
         "api",
-        "12.0k/100.0k",
+        "12k/100k",
     ]
     assert "FIELD_CUSTOM_VALIDATION_EXCEPTION" in lines[1]
     assert '"[ADDR_REQUIRED] Street is required"' in lines[1]

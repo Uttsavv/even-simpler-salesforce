@@ -508,6 +508,7 @@ class AsyncSalesforce:
                 headers=h,
                 idempotent=idempotent,
                 operation=operation,
+                expect_json=False,
             )
         )
         if not raw.content:
