@@ -319,7 +319,7 @@
 
 .esf-window {
   width: 100%;
-  max-width: 46rem;
+  max-width: 52rem;
   margin: 2.2rem 0 0;
   text-align: left;
   border: 1px solid var(--esf-border);
@@ -376,29 +376,22 @@
   font-style: italic;
 }
 
-.esf-chips {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.45rem;
-  max-width: 46rem;
-  margin: 1.4rem 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.esf-chips li {
-  padding: 0.25rem 0.7rem;
-  font-size: 0.62rem;
-  color: var(--esf-fg);
+/* Feature cards on the landing page (grid cards from md_in_html). */
+.md-typeset .grid.cards > ul > li {
   border: 1px solid var(--esf-border);
-  border-radius: 999px;
-  background-color: color-mix(in srgb, var(--esf-muted) 70%, transparent);
+  border-radius: var(--esf-radius);
+  box-shadow: none;
+  transition: border-color 0.15s, background-color 0.15s;
 }
 
-.esf-chips code {
-  font-family: var(--md-code-font-family);
-  background: none;
+.md-typeset .grid.cards > ul > li:hover {
+  border-color: var(--esf-ring);
+  background-color: color-mix(in srgb, var(--esf-muted) 50%, transparent);
+}
+
+.md-typeset .grid.cards > ul > li > hr {
+  margin: 0.5em 0;
+  border-color: var(--esf-border);
 }
 
 /* palette.css sets link colours per primary colour with a more specific selector. */
