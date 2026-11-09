@@ -351,6 +351,23 @@
   transition: background-color 0.15s, opacity 0.15s;
 }
 
+/* Icon before the label (book for "Get started", GitHub mark for "GitHub"). */
+.esf-btn {
+  gap: 0.45rem;
+}
+
+.esf-btn svg {
+  flex-shrink: 0;
+  width: 0.85rem;
+  height: 0.85rem;
+  fill: currentcolor;
+}
+
+.esf-btn svg.lucide {
+  fill: none;
+  stroke: currentcolor;
+}
+
 .esf-btn:hover,
 .esf-btn:focus {
   color: var(--hero-fg);

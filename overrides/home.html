@@ -63,8 +63,8 @@
       <h1 class="esf-hero__title"><span class="esf-hero__accent">even-simpler</span>-salesforce</h1>
       <p class="esf-hero__tagline">The Salesforce client your web app deserves. Async or sync, same API.</p>
       <div class="esf-hero__actions">
-        <a class="esf-btn esf-btn--primary" href="{{ 'getting-started/' | url }}">Get started</a>
-        <a class="esf-btn" href="{{ config.repo_url }}">GitHub</a>
+        <a class="esf-btn esf-btn--primary" href="{{ 'getting-started/' | url }}">{% include ".icons/lucide/book-open.svg" %}Get started</a>
+        <a class="esf-btn" href="{{ config.repo_url }}">{% include ".icons/fontawesome/brands/github.svg" %}GitHub</a>
       </div>
       {#- Below 76em only one window shows; the radios drive the shadcn-style tabs in its bar. -#}
       <input class="esf-tab-input" type="radio" name="esf-framework" id="esf-tab-fastapi" aria-label="Show FastAPI example" checked>
