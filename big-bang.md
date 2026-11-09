@@ -288,9 +288,14 @@ base = esf.AsyncSalesforce(admin_auth, store=my_store)      # app-wide
 user_sf = base.with_auth(esf.WebServerFlow(..., token_key=f"user:{user_id}"))
 ```
 
-Top-level exports (the 0.1 SemVer surface): `AsyncSalesforce`, `Salesforce`, all `Auth`
-classes, `Token`, `TokenStore`, `InMemoryTokenStore`, `soql`, `Cursor`, all exceptions,
-result models, `Budget`, `Observer`, `capture`, `__version__`.
+Top-level exports (the 0.1 SemVer surface, as implemented): `AsyncSalesforce`, `Salesforce`,
+all `Auth` classes and `AuthStart`, `Token`, `AsyncTokenStore` / `TokenStore`,
+`AsyncInMemoryTokenStore` / `InMemoryTokenStore`, `soql`, `soql_like`, `soql_identifier`,
+`Cursor`, all exceptions, result models (`QueryResult`, `BatchResult`, `RecordResult`,
+`UpsertResult`, `UsageSnapshot`, `Limit`), config (`Budget`, `RetryPolicy`, `Timeouts`,
+`DescribeCacheConfig`), `Cache` / `MemoryCache`, `Event`, `Observer`, `capture`,
+`call_context`, `EsfDeprecationWarning`, `__version__`. Naming rule: the async variant carries the
+`Async` prefix, like `AsyncSalesforce` / `Salesforce`.
 
 ---
 
@@ -321,7 +326,7 @@ result models, `Budget`, `Observer`, `capture`, `__version__`.
 
 ### 5.2 Client lifecycle
 
-- `AsyncSalesforce(auth, *, api_version="68.0", http_client=None, store=None, cache=None, observers=(), budget=None, retry=RetryPolicy(), timeout=Timeouts(), max_concurrency=None, user_agent=None, json=None)`.
+- `AsyncSalesforce(auth, *, api_version="68.0", http_client=None, store=None, cache=None, observers=(), budget=None, retry=None, timeout=None, max_concurrency=None, user_agent=None, json=None, error_tags=None, cursor_key=None, instance_url=None, describe_cache=None, log_soql="hash", http2=False, client_name=None)` (`None` means the default config object).
 - If `http_client` is not given, the client creates one (`httpx.AsyncClient` with HTTP/1.1, pool limits, timeouts, `Accept-Encoding: gzip`) and **owns** it: `aclose()` / `async with` closes it. An injected client is never closed by the library.
 - `with_auth(auth)` returns a child client sharing transport, caches, observers, usage counters and budget, with its own auth runtime. Children are cheap (no new pool) and SHOULD NOT be closed individually; closing the parent closes the pool.
 - Clients are safe to share across tasks (async) or threads (sync).
@@ -342,10 +347,14 @@ library behaviour never changes silently from the environment.
 | `_async/_compat.py` | `_sync/_compat.py` (hand-written, not generated) |
 |---|---|
 | `asyncio.Lock` | `threading.Lock` |
-| `asyncio.Event` | `threading.Event` |
+| `asyncio.Semaphore` | `threading.BoundedSemaphore` |
 | `asyncio.sleep` | `time.sleep` |
-| `gather_limited(n, coros)` (semaphore + `asyncio.gather`; Python 3.10 has no `TaskGroup`) | `ThreadPoolExecutor(max_workers=n).map` or sequential |
-| `anext`-based helpers | `next` |
+| `gather_settled(n, funcs)` (semaphore + `asyncio.gather(return_exceptions=True)`; always waits for every call) | `ThreadPoolExecutor`, each task in a copy of the caller's context |
+| `Periodic` (background task, for the limits poller) | daemon thread |
+
+Also replaced: `aread→read`, `StopAsyncIteration→StopIteration`, `asynccontextmanager→contextmanager`,
+`AbstractAsyncContextManager→AbstractContextManager`, `store_lock_async→store_lock_sync`, and a
+generic `Async<Name>→<Name>` rule (`AsyncTokenStore→TokenStore`, ...).
 
 - CI runs the generator and fails if `git diff --exit-code src/even_simpler_salesforce/_sync` is non-empty.
 - Contract tests are parameterised over both clients so behaviour stays identical.
@@ -379,7 +388,7 @@ All are frozen config objects implementing the `Auth` protocol. They hold no tok
 
 | Class | Use | Inputs | Refresh behaviour |
 |---|---|---|---|
-| `WebServerFlow` | A human user logged in via the browser; app holds their refresh token | `domain`, `client_id`, `client_secret` (optional for PKCE public clients), `redirect_uri`, `scopes`, `token_key`, `refresh_ahead=None`, `expiry="unknown"\|"introspect"` | Refresh token grant |
+| `WebServerFlow` | A human user logged in via the browser; app holds their refresh token | `domain`, `client_id`, `client_secret` (optional for PKCE public clients), `redirect_uri`, `scopes`, `token_key` (**required**: one per Salesforce identity), `refresh_ahead=None`, `expiry="unknown"\|"introspect"` | Refresh token grant |
 | `ClientCredentials` | The app acting as its integration user | `domain` (**must be My Domain**), `client_id`, `client_secret` | Re-request a token (no refresh token issued) |
 | `JwtBearer` | Server-to-server with a certificate | `domain`, `client_id`, `username`, `private_key`, `audience` (`login`/`test`/custom) | Re-sign and re-request |
 | `StaticToken` | Tests, scripts, tokens obtained elsewhere | `access_token`, `instance_url` | None: a 401 raises `SessionExpired` |
@@ -422,8 +431,10 @@ class Token:
 
 ### 6.3 `TokenStore` protocol
 
+Implemented as `AsyncTokenStore` (below) and the sync `TokenStore` with the same members.
+
 ```python
-class TokenStore(Protocol):
+class AsyncTokenStore(Protocol):
     async def load(self, key: str) -> Token | None: ...
     async def save(self, key: str, token: Token, *, expected_version: int | None) -> Token:
         """Persist `token`. If expected_version is not None and the stored version differs,
@@ -965,7 +976,8 @@ shows up for admins (V20).
 
 `sf.tagged(caller="job:backfill", priority="low")` returns a child view whose calls carry those
 attributes (for counters, logs and the guard). Default `priority="normal"`. A contextvar alternative
-exists: `with esf.call_context(caller="route:/leads", priority="high"): ...`.
+exists: `with esf.call_context(caller="route:/leads", priority="high"): ...`. Precedence:
+per-call spec priority, then the `tagged()` view, then `call_context`, then `"normal"`.
 
 ### 10.3 Snapshot
 
@@ -1018,8 +1030,9 @@ usage so jobs can sleep and resume.
 `error_code`, `error_class`, `duration_ms`, `attempts`, `retry_reasons`, `refreshed`,
 `records` (returned or sent), `bytes_in`, `bytes_out`, `api_used`, `api_max`, `caller`,
 `priority`, `soql_hash` (SHA-256 of normalised SOQL, first 12 hex), `soql` (only if
-`log_soql="redacted"`: string/number literals replaced by `?`), `request_id`, `api_version`,
-`client_id_hash`.
+`log_soql="redacted"`: string/number literals and SOSL `FIND {...}` terms replaced by `?`),
+`request_id`, `api_version`, `client_id_hash`, `records_failed` (Collections only),
+`error_message` (only with `ESF_DEBUG`: Salesforce messages can quote record values).
 
 **Never logged:** access/refresh tokens, `Authorization` headers, client secrets, private keys,
 record bodies, SOQL literals (unless explicitly enabled), file contents.
