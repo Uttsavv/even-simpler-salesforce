@@ -134,7 +134,7 @@ class FakeOrg:
             self._store(
                 "Contact", {"LastName": last, "AccountId": accounts[0]["Id"], "Email": f"c{i}@acme.test"}
             )
-        self._store("Opportunity", {"Name": "Acme renewal", "AccountId": accounts[0]["Id"], "Amount": 5000})
+        self._store("Opportunity", {"Name": "Acme renewal", "AccountId": accounts[0]["Id"], "Amount": 12500.5})
         statuses = ("Open", "Working", "Closed - Not Converted")
         named = [
             ("Ada", "Lovelace", "Analytical Engines"),
