@@ -84,6 +84,9 @@ thresholds, pyright strictness or ruff rules to make a check pass.
 ## Scope guard
 
 - General-purpose only (D4): nothing specific to one app or org.
+- One way per task (D29): a new public method or parameter must do something no existing
+  public API can do, or replace code users write by hand and often get wrong. No aliases,
+  shortcut parameters or format converters; check D29's rejected list before proposing one.
 - No SOAP `login()`, no zeep, no attribute magic (D10). SOAP is used only internally for
   lead convert/merge (D14).
 - Core depends on httpx only; anything else is an optional extra (O7).
