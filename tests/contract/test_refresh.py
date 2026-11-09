@@ -568,3 +568,20 @@ def test_expiry_introspect_failure_falls_back(h: Harness, mock: respx.MockRouter
     sf = h.client(cc_auth(expiry="introspect"), token=False)
     get(h, sf)
     assert sf._runtime.current().expires_at is None
+
+
+def test_expiry_introspect_save_conflict_keeps_stored_token(h: Harness, mock: respx.MockRouter) -> None:
+    store = h.new_store()
+    auth = cc_auth(expiry="introspect")
+
+    def introspect(request: httpx.Request) -> httpx.Response:
+        cur = store._data[auth.token_key]
+        store._data[auth.token_key] = cur.replace(access_token="AT-elsewhere", version=cur.version + 1)
+        return httpx.Response(200, json=load_fixture("oauth/introspect_active.json"))
+
+    mock.post(INTROSPECT_URL).mock(side_effect=introspect)
+    mock.post(TOKEN_URL).respond(json=token_body("AT-1"))
+    api = mock.get(GET_URL).respond(json={"Id": LEAD_ID})
+    sf = h.client(auth, store=store, token=False)
+    get(h, sf)
+    assert bearer(api.calls.last.request) == "AT-elsewhere"
