@@ -90,7 +90,7 @@ packages = ["src/even_simpler_salesforce"]
 line-length = 110
 target-version = "py310"
 src = ["src", "tests"]
-extend-exclude = ["src/even_simpler_salesforce/_sync"]
+extend-exclude = ["src/even_simpler_salesforce/_sync", "big-bang.md"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "ASYNC", "PT", "S"]
