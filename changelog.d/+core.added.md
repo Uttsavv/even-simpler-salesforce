@@ -1,0 +1,1 @@
+Core layer for 0.1: typed exception hierarchy, client configuration objects, result models, and pure (no-I/O) helpers for SOQL quoting, query cursors, limit-header parsing, error classification and retry decisions.
