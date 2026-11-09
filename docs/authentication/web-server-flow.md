@@ -65,7 +65,8 @@ A rejected code (already used, expired, wrong verifier) raises `OAuthError` with
 ## 3. Call the API as the user
 
 Create a child client for the user's flow. Children share the root client's connection pool,
-caches and observers. They use the root's token store unless you pass `store=`:
+caches and observers. They use the root's token store unless you pass `store=`. They don't inherit the root's
+`instance_url=` override; pass `instance_url=` to `with_auth()` if the child needs one:
 
 ```python
 as_user = sf.with_auth(flow_for("42"))
@@ -99,6 +100,9 @@ When the access token expires, the client refreshes it with the stored refresh t
 - `invalid_grant` (refresh token expired, revoked or rotated out) raises
   `ReauthorizationRequired` and emits `sf.auth.reauth_required`. Send the user through step 1
   again.
+- If no refresh token is stored under `token_key` (the user never finished step 2, or was
+  logged out), the first call raises `ReauthorizationRequired` with
+  `error_code="no_refresh_token"` without contacting Salesforce, and no event is emitted.
 
 ```python
 try:

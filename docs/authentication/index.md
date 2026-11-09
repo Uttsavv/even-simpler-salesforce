@@ -57,7 +57,9 @@ print(auth.token_url)
    with at most 3 token requests in total.
 6. A dead refresh token (`invalid_grant`) raises `ReauthorizationRequired` and emits the
    `sf.auth.reauth_required` event: the user has to log in again. For `ClientCredentials` and
-   `JwtBearer`, `invalid_grant` means a configuration problem and raises `OAuthError`.
+   `JwtBearer`, `invalid_grant` means a configuration problem and raises `OAuthError`. A
+   `WebServerFlow` with no stored refresh token raises `ReauthorizationRequired`
+   (`error_code="no_refresh_token"`) without a token request.
 
 Token requests to `/services/oauth2/token` are not counted as API calls in `sf.request`
 events. They emit `sf.auth.refreshed` instead (see [Logging](../logging.md)).

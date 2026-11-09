@@ -2,8 +2,8 @@
 
 ## Project status
 
-!!! warning "Project status: alpha (0.1)"
-    Breaking changes are possible in 0.x minor releases. They are always listed under
+!!! warning "Project status: alpha (0.1 release candidates)"
+    0.1.0 is in the release-candidate stage (`0.1.0rcN`). Breaking changes are possible in 0.x minor releases. They are always listed under
     *Changed* / *Removed* in the [changelog](changelog.md) with migration notes.
 
     So far the library has been tested against **one production org** only:
@@ -31,10 +31,15 @@
 ## Install
 
 ```sh
-pip install even-simpler-salesforce
+pip install --pre even-simpler-salesforce
 # optional extras, e.g. JWT bearer login and orjson:
-pip install "even-simpler-salesforce[jwt,speed]"
+pip install --pre "even-simpler-salesforce[jwt,speed]"
 ```
+
+`--pre` is needed until 0.1.0 final is published: pip skips release candidates by default, and
+without it you get `0.0.1`, an empty placeholder that only reserves the name. To install from
+the main branch instead, use
+`pip install "even-simpler-salesforce @ git+https://github.com/Uttsavv/even-simpler-salesforce"`.
 
 | Extra | Installs | Enables |
 |---|---|---|
@@ -46,6 +51,8 @@ pip install "even-simpler-salesforce[jwt,speed]"
 | `structlog` | structlog | the structlog observer |
 | `testing` | pytest, respx | `even_simpler_salesforce.testing` helpers that need them |
 | `fastapi`, `flask` | the framework | the example apps |
+| `migrate` | libcst | the [`esf migrate`](migrate.md) codemod |
+| `all` | every extra above | |
 
 The import name is `even_simpler_salesforce`. These docs alias it as `esf`:
 

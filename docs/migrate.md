@@ -27,7 +27,7 @@ migrated code changes nothing.
 | `--check` | changes nothing; exit 1 if any marker or unconverted pattern remains, else 0 |
 | `--client-names a,b` | names that hold a Salesforce client (the last attribute: `sf_client` matches `self.sf_client`) |
 | `--rules r1,r2` | run only these [rules](#rules) |
-| `--exclude GLOB,...` | skip paths; `.venv`, `site-packages`, `node_modules` and `.git` are always skipped |
+| `--exclude GLOB,...` | skip paths; `.venv`, `venv`, `site-packages`, `node_modules`, `.git`, `__pycache__`, `.tox` and `.nox` are always skipped |
 
 Exit codes: **0** nothing left to do; **1** items need review or are TODO, or (in a dry run)
 rewrites are still pending; **2** a usage error or a file that doesn't parse (it is reported and
@@ -91,12 +91,13 @@ res = await sf_client.sobject("Task").create(data)
 
 ## The report
 
-`--report FILE` writes one JSON object (keys in this order):
+`--report FILE` writes one JSON object (keys in this order; `esf_version` is the installed
+library version):
 
 ```json
 {
   "version": 1,
-  "esf_version": "0.1.0",
+  "esf_version": "0.1.0rc1",
   "mode": "write",
   "summary": {"files": 18, "rewritten": 47, "needs_review": 9, "todo": 6, "errors": 0},
   "findings": [

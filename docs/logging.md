@@ -36,7 +36,7 @@ print([e.name for e in seen])  # ['sf.auth.refreshed', 'sf.request']
 | `sf.auth.refreshed` | a token was acquired or refreshed | `token_key_hash`, `flow`, `duration_ms`, `rotated` (new refresh token), `proactive`, `initial` (first token, not a refresh) |
 | `sf.auth.reauth_required` | a refresh token is dead (`invalid_grant`) | `token_key_hash` |
 | `sf.usage.threshold` | a [budget](usage-and-budgets.md#budgets) threshold was crossed | `threshold`, `fraction`, `used`, `max` |
-| `sf.debug.attempt` | each HTTP attempt, **only with `ESF_DEBUG=2`** | `method`, `url` (no query string), `status`, `request_headers` / `response_headers` (`Authorization` and cookies redacted), `elapsed_ms` |
+| `sf.debug.attempt` | each HTTP attempt, **only with `ESF_DEBUG=2`** | `method`, `path_template` (not the URL: paths can carry external id values), `status`, `request_headers` / `response_headers` (`Authorization` and cookies redacted), `elapsed_ms` |
 
 `retry_reasons` / `reason` values: `connect_error`, `timeout`, `transport_error`, `row_locked`,
 `rate_limited`, `http_500`, `http_502`, `http_503`, `http_504`.
@@ -147,7 +147,7 @@ await traced.aclose()
 For each `sf.request` event it records:
 
 - a span named `salesforce <operation>`, covering the call's duration, with attributes
-  `salesforce.operation`, `salesforce.sobject`, `salesforce.status`, `salesforce.outcome`,
+  `salesforce.operation`, `salesforce.sobject`, `salesforce.method`, `salesforce.status`, `salesforce.outcome`,
   `salesforce.error_code`, `salesforce.caller`, `salesforce.priority`, `salesforce.attempts`,
   `http.request.method` and `url.path` (the path template). The span status is `ERROR` on
   failure;
