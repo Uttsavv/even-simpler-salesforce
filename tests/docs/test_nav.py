@@ -40,7 +40,7 @@ def test_nav_pages_exist() -> None:
 
 def test_every_page_is_in_the_nav() -> None:
     nav = set(_nav())
-    pages = {str(p.relative_to(DOCS)) for p in DOCS.rglob("*.md")}
+    pages = {p.relative_to(DOCS).as_posix() for p in DOCS.rglob("*.md")}  # nav uses "/" on every OS
     orphans = sorted(pages - nav)
     assert not orphans, orphans
 
