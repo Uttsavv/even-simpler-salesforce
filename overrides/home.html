@@ -1,0 +1,65 @@
+{#- Home page: full-width hero above the normal page layout. -#}
+{% extends "main.html" %}
+
+{% block extrahead %}
+  {{ super() }}
+  <style>.md-content .md-typeset > h1:first-of-type { display: none; }</style>
+{% endblock %}
+
+{% block hero %}
+  <section class="esf-hero">
+    <div class="esf-hero__inner md-grid">
+      <h1 class="esf-hero__title"><span class="esf-hero__accent">even-simpler</span>-salesforce</h1>
+      <p class="esf-hero__tagline">The Salesforce client your web app deserves.</p>
+      <div class="esf-hero__actions">
+        <a class="esf-btn esf-btn--primary" href="{{ 'getting-started/' | url }}">Get started</a>
+        <a class="esf-btn" href="{{ config.repo_url }}">GitHub</a>
+      </div>
+      <figure class="esf-window" aria-label="FastAPI example">
+        <figcaption class="esf-window__bar">
+          <span class="esf-window__dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="esf-window__label">FastAPI <small>async</small></span>
+        </figcaption>
+        <pre class="esf-window__code highlight"><code><span class="n">sf</span> <span class="o">=</span> <span class="n">esf</span><span class="o">.</span><span class="n">AsyncSalesforce</span><span class="p">(</span><span class="n">auth</span><span class="p">,</span> <span class="n">budget</span><span class="o">=</span><span class="n">esf</span><span class="o">.</span><span class="n">Budget</span><span class="p">(</span><span class="n">block_all_above</span><span class="o">=</span><span class="mf">0.9</span><span class="p">))</span>
+
+<span class="nd">@asynccontextmanager</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">lifespan</span><span class="p">(</span><span class="n">app</span><span class="p">:</span> <span class="n">FastAPI</span><span class="p">):</span>
+    <span class="k">async</span> <span class="k">with</span> <span class="n">sf</span><span class="p">:</span>  <span class="c1"># one pooled client, closed on shutdown</span>
+        <span class="k">yield</span>
+
+<span class="n">app</span> <span class="o">=</span> <span class="n">FastAPI</span><span class="p">(</span><span class="n">lifespan</span><span class="o">=</span><span class="n">lifespan</span><span class="p">)</span>
+
+<span class="nd">@app</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"/leads/by-email"</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">lead_by_email</span><span class="p">(</span><span class="n">email</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+    <span class="c1"># values are quoted for you: no SOQL injection</span>
+    <span class="n">lead</span> <span class="o">=</span> <span class="k">await</span> <span class="n">sf</span><span class="o">.</span><span class="n">query_one</span><span class="p">(</span>
+        <span class="s2">"SELECT Id, Name, Owner.Name FROM Lead WHERE Email = </span><span class="si">{}</span><span class="s2">"</span><span class="p">,</span> <span class="n">email</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">esf</span><span class="o">.</span><span class="n">flatten</span><span class="p">(</span><span class="n">lead</span><span class="p">)</span>  <span class="c1"># {"Id", "Name", "Owner.Name"}</span>
+
+<span class="nd">@app</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"/accounts/</span><span class="si">{account_id}</span><span class="s2">/contacts"</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">contacts</span><span class="p">(</span><span class="n">account_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+    <span class="n">soql</span> <span class="o">=</span> <span class="s2">"SELECT Name, Email FROM Contact WHERE AccountId = </span><span class="si">{}</span><span class="s2">"</span>
+    <span class="k">return</span> <span class="p">[</span><span class="n">esf</span><span class="o">.</span><span class="n">flatten</span><span class="p">(</span><span class="n">c</span><span class="p">)</span> <span class="k">async</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">sf</span><span class="o">.</span><span class="n">query_iter</span><span class="p">(</span><span class="n">soql</span><span class="p">,</span> <span class="n">account_id</span><span class="p">)]</span>
+
+<span class="nd">@app</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"/limits"</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">limits</span><span class="p">():</span>
+    <span class="n">api</span> <span class="o">=</span> <span class="p">(</span><span class="k">await</span> <span class="n">sf</span><span class="o">.</span><span class="n">limits</span><span class="p">())[</span><span class="s2">"DailyApiRequests"</span><span class="p">]</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">"used"</span><span class="p">:</span> <span class="n">api</span><span class="o">.</span><span class="n">used</span><span class="p">,</span> <span class="s2">"max"</span><span class="p">:</span> <span class="n">api</span><span class="o">.</span><span class="n">max</span><span class="p">}</span>
+
+<span class="nd">@app</span><span class="o">.</span><span class="n">exception_handler</span><span class="p">(</span><span class="n">esf</span><span class="o">.</span><span class="n">NotFound</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">not_found</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="n">exc</span><span class="p">:</span> <span class="n">esf</span><span class="o">.</span><span class="n">NotFound</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">JSONResponse</span><span class="p">({</span><span class="s2">"error"</span><span class="p">:</span> <span class="s2">"not found"</span><span class="p">},</span> <span class="n">status_code</span><span class="o">=</span><span class="mi">404</span><span class="p">)</span></code></pre>
+      </figure>
+      <ul class="esf-chips">
+        <li><code>{}</code> values, injection-safe</li>
+        <li>query_one · query_first</li>
+        <li>query_iter: every page, lazily</li>
+        <li>esf.flatten</li>
+        <li>API budget guard</li>
+        <li>limits &amp; usage</li>
+        <li>typed errors</li>
+        <li>sync + async, one API</li>
+      </ul>
+    </div>
+  </section>
+{% endblock %}
