@@ -1,6 +1,9 @@
 {#-
-  Copy of the theme's partials/header.html. Only change: the title block is a link to the
-  home page (an <a> instead of a <div>), so clicking the site name goes to the landing page.
+  Copy of the theme's partials/header.html. Changes:
+  - no logo button: the title already links to the home page, and the menu (hamburger)
+    button takes its place;
+  - the title block is a link to the home page (an <a> instead of a <div>);
+  - quiet "Changelog" and "ADRs" links next to the repository link (they are not in the nav).
 -#}
 {% set class = "md-header" %}
 {% if "navigation.tabs.sticky" in features %}
@@ -10,9 +13,6 @@
 {% endif %}
 <header class="{{ class }}" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="{{ lang.t('header') }}">
-    <a href="{{ config.extra.homepage | d(nav.homepage.url, true) | url }}" title="{{ config.site_name | e }}" class="md-header__button md-logo" aria-label="{{ config.site_name }}" data-md-component="logo">
-      {% include "partials/logo.html" %}
-    </a>
     <label class="md-header__button md-icon" for="__drawer">
       {% set icon = config.theme.icon.menu or "material/menu" %}
       {% include ".icons/" ~ icon ~ ".svg" %}
@@ -58,6 +58,10 @@
         {% include "partials/search.html" %}
       {% endif %}
     {% endif %}
+    <div class="esf-header-links">
+      <a href="{{ 'changelog/' | url }}">Changelog</a>
+      <a href="{{ 'adr/' | url }}">ADRs</a>
+    </div>
     <div class="md-header__source">
       {% if config.repo_url %}
         {% include "partials/source.html" %}

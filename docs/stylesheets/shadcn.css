@@ -1,7 +1,8 @@
 /*
  * shadcn/ui-inspired look for the Zensical "modern" variant.
  * Zinc neutrals, 1px hairline borders, 0.5rem radius, Geist text, JetBrains Mono code.
- * The header is left to the theme. overrides/home.html adds the landing hero.
+ * overrides/partials/header.html trims the header; overrides/home.html adds the landing hero.
+ * The hero's blue-violet accent carries through every page (see "accent" below).
  */
 
 /* ---- tokens ------------------------------------------------------------------- */
@@ -350,6 +351,23 @@
   transition: background-color 0.15s, opacity 0.15s;
 }
 
+/* Icon before the label (book for "Get started", GitHub mark for "GitHub"). */
+.esf-btn {
+  gap: 0.45rem;
+}
+
+.esf-btn svg {
+  flex-shrink: 0;
+  width: 0.85rem;
+  height: 0.85rem;
+  fill: currentcolor;
+}
+
+.esf-btn svg.lucide {
+  fill: none;
+  stroke: currentcolor;
+}
+
 .esf-btn:hover,
 .esf-btn:focus {
   color: var(--hero-fg);
@@ -584,4 +602,84 @@ a.md-header__title:focus {
   color: inherit;
   text-decoration: none;
   cursor: pointer;
+}
+
+/* Changelog and ADR links in the header (overrides/partials/header.html). */
+.esf-header-links {
+  display: flex;
+  gap: 1rem;
+  margin: 0 0.6rem 0 0.4rem;
+  font-size: 0.65rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.esf-header-links a {
+  color: var(--esf-muted-fg);
+  transition: color 0.15s;
+}
+
+.esf-header-links a:hover,
+.esf-header-links a:focus {
+  color: var(--esf-fg);
+}
+
+@media screen and (max-width: 59.984375em) {
+  .esf-header-links {
+    display: none;
+  }
+}
+
+/* ---- accent: the hero's gradient, carried through every page ------------------------ */
+
+/* A thin gradient line under the header. */
+.md-header {
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(
+      90deg,
+      transparent,
+      var(--esf-accent-a) 25%,
+      var(--esf-accent-b) 75%,
+      transparent
+    )
+    1;
+}
+
+/* A faint glow at the top of every page, the same colours as the hero, much weaker. */
+.md-main {
+  background:
+    radial-gradient(60rem 22rem at 0% 0%, color-mix(in srgb, var(--hero-glow-a) 45%, transparent), transparent 70%),
+    radial-gradient(50rem 20rem at 100% 0%, color-mix(in srgb, var(--hero-glow-b) 35%, transparent), transparent 70%)
+    no-repeat;
+}
+
+/* Page titles get a short accent bar underneath (the landing page hides its h1). */
+.md-typeset h1::after {
+  display: block;
+  width: 2.5rem;
+  height: 3px;
+  margin-top: 0.6rem;
+  content: "";
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--esf-accent-a), var(--esf-accent-b));
+}
+
+/* Active sidebar item: an accent bar on its left edge. */
+.md-sidebar--primary .md-nav__link--active {
+  box-shadow: inset 2px 0 0 var(--esf-accent-a);
+}
+
+/* Links underline in the accent on hover. */
+.md-typeset a:hover {
+  text-decoration-color: var(--esf-accent-a);
+}
+
+/* Admonitions and feature cards pick up the accent on hover/edge. */
+.md-typeset .grid.cards > ul > li:hover {
+  border-color: color-mix(in srgb, var(--esf-accent-a) 45%, var(--esf-border));
+}
+
+/* No logo in the drawer title either: the site name is enough. */
+.md-nav__title[for="__drawer"] .md-logo {
+  display: none;
 }
