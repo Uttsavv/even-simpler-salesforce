@@ -171,8 +171,14 @@ def build_url(instance_url: str, api_version: str, path: str) -> str:
 
 
 def path_template(path: str) -> str:
-    """Path for logs: version prefix dropped, ids → ``:id``, query locators → ``:locator``."""
+    """Path for logs: version prefix dropped, ids → ``:id``, query locators → ``:locator``.
+
+    Relative (``sobjects/Lead/...``) and absolute (``/services/data/vXX.X/sobjects/Lead/...``)
+    spellings of the same resource give the same template, always with a leading ``/``.
+    """
     p = path.split("?", 1)[0]
     p = _VERSION_PREFIX.sub("", p)
+    if not p.startswith("/"):
+        p = "/" + p
     p = _LOCATOR_SEGMENT.sub(":locator", p)
     return _ID_SEGMENT.sub(":id", p)
