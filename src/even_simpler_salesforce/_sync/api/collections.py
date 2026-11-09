@@ -19,7 +19,15 @@ from ...core.records import (
     with_type,
 )
 from ...core.soql import soql_identifier
-from ...errors import UnexpectedResponse
+from ...errors import (
+    ErrorDetail,
+    PartialFailure,
+    RequestTimeout,
+    SalesforceError,
+    ServerError,
+    TransportError,
+    UnexpectedResponse,
+)
 from ...models import BatchResult, RecordResult
 from .. import _compat
 
@@ -30,6 +38,23 @@ __all__ = ["Collections"]
 
 _log = logging.getLogger("esf")
 _ROLLED_BACK = "ALL_OR_NONE_OPERATION_ROLLED_BACK"
+
+
+def _chunk_failed(exc: SalesforceError) -> RecordResult:
+    """Per-row result for a chunk whose whole request failed.
+
+    ``extended["outcome"]`` is ``"unknown"`` when the request may have reached Salesforce
+    (timeouts, resets, 5xx): those rows may or may not have been written.
+    """
+    unknown = isinstance(exc, (RequestTimeout, ServerError)) or (
+        isinstance(exc, TransportError) and exc.retryable and not exc.message.startswith("could not connect")
+    )
+    detail = ErrorDetail(
+        error_code=exc.error_code or type(exc).__name__,
+        message=exc.message,
+        extended={"chunk_error": type(exc).__name__, "outcome": "unknown" if unknown else "rejected"},
+    )
+    return RecordResult(ok=False, errors=(detail,))
 
 
 class Collections:
@@ -129,11 +154,18 @@ class Collections:
             )
             results = parse_record_results(raw.json(), len(chunk))
             if all_or_none:
-                self._raise_atomic(results, "collections.delete", None)
+                self._raise_atomic(results, "collections.delete", None, "DELETE")
             return results
 
         return BatchResult(
-            self._run(one, list(chunked(id_list, COLLECTION_WRITE_CHUNK)), all_or_none, concurrency),
+            self._run(
+                one,
+                list(chunked(id_list, COLLECTION_WRITE_CHUNK)),
+                all_or_none,
+                concurrency,
+                operation="collections.delete",
+                sobject=None,
+            ),
             operation="collections.delete",
         )
 
@@ -173,7 +205,15 @@ class Collections:
                 raise UnexpectedResponse("unexpected sObject Collections retrieve response")
             return list(body)  # pyright: ignore[reportUnknownArgumentType]
 
-        return self._run(one, list(chunked(id_list, COLLECTION_READ_CHUNK)), False, concurrency)
+        return self._run(
+            one,
+            list(chunked(id_list, COLLECTION_READ_CHUNK)),
+            False,
+            concurrency,
+            operation="collections.retrieve",
+            sobject=sobject,
+            writes=False,
+        )
 
     # --- internals ---------------------------------------------------------------------
 
@@ -186,7 +226,14 @@ class Collections:
                 COLLECTION_WRITE_CHUNK,
             )
 
-    def _raise_atomic(self, results: list[RecordResult], operation: str, sobject: str | None) -> None:
+    def _raise_atomic(
+        self,
+        results: list[RecordResult],
+        operation: str,
+        sobject: str | None,
+        method: str = "POST",
+        path: str = "composite/sobjects",
+    ) -> None:
         failed = [r for r in results if not r.ok]
         if not failed:
             return
@@ -194,7 +241,7 @@ class Collections:
         primary = next((d for d in details if d.error_code != _ROLLED_BACK), details[0] if details else None)
         if primary is None:
             raise UnexpectedResponse("all_or_none batch failed without error details", operation=operation)
-        spec = RequestSpec("POST", "composite/sobjects", operation=operation, sobject=sobject, dml=True)
+        spec = RequestSpec(method, path, operation=operation, sobject=sobject, dml=True)
         raise error_from_detail(
             primary,
             status=200,
@@ -204,13 +251,51 @@ class Collections:
             errors=tuple(details),
         )
 
-    def _run(self, fn: Any, chunks: list[Any], all_or_none: bool, concurrency: int | None) -> list[Any]:
-        n = 1 if all_or_none else (concurrency or self.concurrency)
-        parts = _compat.gather_limited(n, [functools.partial(fn, c) for c in chunks])
-        out: list[Any] = []
-        for p in parts:
-            out.extend(p)
-        return out
+    def _run(
+        self,
+        fn: Any,
+        chunks: list[Any],
+        all_or_none: bool,
+        concurrency: int | None,
+        *,
+        operation: str,
+        sobject: str | None,
+        writes: bool = True,
+    ) -> list[Any]:
+        if all_or_none:
+            # One chunk at a time; the first failure raises. Earlier chunks stay committed.
+            out: list[Any] = []
+            for c in chunks:
+                out.extend(fn(c))
+            return out
+        n = concurrency or self.concurrency
+        settled = _compat.gather_settled(n, [functools.partial(fn, c) for c in chunks])
+        results: list[Any] = []
+        failures: list[SalesforceError] = []
+        for chunk, part in zip(chunks, settled, strict=True):
+            if isinstance(part, Exception):
+                if not isinstance(part, SalesforceError):
+                    raise part
+                failures.append(part)
+                results.extend(_chunk_failed(part) for _ in range(len(chunk)))
+            else:
+                results.extend(part)
+        if failures and (not writes or len(failures) == len(chunks)):
+            raise failures[0]  # nothing partial to report
+        if failures:
+            first = failures[0]
+            code = first.error_code or type(first).__name__
+            raise PartialFailure(
+                f"{len(failures)} of {len(chunks)} chunks failed ({code}); "
+                "the other chunks were sent and their results are in .results",
+                error_code=first.error_code,
+                status=first.status,
+                operation=operation,
+                sobject=sobject,
+                errors=tuple(d for r in results if not r.ok for d in r.errors),
+                results=BatchResult(results, operation=operation, sobject=sobject),
+            ) from first
+        return results
 
     def _write(
         self,
@@ -246,8 +331,15 @@ class Collections:
             )
             results = parse_record_results(raw.json(), len(chunk))
             if all_or_none:
-                self._raise_atomic(results, operation, sobject)
+                self._raise_atomic(results, operation, sobject, method, path)
             return results
 
-        results = self._run(one, list(chunked(rows, COLLECTION_WRITE_CHUNK)), all_or_none, concurrency)
+        results = self._run(
+            one,
+            list(chunked(rows, COLLECTION_WRITE_CHUNK)),
+            all_or_none,
+            concurrency,
+            operation=operation,
+            sobject=sobject,
+        )
         return BatchResult(results, operation=operation, sobject=sobject)
