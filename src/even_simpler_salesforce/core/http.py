@@ -9,10 +9,12 @@ from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import quote as _urlquote
 
+from ..errors import UnexpectedResponse
 from . import jsonlib
 
 __all__ = [
     "GZIP_THRESHOLD",
+    "InvalidJSONResponse",
     "RawResponse",
     "RequestSpec",
     "build_url",
@@ -88,6 +90,14 @@ class RequestSpec:
 _UNPARSED: Any = object()
 
 
+class InvalidJSONResponse(UnexpectedResponse, ValueError):
+    """A body that should be JSON isn't (proxy/maintenance page, truncated body).
+
+    An :class:`UnexpectedResponse` for callers, and a ``ValueError`` for parsers that already
+    treat undecodable bodies that way.
+    """
+
+
 @dataclass(frozen=True)
 class RawResponse:
     """A fully read HTTP response, decoupled from httpx. ``json()`` is parsed once and cached."""
@@ -109,9 +119,22 @@ class RawResponse:
         return ct == "application/json" or ct.endswith("+json")
 
     def json(self) -> Any:
-        """Decoded JSON body (``None`` when empty). Raises ``ValueError`` on invalid JSON."""
+        """Decoded JSON body (``None`` when empty).
+
+        Raises:
+            InvalidJSONResponse: the body is not valid JSON (an ``UnexpectedResponse`` that is
+                also a ``ValueError``).
+        """
         if self._parsed is _UNPARSED:
-            value = (self.loads or jsonlib.loads)(self.content) if self.content else None
+            try:
+                value = (self.loads or jsonlib.loads)(self.content) if self.content else None
+            except ValueError:
+                raise InvalidJSONResponse(
+                    f"response body is not valid JSON (HTTP {self.status}, "
+                    f"{self.content_type or 'no content-type'})",
+                    status=self.status,
+                    raw=self.content[:4096],
+                ) from None
             object.__setattr__(self, "_parsed", value)
         return self._parsed
 
