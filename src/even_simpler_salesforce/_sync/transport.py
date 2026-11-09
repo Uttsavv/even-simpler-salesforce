@@ -114,6 +114,8 @@ class Transport:
         self.debug = debug
         self.call_options = f"client={client_name}" if client_name else None
         self.tokens: dict[str, Token] = {}
+        # Per token key: (refresh generation, error of the latest refresh or None on success).
+        self.refresh_outcomes: dict[str, tuple[int, SalesforceError | None]] = {}
         self._locks: dict[str, Any] = {}
         self._locks_guard = threading.Lock()
         self.sleep: Callable[[float], Any] = _compat.sleep
