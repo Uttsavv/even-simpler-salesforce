@@ -1,0 +1,36 @@
+# pre-commit install   (then runs on every commit; `pre-commit run -a` to check everything)
+default_install_hook_types: [pre-commit]
+exclude: ^src/even_simpler_salesforce/_sync/
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: check-case-conflict
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: detect-private-key
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.4
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: no-salesforce-tokens
+        name: no Salesforce access tokens (00D...!)
+        language: pygrep
+        entry: '00D[A-Za-z0-9]{12,15}!'
+        files: ^(tests/fixtures|docs)/
