@@ -245,3 +245,21 @@ def test_default_memory_cache_is_used(h: Harness, mock: respx.MockRouter) -> Non
     h.run(sf.sobject("Lead").describe())
     h.run(sf.sobject("Lead").describe())
     assert route.call_count == 1
+
+
+@pytest.mark.parametrize("name", ["Content-Type", "content-type", "CONTENT-TYPE"])
+def test_request_content_type_header_any_case(h: Harness, mock: respx.MockRouter, name: str) -> None:
+    route = mock.post(f"{DATA}/x").respond(204)
+    sf = h.client()
+    h.run(sf.request("POST", "x", content=b"a,b\n1,2\n", headers={name: "text/csv"}))
+    req = route.calls.last.request
+    assert req.headers.get_list("Content-Type") == ["text/csv"]
+
+
+def test_request_json_with_custom_content_type(h: Harness, mock: respx.MockRouter) -> None:
+    route = mock.post(f"{DATA}/x").respond(204)
+    sf = h.client()
+    h.run(sf.request("POST", "x", json={"a": 1}, headers={"content-type": "application/json; charset=UTF-8"}))
+    assert route.calls.last.request.headers.get_list("Content-Type") == ["application/json; charset=UTF-8"]
+    h.run(sf.request("POST", "x", json={"a": 1}))
+    assert route.calls.last.request.headers.get_list("Content-Type") == ["application/json"]
