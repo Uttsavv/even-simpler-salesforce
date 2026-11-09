@@ -36,7 +36,7 @@ jobs:
       - name: Build dev (main)
         run: |
           sed -i "s#^site_url = .*#site_url = \"${PAGES_BASE}/dev/\"#" zensical.toml
-          uvx --with mkdocstrings-python zensical build --clean
+          uvx --from 'zensical>=0.1' --with 'mkdocstrings-python>=2' zensical build --clean
           mkdir -p _site && mv site _site/dev
           git checkout -- zensical.toml
 
@@ -48,7 +48,7 @@ jobs:
           if [ ! -f ../latest/zensical.toml ]; then echo "$tag has no zensical.toml; skipping"; exit 0; fi
           cd ../latest
           sed -i "s#^site_url = .*#site_url = \"${PAGES_BASE}/latest/\"#" zensical.toml
-          uvx --with mkdocstrings-python zensical build --clean
+          uvx --from 'zensical>=0.1' --with 'mkdocstrings-python>=2' zensical build --clean
           mv site "$GITHUB_WORKSPACE/_site/latest"
           echo "built latest from $tag"
 
