@@ -74,6 +74,7 @@ nav = [
     { "0010 Org automation" = "adr/0010-org-automation-convert-and-merge.md" },
     { "0011 Docs, versioning, releases" = "adr/0011-docs-versioning-and-releases.md" },
     { "0012 Request headers" = "adr/0012-request-headers.md" },
+    { "0013 Event subscriptions" = "adr/0013-event-subscriptions.md" },
   ] },
 ]
 
