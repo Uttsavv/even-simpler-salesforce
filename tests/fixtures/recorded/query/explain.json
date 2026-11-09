@@ -1,0 +1,33 @@
+{
+  "synthetic": true,
+  "source": "hand-written from the REST API Developer Guide, 'Get Feedback on Query Performance' (query?explain=, Beta), v264: https://developer.salesforce.com/docs/atlas.en-us.264.0.api_rest.meta/api_rest/dome_query_explain.htm",
+  "body": {
+    "plans": [
+      {
+        "cardinality": 1,
+        "fields": ["Email"],
+        "leadingOperationType": "Index",
+        "notes": [],
+        "relativeCost": 0.0,
+        "sobjectCardinality": 120000,
+        "sobjectType": "Lead"
+      },
+      {
+        "cardinality": 120000,
+        "fields": [],
+        "leadingOperationType": "TableScan",
+        "notes": [
+          {
+            "description": "Not considering filter for optimization because unindexed",
+            "fields": ["IsDeleted"],
+            "tableEnumOrId": "Lead"
+          }
+        ],
+        "relativeCost": 2.8,
+        "sobjectCardinality": 120000,
+        "sobjectType": "Lead"
+      }
+    ],
+    "sourceQuery": "SELECT Id FROM Lead WHERE Email = 'a@example.com'"
+  }
+}

@@ -30,6 +30,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, TextIO
 
 from .._version import __version__
+from ..core.records import flatten
 from ._env import EnvConfigError, auth_from_env
 
 __all__ = ["EXIT_API_ERROR", "EXIT_INTERRUPTED", "EXIT_OK", "EXIT_USAGE", "main"]
@@ -86,24 +87,8 @@ def _build_parser() -> argparse.ArgumentParser:
 # --- output helpers -------------------------------------------------------------------
 
 
-def _flatten(row: Mapping[str, Any], prefix: str = "") -> dict[str, Any]:
-    out: dict[str, Any] = {}
-    for key, value in row.items():
-        if key == "attributes":
-            continue
-        name = f"{prefix}{key}"
-        if isinstance(value, Mapping):
-            nested: Mapping[str, Any] = value  # pyright: ignore[reportUnknownVariableType]
-            if "records" in nested:
-                out[name] = json.dumps(_strip(nested.get("records") or []), default=str)
-            else:
-                out.update(_flatten(nested, name + "."))
-        else:
-            out[name] = value
-    return out
-
-
 def _strip(value: Any) -> Any:
+    """Drop ``attributes`` at every level (JSON output keeps the nested shape)."""
     if isinstance(value, Mapping):
         m: Mapping[str, Any] = value  # pyright: ignore[reportUnknownVariableType]
         return {k: _strip(v) for k, v in m.items() if k != "attributes"}
@@ -225,13 +210,13 @@ def _cmd_query(args: argparse.Namespace, env: Mapping[str, str], out: TextIO, er
     if args.json:
         _json(_strip(records), out)
     elif args.csv:
-        rows = [_flatten(r) for r in records]
+        rows = [flatten(r) for r in records]
         writer = csv.DictWriter(out, fieldnames=_columns(rows), extrasaction="ignore", lineterminator="\n")
         writer.writeheader()
         for r in rows:
             writer.writerow({k: _cell(v) for k, v in r.items()})
     else:
-        rows = [_flatten(r) for r in records]
+        rows = [flatten(r) for r in records]
         if rows:
             _table(rows, _columns(rows), out)
     noun = "row" if total == 1 else "rows"

@@ -22,9 +22,10 @@ from ..config import Budget, DescribeCacheConfig, Priority, RetryPolicy, Timeout
 from ..context import current_call_context
 from ..core.cursor import Cursor, decode_cursor, encode_cursor
 from ..core.http import RawResponse, RequestSpec, check_sobject
-from ..core.records import apply_model
-from ..errors import SalesforceError, UnexpectedResponse
-from ..models import Limit, QueryResult
+from ..core.records import apply_model, parse_query_plans
+from ..core.soql import soql_values
+from ..errors import MultipleMatches, NotFound, SalesforceError, UnexpectedResponse
+from ..models import Limit, QueryPlan, QueryResult
 from ..observability.debug import DebugPrinter, debug_level
 from ..observability.events import Observer, ObserverHub
 from ..usage import UsageTracker
@@ -354,24 +355,103 @@ class Salesforce:
 
     @overload
     def query(
-        self, soql: str, *, page_size: int | None = None, include_deleted: bool = False, model: None = None
+        self,
+        soql: str,
+        *values: Any,
+        page_size: int | None = None,
+        include_deleted: bool = False,
+        model: None = None,
     ) -> QueryResult[dict[str, Any]]: ...
     @overload
     def query(
-        self, soql: str, *, page_size: int | None = None, include_deleted: bool = False, model: type[M]
+        self,
+        soql: str,
+        *values: Any,
+        page_size: int | None = None,
+        include_deleted: bool = False,
+        model: type[M],
     ) -> QueryResult[M]: ...
     def query(
-        self, soql: str, *, page_size: int | None = None, include_deleted: bool = False, model: Any = None
+        self,
+        soql: str,
+        *values: Any,
+        page_size: int | None = None,
+        include_deleted: bool = False,
+        model: Any = None,
     ) -> QueryResult[Any]:
         """Run SOQL and return one page plus a cursor.
 
+        Example:
+            page = sf.query("SELECT Id FROM Lead WHERE Email = {}", email)
+
         Args:
-            soql: The query; build it with ``esf.soql()`` to quote values safely.
+            soql: The query. ``{}`` placeholders are filled with ``values``, quoted safely.
+            *values: Values for the ``{}`` placeholders (same quoting as ``esf.soql``). Without
+                values the query is sent unchanged.
             page_size: ``Sforce-Query-Options: batchSize`` (200-2000; a hint, not a guarantee).
             include_deleted: Use ``queryAll`` (deleted and archived rows).
             model: Optional Pydantic model / dataclass for the rows.
         """
+        soql = soql_values(soql, values)
         return self._page(self._query_body(soql, page_size, include_deleted), model)
+
+    def query_one(
+        self, soql: str, *values: Any, include_deleted: bool = False, model: Any = None
+    ) -> Any:
+        """Return exactly one row.
+
+        Reads only the first page and decides from ``totalSize``; the SOQL is never rewritten.
+
+        Raises:
+            NotFound: no rows.
+            MultipleMatches: more than one row (``.matches`` holds the Ids on the first page).
+        """
+        soql = soql_values(soql, values)
+        page = self._page(self._query_body(soql, None, include_deleted), None)
+        sobject = _sobject_of(soql)
+        if page.total_size == 0 or not page.records:
+            raise NotFound("query returned no rows; expected exactly one", operation="query", sobject=sobject)
+        if page.total_size > 1:
+            rows = cast("list[dict[str, Any]]", page.records)
+            ids = tuple(str(r["Id"]) for r in rows if r.get("Id"))
+            raise MultipleMatches(
+                f"query returned {page.total_size} rows; expected exactly one",
+                matches=ids,
+                operation="query",
+                sobject=sobject,
+            )
+        return apply_model(page.records[:1], model)[0]
+
+    def query_first(
+        self, soql: str, *values: Any, include_deleted: bool = False, model: Any = None
+    ) -> Any:
+        """Return the first row, or ``None`` when there are none (never raises for no rows).
+
+        Reads only the first page; add ``LIMIT 1`` yourself to avoid fetching more rows.
+        """
+        soql = soql_values(soql, values)
+        page = self._page(self._query_body(soql, None, include_deleted), None)
+        return apply_model(page.records[:1], model)[0] if page.records else None
+
+    def explain(self, soql: str, *values: Any) -> list[QueryPlan]:
+        """``GET query?explain=``: how Salesforce would run ``soql``, without running it.
+
+        Returns the plans as Salesforce sends them (most optimal first). Salesforce labels the
+        explain parameter a Beta feature.
+        """
+        soql = soql_values(soql, values)
+        raw = self._send(
+            RequestSpec(
+                "GET",
+                "query",
+                params={"explain": soql},
+                idempotent=True,
+                operation="query.explain",
+                sobject=_sobject_of(soql),
+                soql=soql,
+            )
+        )
+        return parse_query_plans(raw.json())
 
     def query_more(
         self, cursor: Cursor | str, *, page_size: int | None = None, model: Any = None
@@ -383,7 +463,7 @@ class Salesforce:
     def query_iter(
         self,
         soql: str,
-        *,
+        *values: Any,
         page_size: int | None = None,
         include_deleted: bool = False,
         model: Any = None,
@@ -391,9 +471,11 @@ class Salesforce:
     ) -> Iterator[Any]:
         """Yield every row, fetching pages lazily.
 
-        With ``expand_children=True``, child subquery results that were truncated are followed
-        to completion before the parent row is yielded.
+        ``values`` fill the ``{}`` placeholders as in :meth:`query`. With
+        ``expand_children=True``, child subquery results that were truncated are followed to
+        completion before the parent row is yielded.
         """
+        soql = soql_values(soql, values)
         body: Any = self._query_body(soql, page_size, include_deleted)
         while True:
             page = self._page(body, None)
@@ -424,8 +506,9 @@ class Salesforce:
                 child["nextRecordsUrl"] = more.get("nextRecordsUrl")
             child.pop("nextRecordsUrl", None)
 
-    def count(self, soql: str) -> int:
-        """Run ``SELECT COUNT() ...`` and return ``totalSize``."""
+    def count(self, soql: str, *values: Any) -> int:
+        """Run ``SELECT COUNT() ...`` and return ``totalSize``; ``values`` as in :meth:`query`."""
+        soql = soql_values(soql, values)
         body: Any = self._query_body(soql, None, False)
         total: Any = cast("dict[str, Any]", body).get("totalSize") if isinstance(body, dict) else None
         if not isinstance(total, int) or isinstance(total, bool):

@@ -13,6 +13,8 @@ from .errors import ErrorDetail, PartialFailure
 __all__ = [
     "BatchResult",
     "Limit",
+    "QueryPlan",
+    "QueryPlanNote",
     "QueryResult",
     "RecordResult",
     "UpsertResult",
@@ -104,6 +106,39 @@ class BatchResult(Generic[T]):
             errors=tuple(details),
             results=self,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class QueryPlanNote:
+    """A note on why a query plan can't use an index (``notes[]`` of ``query?explain=``)."""
+
+    description: str
+    fields: tuple[str, ...] = ()
+    table_enum_or_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class QueryPlan:
+    """One plan from ``GET query?explain=`` (Salesforce Beta feature). Plans come sorted from
+    most to least optimal; the first is the one Salesforce would use.
+
+    Attributes:
+        leading_operation: ``"Index"``, ``"Other"`` or ``"TableScan"`` (``leadingOperationType``).
+        relative_cost: Cost against the selectivity threshold; above 1.0 is not selective.
+        cardinality: Estimated rows the plan returns.
+        sobject_cardinality: Approximate number of records of the queried object in the org.
+        sobject_type: The queried object.
+        fields: Indexed fields the plan uses.
+        notes: Why other fields couldn't use an index.
+    """
+
+    leading_operation: str
+    relative_cost: float
+    cardinality: int
+    sobject_cardinality: int
+    sobject_type: str
+    fields: tuple[str, ...] = ()
+    notes: tuple[QueryPlanNote, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

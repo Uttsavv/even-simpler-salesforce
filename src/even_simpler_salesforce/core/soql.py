@@ -19,6 +19,7 @@ __all__ = [
     "soql_hash",
     "soql_identifier",
     "soql_like",
+    "soql_values",
 ]
 
 _IDENT_SEGMENT = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(__[a-z]+)?$")
@@ -136,6 +137,33 @@ def soql(template: str, /, *args: Any, **kwargs: Any) -> str:
     Field and object names are not placeholders; pass them through :func:`soql_identifier`.
     """
     return _FORMATTER.vformat(template, args, kwargs)
+
+
+def soql_values(template: str, values: tuple[Any, ...]) -> str:
+    """Fill the positional ``{}`` placeholders of ``template`` for the SOQL methods (§9.2).
+
+    Without values the template is returned unchanged (no ``{{``/``}}`` handling), so existing
+    queries keep working. With values, only ``{}`` placeholders are allowed: named placeholders
+    and ``{:like}`` need :func:`soql`, because the methods' keyword arguments are options.
+    Quoting is the same code as :func:`soql`.
+    """
+    if not values:
+        return template
+    placeholders = 0
+    for _, field, spec, conversion in _FORMATTER.parse(template):
+        if field is None:
+            continue
+        if field != "" or spec or conversion:
+            raise ValueError(
+                "SOQL methods take only positional {} placeholders; use esf.soql() for "
+                "named placeholders or {:like}"
+            )
+        placeholders += 1
+    if placeholders != len(values):
+        raise ValueError(
+            f"the query has {placeholders} {{}} placeholder(s) but {len(values)} value(s) were given"
+        )
+    return _FORMATTER.vformat(template, values, {})
 
 
 def soql_like(value: str, pattern: str = "{}") -> SoqlLiteral:

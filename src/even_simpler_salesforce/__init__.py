@@ -28,6 +28,7 @@ from .cache import Cache, MemoryCache
 from .config import Budget, DescribeCacheConfig, RetryPolicy, Timeouts
 from .context import call_context
 from .core.cursor import Cursor
+from .core.records import flatten
 from .core.soql import soql, soql_identifier, soql_like
 from .errors import (
     ApexError,
@@ -74,7 +75,16 @@ from .errors import (
     UnsupportedApiVersion,
     ValidationRuleFailed,
 )
-from .models import BatchResult, Limit, QueryResult, RecordResult, UpsertResult, UsageSnapshot
+from .models import (
+    BatchResult,
+    Limit,
+    QueryPlan,
+    QueryPlanNote,
+    QueryResult,
+    RecordResult,
+    UpsertResult,
+    UsageSnapshot,
+)
 from .observability import Event, Observer, capture
 
 
@@ -123,6 +133,8 @@ __all__ = [
     "OAuthError",
     "Observer",
     "PartialFailure",
+    "QueryPlan",
+    "QueryPlanNote",
     "QueryResult",
     "ReauthorizationRequired",
     "RecordError",
@@ -158,6 +170,7 @@ __all__ = [
     "__version__",
     "call_context",
     "capture",
+    "flatten",
     "soql",
     "soql_identifier",
     "soql_like",

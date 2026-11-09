@@ -26,7 +26,7 @@ Paths are relative to `/services/data/vXX.X/` unless they start with `/services/
 
 | Path | Methods | Used by | Docs | Checked |
 |---|---|---|---|---|
-| `query` | GET | sf.query, sf.query_iter, sf.count (?q=) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_query.htm) |  |
+| `query` | GET | sf.query, sf.query_iter, sf.count, sf.query_one, sf.query_first (?q=); sf.explain (?explain=, Salesforce Beta) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_query.htm) |  |
 | `queryAll` | GET | sf.query(..., include_deleted=True) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_queryall.htm) |  |
 | `query/{}` | GET | sf.query_more, sf.query_iter (nextRecordsUrl, absolute path) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_query.htm) |  |
 | `search` | GET | sf.search (?q= SOSL) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_search.htm) |  |

@@ -763,7 +763,9 @@ res = await sf.parameterized_search(q, sobjects=[...], fields=[...])
 - **Values in SOQL methods (D29):** every method that takes SOQL (`query`, `query_one`, `query_first`,
   `query_iter`, `count`, `explain`, later `tooling.query`, `bulk.query`) accepts positional values
   after the query: `sf.query("SELECT Id FROM Lead WHERE Email = {}", email)`. They are quoted by
-  the same code as `esf.soql`, so the two can't behave differently. The template is formatted only
+  the same code as `esf.soql`, so the two can't behave differently. The number of `{}`
+  placeholders must equal the number of values (`ValueError` otherwise), so a forgotten
+  placeholder can't silently drop a filter. The template is formatted only
   when at least one value is given; without values the string is sent unchanged (no `{{` handling),
   so existing queries keep working. Named placeholders (`{name}`) and `{:like}` are only available
   through `esf.soql`, because keyword arguments are taken by options (`page_size=`, `model=`, ...).
@@ -1006,8 +1008,9 @@ settings come from `ESF_*` environment variables (§5.3).
 
 | Command | Ships | Does |
 |---|---|---|
-| `esf query "SELECT ..." [--format json\|csv]` | 0.1 | runs SOQL; CSV output uses `esf.flatten` |
-| `esf whoami`, `esf limits`, `esf version` | 0.1 | identity, `/limits`, versions |
+| `esf query "SELECT ..." [--json\|--csv] [--all] [--include-deleted] [--page-size N]` | 0.1 | runs SOQL (first page unless `--all`); table by default, CSV output uses `esf.flatten` |
+| `esf whoami`, `esf limits [--json]`, `esf version` | 0.1 | identity, `/limits`, versions |
+| `esf generate ...` | 0.1 placeholder | prints that code generation arrives in 0.2 |
 | `esf describe <sObject>` | 0.2 | fields with type, length, required, picklist values |
 | `esf request <METHOD> <path> [--json ...]` | 0.2 | `sf.request` from the terminal |
 | `esf generate actions ...` | 0.2 | typed action stubs (§9.7) |
@@ -1433,7 +1436,7 @@ before the release named.
 | V18 | Bulk 2.0 CSV: empty cell = unchanged, `#N/A` = null; UTF-8 handling | 0.3 | **Open** — official Bulk 2.0 docs + sandbox (simple-salesforce #309, #769, #706) |
 | V19 | External id values containing `.` (e.g. `x.json`) in `sobjects/{o}/{field}/{value}` are read as a format suffix | 0.1 | **Open** — sandbox (simple-salesforce #22) |
 | V21 | HTTP status and body for `UNSUPPORTED_API_VERSION` (configured version not offered by the org); message seen elsewhere: "Invalid Api version specified on URL" | 0.1 | **Open** — sandbox; current test fixture is synthetic |
-| V22 | `GET query?explain=` response fields (`plans[]`: `cardinality`, `fields`, `leadingOperationType`, `relativeCost`, `sobjectCardinality`, `sobjectType`, `notes`) | 0.1 | **Open** — *REST API Developer Guide* (Query resource, explain parameter) + recorded response |
+| V22 | `GET query?explain=` response fields (`plans[]`: `cardinality`, `fields`, `leadingOperationType`, `relativeCost`, `sobjectCardinality`, `sobjectType`, `notes`) | 0.1 | **Partly done** — fields confirmed in the *REST API Developer Guide* ("Get Feedback on Query Performance", v264: `plans[]` sorted most to least optimal; `leadingOperationType` is `Index`/`Other`/`TableScan`; `notes[]` has `description`, `fields`, `tableEnumOrId`; errors `MALFORMED_QUERY`/`INVALID_ID`). Salesforce labels it **Beta**. Still record a response in a sandbox (fixture is `synthetic`) |
 | V23 | Debug-log capture for anonymous Apex: `TraceFlag`/`DebugLevel` fields and permissions, `ApexLog` body endpoint, fields to match the log to the run | 0.3 | **Open** — *Tooling API* reference + sandbox |
 | V20 | `Sforce-Call-Options: client=<name>` on REST calls: accepted on every resource, and where admins see it | 0.1 | **Open** — REST API headers reference + sandbox |
 
