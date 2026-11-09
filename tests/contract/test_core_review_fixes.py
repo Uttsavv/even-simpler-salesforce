@@ -201,6 +201,65 @@ def test_lru_dict_never_evicts_pinned_keys() -> None:
     assert d._pins == {}  # pyright: ignore[reportPrivateUsage]
 
 
+@pytest.mark.parametrize("kind", ["async", "sync"])
+def test_lru_dict_trims_when_pins_are_released(kind: str) -> None:
+    from even_simpler_salesforce._sync.transport import LruDict as SyncLruDict
+
+    d: Any = (LruDict if kind == "async" else SyncLruDict)(2)
+    for k in ("a", "b"):
+        d.pin(k)
+        d[k] = 1
+    d["c"] = 1
+    d["d"] = 1  # "a" and "b" pinned: over the cap
+    assert list(d) == ["a", "b", "d"]
+    d.unpin("a")
+    d.unpin("b")
+    assert len(d) == 2  # back under the cap once idle, with no further insert
+    assert d._pins == {}
+
+
+@pytest.mark.parametrize("kind", ["async", "sync"])
+def test_lru_dict_pin_races_eviction(kind: str) -> None:
+    import threading
+
+    from even_simpler_salesforce._sync.transport import LruDict as SyncLruDict
+
+    d: Any = (LruDict if kind == "async" else SyncLruDict)(8)
+    lost: list[str] = []
+    stop = threading.Event()
+
+    def churn() -> None:
+        i = 0
+        while not stop.is_set():
+            d[f"other{i}"] = i
+            i += 1
+
+    def holder(n: int) -> None:
+        for j in range(300):
+            key = f"held{n}-{j}"
+            d[key] = j  # present but unpinned: a candidate for eviction right now
+            d.pin(key)
+            present = key in d  # if it survived until pinned, it must stay
+            for _ in range(5):
+                d[f"noise{n}"] = j
+            if present and key not in d:
+                lost.append(key)
+            d.unpin(key)
+
+    churners = [threading.Thread(target=churn) for _ in range(2)]
+    holders = [threading.Thread(target=holder, args=(n,)) for n in range(4)]
+    for t in churners + holders:
+        t.start()
+    for t in holders:
+        t.join()
+    stop.set()
+    for t in churners:
+        t.join()
+    assert lost == []
+    assert len(d) <= 8
+    assert d._pins == {}
+
+
 def test_calls_unpin_refresh_outcomes(h: Harness, mock: respx.MockRouter) -> None:
     mock.get(f"{DATA}/limits").respond(json={})
     sf = h.client()
