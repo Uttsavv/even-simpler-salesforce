@@ -75,7 +75,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - run: uv build
       - name: Smoke-test the wheel
-        run: uv run --isolated --no-project --with dist/*.whl python -c "import even_simpler_salesforce as m; print(m.__version__)"
+        run: uv run --no-project python scripts/smoke_wheel.py dist/*.whl
       - uses: actions/upload-artifact@v4
         with:
           name: dist
