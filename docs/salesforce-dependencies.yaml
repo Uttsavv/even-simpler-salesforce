@@ -28,8 +28,8 @@ rest_endpoints:
     used_by: "sf.query, sf.query_iter, sf.count, sf.query_one, sf.query_first (?q=); sf.explain (?explain=, Salesforce Beta)"
     docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_query.htm
     checked: null
-    explain_docs: https://developer.salesforce.com/docs/atlas.en-us.264.0.api_rest.meta/api_rest/dome_query_explain.htm
-    explain_checked: "2026-11-09 (response fields, via web search of the official page; V22)"
+    # ?explain= (sf.explain): fields checked 2026-11-09 against
+    # https://developer.salesforce.com/docs/atlas.en-us.264.0.api_rest.meta/api_rest/dome_query_explain.htm (V22)
   - path: queryAll
     methods: [GET]
     used_by: "sf.query(..., include_deleted=True)"
