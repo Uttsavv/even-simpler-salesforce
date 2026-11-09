@@ -1,4 +1,21 @@
-# even-simpler-salesforce
+<h1 align="center">
+  <img src="https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/assets/banner.png" alt="even-simpler-salesforce: async-first Salesforce on httpx. Skip the boilerplate." width="100%">
+</h1>
+
+<p align="center">
+  <a href="https://uttsavv.github.io/even-simpler-salesforce/"><b>Documentation</b></a> ·
+  <a href="https://pypi.org/project/even-simpler-salesforce/"><b>PyPI</b></a> ·
+  <a href="https://uttsavv.github.io/even-simpler-salesforce/getting-started/"><b>Getting started</b></a> ·
+  <a href="https://github.com/Uttsavv/even-simpler-salesforce/blob/main/CHANGELOG.md"><b>Changelog</b></a>
+</p>
+
+<p align="center">
+  <a href="https://pypi.org/project/even-simpler-salesforce/"><img src="https://img.shields.io/pypi/v/even-simpler-salesforce?color=8b5cf6&label=pypi" alt="PyPI version"></a>
+  <img src="https://img.shields.io/badge/python-3.10%E2%80%933.14-3b82f6" alt="Python 3.10 to 3.14">
+  <a href="https://github.com/Uttsavv/even-simpler-salesforce/actions/workflows/ci.yml"><img src="https://github.com/Uttsavv/even-simpler-salesforce/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <a href="https://uttsavv.github.io/even-simpler-salesforce/"><img src="https://img.shields.io/badge/docs-latest-18181b" alt="Docs"></a>
+  <a href="https://github.com/Uttsavv/even-simpler-salesforce/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-71717a" alt="License: Apache-2.0"></a>
+</p>
 
 A typed Salesforce client for Python built on [httpx](https://www.python-httpx.org/). It is
 async-first, and a sync client with the same methods is generated from the async code. OAuth

@@ -133,6 +133,8 @@ release since June 2024, has a single maintainer, and also lacks refresh-token f
 | D27 | **Usage tracking:** read `Sforce-Limit-Info` on every response; counters by operation, object and caller; `sf.usage.snapshot()`; budget threshold events; optional guard that pauses low-priority callers; `/limits` polling opt-in. |
 | D28 | **Lessons from simple-salesforce's issue tracker** (482 issues analysed, 2026-11-09): every design-caused bug class there gets a guard test here, and the decisions below cite the issue numbers. Summary in §15.1. |
 | D29 | **One way per task.** A new public method or parameter must either do something no existing public API can do, or replace code users would otherwise write by hand and often get wrong. Aliases, shortcut parameters and format converters are rejected. `sf.request` is the one deliberate overlap (the escape hatch, §9.5). Positional values in SOQL methods (§9.2) and `esf.soql` share one quoting implementation; docs teach the first and use `esf.soql` only for building a query in pieces. Rejected under this rule (2026-11-09): `QueryResult.flat()` (use `esf.flatten`), `to_pandas()`/`to_polars()` and a `[dataframe]` extra (use `pandas.DataFrame([esf.flatten(r) for r in page])`), `esf shell` (use `python -i`), `Auth.from_env()` (infers the flow from which variables are set, the §1.1 problem), an `sf` CLI-backed auth (depends on an external binary). Deferred until users ask: `sf.with_options(timeout=, retry=, headers=)`. |
+| D30 | **Request headers are keyword arguments**, on the method (per call) or the client (per integration) whose Salesforce resource documents the header. There are no generic header objects, because they would be a second way to set the same header (D29) and pyright could not tell which headers a method accepts. Each header kwarg cites the Salesforce page that names the resources accepting it; a header that is not documented for a resource is not sent there. Response headers are parsed into typed results (usage, warnings), never returned raw. Rejected (2026-11-09): typed header objects (`headers=[AutoAssign(...)]`), `If-Match`/`If-None-Match` ETags (Account rows only), `x-sfdc-packageversion-*` (niche; use `sf.request`). Bulk-only headers arrive with Bulk (0.3). Details: ADR 0012. |
+| D31 | **Events are pulled through one async iterator.** Pub/Sub subscriptions are `async with sf.pubsub.subscribe(...) as events: async for ev in events` (a blocking iterator in the sync twin); iterating is the flow control. Change Data Capture (CDC) bitmaps are decoded to field names, gap and overflow events are typed, delivery is at least once through an optional `ReplayStore`, and Pub/Sub error codes map onto §8. Rejected under D29: a callback or decorator registry (`@sf.on(...)`), `before_request`/`on_refresh` hooks (observers and `TokenStore` cover them), and `sf.pubsub.publish` (use `sf.platform_events`, §9.10). `ManagedSubscribe` waits for GA and then becomes one parameter. gRPC is a second network path beside the httpx transport, with one module that owns it (§5.1). The Salesforce `.proto` file is vendored (CC0-1.0). Outbound Messaging receivers are unscheduled. ADR 0013. |
 
 ### 2.2 Resolved open questions
 
@@ -191,6 +193,7 @@ even-simpler-salesforce/
 │   ├── models.py                # Token, QueryResult, RecordResult, BatchResult, UsageSnapshot, ...
 │   ├── observability/           # Event types, observers, canonical summary, stdlib/structlog/otel adapters
 │   ├── cache.py                 # Cache protocol + in-memory TTL cache
+│   ├── _pubsub/                 # [pubsub]: vendored pubsub_api.proto (CC0-1.0) + generated *_pb2 stubs
 │   ├── cli/                     # `esf` command (§9.18)
 │   ├── testing/                 # FakeSalesforce, recorder, pytest plugin
 │   └── contrib/
@@ -226,6 +229,7 @@ even-simpler-salesforce/
 │
 ├── scripts/
 │   ├── unasync.py               # generates _sync/ from _async/
+│   ├── pubsub_proto.py          # regenerates _pubsub/ stubs; --check fails on drift from the pinned SHA
 │   └── release.py               # bump version, compile changelog, tag
 └── .github/
     ├── workflows/               # ci.yml, docs.yml, release.yml, changelog-check.yml
@@ -295,7 +299,9 @@ all `Auth` classes and `AuthStart`, `Token`, `AsyncTokenStore` / `TokenStore`,
 `Cursor`, all exceptions, result models (`QueryResult`, `BatchResult`, `RecordResult`,
 `UpsertResult`, `UsageSnapshot`, `Limit`), config (`Budget`, `RetryPolicy`, `Timeouts`,
 `DescribeCacheConfig`), `Cache` / `MemoryCache`, `Event`, `Observer`, `capture`,
-`call_context`, `EsfDeprecationWarning`, `__version__`. Naming rule: the async variant carries the
+`call_context`, `DuplicateRules`, `EsfDeprecationWarning`, `SalesforceWarning`, `__version__`. 0.5 adds `PubSubEvent`, `ChangeHeader`,
+`ChangeType`, `AsyncReplayStore` / `ReplayStore` and `AsyncInMemoryReplayStore` /
+`InMemoryReplayStore` (§9.16). Naming rule: the async variant carries the
 `Async` prefix, like `AsyncSalesforce` / `Salesforce`.
 
 ---
@@ -323,11 +329,12 @@ all `Auth` classes and `AuthStart`, `Token`, `AsyncTokenStore` / `TokenStore`,
 
 - **Area facades** never touch httpx. They produce a `RequestSpec` (method, path, params, body, headers, `idempotent`, `operation`, `sobject`, `priority`) using pure builders from `core/`, hand it to the client, and parse the `Response` with pure parsers from `core/`.
 - **The transport pipeline is the only path to the network.** Every feature (refresh, retries, usage, logging, budget) lives there once, so it applies to every call. This is the fix for "refresh only covers three methods".
+- **The one exception is Pub/Sub (D31).** gRPC streams cannot go through httpx. `_async/pubsub_transport.py` is the gRPC equivalent of the transport, and it and the `GrpcStream` adapter in `_compat` (§5.4) are the only modules that import `grpc`. It reuses the client's auth runtime (single-flight refresh), `RetryPolicy` backoff and observers. All decisions (flow-control accounting, replay rules, error classification, Avro and bitmap decoding) are pure functions in `core/pubsub.py`. The §15.1 AST guard is extended to cover this: only the transport imports httpx, and only `pubsub_transport.py` and `_compat` import grpc.
 - **Auth runtime** sits between the client and the `Auth` config: it holds the current in-memory token per `token_key`, runs single-flight refresh and talks to the `TokenStore`.
 
 ### 5.2 Client lifecycle
 
-- `AsyncSalesforce(auth, *, api_version="68.0", http_client=None, store=None, cache=None, observers=(), budget=None, retry=None, timeout=None, max_concurrency=None, user_agent=None, json=None, error_tags=None, cursor_key=None, instance_url=None, describe_cache=None, log_soql="hash", http2=False, client_name=None)` (`None` means the default config object).
+- `AsyncSalesforce(auth, *, api_version="68.0", http_client=None, store=None, cache=None, observers=(), budget=None, retry=None, timeout=None, max_concurrency=None, user_agent=None, json=None, error_tags=None, cursor_key=None, instance_url=None, describe_cache=None, log_soql="hash", http2=False, client_name=None, default_namespace=None, update_mru=None)` (`None` means the default config object).
 - If `http_client` is not given, the client creates one (`httpx.AsyncClient` with HTTP/1.1, pool limits, timeouts, `Accept-Encoding: gzip`) and **owns** it: `aclose()` / `async with` closes it. An injected client is never closed by the library.
 - `with_auth(auth)` returns a child client sharing transport, caches, observers, usage counters and budget, with its own auth runtime. Children are cheap (no new pool) and SHOULD NOT be closed individually; closing the parent closes the pool.
 - Clients are safe to share across tasks (async) or threads (sync).
@@ -352,6 +359,7 @@ library behaviour never changes silently from the environment.
 | `asyncio.sleep` | `time.sleep` |
 | `gather_settled(n, funcs)` (semaphore + `asyncio.gather(return_exceptions=True)`; always waits for every call) | `ThreadPoolExecutor`, each task in a copy of the caller's context |
 | `Periodic` (background task, for the limits poller) | daemon thread |
+| `GrpcStream` over `grpc.aio` (`write()` / async `read()`) | `GrpcStream` over sync `grpc`: a queue-fed request iterator and a blocking response iterator (D31) |
 
 Also replaced: `aread→read`, `StopAsyncIteration→StopIteration`, `asynccontextmanager→contextmanager`,
 `AbstractAsyncContextManager→AbstractContextManager`, `store_lock_async→store_lock_sync`, and a
@@ -369,7 +377,7 @@ generic `Async<Name>→<Name>` rule (`AsyncTokenStore→TokenStore`, ...).
 | `[speed]` | `orjson` | faster JSON |
 | `[http2]` | `h2` (via `httpx[http2]`) | HTTP/2 |
 | `[jwt]` | `cryptography`, `pyjwt` | `JwtBearer` |
-| `[pubsub]` | `grpcio`, `fastavro` | Pub/Sub API |
+| `[pubsub]` | `grpcio`, `protobuf`, `fastavro` | Pub/Sub API (§9.16) |
 | `[otel]` | `opentelemetry-api` | spans and metrics observer |
 | `[structlog]` | `structlog` | structlog observer |
 | `[fastapi]` | `fastapi` | `contrib.fastapi` |
@@ -379,6 +387,20 @@ generic `Async<Name>→<Name>` rule (`AsyncTokenStore→TokenStore`, ...).
 | `[all]` | all of the above | |
 
 The Metadata API (0.4) uses only the stdlib (`zipfile`, `xml.etree`) and needs no extra.
+
+`[pubsub]` notes (checked on PyPI 2026-11-09):
+
+- **Stubs are generated at build time, not install time.** `_pubsub/` ships the generated
+  `*_pb2.py` / `*_pb2_grpc.py`, so users never need `grpcio-tools`. Stubs from `grpcio-tools`
+  1.85 require `protobuf>=7.35` at runtime, so the `protobuf` minimum in `[pubsub]` MUST equal
+  the version the stubs were generated with. `scripts/pubsub_proto.py --check` enforces this in
+  CI.
+- **fastavro 1.13 dropped Python 3.10.** On 3.10, `[pubsub]` resolves fastavro 1.12.x, the
+  last line with 3.10 wheels. Python 3.10 reached end of life on 2026-10-01, so whether ESF keeps
+  3.10 (O2) needs a separate decision. The `min_deps` session pins the lowest supported
+  `grpcio`, `protobuf` and `fastavro`.
+- **Types:** pyright strict uses `types-grpcio` and `types-protobuf` (dev group), plus `.pyi`
+  files generated with `--pyi_out`.
 
 ---
 
@@ -528,7 +550,7 @@ hard-coded (#506, #78, #268). Both rules are enforced by an AST test (`tests/uni
 4. **Concurrency gate**: optional `max_concurrency` semaphore per client family.
 5. **Compression**: always send `Accept-Encoding: gzip`. Gzip request bodies over 64 KiB (`Content-Encoding: gzip`) for Bulk ingest, Collections and Composite.
 6. **Send** via httpx.
-7. **Parse `Sforce-Limit-Info`** (`api-usage=used/max`, and `api-bursts=used/max` when present) into usage counters.
+7. **Parse `Sforce-Limit-Info`** (`api-usage=used/max`, and `api-bursts=used/max` when present) into usage counters. Parse a `Warning` response header (`<code> - "<text>"`; code `299` = deprecated API version) and emit `warnings.warn(text, esf.SalesforceWarning)` **once per distinct text per client family**, so a deprecation notice is not lost or repeated on every call. `SalesforceWarning` subclasses `UserWarning`; users silence or escalate it with the standard `warnings` filters.
 8. **Classify** the response (§8.2) into success or a typed error.
 9. **Refresh** on `INVALID_SESSION_ID` (§6.4).
 10. **Retry** per policy (§7.4).
@@ -645,13 +667,16 @@ SalesforceError
 ├── LimitError
 │   ├── RequestLimitExceeded             REQUEST_LIMIT_EXCEEDED (HTTP 403; covers both the concurrent-request
 │   │                                    and the rate limit), 429 if ever returned (.retry_after)
-│   └── BudgetExceeded                   raised by the library's own guard (§10.4)
+│   ├── BudgetExceeded                   raised by the library's own guard (§10.4)
+│   └── PubSubLimitExceeded              Pub/Sub RESOURCE_EXHAUSTED codes (§9.16.5)
 ├── ServerError                          500, 502, 503, SERVER_UNAVAILABLE (502/503 retryable; 420 = Edge routing,
 │                                        not retryable)
 ├── PartialFailure                       allOrNone=false batches; .results: BatchResult
 ├── BulkJobFailed                        (.job_id, .state, .error_message)
 ├── ApexError                            APEX_ERROR / Apex REST errors (.status, .body)
 ├── GraphQLError                         (.errors from the GraphQL `errors` array)
+├── PubSubError                          other Pub/Sub gRPC errors; error_code = trailer code, request_id = rpcId
+│   └── ReplayUnavailable                stored/requested replay id rejected (replayid.corrupted, §9.16.4)
 ├── SoapFault                            parsed SOAP faults (.fault_code), mapped to the classes above when possible
 └── UnexpectedResponse                   HTML pages (proxy, maintenance), non-JSON bodies, schema surprises
 ```
@@ -675,6 +700,7 @@ mapping of validation rules / trigger exceptions to those codes needs recorded s
 | Bulk 2.0 | job `state=Failed`, `errorMessage`; failed-results CSV `sf__Error` | `BulkJobFailed`; failed rows parsed into `ErrorDetail` |
 | SOAP | `<soapenv:Fault>` or `<errors><statusCode>` | mapped by status code to the same classes |
 | GraphQL | 200 with `errors[]` | `GraphQLError` |
+| Pub/Sub (gRPC) | status + `error-code` trailer + `rpcId` | table in §9.16.5 |
 | Apex REST | whatever the class returns; `APEX_ERROR` on unhandled exceptions | `ApexError` |
 | HTML / non-JSON | proxy or maintenance pages | `UnexpectedResponse` with a truncated `raw` |
 
@@ -732,7 +758,7 @@ Every area exists on both clients with identical names. Signatures below are asy
 | `create(data) -> str` | `POST sobjects/{o}` | returns id |
 | `update(id, data)` | `PATCH sobjects/{o}/{id}` | |
 | `upsert(field, value, data) -> UpsertResult` | `PATCH sobjects/{o}/{field}/{value}` | `created: bool`, `id` |
-| `delete(id)` | `DELETE sobjects/{o}/{id}` | |
+| `delete(id)` | `DELETE sobjects/{o}/{id}` | no conditional headers (see below) |
 | `describe(cached=True)` | `GET sobjects/{o}/describe` | uses describe cache (§12) |
 | `metadata()` | `GET sobjects/{o}` | |
 | `updated(start, end)` / `deleted(start, end)` | `GET sobjects/{o}/updated|deleted` | |
@@ -745,8 +771,41 @@ spaces into `+`, which Salesforce reads literally; simple-salesforce #801). Valu
 in a sandbox (V19); if confirmed, `get_by_external_id`/`upsert` fall back to a SOQL lookup or the
 Collections upsert for such values.
 
-Headers supported via keyword args: `assignment_rule_id`, `duplicate_rule_header`
-(`allow_save=True`), `if_modified_since`, `if_unmodified_since` → `Conflict` on 412.
+**Request headers (D30).** Keyword-only arguments; `None` means the header is not sent and
+Salesforce's default applies.
+
+| Kwarg | Methods | Header | Notes |
+|---|---|---|---|
+| `assignment_rule_id: str \| bool \| None` | `create`, `update`, `upsert` | `Sforce-Auto-Assign` | `True`/`False` → `TRUE`/`FALSE`; a string must be an AssignmentRule id (validated with `check_record_id`). Salesforce defaults to `TRUE` and applies it to Accounts, Cases and Leads, including ones written indirectly by triggers. |
+| `duplicate_rules: DuplicateRules \| None` | `create`, `update`, `upsert` | `Sforce-Duplicate-Rule-Header` | API 52.0+. See below. |
+| `if_modified_since: datetime \| None` | `get` | `If-Modified-Since` | 304 handling as before. The describe cache sends it internally (§12). |
+| `if_unmodified_since: datetime \| None` | `update` | `If-Unmodified-Since` | `Conflict` on 412. |
+
+`esf.DuplicateRules` is a frozen dataclass in `config.py` (no I/O), serialised by
+`core/records.duplicate_rule_header`. It replaces the 0.1 pre-release `allow_save=` kwarg (no
+deprecation needed: unreleased):
+
+```python
+@dataclass(frozen=True)
+class DuplicateRules:
+    allow_save: bool = False             # save despite a duplicate-rule alert
+    include_record_details: bool = False # DuplicateDetected.duplicates carries the matched records' fields, not just ids
+    run_as_current_user: bool = False    # match with the running user's sharing rules, not system sharing
+```
+
+All three fields are always sent (`allowSave=true; includeRecordDetails=false;
+runAsCurrentUser=false`); the defaults equal Salesforce's documented defaults, so
+`DuplicateRules()` behaves like sending no header.
+
+**No conditional headers on delete.** The REST API Developer Guide (*Conditional Request
+Headers*) says DELETE requests don't support them. An earlier 0.1 draft accepted
+`delete(id, if_unmodified_since=)`; Salesforce would ignore the header and delete anyway, which
+is worse than not offering it. It is removed (fix). There is no atomic "delete only if unchanged"
+in REST; the records guide says so and shows a read-then-delete pattern with its race window. V25 records
+the sandbox behaviour for the test docstring.
+
+**Client-wide headers** (§10.2): `client_name` and `default_namespace`
+(`Sforce-Call-Options`) and `update_mru` (`Sforce-Mru`).
 
 ### 9.2 Query and search (0.1)
 
@@ -814,6 +873,12 @@ which validates `^[A-Za-z][A-Za-z0-9_]*(__[a-z]+)?$` (dotted paths allowed).
 | `delete(ids, all_or_none=False)` | `DELETE composite/sobjects?ids=` | chunks of 200 |
 | `retrieve(sobject, ids, fields)` | `POST composite/sobjects/{o}` | chunks of 2000 |
 
+- **Write headers** (D30): `create`, `update` and `upsert` take `assignment_rule_id=` and
+  `duplicate_rules=` with the same types and serialisation as §9.1, sent on every chunk. The
+  *Headers* pages don't limit these two headers to particular resources, and the Collections
+  example responses show `DUPLICATES_DETECTED`, but no page says Collections honours them. They
+  ship only after a sandbox check (V24); if Salesforce ignores either one, that kwarg is not added
+  and the Collections guide says so. `delete` and `retrieve` take neither.
 - Returns `BatchResult` (ordered as input): `.results: list[RecordResult(ok, id, created, errors)]`, `.ok`, `.failed`, `.raise_for_errors()` → `PartialFailure`.
 - **Failures can't go unnoticed** (simple-salesforce #817, #544, #502, #442): every
   Collections `sf.request` event carries `records_failed`, so partial failures show up in logs and
@@ -981,22 +1046,177 @@ Result helpers turn fact maps into rows.
 `metadata/deployRequest`, `deploy_status(id)`, `retrieve(package_xml_or_types)` via SOAP Metadata
 API with polling. `list_metadata(type)`, `describe_metadata()`. Stdlib only.
 
-### 9.16 Pub/Sub API — `sf.pubsub` (0.5, `[pubsub]`)
+### 9.16 Pub/Sub API — `sf.pubsub` (0.5, `[pubsub]`, D31)
+
+Subscribing is the one way to receive events (D31). There is no callback registry and no
+`sf.pubsub.publish`: publishing stays with `sf.platform_events` (§9.10) until users ask (D29).
 
 ```python
-async for event in sf.pubsub.subscribe("/event/Order_Event__e", replay="latest" | "earliest" | replay_id,
-                                       batch_size=100):
-    event.payload  # decoded Avro → dict
-    event.replay_id
-await sf.pubsub.publish("/event/Order_Event__e", [payload, ...])
+store = MyReplayStore()                                   # optional; AsyncReplayStore protocol
+async with sf.pubsub.subscribe("/data/AccountChangeEvent",
+                               replay="latest",           # "latest" | "earliest" | replay_id (bytes)
+                               replay_store=store,
+                               on_invalid_replay="raise", # "raise" | "latest" | "earliest"
+                               batch_size=100) as events:
+    async for ev in events:
+        ev.topic, ev.replay_id, ev.event_id, ev.schema_id
+        ev.payload                                        # decoded Avro → dict
+        if ev.change is None:                             # platform event
+            ...
+        elif ev.change.is_gap:                            # GAP_* or GAP_OVERFLOW: no field data
+            await resync(ev.change.entity_name, ev.change.record_ids)
+        else:
+            apply(ev.change.change_type, ev.change.record_ids, ev.change.changed_fields, ev.payload)
 ```
 
-- gRPC to `api.pubsub.salesforce.com:443` (7443 also accepted; configurable). The EU-only endpoint `api.deu.pubsub.salesforce.com` is selectable for data-in-transit requirements.
-- Auth metadata from the same `Auth`: `accesstoken`, `instanceurl`, `tenantid` (= org id).
-- Flow control: the client sends `FetchRequest.num_requested` as it frees capacity (server default 100).
-- Schema cache by schema id; flow control via `FetchRequest(num_requested)`; automatic resubscribe from the last replay id on stream errors; token refresh on `UNAUTHENTICATED`.
-- Supports platform events, Change Data Capture (`/data/AccountChangeEvent`) and managed subscriptions.
-- Sync twin: `subscribe` is a blocking iterator; documented as best used in a dedicated thread.
+The sync twin is the same code generated by unasync: `with sf.pubsub.subscribe(...) as events:
+for ev in events:`. It blocks, so the docs recommend running it in a dedicated thread.
+
+#### 9.16.1 Connection and auth
+
+- gRPC to `api.pubsub.salesforce.com:443` (7443 is also accepted; the host is configurable). The
+  EU-only endpoint `api.deu.pubsub.salesforce.com` is selectable when data in transit must stay
+  in the EU.
+- Auth metadata comes from the client's own `Auth` and auth runtime (§6): `accesstoken`,
+  `instanceurl`, and `tenantid` (the org id from `Token.org_id`). A token with no org id (for
+  example `StaticToken`) gets one `GET /services/oauth2/userinfo` call, cached for the client's
+  lifetime.
+- One gRPC channel per client, shared by all subscriptions and closed with the client. A channel
+  carries at most 1,000 concurrent streams; gRPC queues any beyond that in the client, and the
+  docs page says so.
+- `subscribe()` is an async context manager. The stream closes when the block exits, including on
+  `break` and on an exception. A bare async generator would leave the stream open until garbage
+  collection. `sf.files.download` (§9.9) uses the same `async with … as …: async for` shape.
+
+#### 9.16.2 Flow control
+
+- The iterator pulls events, so backpressure follows the consumer's speed. The client keeps at
+  most `batch_size` events requested but not yet consumed (maximum 100, the server's limit;
+  larger values raise `ValueError`) and sends another `FetchRequest` only after the consumer has
+  taken events from the buffer.
+- When nothing is pending, Salesforce closes a stream that gets no new `FetchRequest` within 60
+  seconds. A consumer slower than that therefore sees a transparent resubscribe from the last
+  processed replay id (§9.16.4), reported as a `sf.pubsub.reconnect` event with
+  `reason="idle"`. No events are lost or skipped.
+- Server keepalives (an empty `FetchResponse` carrying `latest_replay_id`, sent within 270 s) are
+  consumed internally. They are never yielded to the consumer.
+
+#### 9.16.3 Events and decoding
+
+`PubSubEvent(topic, replay_id: bytes, event_id: str | None, schema_id, payload: dict,
+change: ChangeHeader | None)`:
+
+- **Schemas** are fetched with `GetSchema` and cached by schema id for the client's lifetime.
+  Payloads are decoded with fastavro. An event whose payload does not decode against its schema
+  raises `UnexpectedResponse` with `event_id` and `replay_id` set. Salesforce does not validate
+  Avro on publish, so such events can exist.
+- **`event_id`** is `ConsumerEvent.event.id`, the stable key for de-duplication. Salesforce sets
+  it on platform events only, so it is `None` for change events. Change events de-duplicate on
+  `(change.transaction_key, change.sequence_number)`. Replay ids are not unique across org
+  migrations and must never be used as a de-duplication key.
+- **Dates**: Date and DateTime values arrive as epoch numbers. They are converted to `date` /
+  aware UTC `datetime` only where the schema identifies the field type. ⚠️ **VERIFY** how the
+  schema marks them (V28). Any other `long` stays an `int`.
+- **`ChangeHeader`** is built from `ChangeEventHeader` for every CDC event and is `None` for
+  platform events:
+  - `entity_name`, `change_type` (an enum: `CREATE`, `UPDATE`, `DELETE`, `UNDELETE`,
+    `GAP_CREATE`, `GAP_UPDATE`, `GAP_DELETE`, `GAP_UNDELETE`, `GAP_OVERFLOW`; an unknown value
+    raises `UnexpectedResponse`), `is_gap` (true for every `GAP_*` value), `is_overflow`;
+  - `record_ids: tuple[str, ...]`, which holds several ids when Salesforce merged changes. An
+    overflow event carries the empty id `000000000000000AAA`, which is dropped, so
+    `record_ids == ()`;
+  - `changed_fields`, `diff_fields`, `nulled_fields`: tuples of **field names** decoded from the
+    bitmaps;
+  - `transaction_key`, `sequence_number`, `commit_timestamp` (`datetime`), `commit_user`,
+    `change_origin`.
+- **Bitmap decoding** (`core/pubsub.py`, pure, 100 % covered) follows *Event Deserialization
+  Considerations*:
+  - The first array element, `0x…`, is a bitmap over the top-level schema fields. A set bit *i*
+    means schema field *i*.
+  - Each further element `{pos}-0x…` is a bitmap over the nested fields of the compound field at
+    top-level position `pos`. Those fields are named `Parent.Child` (for example
+    `BillingAddress.City`), matching how the docs list changed compound components.
+  - When only compound nested fields were nulled, the array holds just `{pos}-…` entries and no
+    leading `0x…`.
+  - Bits for fields the subscriber cannot see are already cleared, and hidden compound entries
+    are omitted, so the decoder never invents names.
+  - Bit order (bit 0 = least-significant bit of the hex value, as the official Python sample
+    implies) ⚠️ **VERIFY** against a recorded CDC event (V27). The decoder is original code, not
+    a port of the sample.
+- **Gap events are not resolved automatically.** Re-fetching costs API calls and the fields to
+  fetch are app-specific. The docs page has a replication recipe: buffer by `transaction_key`;
+  on a gap event re-read `record_ids`; on an overflow event re-sync `entity_name`.
+
+#### 9.16.4 Replay and checkpointing
+
+- **Start position:** a value in `replay_store` wins. Otherwise `replay=` applies, defaulting to
+  `"latest"`. Only the first `FetchRequest` of a stream can set the position; later ones are
+  ignored by Salesforce, so the client never sends a position after the first request.
+- **`AsyncReplayStore` / `ReplayStore`** (protocols, like `TokenStore`):
+  `load(key) -> bytes | None`, `save(key, replay_id)`. The key is `f"{org_id}:{topic}"`, so a
+  sandbox refresh or a second org never resumes from another org's position. Shipped:
+  `AsyncInMemoryReplayStore` / `InMemoryReplayStore`, plus a parametrisable
+  `replay_store_contract` test suite in `esf.testing`.
+- **Delivery is at least once.** An event counts as processed when the consumer asks for the
+  next one, or when the `async with` block exits normally. If the block exits with an exception,
+  the current event does not count. The client saves the last processed replay id after each
+  fully consumed batch and on normal exit. A crash can redeliver at most one batch.
+- **Keepalive positions:** the docs recommend saving the `latest_replay_id` of empty responses so
+  that a restart does not seek far back. The client saves it only when every delivered event has
+  been processed and nothing is buffered. Saving it earlier would skip events.
+- **Rejected replay id** (`sfdc.platform.eventbus.grpc.subscription.fetch.replayid.corrupted`,
+  for example older than the 72-hour retention window): `on_invalid_replay="raise"` (default)
+  raises `ReplayUnavailable`. `"latest"` or `"earliest"` resubscribes from that preset and emits
+  `sf.pubsub.reconnect` with `reason="invalid_replay"`. The default raises because silently
+  skipping or replaying three days of events is the app's decision. `"earliest"` can be slow on a
+  busy bus, as the docs warn.
+- **Retention:** events are kept for 72 hours (not guaranteed beyond). Retained events can be
+  reset when an org moves instance.
+
+#### 9.16.5 Errors and reconnects
+
+The gRPC status and the Pub/Sub `error-code` trailer are classified in `core/pubsub.py` into the
+§8 hierarchy with the usual shape:
+
+- `error_code` is the trailer value, or the gRPC status name when there is no trailer;
+- `request_id` is the `rpcId` that Salesforce Support asks for;
+- `operation` is `"pubsub.subscribe"`, `path` is the topic, `status` is `None`.
+
+| Pub/Sub code (gRPC status) | Raised / done |
+|---|---|
+| `…service.auth.error`, `…auth.headers.invalid` (UNAUTHENTICATED) | refresh once through the shared single-flight refresh (§6.4), then resubscribe; a second failure raises `SessionExpired` |
+| `…subscription.fetch.replayid.corrupted` (INVALID_ARGUMENT) | `ReplayUnavailable` or the `on_invalid_replay` fallback (§9.16.4) |
+| `…topic.not.found` (NOT_FOUND) | `NotFound` |
+| `…topic.cannot.subscribe`, `…topic.meta.permission`, `…tenant.license` (PERMISSION_DENIED) | `Forbidden` (`tenant.license` is retried once first; the docs call it sometimes intermittent) |
+| `…concurrent.client.limit.exceeded`, `…subscription.limit.exceeded`, `…service.protection.*` (RESOURCE_EXHAUSTED) | `PubSubLimitExceeded` (a `LimitError`) |
+| `RST_STREAM` / UNAVAILABLE, `…service.unavailable`, `…subscription.internal.error`, `…replay.repeated` (INTERNAL) | reconnect with backoff from the last processed replay id |
+| `…org.migrated` (UNAVAILABLE) | reconnect no sooner than 30 minutes apart, as the docs require |
+| anything else | `PubSubError` (a `SalesforceError`) with the fields above |
+
+- Reconnects use the client's `RetryPolicy` backoff (§7.4). The attempt counter resets after the
+  first event delivered on a new stream. When attempts run out, the last error is raised.
+- Every reconnect resumes from the last **processed** replay id held in memory, whether or not a
+  `replay_store` is set. Events already buffered but not consumed are dropped and redelivered.
+- `PubSubError`, `PubSubLimitExceeded` and `ReplayUnavailable` follow every §15.1 rule
+  (pickling, `str()`, odd bodies).
+
+#### 9.16.6 Limits that shape the interface
+
+`num_requested` is at most 100 per stream. A channel carries at most 1,000 concurrent streams. An
+org has at most 200 managed subscriptions. The CDC, platform-event and real-time event
+monitoring delivery allocations apply to Pub/Sub subscribers.
+
+#### 9.16.7 Not in 0.5
+
+- **`ManagedSubscribe`** (Salesforce stores the replay position) is **Beta**. When it is GA it
+  becomes one parameter, `subscribe(..., managed_subscription="<id or name>")`, never a second
+  method. The client would then hide its keepalive rules: request within 60 s, commit within
+  30 min, commit the `latest_replay_id` of empty batches. It must not be combined with
+  `replay_store`.
+- **Publishing over gRPC** (`Publish`, `PublishStream`): deferred under D29; see the intro above.
+  If it is added, batches are split under 3 MB and 200 events (1 MB per event).
+- Event filters and enrichment on channels are org configuration (Metadata/Tooling), not client
+  features.
 
 ### 9.17 Limits — `sf.limits()` (0.1)
 
@@ -1217,10 +1437,37 @@ sf_client.sobject("Lead").update.assert_awaited_once_with(LEAD_ID, {"Status": "W
 **Integration name for admins** (#726): `AsyncSalesforce(..., client_name="acme-sync")` sends
 `Sforce-Call-Options: client=acme-sync` on every API call, so the org's API usage can be
 attributed to this integration on the Salesforce side. Opt-in; validated to
-`[A-Za-z0-9_.:-]{1,64}`. A caller's own `Sforce-Call-Options` (e.g. `defaultNamespace=ns`) is
-merged, not replaced: comma-separated, ours first, header name matched case-insensitively; a
-`client=` the caller sets for one call wins for that call. ⚠️ **VERIFY** where the `client` value
-shows up for admins (V20).
+`[A-Za-z0-9_.:-]{1,64}`.
+
+**Default namespace** (managed-package orgs): `AsyncSalesforce(..., default_namespace="battle")`
+adds `defaultNamespace=battle`, so SOQL and records can name `botId__c` instead of
+`battle__botId__c`. Per the REST API Developer Guide (*Call Options Header*): Salesforce strips the
+prefix from response field names when this is set, and ignores it for describe calls; it is not
+supported by Bulk API 1.0. Validated as a namespace prefix (1–15 letters, digits or underscores,
+starting with a letter, no `__`; ⚠️ **VERIFY** the exact rule, V26). The docs page for each client
+option states the response-name change, because it alters dict keys.
+
+**Merging and separator (fix).** Options are joined with `"; "`, the separator in Salesforce's
+only documented example (`client=caseSensitiveToken; defaultNamespace=battle`). The 0.1 draft
+joined with `", "` and split the caller's header on `,` only, so a caller's
+`defaultNamespace=ns; client=x` was read as one option. A caller's own `Sforce-Call-Options` passed
+through `sf.request` is split on `;` **and** `,`, merged with ours (ours first, header name matched
+case-insensitively), and an option key the caller sets for one call (`client=`,
+`defaultNamespace=`) wins for that call. Pure function in `core/http.py`, unit-tested.
+
+Salesforce documents `Sforce-Call-Options` for sObject Basic Information, sObject Rows, sObject
+Rows by External ID, Query, QueryAll, Search and Bulk. We send it on every REST data call; V20
+checks it is accepted (or ignored, not rejected) on Collections and Composite and where admins see
+the `client` value.
+
+**MRU updates**: `AsyncSalesforce(..., update_mru=False)` sends `Sforce-Mru: updateMru=false`
+(API 60.0+; `ValueError` at construction if `api_version` is older). Salesforce defaults to
+`true` and recommends `false` for integration users, who never see Recent Items. Default `None`
+(no header, Salesforce's behaviour) so the library doesn't silently change what users see in
+the UI; the records guide recommends `update_mru=False` for integrations. Sent only on the
+resources Salesforce documents for it: `sf.sobject(...)` create, get, get-by-external-id,
+update and upsert (sObject Basic Information POST, Rows, Rows by External ID). SOQL never updates
+the MRU, so it is not sent on query.
 
 
 `sf.tagged(caller="job:backfill", priority="low")` returns a child view whose calls carry those
@@ -1270,7 +1517,14 @@ usage so jobs can sleep and resume.
 | `sf.auth.reauth_required` | invalid_grant | token_key_hash |
 | `sf.usage.threshold` | budget threshold crossed | fraction, used, max |
 | `sf.bulk.job` | bulk job state changes | job_id, state, records_processed, records_failed |
-| `sf.pubsub.*` | subscribe, reconnect, error | topic, replay_id |
+| `sf.pubsub.subscribed` | a stream opens (first and every reconnect) | topic, replay_preset, resumed_from (`store`/`memory`/`none`), stream_no |
+| `sf.pubsub.batch` | a non-empty `FetchResponse` is received | topic, events, pending, lag_ms (newest event's commit/created time vs now, when the payload has one) |
+| `sf.pubsub.reconnect` | before each resubscribe | topic, attempt, reason (`idle`/`error`/`auth`/`invalid_replay`/`org_migrated`), error_code, rpc_id, delay_ms |
+| `sf.pubsub.closed` | the `subscribe()` block exits | topic, events, reconnects, duration_ms, outcome (`ok`/`error`), error_class |
+
+Pub/Sub streams are long-lived, so they emit no `sf.request` events. `GetSchema` / `GetTopic`
+calls are counted in `sf.pubsub.subscribed` instead. Replay ids are logged as hex (they are
+opaque positions, not secrets). Payloads and decoded field values are never logged.
 
 ### 11.3 `sf.request` fields
 
@@ -1281,6 +1535,7 @@ usage so jobs can sleep and resume.
 `priority`, `soql_hash` (SHA-256 of normalised SOQL, first 12 hex), `soql` (only if
 `log_soql="redacted"`: string/number literals and SOSL `FIND {...}` terms replaced by `?`),
 `request_id`, `api_version`, `client_id_hash`, `records_failed` (Collections only),
+`sf_warning` (text of a `Warning` response header, when present),
 `error_message` (only with `ESF_DEBUG`: Salesforce messages can quote record values).
 
 **Never logged:** access/refresh tokens, `Authorization` headers, client secrets, private keys,
@@ -1296,7 +1551,8 @@ class Observer(Protocol):
 Shipped: `esf.observability.StdlibLogging(logger="esf", level=INFO)`,
 `esf.observability.Structlog()` (`[structlog]`), `esf.observability.OpenTelemetry()` (`[otel]`:
 a span per `sf.request` with semantic attributes, counters `esf.requests`, `esf.errors`, histogram
-`esf.duration`, gauge `esf.api_usage`).
+`esf.duration`, gauge `esf.api_usage`; for Pub/Sub, counter `esf.pubsub.events` and histogram
+`esf.pubsub.lag`).
 
 ### 11.5 Roll-up summary
 
@@ -1401,6 +1657,8 @@ One sync client per process, shared across threads; `teardown_appcontext` emits 
 - **Recorder**: `esf.testing.record(path)` captures real responses (redacted: tokens, ids optional, emails/phones masked) into JSON fixtures for contract tests; `esf.testing.replay(path)` serves them via `httpx.MockTransport`.
 - **pytest plugin** (auto-registered entry point): fixtures `esf_fake`, `esf_async_fake`, `esf_replay`; marker `@pytest.mark.esf_sandbox` skipped unless `ESF_SANDBOX_*` env vars are set.
 - **`token_store_contract`**: a parametrisable test suite apps run against their own `TokenStore` (CAS, concurrency, delete, round-trip).
+- **`replay_store_contract`** (0.5): the same for `ReplayStore` (round-trip, per-org keys, overwrite, missing key → `None`).
+- **Pub/Sub fake** (0.5): `fake.pubsub.emit(topic, payload)` and `fake.pubsub.emit_change(entity, change_type, record_ids, changed_fields=...)` feed `sf.pubsub.subscribe` on `FakeSalesforce`; `fake.pubsub.fail_next(esf.ReplayUnavailable(...))` injects errors. No gRPC involved.
 
 ---
 
@@ -1410,6 +1668,7 @@ One sync client per process, shared across threads; `teardown_appcontext` emits 
 |---|---|---|---|
 | Unit | `tests/unit` | pytest | `core/` builders and parsers, SOQL escaping (property tests with hypothesis), cursor encode/validate/sign, error classification for every recorded error body, limit-header parsing, unasync output |
 | Contract | `tests/contract` | pytest + respx, parametrised over async/sync | every public method against recorded responses: success, each error family, pagination, chunking, retries (fake clock), refresh single-flight and rotation, "already being processed", ambiguous refresh |
+| Pub/Sub contract | `tests/contract/pubsub` | in-process `grpc.aio` / `grpc` fake server implementing the vendored `.proto`, parametrised over async/sync | flow control (never more than `batch_size` outstanding), keepalive handling, idle-close resubscribe, every §9.16.5 error row, replay-store save points (batch end, normal exit, not on exception, keepalive only when drained), auth refresh on UNAUTHENTICATED |
 | Concurrency | `tests/contract/test_refresh_concurrency.py` | asyncio + threads | 100 concurrent callers on an expired token → exactly 1 token POST; rotated token saved before use; CAS conflict path |
 | Sandbox | `tests/sandbox` | opt-in, real org | smoke per API area; never runs on PRs from forks |
 | Docs | `tests/docs` | pytest + replay | every fenced `python` block in `docs/` runs against replayed responses |
@@ -1517,6 +1776,7 @@ Scope:
 - Errors: §8 complete including custom error tags.
 - Areas: Records (§9.1), Query/Search + `soql` + Cursor (§9.2) incl. values in SOQL methods, `query_one`, `query_first`, `explain`, `esf.flatten`, Collections (§9.3), raw `request` (§9.5), `limits()` (§9.17).
 - CLI: `esf query`, `whoami`, `limits`, `version`, and `esf migrate` (§9.19) so users moving off simple-salesforce have it from the first release.
+- Request headers (D30, ADR 0012): fixes (no conditional headers on delete; `"; "` in `Sforce-Call-Options`); `DuplicateRules`; `default_namespace`; `update_mru`; `Warning` → `SalesforceWarning`; Collections write headers if V24 passes.
 - Usage (§10) and observability (§11) complete, stdlib observer; structlog/otel adapters.
 - Testing module (§14) for the areas above.
 - Docs: getting started, auth pages, records/query/collections guides, errors, logging, usage, migration guide (partial).
@@ -1538,6 +1798,12 @@ Bulk 2.0 ingest/query, Tooling incl. execute anonymous (with `capture_log`), Gra
 
 ### 0.4 — UI API, Reports, Metadata
 ### 0.5 — Pub/Sub API
+Subscribe (§9.16) with CDC decoding, `ReplayStore`, typed errors, reconnects, `sf.pubsub.*`
+events, the Pub/Sub fake and `replay_store_contract`, a vendored `.proto` with a drift check,
+and a docs guide (subscribing, a replication recipe that handles gap events, moving from the
+official Salesforce sample). Acceptance: V27 and V28 verified; a `tests/sandbox` run receives a
+platform event and a CDC update on a sandbox, then resumes after a forced disconnect without
+losing or duplicating events beyond one batch.
 ### 1.0 — stabilise
 Interface freeze, per-version docs, migration guide complete, all
 deprecations resolved.
@@ -1546,6 +1812,14 @@ deprecations resolved.
 - `sf.with_options(timeout=, retry=, headers=)`: deferred under D29 until users ask.
 - A one-time warning when the pinned API version is close to Salesforce's retirement schedule.
 - `esf.testing` data factories for sandbox tests, with cleanup after each test.
+- `ManagedSubscribe` as `subscribe(..., managed_subscription=)`, once Salesforce makes it GA (§9.16.7).
+- `sf.pubsub.publish` over gRPC: deferred under D29 until users ask (§9.16.7).
+- **Outbound Messaging receiver** for `contrib.fastapi` / `contrib.flask`: parse the SOAP
+  `notifications()` message with hardened XML (no entities), check `OrganizationId` against the
+  client's org, de-duplicate on the notification `Id` (Salesforce may deliver more than once and
+  out of order, retrying for up to 24 hours), return one ACK for the whole message, and redact
+  the optional `SessionId` everywhere. Record-triggered flows can still send outbound messages
+  (release 234), so the feature outlives workflow rules. Scheduled when users ask.
 
 ---
 
@@ -1613,9 +1887,14 @@ before the release named.
 | V21 | HTTP status and body for `UNSUPPORTED_API_VERSION` (configured version not offered by the org); message seen elsewhere: "Invalid Api version specified on URL" | 0.1 | **Open** — sandbox; current test fixture is synthetic |
 | V22 | `GET query?explain=` response fields (`plans[]`: `cardinality`, `fields`, `leadingOperationType`, `relativeCost`, `sobjectCardinality`, `sobjectType`, `notes`) | 0.1 | **Partly done** — fields confirmed in the *REST API Developer Guide* ("Get Feedback on Query Performance", v264: `plans[]` sorted most to least optimal; `leadingOperationType` is `Index`/`Other`/`TableScan`; `notes[]` has `description`, `fields`, `tableEnumOrId`; errors `MALFORMED_QUERY`/`INVALID_ID`). Salesforce labels it **Beta**. Still record a response in a sandbox (fixture is `synthetic`) |
 | V23 | Debug-log capture for anonymous Apex: `TraceFlag`/`DebugLevel` fields and permissions, `ApexLog` body endpoint, fields to match the log to the run | 0.3 | **Open** — *Tooling API* reference + sandbox |
-| V20 | `Sforce-Call-Options: client=<name>` on REST calls: accepted on every resource, and where admins see it | 0.1 | **Open** — REST API headers reference + sandbox |
+| V20 | `Sforce-Call-Options: client=<name>` on REST calls: accepted on every resource, and where admins see it | 0.1 | **Partly done** — *Call Options Header* (REST API Developer Guide v68.0) lists sObject Basic Information, Rows, Rows by External ID, Query, QueryAll, Search, Bulk; separator in the only example is `; `. Sandbox: Collections/Composite accept or ignore it; whether `, ` is also accepted; where admins see `client` |
+| V24 | `Sforce-Auto-Assign` and `Sforce-Duplicate-Rule-Header` take effect on sObject Collections create/update/upsert | 0.1 | **Open** — not stated in the *Headers* or *sObject Collections* pages; sandbox: Lead assignment rule fires (or not) and a duplicate alert is bypassed with `allowSave=true` via `composite/sobjects` |
+| V25 | `If-Unmodified-Since` on `DELETE sobjects/{o}/{id}` is ignored (record deleted) or rejected | 0.1 | **Partly done** — *Conditional Request Headers*: "DELETE requests aren't supported". Record the sandbox response for the test docstring |
+| V26 | Namespace prefix format accepted by `defaultNamespace` | 0.1 | **Open** — Salesforce help on registering a namespace prefix + sandbox with a managed package |
+| V27 | CDC bitmap bit order (bit 0 = least-significant bit of the hex value) and compound `{pos}-0x…` decoding | 0.5 | **Partly done**: format from *Event Deserialization Considerations*; bit order inferred from Salesforce's Python sample. Record a CDC event with several changed and nulled fields (including a compound field) in a sandbox |
+| V28 | How Pub/Sub Avro schemas mark Date/DateTime fields (logicalType or otherwise), so epoch values are converted only where the type is known | 0.5 | **Open**: `GetSchema` on a sandbox platform event and a change event |
 
-Remaining open: V4, V5b, V11 (sandbox half), V17, V18, V19, V20, V21 — all need a sandbox (V18/V20 also a docs check).
+Remaining open: V4, V5b, V11 (sandbox half), V17, V18, V19, V20, V21, V24, V25, V26 — all need a sandbox (V18/V26 also a docs check). V27 and V28 (0.5) need a sandbox too.
 
 Note: developer.salesforce.com blocks non-browser clients (403). In a real browser, each docs page
 has a Markdown version at the same path with `.md` instead of `.html` (fetch it from the page's
@@ -1641,6 +1920,31 @@ origin). help.salesforce.com needs JavaScript to render.
 
 ## Appendix A: Salesforce facts confirmed during design
 
+From the **REST API Developer Guide**, version 68.0 (Winter '27), "Headers" chapter
+(`resources.docs.salesforce.com/latest/latest/en-us/sfdc/pdf/api_rest.pdf`; HTML:
+`developer.salesforce.com/docs/platform/api-rest/guide/headers.html`), read 2026-11-09:
+
+- *Assignment Rule Header*: `Sforce-Auto-Assign`: `TRUE`, `FALSE` (case-insensitive) or an
+  AssignmentRule id; default `TRUE`; applies to Accounts, Cases, Leads, including ones written
+  indirectly (e.g. by a trigger). No resource restriction stated.
+- *Call Options Header*: `Sforce-Call-Options` with `client` and `defaultNamespace` ("Not supported
+  in Bulk API"); usable with sObject Basic Information, sObject Rows, sObject Rows by External ID,
+  Query, QueryAll, Search, Bulk API and Bulk API 2.0. Example:
+  `client=caseSensitiveToken; defaultNamespace=battle`. With a default namespace the response omits
+  the prefix; `defaultNamespace` is ignored for describe.
+- *Conditional Request Headers*: `If-Match`/`If-None-Match` (ETag) only for sObject Rows on
+  **Account**; `If-Modified-Since`/`If-Unmodified-Since` for sObject Rows, sObject Describe,
+  Describe Global, Invocable Actions; invalid values on PATCH/POST → 400; `If-Range` unsupported;
+  **"DELETE requests aren't supported"**.
+- *Duplicate Rule Header*: API 52.0+; `allowSave`, `includeRecordDetails`, `runAsCurrentUser`, all
+  default `false`. No resource restriction stated.
+- *MRU Header*: `Sforce-Mru: updateMru=true|false`, API 60.0+, default `true`; for sObject Basic
+  Information (POST), sObject Rows, sObject Rows by External ID, sObject Relationships; SOQL never
+  updates the MRU. Salesforce recommends `false` for API-only integration users.
+- *Package Version Header*: `x-sfdc-packageversion-[namespace]: xx.x`.
+- *Query Options Header*: `batchSize` default 2,000, min 200, max 2,000, not guaranteed (V9).
+- *Warning Header*: `Warning: <code> <message>`; code `299` for deprecated API versions.
+
 From the official Salesforce Help page **"OAuth 2.0 Refresh Token Flow for Renewed Sessions"**
 (`help.salesforce.com/s/articleView?id=xcloud.remoteaccess_oauth_refresh_token_flow.htm`), read 2026-11-09:
 
@@ -1654,3 +1958,45 @@ From **"OpenID Connect Token Introspection"** (`...id=xcloud.remoteaccess_oidc_t
 
 - Endpoint `POST https://<host>/services/oauth2/introspect`, form params `token`, optional `token_type_hint` (`access_token`/`refresh_token`), optional `child_sessions=all`; client id/secret via Basic or body.
 - Response fields are not listed; the page refers to RFC 7662 (where `exp` is optional) → V4.
+
+From the **Pub/Sub API Developer Guide** (`developer.salesforce.com/docs/platform/pub-sub-api/`),
+read in a browser 2026-11-09 (sources for §9.16 and ADR 0013):
+
+- *Subscribe RPC Method*: `num_requested` max 100. With nothing pending, the client must send a
+  `FetchRequest` within 60 s. With events pending, the server sends keepalives (an empty batch
+  carrying `latest_replay_id`) within 270 s, and Salesforce recommends saving that replay id.
+  Only the first `FetchRequest` sets the replay position. Events are retained 3 days.
+- *ManagedSubscribe RPC Method*: labelled **Beta**. The client commits replay ids; it must commit
+  within 30 min and request within 60 s.
+- *Event Deserialization Considerations*: `changedFields`/`diffFields`/`nulledFields` are hex
+  bitmaps over the Avro schema field positions, with `{pos}-{bitmap}` entries for compound
+  fields. Bits for fields without permission are cleared. Dates arrive as epoch numbers. Byte
+  fields such as `replay_id` are little-endian.
+- *Event Message Durability*: 72-hour retention. Replay ids are not contiguous and not unique
+  across org migrations. Use the event `id` (platform events only) to identify a message.
+- *Handle Errors* / *Retry Long-Lived RPC Calls*: the custom code is in the `error-code` trailer
+  and an `rpcId` is appended. `replayid.corrupted` means the replay id is invalid or outside
+  retention. `org.migrated` needs retries at least 30 minutes apart.
+- *Allocations*: about 3 MB recommended per publish batch (4 MB gRPC limit), 1 MB per event, at
+  most 200 events per publish recommended, 1,000 concurrent streams per channel, 200 managed
+  subscriptions per org.
+- *Authentication*: metadata `accesstoken`, `instanceurl`, `tenantid`.
+
+From the **Change Data Capture Developer Guide** (`…/change-data-capture/guide/`): gap events
+(`GAP_CREATE`/`UPDATE`/`DELETE`/`UNDELETE`) carry header data and record ids but no fields.
+`GAP_OVERFLOW` covers changes beyond 100,000 in one transaction, one event per entity, with
+record id `000000000000000AAA`. Merged events list several `recordIds`. Replicate one transaction
+(`transactionKey`, `sequenceNumber`) as one commit.
+
+From the **SOAP API Developer Guide**, *Outbound Messaging*, and Salesforce Help (*Considerations
+for Outbound Messages*; release notes 234, *Send an Outbound Message from Your Record-Triggered
+Flow*):
+
+- Messages carry `OrganizationId`, `ActionId`, an optional `SessionId` and one or more
+  notifications.
+- The listener ACKs the whole message. Salesforce retries with growing intervals (at most 2 h
+  apart) for 24 hours, may deliver more than once and out of order, and the receiver should
+  check the org id.
+
+`forcedotcom/pub-sub-api` (GitHub): `pubsub_api.proto` (package `eventbus.v1`) is licensed
+**CC0-1.0**. Last change 2024-05-30 at commit `03d49a9c21c10ca3b55fa7ab30db6ee69250378e`.

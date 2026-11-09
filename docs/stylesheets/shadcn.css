@@ -1,0 +1,484 @@
+/*
+ * shadcn/ui-inspired look for the Zensical "modern" variant.
+ * Zinc neutrals, 1px hairline borders, 0.5rem radius, Geist type, no coloured chrome.
+ * Only CSS custom properties and a few component rules; no template changes needed
+ * (except overrides/home.html for the landing hero).
+ */
+
+/* ---- tokens ------------------------------------------------------------------- */
+
+:root,
+[data-md-color-scheme="default"] {
+  --esf-bg: #ffffff;
+  --esf-fg: #09090b;
+  --esf-muted: #f4f4f5;
+  --esf-muted-fg: #71717a;
+  --esf-border: #e4e4e7;
+  --esf-ring: #a1a1aa;
+  --esf-card: #ffffff;
+  --esf-code-bg: #fafafa;
+  --esf-radius: 0.5rem;
+  --esf-accent-a: #3b82f6;
+  --esf-accent-b: #8b5cf6;
+
+  --md-default-bg-color: var(--esf-bg);
+  --md-default-fg-color: var(--esf-fg);
+  --md-default-fg-color--light: #52525b;
+  --md-default-fg-color--lighter: #a1a1aa;
+  --md-default-fg-color--lightest: var(--esf-border);
+  --md-primary-fg-color: var(--esf-fg);
+  --md-primary-fg-color--light: #3f3f46;
+  --md-primary-fg-color--dark: #000000;
+  --md-primary-bg-color: var(--esf-bg);
+  --md-accent-fg-color: var(--esf-fg);
+  --md-accent-fg-color--transparent: rgb(9 9 11 / 6%);
+  --md-typeset-color: #27272a;
+  --md-typeset-a-color: var(--esf-fg);
+  --md-typeset-table-color: var(--esf-border);
+  --md-typeset-table-color--light: #fafafa;
+  --md-code-bg-color: var(--esf-code-bg);
+  --md-code-fg-color: #18181b;
+  --md-footer-bg-color: var(--esf-bg);
+  --md-footer-bg-color--dark: var(--esf-bg);
+  --md-footer-fg-color: var(--esf-muted-fg);
+  --md-footer-fg-color--light: var(--esf-muted-fg);
+  --md-footer-fg-color--lighter: #a1a1aa;
+  --md-admonition-bg-color: var(--esf-card);
+  --md-shadow-z1: none;
+  --md-shadow-z2: 0 1px 2px rgb(0 0 0 / 5%);
+  --md-shadow-z3: 0 4px 12px rgb(0 0 0 / 8%);
+}
+
+[data-md-color-scheme="slate"] {
+  --md-hue: 240deg;
+  --esf-bg: #09090b;
+  --esf-fg: #fafafa;
+  --esf-muted: #18181b;
+  --esf-muted-fg: #a1a1aa;
+  --esf-border: #27272a;
+  --esf-ring: #52525b;
+  --esf-card: #09090b;
+  --esf-code-bg: #0f0f12;
+  --esf-accent-a: #60a5fa;
+  --esf-accent-b: #a78bfa;
+
+  --md-default-bg-color: var(--esf-bg);
+  --md-default-bg-color--light: rgb(9 9 11 / 70%);
+  --md-default-fg-color: var(--esf-fg);
+  --md-default-fg-color--light: #a1a1aa;
+  --md-default-fg-color--lighter: #71717a;
+  --md-default-fg-color--lightest: var(--esf-border);
+  --md-primary-fg-color: var(--esf-fg);
+  --md-primary-fg-color--light: #d4d4d8;
+  --md-primary-fg-color--dark: #ffffff;
+  --md-primary-bg-color: var(--esf-bg);
+  --md-accent-fg-color: var(--esf-fg);
+  --md-accent-fg-color--transparent: rgb(250 250 250 / 6%);
+  --md-typeset-color: #d4d4d8;
+  --md-typeset-a-color: var(--esf-fg);
+  --md-typeset-table-color: var(--esf-border);
+  --md-typeset-table-color--light: #111113;
+  --md-code-bg-color: var(--esf-code-bg);
+  --md-code-fg-color: #e4e4e7;
+  --md-footer-bg-color: var(--esf-bg);
+  --md-footer-bg-color--dark: var(--esf-bg);
+  --md-admonition-bg-color: var(--esf-card);
+  --md-shadow-z3: 0 4px 16px rgb(0 0 0 / 40%);
+}
+
+/* Syntax colours shared by docs code blocks and the hero (same family as the hero image). */
+[data-md-color-scheme="slate"] {
+  --md-code-hl-keyword-color: #c792ea;
+  --md-code-hl-function-color: #82aaff;
+  --md-code-hl-string-color: #a5e075;
+  --md-code-hl-number-color: #f78c6c;
+  --md-code-hl-constant-color: #f78c6c;
+  --md-code-hl-special-color: #89ddff;
+  --md-code-hl-name-color: #e4e4e7;
+  --md-code-hl-operator-color: #a1a1aa;
+  --md-code-hl-punctuation-color: #a1a1aa;
+  --md-code-hl-comment-color: #71717a;
+  --md-code-hl-variable-color: #e4e4e7;
+}
+
+:root,
+[data-md-color-scheme="default"] {
+  --md-code-hl-keyword-color: #7c3aed;
+  --md-code-hl-function-color: #2563eb;
+  --md-code-hl-string-color: #15803d;
+  --md-code-hl-number-color: #c2410c;
+  --md-code-hl-constant-color: #c2410c;
+  --md-code-hl-special-color: #0e7490;
+  --md-code-hl-comment-color: #71717a;
+}
+
+/* ---- header ------------------------------------------------------------------- */
+
+.md-header {
+  background-color: color-mix(in srgb, var(--esf-bg) 80%, transparent);
+  color: var(--esf-fg);
+  border-bottom: 1px solid var(--esf-border);
+  box-shadow: none;
+  backdrop-filter: saturate(180%) blur(8px);
+  -webkit-backdrop-filter: saturate(180%) blur(8px);
+}
+
+.md-header__title {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.md-search__form {
+  background-color: transparent;
+  border: 1px solid var(--esf-border);
+  border-radius: var(--esf-radius);
+  box-shadow: none;
+}
+
+.md-search__form:hover {
+  background-color: var(--esf-muted);
+}
+
+/* ---- sidebar navigation ------------------------------------------------------- */
+
+.md-nav__link {
+  color: var(--esf-muted-fg);
+  border-radius: calc(var(--esf-radius) - 2px);
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.md-nav__item .md-nav__link:hover,
+.md-nav__item .md-nav__link:focus {
+  color: var(--esf-fg);
+}
+
+.md-nav__link--active,
+.md-nav__item .md-nav__link--active,
+.md-nav__item .md-nav__link--active:hover {
+  color: var(--esf-fg);
+  background-color: var(--esf-muted);
+  font-weight: 500;
+}
+
+.md-sidebar--primary .md-nav__item--section > .md-nav__link {
+  color: var(--esf-fg);
+  font-weight: 600;
+  font-size: 0.7rem;
+}
+
+/* ---- content -------------------------------------------------------------------- */
+
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3 {
+  color: var(--esf-fg);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.md-typeset h2 {
+  padding-bottom: 0.4em;
+  border-bottom: 1px solid var(--esf-border);
+}
+
+.md-typeset a {
+  text-decoration: underline;
+  text-decoration-color: var(--esf-ring);
+  text-underline-offset: 0.2em;
+  font-weight: 500;
+}
+
+.md-typeset a:hover {
+  text-decoration-color: currentcolor;
+}
+
+.md-typeset :not(pre) > code {
+  background-color: var(--esf-muted);
+  border: 1px solid var(--esf-border);
+  border-radius: 0.3rem;
+  padding: 0.05em 0.35em;
+}
+
+.md-typeset pre > code,
+.md-typeset .highlight {
+  border-radius: var(--esf-radius);
+}
+
+.md-typeset .highlight pre,
+.md-typeset pre {
+  border: 1px solid var(--esf-border);
+  border-radius: var(--esf-radius);
+}
+
+.md-typeset table:not([class]) {
+  border: 1px solid var(--esf-border);
+  border-radius: var(--esf-radius);
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.md-typeset table:not([class]) th {
+  background-color: var(--esf-muted);
+  color: var(--esf-fg);
+  font-weight: 500;
+}
+
+.md-typeset .admonition,
+.md-typeset details {
+  border: 1px solid var(--esf-border);
+  border-radius: var(--esf-radius);
+  box-shadow: none;
+}
+
+/* ---- footer --------------------------------------------------------------------- */
+
+.md-footer,
+.md-footer-meta {
+  background-color: var(--esf-bg);
+  border-top: 1px solid var(--esf-border);
+}
+
+/* ---- landing hero (overrides/home.html) ------------------------------------------- */
+
+/* The hero is always dark (in both colour schemes), like the README banner. */
+.esf-hero {
+  --hero-bg: #07070a;
+  --hero-fg: #fafafa;
+  --hero-muted: #b4b4bd;
+  --hero-border: rgb(255 255 255 / 10%);
+  --md-code-fg-color: #eeeff4;
+  --md-code-hl-name-color: #eeeff4;
+  --md-code-hl-variable-color: #eeeff4;
+  --md-code-hl-generic-color: #eeeff4;
+  --md-code-hl-keyword-color: #c792ea;
+  --md-code-hl-function-color: #82aaff;
+  --md-code-hl-string-color: #c3e88d;
+  --md-code-hl-number-color: #f78c6c;
+  --md-code-hl-constant-color: #f78c6c;
+  --md-code-hl-special-color: #89ddff;
+  --md-code-hl-operator-color: #a6accd;
+  --md-code-hl-punctuation-color: #a6accd;
+  --md-code-hl-comment-color: #8087a8;
+  position: relative;
+  overflow: hidden;
+  padding: 4.5rem 0 3.5rem;
+  color: var(--hero-fg);
+  color-scheme: dark;
+  background:
+    radial-gradient(70% 60% at 0% 0%, rgb(37 99 235 / 50%), transparent 70%),
+    radial-gradient(60% 55% at 100% 100%, rgb(124 58 237 / 38%), transparent 70%),
+    var(--hero-bg);
+}
+
+.esf-hero__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 0 1.5rem;
+}
+
+.esf-hero__inner > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.esf-hero__title {
+  margin: 0;
+  font-size: clamp(1.6rem, 4.2vw, 2.8rem);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+  color: var(--hero-fg);
+  overflow-wrap: anywhere;
+}
+
+.esf-hero__accent {
+  background: linear-gradient(90deg, #60a5fa, #a78bfa);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.esf-hero__tagline {
+  margin: 0.8rem 0 0;
+  font-size: 0.95rem;
+  color: var(--hero-muted);
+}
+
+.esf-hero__actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 1.4rem;
+}
+
+.esf-btn {
+  display: inline-flex;
+  align-items: center;
+  height: 2rem;
+  padding: 0 0.9rem;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--hero-fg);
+  border: 1px solid var(--hero-border);
+  border-radius: var(--esf-radius);
+  background-color: rgb(255 255 255 / 4%);
+  transition: background-color 0.15s, opacity 0.15s;
+}
+
+.esf-btn:hover,
+.esf-btn:focus {
+  color: var(--hero-fg);
+  background-color: rgb(255 255 255 / 10%);
+}
+
+.esf-btn--primary,
+.esf-btn--primary:hover,
+.esf-btn--primary:focus {
+  color: #09090b;
+  background-color: #fafafa;
+  border-color: #fafafa;
+}
+
+.esf-btn--primary:hover {
+  opacity: 0.9;
+}
+
+/* Two code windows side by side (FastAPI async, Flask sync); stacked below 76rem. */
+.esf-windows {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  width: 100%;
+  max-width: 68rem;
+  margin-top: 2.4rem;
+  text-align: left;
+}
+
+.esf-window {
+  min-width: 0;
+  margin: 0;
+  border: 1px solid var(--hero-border);
+  border-radius: 0.75rem;
+  background-color: #111218;
+  box-shadow: 0 24px 60px -12px rgb(0 0 0 / 60%), 0 0 0 1px rgb(0 0 0 / 40%);
+  overflow: hidden;
+}
+
+.esf-window__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.9rem;
+  border-bottom: 1px solid var(--hero-border);
+  background-color: rgb(255 255 255 / 2%);
+}
+
+.esf-window__dots {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.esf-window__dots i {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background-color: rgb(255 255 255 / 16%);
+}
+
+.esf-window__label {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: var(--hero-fg);
+}
+
+.esf-window__label small {
+  margin-left: 0.3rem;
+  font-weight: 400;
+  color: var(--hero-muted);
+}
+
+.esf-window__code {
+  margin: 0;
+  padding: 1.2rem 1.4rem 1.3rem;
+  overflow-x: auto;
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, "JetBrains Mono", Consolas, monospace;
+  font-size: 0.64rem;
+  font-weight: 400;
+  line-height: 1.65;
+  color: #eeeff4;
+  background: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Token colours (Pygments classes), hero only: overrides the docs code palette. */
+.esf-hero .esf-window__code span { color: #eeeff4; }
+.esf-hero .esf-window__code .k,
+.esf-hero .esf-window__code .kn,
+.esf-hero .esf-window__code .kd,
+.esf-hero .esf-window__code .kc,
+.esf-hero .esf-window__code .ow { color: #c792ea; }
+.esf-hero .esf-window__code .nf,
+.esf-hero .esf-window__code .nb,
+.esf-hero .esf-window__code .fm { color: #82aaff; }
+.esf-hero .esf-window__code .s,
+.esf-hero .esf-window__code .s1,
+.esf-hero .esf-window__code .s2,
+.esf-hero .esf-window__code .sa,
+.esf-hero .esf-window__code .si { color: #c3e88d; }
+.esf-hero .esf-window__code .mi,
+.esf-hero .esf-window__code .mf { color: #f78c6c; }
+.esf-hero .esf-window__code .o,
+.esf-hero .esf-window__code .p { color: #a6accd; }
+.esf-hero .esf-window__code .nd { color: #a6accd; }
+.esf-hero .esf-window__code .c,
+.esf-hero .esf-window__code .c1 { color: #8087a8; font-style: italic; }
+
+@media screen and (max-width: 76em) {
+  .esf-windows {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 44rem;
+  }
+
+  .esf-window__code {
+    font-size: 0.7rem;
+  }
+}
+
+@media screen and (max-width: 44.9375em) {
+  .esf-hero {
+    padding: 2.5rem 0 2rem;
+  }
+
+  .esf-window__code {
+    font-size: 0.64rem;
+    padding: 1rem;
+  }
+}
+
+/* Feature cards on the landing page (grid cards from md_in_html). */
+.md-typeset .grid.cards > ul > li {
+  border: 1px solid var(--esf-border);
+  border-radius: var(--esf-radius);
+  box-shadow: none;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.md-typeset .grid.cards > ul > li:hover {
+  border-color: var(--esf-ring);
+  background-color: color-mix(in srgb, var(--esf-muted) 50%, transparent);
+}
+
+.md-typeset .grid.cards > ul > li > hr {
+  margin: 0.5em 0;
+  border-color: var(--esf-border);
+}
+
+/* palette.css sets link colours per primary colour with a more specific selector. */
+[data-md-color-scheme][data-md-color-primary] {
+  --md-typeset-a-color: var(--esf-fg);
+}
+
+.md-search__input {
+  background-color: transparent;
+}
