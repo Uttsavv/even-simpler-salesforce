@@ -72,6 +72,11 @@ dev = [
     "opentelemetry-sdk>=1.20",
     "fastapi>=0.110",
     "flask>=3.0",
+    "pre-commit>=3.7",
+]
+docs = [
+    "zensical>=0.1; python_version >= '3.11'",
+    "mkdocstrings-python>=2; python_version >= '3.11'",
 ]
 
 [tool.hatch.version]
@@ -114,6 +119,7 @@ filterwarnings = ["error::DeprecationWarning:even_simpler_salesforce"]
 
 [tool.coverage.run]
 branch = true
+relative_files = true
 source = ["even_simpler_salesforce"]
 omit = ["*/_sync/*", "*/contrib/*", "*/cli/*"]
 
