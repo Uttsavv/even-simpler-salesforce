@@ -91,7 +91,7 @@ def docs(session: nox.Session) -> None:
     """Build the documentation site into site/."""
     _sync(session)
     session.install(*DOCS_DEPS)
-    session.run("zensical", "build", "--clean", *session.posargs)
+    session.run("zensical", "build", "--clean", "--strict", *session.posargs)
 
 
 @nox.session(python="3.12")

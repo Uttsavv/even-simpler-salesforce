@@ -142,11 +142,11 @@ Every option is a keyword argument, and none of them is required:
 ```python
 sf = esf.AsyncSalesforce(
     auth,
-    api_version="68.0",                  # 59.0 or newer
+    api_version="68.0",  # 59.0 or newer
     timeout=esf.Timeouts(connect=5, read=60, write=60, pool=5),
     retry=esf.RetryPolicy(max_attempts=3),
-    max_concurrency=20,                  # in-flight requests for the whole client family
-    client_name="acme-sync",             # Sforce-Call-Options: client=acme-sync
+    max_concurrency=20,  # in-flight requests for the whole client family
+    client_name="acme-sync",  # Sforce-Call-Options: client=acme-sync
     budget=esf.Budget(warn_at=(0.5, 0.8, 0.95)),
 )
 await sf.aclose()

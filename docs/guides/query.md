@@ -49,7 +49,7 @@ value matches exactly. Add your own wildcards with `soql_like`'s pattern:
 term = "50%_off"
 exact = esf.soql("SELECT Id FROM Campaign WHERE Name LIKE {:like}", term)
 contains = esf.soql("SELECT Id FROM Campaign WHERE Name LIKE {}", esf.soql_like(term, "%{}%"))
-print(contains)   # ... LIKE '%50\%\_off%'
+print(contains)  # ... LIKE '%50\%\_off%'
 ```
 
 ### Field and object names
@@ -70,7 +70,7 @@ print(q)
 ```python
 page = await sf.query(esf.soql("SELECT Id, Name, Status FROM Lead WHERE Status = {}", "Open"))
 print(page.total_size, page.done, len(page))
-for lead in page:                    # iterating a page iterates its records
+for lead in page:  # iterating a page iterates its records
     print(lead["Name"])
 ```
 
@@ -98,7 +98,7 @@ can't make your server call any other URL.
 
 ```python
 first = await sf.query("SELECT Id, Name FROM Lead", page_size=200)
-second = await sf.query_more(first.cursor)          # or the string the browser sent back
+second = await sf.query_more(first.cursor)  # or the string the browser sent back
 print(len(first), len(second), second.done)
 ```
 

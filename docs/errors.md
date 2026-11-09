@@ -16,8 +16,8 @@ try:
     await sf.sobject("Lead").create({"LastName": "Franklin", "Company": "KCL", "Country": "UK"})
 except esf.ValidationRuleFailed as exc:
     print(exc.error_code)  # FIELD_CUSTOM_VALIDATION_EXCEPTION
-    print(exc.message)     # [ADDR_REQUIRED] Street is required when Country is set
-    print(exc.fields)      # ('Street',)
+    print(exc.message)  # [ADDR_REQUIRED] Street is required when Country is set
+    print(exc.fields)  # ('Street',)
     print(exc.status, exc.operation, exc.sobject)  # 400 sobject.create Lead
 except esf.SalesforceError as exc:
     print("other Salesforce error:", exc)

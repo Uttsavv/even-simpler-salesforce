@@ -60,7 +60,20 @@ nav = [
   { "Salesforce dependency index" = "salesforce-dependencies.md" },
   { "Reference" = "reference/index.md" },
   { "Changelog" = "changelog.md" },
-  { "ADRs" = "adr/index.md" },
+  { "ADRs" = [
+    "adr/index.md",
+    { "0001 Retry safety" = "adr/0001-retry-safety.md" },
+    { "0002 New library and scope" = "adr/0002-new-library-and-scope.md" },
+    { "0003 Async first, sync twin" = "adr/0003-async-first-with-generated-sync-twin.md" },
+    { "0004 One transport on httpx" = "adr/0004-one-transport-on-httpx.md" },
+    { "0005 Authentication and tokens" = "adr/0005-authentication-and-tokens.md" },
+    { "0006 Typed errors" = "adr/0006-typed-errors.md" },
+    { "0007 Records, query, results" = "adr/0007-records-query-and-results.md" },
+    { "0008 Observability and usage" = "adr/0008-observability-and-usage.md" },
+    { "0009 Integrations and testing" = "adr/0009-integrations-and-testing.md" },
+    { "0010 Org automation" = "adr/0010-org-automation-convert-and-merge.md" },
+    { "0011 Docs, versioning, releases" = "adr/0011-docs-versioning-and-releases.md" },
+  ] },
 ]
 
 [project.theme]
@@ -86,6 +99,41 @@ media = "(prefers-color-scheme: dark)"
 scheme = "slate"
 toggle.icon = "lucide/moon"
 toggle.name = "Switch to light mode"
+
+# Markdown extensions: Zensical's defaults (minus emoji/arithmatex, which these docs don't use)
+# plus pymdownx.snippets, which docs/changelog.md uses to include CHANGELOG.md. Setting this
+# table replaces the defaults, so every extension the pages use must be listed here.
+[project.markdown_extensions.abbr]
+[project.markdown_extensions.admonition]
+[project.markdown_extensions.attr_list]
+[project.markdown_extensions.def_list]
+[project.markdown_extensions.footnotes]
+[project.markdown_extensions.md_in_html]
+[project.markdown_extensions.tables]
+[project.markdown_extensions.toc]
+permalink = true
+[project.markdown_extensions.pymdownx.betterem]
+[project.markdown_extensions.pymdownx.caret]
+[project.markdown_extensions.pymdownx.details]
+[project.markdown_extensions.pymdownx.highlight]
+anchor_linenums = true
+line_spans = "__span"
+pygments_lang_class = true
+[project.markdown_extensions.pymdownx.inlinehilite]
+[project.markdown_extensions.pymdownx.keys]
+[project.markdown_extensions.pymdownx.magiclink]
+[project.markdown_extensions.pymdownx.mark]
+[project.markdown_extensions.pymdownx.smartsymbols]
+[project.markdown_extensions.pymdownx.snippets]
+base_path = ["."]
+check_paths = true
+[project.markdown_extensions.pymdownx.superfences]
+[project.markdown_extensions.pymdownx.tabbed]
+alternate_style = true
+combine_header_slug = true
+[project.markdown_extensions.pymdownx.tasklist]
+custom_checkbox = true
+[project.markdown_extensions.pymdownx.tilde]
 
 [project.plugins.mkdocstrings]
 default_handler = "python"

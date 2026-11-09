@@ -26,7 +26,7 @@ await sf.sobject("Account").describe()
 
 usage = sf.usage.snapshot()
 print(f"{usage.api_used}/{usage.api_max} ({usage.api_fraction:.1%}) as of {usage.as_of}")
-print(usage.calls_by_operation)   # {'query': 1, 'sobject.describe': 1}
+print(usage.calls_by_operation)  # {'query': 1, 'sobject.describe': 1}
 ```
 
 | `UsageSnapshot` field | Meaning |
@@ -54,9 +54,9 @@ backfill = sf.tagged(caller="job:backfill", priority="low")
 await backfill.query("SELECT Id FROM Lead LIMIT 10")
 
 with esf.call_context(caller="route:/leads", priority="high"):
-    await sf.query("SELECT Id FROM Lead LIMIT 10")   # tagged too, across awaits
+    await sf.query("SELECT Id FROM Lead LIMIT 10")  # tagged too, across awaits
 
-print(sf.usage.snapshot().calls_by_caller)          # {'-': 2, 'job:backfill': 1, 'route:/leads': 1}
+print(sf.usage.snapshot().calls_by_caller)  # {'-': 2, 'job:backfill': 1, 'route:/leads': 1}
 ```
 
 - `sf.tagged(caller=..., priority=...)` returns a child view. It shares everything with `sf`
@@ -84,9 +84,9 @@ value. Neither makes extra calls.
 
 ```python
 budget = esf.Budget(
-    warn_at=(0.5, 0.8, 0.95),        # emit sf.usage.threshold once per threshold per UTC day
-    pause_low_priority_above=0.8,    # BudgetExceeded for priority="low" calls above 80 %
-    block_all_above=0.98,            # BudgetExceeded for everything except priority="high"
+    warn_at=(0.5, 0.8, 0.95),  # emit sf.usage.threshold once per threshold per UTC day
+    pause_low_priority_above=0.8,  # BudgetExceeded for priority="low" calls above 80 %
+    block_all_above=0.98,  # BudgetExceeded for everything except priority="high"
 )
 guarded = esf.AsyncSalesforce(auth, budget=budget)
 await guarded.aclose()
@@ -104,14 +104,14 @@ snapshot, so a job can sleep and resume:
 ```python
 from even_simpler_salesforce.testing import FakeSalesforce
 
-fake = FakeSalesforce(budget=esf.Budget())   # the in-memory fake applies budgets too
-fake.set_api_usage(85_000, 100_000)          # pretend the header said 85 %
+fake = FakeSalesforce(budget=esf.Budget())  # the in-memory fake applies budgets too
+fake.set_api_usage(85_000, 100_000)  # pretend the header said 85 %
 
 job = fake.tagged(caller="job:nightly", priority="low")
 try:
     job.query("SELECT Id FROM Lead")
 except esf.BudgetExceeded as exc:
-    print(f"paused at {exc.usage.api_fraction:.0%}")   # paused at 85%
+    print(f"paused at {exc.usage.api_fraction:.0%}")  # paused at 85%
 ```
 
 Without `budget=`, there are no threshold events and no guard. Usage is still tracked.
@@ -137,5 +137,5 @@ uses a daemon thread.
 
 ```python
 sf.start_limits_poller(interval=900)
-await sf.aclose()   # stops the poller
+await sf.aclose()  # stops the poller
 ```

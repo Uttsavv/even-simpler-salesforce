@@ -12,7 +12,7 @@ The org enforces a few rules so error examples have something to hit:
 - a ``Lead`` with ``Country`` but no ``Street`` fails the validation rule
   ``[ADDR_REQUIRED] Street is required when Country is set`` (``FIELD_CUSTOM_VALIDATION_EXCEPTION``);
 - custom fields other than ``External_Id__c`` / ``Score__c`` don't exist (``INVALID_FIELD``);
-- objects other than Lead, Account, Contact and Opportunity don't exist (``INVALID_TYPE``).
+- objects other than Lead, Account, Contact, Opportunity and User don't exist (``INVALID_TYPE``).
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ USER_ID = "005xx0000000001AAA"
 ID_URL = f"https://login.salesforce.com/id/{ORG_ID}/{USER_ID}"
 API_MAX = 100_000
 
-PREFIXES = {"Lead": "00Q", "Account": "001", "Contact": "003", "Opportunity": "006"}
+PREFIXES = {"Lead": "00Q", "Account": "001", "Contact": "003", "Opportunity": "006", "User": "005"}
 CUSTOM_FIELDS = {"External_Id__c", "Score__c"}
 CHILD_RELATIONSHIPS = {"Contacts": ("Contact", "AccountId"), "Opportunities": ("Opportunity", "AccountId")}
 CHILD_PAGE = 2  # tiny on purpose, so ``expand_children`` has something to follow
@@ -129,12 +129,15 @@ class FakeOrg:
         return rec
 
     def _seed(self) -> None:
+        self._store("User", {"Username": "integration@acme.example", "LastName": "Integration"})
         accounts = [self._store("Account", {"Name": n}) for n in ("Acme", "Globex", "Initech")]
         for i, last in enumerate(("Doe", "Roe", "Poe")):
             self._store(
                 "Contact", {"LastName": last, "AccountId": accounts[0]["Id"], "Email": f"c{i}@acme.test"}
             )
-        self._store("Opportunity", {"Name": "Acme renewal", "AccountId": accounts[0]["Id"], "Amount": 12500.5})
+        self._store(
+            "Opportunity", {"Name": "Acme renewal", "AccountId": accounts[0]["Id"], "Amount": 12500.5}
+        )
         statuses = ("Open", "Working", "Closed - Not Converted")
         named = [
             ("Ada", "Lovelace", "Analytical Engines"),

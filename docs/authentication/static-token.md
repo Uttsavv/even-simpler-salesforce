@@ -22,8 +22,9 @@ one.
   is the org's API host (`https://acme.my.salesforce.com`), not the login host.
 - `repr(auth)` doesn't show the token.
 - `sf.auth.revoke()` revokes a static token through the instance's revoke endpoint.
-- `sf.auth.introspect()` and `sf.auth.revoke(token_key=...)` for *other* keys need the flow
-  that issued that token, because a static token has no OAuth client. Pass it as `auth=`.
+- `sf.auth.introspect()` needs an OAuth client, which a static token doesn't have. Pass
+  `auth=` with the flow that issued the token. The same applies to `sf.auth.revoke(token_key=...)`
+  for keys other than this client's own.
 
 !!! tip "Getting a token from the Salesforce CLI"
     `sf org display --target-org <alias> --json` prints an access token and instance URL for an

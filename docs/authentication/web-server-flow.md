@@ -10,12 +10,12 @@ import even_simpler_salesforce as esf
 
 def flow_for(user_id: str) -> esf.WebServerFlow:
     return esf.WebServerFlow(
-        domain="https://acme.my.salesforce.com",       # or "login" / "test"
+        domain="https://acme.my.salesforce.com",  # or "login" / "test"
         client_id="3MVG9...",
-        client_secret="...",                            # optional for public clients (PKCE only)
+        client_secret="...",  # optional for public clients (PKCE only)
         redirect_uri="https://app.example.com/oauth/callback",
-        scopes=("api", "refresh_token"),                # the default
-        token_key=f"user:{user_id}",                    # required: one key per Salesforce identity
+        scopes=("api", "refresh_token"),  # the default
+        token_key=f"user:{user_id}",  # required: one key per Salesforce identity
     )
 ```
 
@@ -31,9 +31,9 @@ server-side session until the callback.
 
 ```python
 flow = flow_for("42")
-start = flow.authorization_url()   # random state; or authorization_url(state=..., prompt="login")
+start = flow.authorization_url()  # random state; or authorization_url(state=..., prompt="login")
 session = {"oauth_state": start.state, "pkce_verifier": start.code_verifier}
-print(start.url)                    # send the browser here
+print(start.url)  # send the browser here
 ```
 
 | Argument | Sent as |
@@ -50,14 +50,12 @@ then exchange the code. `exchange_code` stores the tokens under `flow.token_key`
 the `Token`:
 
 ```python
-callback_params = {"code": "aPrx...", "state": start.state}   # from the callback request
+callback_params = {"code": "aPrx...", "state": start.state}  # from the callback request
 
 assert callback_params["state"] == session["oauth_state"]
 
 sf = esf.AsyncSalesforce(esf.StaticToken("unused", "https://acme.my.salesforce.com"))
-token = await sf.auth.exchange_code(
-    flow, callback_params["code"], code_verifier=session["pkce_verifier"]
-)
+token = await sf.auth.exchange_code(flow, callback_params["code"], code_verifier=session["pkce_verifier"])
 print(token.user_id, token.org_id)
 ```
 
@@ -90,8 +88,9 @@ itself. In a real app the root is often your integration-user client
 
 When the access token expires, the client refreshes it with the stored refresh token:
 
-- Only one refresh runs at a time per `token_key` in the process. With a durable store that
-  implements `lock()`, this also holds across processes.
+- Only one refresh runs at a time per `token_key` within a client family. The store's `lock()`
+  extends this to other client families (the built-in in-memory stores lock per process), and a
+  durable store's `lock()` extends it across processes.
 - A rotated refresh token is saved to the store (compare-and-swap) **before** the new access
   token is used. If another process saved first, the client uses that process's token.
 - A refresh request that timed out or was reset after sending is **not resent**. The client
@@ -105,7 +104,7 @@ When the access token expires, the client refreshes it with the stored refresh t
 try:
     await as_user.query("SELECT Id FROM Account LIMIT 1")
 except esf.ReauthorizationRequired:
-    start = flow_for("42").authorization_url()   # ask the user to log in again
+    start = flow_for("42").authorization_url()  # ask the user to log in again
 ```
 
 ## Log out

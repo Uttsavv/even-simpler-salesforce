@@ -87,18 +87,20 @@ from even_simpler_salesforce import Token
 
 
 def token_to_json(token: Token) -> str:
-    return json.dumps({
-        "access_token": token.access_token,
-        "instance_url": token.instance_url,
-        "issued_at": token.issued_at.isoformat(),
-        "refresh_token": token.refresh_token,
-        "id_url": token.id_url,
-        "org_id": token.org_id,
-        "user_id": token.user_id,
-        "scope": sorted(token.scope),
-        "signature": token.signature,
-        "expires_at": token.expires_at.isoformat() if token.expires_at else None,
-    })
+    return json.dumps(
+        {
+            "access_token": token.access_token,
+            "instance_url": token.instance_url,
+            "issued_at": token.issued_at.isoformat(),
+            "refresh_token": token.refresh_token,
+            "id_url": token.id_url,
+            "org_id": token.org_id,
+            "user_id": token.user_id,
+            "scope": sorted(token.scope),
+            "signature": token.signature,
+            "expires_at": token.expires_at.isoformat() if token.expires_at else None,
+        }
+    )
 
 
 def token_from_json(data: str, version: int) -> Token:
@@ -250,7 +252,7 @@ esf_tokens = Table(
     "esf_tokens",
     metadata,
     Column("key", String(255), primary_key=True),
-    Column("data", Text, nullable=False),        # Fernet-encrypted token_to_json(...)
+    Column("data", Text, nullable=False),  # Fernet-encrypted token_to_json(...)
     Column("version", Integer, nullable=False),
 )
 
@@ -284,9 +286,7 @@ class SqlAlchemyTokenStore:
                     conn.execute(esf_tokens.insert().values(key=key, data=data, version=version))
                 else:
                     conn.execute(
-                        esf_tokens.update()
-                        .where(esf_tokens.c.key == key)
-                        .values(data=data, version=version)
+                        esf_tokens.update().where(esf_tokens.c.key == key).values(data=data, version=version)
                     )
         except IntegrityError:  # another process inserted the first row concurrently
             raise esf.TokenConflict("token record was created concurrently") from None
@@ -353,8 +353,15 @@ return 0
 
 
 class RedisTokenStore:
-    def __init__(self, client: redis.Redis, fernet: Fernet, *, prefix: str = "esf:token:",
-                 lock_ttl: float = 30.0, lock_wait: float = 35.0) -> None:
+    def __init__(
+        self,
+        client: redis.Redis,
+        fernet: Fernet,
+        *,
+        prefix: str = "esf:token:",
+        lock_ttl: float = 30.0,
+        lock_wait: float = 35.0,
+    ) -> None:
         self.r = client
         self.fernet = fernet
         self.prefix = prefix

@@ -35,7 +35,7 @@ alphanumeric characters) and field names before it builds a URL. A bad value rai
 ```python
 lead_id = await leads.create({"FirstName": "Ada", "LastName": "Lovelace", "Company": "Engines"})
 
-lead = await leads.get(lead_id)                                    # every field
+lead = await leads.get(lead_id)  # every field
 small = await leads.get(lead_id, fields=["Id", "Name", "Status"])  # just these
 print(small["Name"], small["Status"])
 
@@ -59,8 +59,7 @@ Values are JSON-encoded with these rules (the same with orjson and the stdlib):
 from decimal import Decimal
 
 opp_id = await sf.sobject("Opportunity").create(
-    {"Name": "Renewal", "StageName": "Prospecting", "CloseDate": "2027-01-31",
-     "Amount": Decimal("12500.10")}
+    {"Name": "Renewal", "StageName": "Prospecting", "CloseDate": "2027-01-31", "Amount": Decimal("12500.10")}
 )
 ```
 
@@ -70,7 +69,7 @@ opp_id = await sf.sobject("Opportunity").create(
 lead = await leads.get_by_external_id("External_Id__c", "ext-hopper", fields=["Id", "Name"])
 
 result = await leads.upsert("External_Id__c", "crm-1001", {"LastName": "Liskov", "Company": "MIT"})
-print(result.created, result.id)   # True, '00Q...' on the first run; False on later runs
+print(result.created, result.id)  # True, '00Q...' on the first run; False on later runs
 ```
 
 The value is percent-encoded as **one path segment**: a space becomes `%20`, `/` becomes `%2F`
@@ -102,7 +101,7 @@ from datetime import datetime, timedelta, timezone
 
 since = datetime.now(timezone.utc) - timedelta(minutes=5)
 lead_id = await leads.create({"LastName": "Hamilton", "Company": "NASA"}, assignment_rule_id=True)
-fresh = await leads.get(lead_id, if_modified_since=since)   # None if unchanged since `since`
+fresh = await leads.get(lead_id, if_modified_since=since)  # None if unchanged since `since`
 
 try:
     await leads.update(lead_id, {"Status": "Working"}, if_unmodified_since=since)
@@ -151,12 +150,12 @@ are the easiest way to get exact numbers and real datetimes back.
 ## Describe
 
 ```python
-describe = await leads.describe()                 # served from the describe cache when fresh
+describe = await leads.describe()  # served from the describe cache when fresh
 names = [f["name"] for f in describe["fields"]]
 everything = await sf.describe_global()
 print(len(everything["sobjects"]), names[:3])
 
-fresh = await leads.describe(cached=False)        # skip the cache
+fresh = await leads.describe(cached=False)  # skip the cache
 ```
 
 The describe cache is keyed by org, API version, sObject and a hash of the user id, because
@@ -175,8 +174,8 @@ from datetime import datetime, timedelta, timezone
 
 end = datetime.now(timezone.utc)
 start = end - timedelta(days=1)
-changed = await leads.updated(start, end)    # {"ids": [...], "latestDateCovered": "..."}
-removed = await leads.deleted(start, end)    # {"deletedRecords": [...], ...}
+changed = await leads.updated(start, end)  # {"ids": [...], "latestDateCovered": "..."}
+removed = await leads.deleted(start, end)  # {"deletedRecords": [...], ...}
 print(len(changed["ids"]), len(removed["deletedRecords"]))
 
 await sf.aclose()

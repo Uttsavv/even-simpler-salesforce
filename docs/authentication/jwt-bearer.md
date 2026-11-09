@@ -15,9 +15,9 @@ from pathlib import Path
 import even_simpler_salesforce as esf
 
 auth = esf.JwtBearer(
-    domain="login",                               # or "test", or the My Domain URL
+    domain="login",  # or "test", or the My Domain URL
     client_id=os.environ["SF_CLIENT_ID"],
-    username=os.environ["SF_USERNAME"],           # the user to act as (pre-authorized)
+    username=os.environ["SF_USERNAME"],  # the user to act as (pre-authorized)
     private_key=Path("server.key").read_bytes(),  # PEM, str or bytes
 )
 
