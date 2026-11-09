@@ -1,0 +1,10 @@
+{
+  "synthetic": true,
+  "source": "hand-written from Salesforce REST API Developer Guide examples",
+  "body": [
+    {
+      "message": "Server unavailable",
+      "errorCode": "SERVER_UNAVAILABLE"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "synthetic": true,
+  "source": "hand-written from Salesforce REST API Developer Guide examples",
+  "body": [
+    {
+      "message": "\nSELECT Nope FROM Lead\n       ^\nERROR at Row:1:Column:8\nNo such column 'Nope' on entity 'Lead'.",
+      "errorCode": "INVALID_FIELD"
+    }
+  ]
+}

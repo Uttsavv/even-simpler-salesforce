@@ -155,7 +155,7 @@ class AsyncTransport:
         reasons: list[str] = []
         refreshed = False
         raw: RawResponse | None = None
-        error: SalesforceError | None = None
+        failure: BaseException | None = None
         bytes_out = len(spec.content) if spec.content else 0
         bytes_in = 0
         try:
@@ -208,15 +208,17 @@ class AsyncTransport:
                         },
                     )
                     await self.sleep(delay)
-        except SalesforceError as exc:
-            error = exc
+        except BaseException as exc:
+            # Not only SalesforceError: a rejected path (ValueError), a cancelled task or a
+            # bug must not be reported as outcome="ok".
+            failure = exc
             raise
         finally:
             self._finish(
                 spec,
                 runtime,
                 raw,
-                error,
+                failure,
                 started,
                 attempts,
                 reasons,
@@ -292,12 +294,22 @@ class AsyncTransport:
         raw = RawResponse(response.status_code, response.headers, response.content, url, loads=self.loads)
         return raw, response.num_bytes_downloaded, len(content) if content else 0
 
+    @staticmethod
+    def _error_message(spec: RequestSpec, error: SalesforceError | None) -> str | None:
+        if error is None or not error.message:
+            return None
+        message = error.message
+        if spec.soql:
+            # MALFORMED_QUERY / INVALID_FIELD messages echo the query text, literals included.
+            message = redact_soql(message)
+        return message[:200]
+
     def _finish(
         self,
         spec: RequestSpec,
         runtime: AsyncAuthRuntime,
         raw: RawResponse | None,
-        error: SalesforceError | None,
+        failure: BaseException | None,
         started: float,
         attempts: int,
         reasons: list[str],
@@ -308,8 +320,9 @@ class AsyncTransport:
         priority: str,
     ) -> None:
         used, mx = self.usage.latest()
+        error = failure if isinstance(failure, SalesforceError) else None
         records = spec.records
-        if error is None and raw is not None and raw.is_json:
+        if failure is None and raw is not None and raw.is_json:
             try:
                 body = raw.json()
             except ValueError:
@@ -324,10 +337,10 @@ class AsyncTransport:
             "method": spec.method,
             "path_template": spec.path_template or path_template(spec.path),
             "status": raw.status if raw is not None else (error.status if error else None),
-            "outcome": "error" if error is not None else "ok",
+            "outcome": "error" if failure is not None else "ok",
             "error_code": error.error_code if error else None,
-            "error_class": type(error).__name__ if error else None,
-            "error_message": (error.message[:200] if error and error.message else None),
+            "error_class": type(failure).__name__ if failure is not None else None,
+            "error_message": self._error_message(spec, error),
             "duration_ms": round((time.perf_counter() - started) * 1000, 1),
             "attempts": attempts,
             "retry_reasons": reasons,
@@ -346,11 +359,14 @@ class AsyncTransport:
         }
         if spec.soql and self.log_soql == "redacted":
             fields["soql"] = redact_soql(spec.soql)
+        error_label: str | None = None
+        if failure is not None:
+            error_label = (error.error_code if error else None) or type(failure).__name__
         self.usage.record_call(
             operation=spec.operation,
             sobject=spec.sobject,
             caller=caller,
-            error_code=(error.error_code or type(error).__name__) if error else None,
+            error_code=error_label,
             retries=len(reasons),
         )
         self.emit("sf.request", fields)

@@ -1,0 +1,9 @@
+{
+  "synthetic": true,
+  "source": "hand-written from Salesforce REST API Developer Guide examples",
+  "body": {
+    "totalSize": 42,
+    "done": true,
+    "records": []
+  }
+}

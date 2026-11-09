@@ -1,0 +1,16 @@
+{
+  "synthetic": true,
+  "source": "hand-written from Salesforce REST API Developer Guide examples",
+  "body": {
+    "encoding": "UTF-8",
+    "maxBatchSize": 200,
+    "sobjects": [
+      {
+        "name": "Account"
+      },
+      {
+        "name": "Lead"
+      }
+    ]
+  }
+}

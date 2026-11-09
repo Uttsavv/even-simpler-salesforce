@@ -1,0 +1,25 @@
+{
+  "synthetic": true,
+  "source": "hand-written from Salesforce REST API Developer Guide examples",
+  "body": {
+    "totalSize": 3,
+    "done": false,
+    "nextRecordsUrl": "/services/data/v68.0/query/01gxx0000000001AAA-2",
+    "records": [
+      {
+        "attributes": {
+          "type": "Lead"
+        },
+        "Id": "00Qxx0000000001AAA",
+        "Name": "A"
+      },
+      {
+        "attributes": {
+          "type": "Lead"
+        },
+        "Id": "00Qxx0000000002AAA",
+        "Name": "B"
+      }
+    ]
+  }
+}

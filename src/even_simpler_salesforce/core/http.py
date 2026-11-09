@@ -9,10 +9,12 @@ from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import quote as _urlquote
 
+from ..errors import UnexpectedResponse
 from . import jsonlib
 
 __all__ = [
     "GZIP_THRESHOLD",
+    "InvalidJSONResponse",
     "RawResponse",
     "RequestSpec",
     "build_url",
@@ -88,6 +90,14 @@ class RequestSpec:
 _UNPARSED: Any = object()
 
 
+class InvalidJSONResponse(UnexpectedResponse, ValueError):
+    """A body that should be JSON isn't (proxy/maintenance page, truncated body).
+
+    An :class:`UnexpectedResponse` for callers, and a ``ValueError`` for parsers that already
+    treat undecodable bodies that way.
+    """
+
+
 @dataclass(frozen=True)
 class RawResponse:
     """A fully read HTTP response, decoupled from httpx. ``json()`` is parsed once and cached."""
@@ -109,9 +119,22 @@ class RawResponse:
         return ct == "application/json" or ct.endswith("+json")
 
     def json(self) -> Any:
-        """Decoded JSON body (``None`` when empty). Raises ``ValueError`` on invalid JSON."""
+        """Decoded JSON body (``None`` when empty).
+
+        Raises:
+            InvalidJSONResponse: the body is not valid JSON (an ``UnexpectedResponse`` that is
+                also a ``ValueError``).
+        """
         if self._parsed is _UNPARSED:
-            value = (self.loads or jsonlib.loads)(self.content) if self.content else None
+            try:
+                value = (self.loads or jsonlib.loads)(self.content) if self.content else None
+            except ValueError:
+                raise InvalidJSONResponse(
+                    f"response body is not valid JSON (HTTP {self.status}, "
+                    f"{self.content_type or 'no content-type'})",
+                    status=self.status,
+                    raw=self.content[:4096],
+                ) from None
             object.__setattr__(self, "_parsed", value)
         return self._parsed
 
@@ -171,8 +194,14 @@ def build_url(instance_url: str, api_version: str, path: str) -> str:
 
 
 def path_template(path: str) -> str:
-    """Path for logs: version prefix dropped, ids → ``:id``, query locators → ``:locator``."""
+    """Path for logs: version prefix dropped, ids → ``:id``, query locators → ``:locator``.
+
+    Relative (``sobjects/Lead/...``) and absolute (``/services/data/vXX.X/sobjects/Lead/...``)
+    spellings of the same resource give the same template, always with a leading ``/``.
+    """
     p = path.split("?", 1)[0]
     p = _VERSION_PREFIX.sub("", p)
+    if not p.startswith("/"):
+        p = "/" + p
     p = _LOCATOR_SEGMENT.sub(":locator", p)
     return _ID_SEGMENT.sub(":id", p)
