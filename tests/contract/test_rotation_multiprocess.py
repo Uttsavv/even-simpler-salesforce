@@ -87,7 +87,8 @@ def test_four_processes_never_hit_invalid_grant(tmp_path: Path, kinds: tuple[str
     assert counters["reuse"] == 0, counters  # nobody ever presented a rotated-out token
     assert counters["unknown"] == 0, counters
     assert counters["overlaps"] == 0, counters  # the store lock serialised every POST
-    assert counters["userinfo_401"] == 0, counters
+    assert counters["api_401"] == 0, counters
+    assert counters["api_ok"] == sum(r.verified for r in reports) > 0, counters
     assert counters["refreshes"] == sum(r.posts for r in reports), (counters, detail)
     assert counters["refreshes"] >= total, detail  # the chain really rotated TOTAL times
     assert all(r.cycles_done > 0 for r in reports), detail  # every process took part

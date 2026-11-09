@@ -13,7 +13,7 @@ not recorded traffic:
 
 State lives in a SQLite file so all worker processes see one org. :func:`install` (entered by
 each worker, see ``tests/sandbox/rotation.py``) starts respx in that process and routes the
-token endpoint and ``/services/oauth2/userinfo`` to this fake.
+token endpoint and ``GET /services/data/v68.0/limits`` to this fake.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ import respx
 
 INSTANCE = "https://acme.my.salesforce.com"
 TOKEN_URL = f"{INSTANCE}/services/oauth2/token"
-USERINFO_URL = f"{INSTANCE}/services/oauth2/userinfo"
+LIMITS_URL = f"{INSTANCE}/services/data/v68.0/limits"
 ID_URL = "https://login.salesforce.com/id/00Dxx0000000001EAA/005xx0000000001AAA"
 CLIENT_ID = "cid-rotation"
 CLIENT_SECRET = "s3cr3t-rotation"
@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS inflight (rt TEXT PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS counters (name TEXT PRIMARY KEY, n INTEGER NOT NULL);
 """
 
-COUNTERS = ("refreshes", "reuse", "overlaps", "unknown", "userinfo_ok", "userinfo_401")
+COUNTERS = ("refreshes", "reuse", "overlaps", "unknown", "api_ok", "api_401")
 
 
 class FakeOrg:
@@ -156,17 +156,21 @@ class FakeOrg:
         }
         return httpx.Response(200, json=body)
 
-    def userinfo(self, request: httpx.Request) -> httpx.Response:
+    def limits(self, request: httpx.Request) -> httpx.Response:
         at = request.headers.get("Authorization", "").removeprefix("Bearer ")
         with self._tx() as c:
             row = c.execute("SELECT valid FROM access_tokens WHERE at = ?", (at,)).fetchone()
             ok = bool(row and row[0])
-            self._bump(c, "userinfo_ok" if ok else "userinfo_401")
+            self._bump(c, "api_ok" if ok else "api_401")
         if not ok:
             return httpx.Response(
                 401, json=[{"errorCode": "INVALID_SESSION_ID", "message": "Session expired"}]
             )
-        return httpx.Response(200, json={"sub": ID_URL, "user_id": "005xx0000000001AAA"})
+        return httpx.Response(
+            200,
+            json={"DailyApiRequests": {"Max": 15000, "Remaining": 14000}},
+            headers={"Sforce-Limit-Info": "api-usage=1000/15000"},
+        )
 
     @staticmethod
     def _invalid_grant() -> httpx.Response:
@@ -182,5 +186,5 @@ def install(arg: str | None) -> Iterator[None]:
     org = FakeOrg(opts["path"], delay=float(opts.get("delay", 0.002)))
     with respx.mock(assert_all_called=False) as router:
         router.post(TOKEN_URL).mock(side_effect=org.token)
-        router.get(USERINFO_URL).mock(side_effect=org.userinfo)
+        router.get(LIMITS_URL).mock(side_effect=org.limits)
         yield
