@@ -7,51 +7,42 @@ hide:
 
 # even-simpler-salesforce
 
+## Beyond simple-salesforce
+
+Coming from simple-salesforce? Here is what you get on top. Most of it needs no code at all.
+
+<div class="esf-compare" markdown>
+
+| | simple-salesforce | even-simpler-salesforce |
+|---|---|---|
+| Async | Sync only | [`AsyncSalesforce`](getting-started.md#async-or-sync), and a sync client with the same methods |
+| Expired session | Raises `SalesforceExpiredSession` | [Refreshes the token](authentication/index.md#how-tokens-are-handled) and sends the call again |
+| Browser login | Not available | [Web server flow with PKCE](authentication/web-server-flow.md) |
+| Saved tokens | Not available | [Token stores](authentication/token-stores.md), safe under refresh-token rotation |
+| Errors | One class per HTTP status | [One class per Salesforce error code](errors.md), such as `ValidationRuleFailed` and `RowLocked` |
+| Retries | None built in | [Retries reads](errors.md#retries), and never sends a write twice by accident |
+| API limits | Reads usage into `api_usage` | A [budget guard](usage-and-budgets.md#budgets) that stops calls before you hit the org limit |
+| Logs | No structured events | [One event per call](logging.md), secrets redacted, OpenTelemetry and structlog |
+| Tests | No test helpers | [In-memory fake, recorder and replayer](testing.md), and a pytest plugin |
+| Moving over | By hand | [`esf migrate`](migrate.md) rewrites the mechanical part of your code |
+
+</div>
+
+## Start here
+
 <div class="grid cards" markdown>
 
--   **Login flows as config objects**
+-   **[Getting started](getting-started.md)**
 
-    ---
+    Install the library and make your first call in five minutes.
 
-    [Client credentials](authentication/client-credentials.md),
-    [JWT bearer](authentication/jwt-bearer.md),
-    [web server with PKCE](authentication/web-server-flow.md) and
-    [static tokens](authentication/static-token.md), with
-    [token stores](authentication/token-stores.md) that are safe under refresh-token rotation.
+-   **[Choose a login flow](authentication/index.md)**
 
--   **Records, query and Collections**
+    Client credentials, JWT bearer, web server flow or a static token.
 
-    ---
+-   **[Work with records](guides/records.md)**
 
-    [Records](guides/records.md), [query and search](guides/query.md) with values quoted for
-    you, and [sObject Collections](guides/collections.md).
-
--   **Typed errors**
-
-    ---
-
-    [Exceptions](errors.md) such as `ValidationRuleFailed`, `RowLocked`, `MultipleMatches` and
-    `PartialFailure`, with `error_code`, `fields`, `status` and `request_id`.
-
--   **Usage and budgets**
-
-    ---
-
-    [API usage](usage-and-budgets.md) read from response headers at no extra API cost, and a
-    budget guard that stops calls before you hit the org limit.
-
--   **Structured logs**
-
-    ---
-
-    [One event per call](logging.md) with secrets redacted, plus `ESF_DEBUG=1` for readable
-    local output.
-
--   **Testing helpers**
-
-    ---
-
-    [In-memory fakes, a recorder and replayer](testing.md), and a pytest plugin.
+    Create, read, update and delete records, then query them.
 
 </div>
 
