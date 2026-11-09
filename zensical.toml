@@ -63,23 +63,6 @@ nav = [
   ] },
   { "Salesforce dependency index" = "salesforce-dependencies.md" },
   { "Reference" = "reference/index.md" },
-  { "Changelog" = "changelog.md" },
-  { "ADRs" = [
-    "adr/index.md",
-    { "0001 Retry safety" = "adr/0001-retry-safety.md" },
-    { "0002 New library and scope" = "adr/0002-new-library-and-scope.md" },
-    { "0003 Async first, sync twin" = "adr/0003-async-first-with-generated-sync-twin.md" },
-    { "0004 One transport on httpx" = "adr/0004-one-transport-on-httpx.md" },
-    { "0005 Authentication and tokens" = "adr/0005-authentication-and-tokens.md" },
-    { "0006 Typed errors" = "adr/0006-typed-errors.md" },
-    { "0007 Records, query, results" = "adr/0007-records-query-and-results.md" },
-    { "0008 Observability and usage" = "adr/0008-observability-and-usage.md" },
-    { "0009 Integrations and testing" = "adr/0009-integrations-and-testing.md" },
-    { "0010 Org automation" = "adr/0010-org-automation-convert-and-merge.md" },
-    { "0011 Docs, versioning, releases" = "adr/0011-docs-versioning-and-releases.md" },
-    { "0012 Request headers" = "adr/0012-request-headers.md" },
-    { "0013 Event subscriptions" = "adr/0013-event-subscriptions.md" },
-  ] },
 ]
 
 [project.theme]

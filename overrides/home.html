@@ -6,6 +6,54 @@
   <style>
     .md-content .md-typeset > h1:first-of-type { display: none; }
     .md-main__inner > .md-content { max-width: 64rem; margin: 0 auto; }
+    .md-main { background: none; } /* the hero already carries the glow */
+
+    /* The landing page hides the sidebar, so on wide screens the menu button opens it as a
+       drawer, the same way the theme does below 76.25em. */
+    @media screen and (min-width: 76.25em) {
+      .md-header__button[for="__drawer"] { display: inline-block; }
+      .md-sidebar--primary {
+        position: fixed;
+        top: 0.4rem;
+        left: -12.1rem;
+        z-index: 5;
+        display: block;
+        width: 12.1rem;
+        height: calc(100% - 0.8rem);
+        background-color: var(--md-default-bg-color--light);
+        backdrop-filter: blur(0.4rem);
+        border-radius: 0.8rem;
+        transition: transform 0.2s cubic-bezier(0.5, 0, 0.5, 0), box-shadow 0.2s;
+      }
+      [data-md-toggle="drawer"]:checked ~ .md-container .md-sidebar--primary {
+        box-shadow: var(--md-shadow-z3);
+        transform: translateX(12.5rem);
+        transition: transform 0.25s cubic-bezier(0.7, 0.7, 0.1, 1), box-shadow 0.25s;
+      }
+      .md-sidebar--primary .md-sidebar__scrollwrap {
+        position: absolute;
+        inset: 0;
+        margin: 0;
+        overscroll-behavior-y: contain;
+      }
+      .md-overlay {
+        position: fixed;
+        top: 0;
+        z-index: 5;
+        width: 0;
+        height: 0;
+        background-color: var(--md-default-bg-color--light);
+        backdrop-filter: blur(0.2rem);
+        opacity: 0;
+        transition: width 0s 0.5s, height 0s 0.5s, opacity 0.25s 125ms;
+      }
+      [data-md-toggle="drawer"]:checked ~ .md-overlay {
+        width: 100%;
+        height: 100%;
+        opacity: 1;
+        transition: width, height, opacity 0.25s;
+      }
+    }
   </style>
 {% endblock %}
 
