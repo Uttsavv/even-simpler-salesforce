@@ -318,8 +318,8 @@ def test_capture_rolls_up_fake_calls(esf_fake: FakeSalesforce) -> None:
     assert fields["sf_ops"] == {"sobject.create": 1, "sobject.get": 2}
     assert fields["sf_api_used"] == 12
     req = [e for e in events if e.name == "sf.request"]
-    assert req[0]["path_template"] == "sobjects/Lead"
-    assert req[1]["path_template"] == "sobjects/Lead/:id"
+    assert req[0]["path_template"] == "/sobjects/Lead"
+    assert req[1]["path_template"] == "/sobjects/Lead/:id"
     assert req[1]["outcome"] == "error"
 
 
