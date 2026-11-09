@@ -362,6 +362,7 @@ def test_csv_neutralises_formulas(capsys: pytest.CaptureFixture[str], static_env
             "Note__c": "+1",
             "At__c": "@SUM(A1)",
             "Nl__c": "\n=1+1",
+            "Wide__c": "\uff1d1+1",
             "Score__c": -5,
         }
     )
@@ -373,6 +374,7 @@ def test_csv_neutralises_formulas(capsys: pytest.CaptureFixture[str], static_env
     assert row["Note__c"] == "'+1"
     assert row["At__c"] == "'@SUM(A1)"
     assert row["Nl__c"] == "'\n=1+1"
+    assert row["Wide__c"] == "'\uff1d1+1"  # full-width "=": a formula in some locales
     assert row["Score__c"] == "-5"  # numbers are data, not formulas
 
 
