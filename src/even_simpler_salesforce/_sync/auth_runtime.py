@@ -116,11 +116,12 @@ class AuthRuntime:
                 error_code="INVALID_SESSION_ID",
                 status=401,
             )
-        self.transport.refresh_outcomes.pin(self.key)
+        key = self.key  # pin and unpin the same key even if sf.auth rebinds it meanwhile
+        self.transport.refresh_outcomes.pin(key)
         if entered is None:
             entered = self._generation()
         try:
-            with self.transport.lock_for(self.key):
+            with self.transport.single_flight(key):
                 cur = self.transport.tokens.get(self.key)
                 if cur is not None and cur.access_token != stale.access_token and not self._due(cur):
                     return cur  # another caller already refreshed
@@ -129,12 +130,12 @@ class AuthRuntime:
                 self.transport.tokens[self.key] = new
                 return new
         finally:
-            self.transport.refresh_outcomes.unpin(self.key)
+            self.transport.refresh_outcomes.unpin(key)
             self.transport.flush_deferred()
 
     def set_token(self, token: Token) -> Token:
         """Save ``token`` to the store and memory (used by ``exchange_code``)."""
-        with self.transport.lock_for(self.key):
+        with self.transport.single_flight(self.key):
             current = self.store.load(self.key)
             saved = self.store.save(
                 self.key, token, expected_version=current.version if current is not None else None
@@ -143,7 +144,7 @@ class AuthRuntime:
             return saved
 
     def forget(self) -> None:
-        with self.transport.lock_for(self.key):
+        with self.transport.single_flight(self.key):
             self.transport.tokens.pop(self.key, None)
             self.transport.refresh_outcomes.pop(self.key, None)
             self.store.delete(self.key)
@@ -162,10 +163,11 @@ class AuthRuntime:
         if static is not None:
             self.transport.tokens.setdefault(self.key, static)
             return self.transport.tokens[self.key]
-        self.transport.refresh_outcomes.pin(self.key)
+        key = self.key
+        self.transport.refresh_outcomes.pin(key)
         entered = self._generation()
         try:
-            with self.transport.lock_for(self.key):
+            with self.transport.single_flight(key):
                 tok = self.transport.tokens.get(self.key)
                 if tok is not None:
                     return tok
@@ -176,7 +178,7 @@ class AuthRuntime:
                 self.transport.tokens[self.key] = tok
                 return tok
         finally:
-            self.transport.refresh_outcomes.unpin(self.key)
+            self.transport.refresh_outcomes.unpin(key)
             self.transport.flush_deferred()
 
     # Concurrent callers queue on the per-key lock while one of them refreshes. If that refresh

@@ -267,6 +267,30 @@ def test_calls_unpin_refresh_outcomes(h: Harness, mock: respx.MockRouter) -> Non
     assert sf._transport.refresh_outcomes._pins == {}  # pyright: ignore[reportPrivateUsage]
 
 
+def test_rebinding_the_key_mid_call_does_not_leak_a_pin(h: Harness, mock: respx.MockRouter) -> None:
+    sf = h.client()
+
+    def rebind(request: httpx.Request) -> httpx.Response:
+        sf._runtime.key = "rebound-key"  # pyright: ignore[reportPrivateUsage] - as sf.auth does
+        return httpx.Response(200, json={})
+
+    mock.get(f"{DATA}/limits").mock(side_effect=rebind)
+    h.run(sf.limits())
+    assert sf._transport.refresh_outcomes._pins == {}  # pyright: ignore[reportPrivateUsage]
+
+
+def test_token_key_locks_are_retired(h: Harness, mock: respx.MockRouter) -> None:
+    mock.post("https://acme.my.salesforce.com/services/oauth2/token").respond(
+        json={"access_token": "AT2", "instance_url": INSTANCE, "issued_at": "1700000000000"}
+    )
+    expired = httpx.Response(401, json=[{"errorCode": "INVALID_SESSION_ID", "message": "expired"}])
+    route = mock.get(f"{DATA}/limits").mock(side_effect=[expired, httpx.Response(200, json={})])
+    sf = h.client(web_auth(), token=make_token("AT", "RT"))
+    h.run(sf.limits())  # 401 -> refresh under the token-key lock -> retry
+    assert route.call_count == 2
+    assert sf._transport._flights == {}  # pyright: ignore[reportPrivateUsage]
+
+
 def test_revoke_drops_refresh_outcome(h: Harness, mock: respx.MockRouter) -> None:
     mock.post(f"{'https://acme.my.salesforce.com'}/services/oauth2/revoke").respond(200)
     auth = web_auth()

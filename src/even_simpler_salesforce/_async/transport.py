@@ -204,7 +204,6 @@ class AsyncTransport:
         self.refresh_outcomes: LruDict[str, tuple[int, SalesforceError | None]] = LruDict(
             MAX_TOKENS_IN_MEMORY
         )
-        self._locks: dict[str, Any] = {}
         self._locks_guard = threading.Lock()
         # key -> [lock, holders + waiters]; dropped when the count reaches 0.
         self._flights: dict[str, list[Any]] = {}
@@ -218,18 +217,12 @@ class AsyncTransport:
 
     # --- helpers ---------------------------------------------------------------------
 
-    def lock_for(self, key: str) -> Any:
-        with self._locks_guard:
-            lock = self._locks.get(key)
-            if lock is None:
-                lock = self._locks[key] = _compat.Lock()
-            return lock
-
     @contextlib.asynccontextmanager
     async def single_flight(self, key: str) -> AsyncIterator[None]:
         """Serialise work for ``key``; the lock is retired once no caller holds or awaits it.
 
-        For keys with unbounded cardinality (describe per identity), unlike :meth:`lock_for`.
+        Used per token key (refresh, acquisition) and per describe key; both can have
+        unbounded cardinality, so idle locks must not pile up.
         """
         with self._locks_guard:
             entry = self._flights.get(key)
@@ -317,7 +310,8 @@ class AsyncTransport:
         bytes_out = len(spec.content) if spec.content else 0
         bytes_in = 0
         # A refresh failure this call may have to share must stay until the call ends.
-        self.refresh_outcomes.pin(runtime.key)
+        pinned_key = runtime.key  # sf.auth may rebind runtime.key while this call runs
+        self.refresh_outcomes.pin(pinned_key)
         try:
             self.usage.check(priority, operation=spec.operation)
             async with self.gate if self.gate is not None else _compat.nullcontext():
@@ -379,7 +373,7 @@ class AsyncTransport:
             failure = exc
             raise
         finally:
-            self.refresh_outcomes.unpin(runtime.key)
+            self.refresh_outcomes.unpin(pinned_key)
             self._finish(
                 spec,
                 runtime,

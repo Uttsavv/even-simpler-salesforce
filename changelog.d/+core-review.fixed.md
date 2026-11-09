@@ -3,3 +3,5 @@ Core review fixes: an `{"error": ...}` body outside `/services/oauth2/` (e.g. fr
 Follow-up from review: describe single-flight locks are dropped once idle, so many identities no longer grow memory; `request()` decides text vs bytes from the parsed media type (`+json`/`+xml` suffixes, `text/*`, a `charset`), not substrings; the default HTTP client connects to plain-`http://` loopback hosts directly, so an `HTTP_PROXY` never sees a bearer token in cleartext.
 
 A refresh failure that in-flight calls may need to share is never evicted from the bounded per-key state while those calls run, so heavy multi-identity traffic can't make a waiter retry with an already-rotated refresh token.
+
+Per-token-key locks are dropped once idle, like describe locks, so a server that creates a client per user no longer keeps one lock per user forever.

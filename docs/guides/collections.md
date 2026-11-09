@@ -217,7 +217,7 @@ a thread pool of the same size. `capture()` and `call_context()` still apply ins
 
 | `BatchResult` member | Meaning |
 |---|---|
-| `.ok` | list of the results that succeeded |
+| `.succeeded` | list of the results that succeeded (`.ok` is a deprecated alias) |
 | `.failed` | list of the results that failed |
 | `.results` | every result, in input order |
 | `.operation`, `.sobject` | what the call did, and on which sObject |
