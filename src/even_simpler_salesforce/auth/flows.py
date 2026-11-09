@@ -330,7 +330,8 @@ class JwtBearer(Auth):
     def aud(self) -> str:
         """``aud`` claim: ``login``/``test``/a custom URL; inferred from ``domain`` when unset."""
         if self.audience is None:
-            sandbox = self.domain == "test" or ".sandbox.my.salesforce.com" in self.domain
+            host = (urlparse(self.domain).hostname or "").lower()
+            sandbox = self.domain == "test" or host.endswith(".sandbox.my.salesforce.com")
             return _HOSTS["test" if sandbox else "login"]
         return _HOSTS.get(self.audience, self.audience)
 
