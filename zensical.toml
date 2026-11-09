@@ -13,6 +13,7 @@ repo_name = "Uttsavv/even-simpler-salesforce"
 edit_uri = "edit/main/docs/"
 copyright = "Copyright &copy; 2026 Utsav Singh &middot; Apache-2.0 &middot; Not affiliated with or endorsed by Salesforce, Inc."
 docs_dir = "docs"
+extra_css = ["stylesheets/shadcn.css"]
 site_dir = "site"
 
 nav = [
@@ -78,6 +79,10 @@ nav = [
 ]
 
 [project.theme]
+# shadcn/ui-inspired styling: docs/stylesheets/shadcn.css; landing hero: overrides/home.html.
+custom_dir = "overrides"
+font.text = "Geist"
+font.code = "Geist Mono"
 features = [
   "content.code.copy",
   "content.code.annotate",
