@@ -255,6 +255,7 @@ def test_capture_summary_and_nesting() -> None:
         "sf_api_used": 12000,
         "sf_api_max": 100000,
         "sf_ops": {"sobject.get": 1},
+        "sf_records_failed": 0,
     }
     f = outer.as_fields()
     assert f["sf_calls"] == 3
