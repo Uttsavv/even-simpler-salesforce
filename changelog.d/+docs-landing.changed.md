@@ -1,0 +1,1 @@
+Docs landing page: FastAPI (async) and Flask (sync) examples side by side in an always-dark hero with readable code colours; the project status moved to Getting started. README: links to the docs, PyPI and changelog, badges, and a new tagline.
