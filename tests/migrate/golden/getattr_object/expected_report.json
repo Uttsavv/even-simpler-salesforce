@@ -1,0 +1,12 @@
+[
+  {
+    "rule": "sobject-getattr",
+    "status": "rewritten",
+    "line": 5
+  },
+  {
+    "rule": "sobject-getattr",
+    "status": "rewritten",
+    "line": 9
+  }
+]

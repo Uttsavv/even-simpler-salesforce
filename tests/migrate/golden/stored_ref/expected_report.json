@@ -1,0 +1,17 @@
+[
+  {
+    "rule": "login",
+    "status": "todo",
+    "line": 3
+  },
+  {
+    "rule": "stored-ref",
+    "status": "rewritten",
+    "line": 7
+  },
+  {
+    "rule": "stored-ref",
+    "status": "todo",
+    "line": 13
+  }
+]

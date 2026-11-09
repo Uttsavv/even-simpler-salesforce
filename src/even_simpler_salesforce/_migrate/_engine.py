@@ -253,6 +253,8 @@ class _Transformer(cst.CSTTransformer):
         self.replace: dict[cst.CSTNode, cst.BaseExpression] = {}  # original node -> replacement
         self.unwrap: set[cst.CSTNode] = set()  # subscripts replaced by their (updated) value
         self.to_attr: dict[cst.CSTNode, str] = {}  # subscripts replaced by .<attr> on their value
+        # findings about a later use site: recorded when that node is visited (marker on its line)
+        self.pending: dict[cst.CSTNode, tuple[str, Status, str]] = {}
         self.need_esf = False
         self.rewritten_exceptions: set[str] = set()
         self.kept_exceptions: set[str] = set()
@@ -328,7 +330,11 @@ class _Transformer(cst.CSTTransformer):
         name = name_node.value
         if len(scope.assignments[name]) != 1:
             return None
-        return [a.node for a in scope.accesses[name]]
+        uses: list[cst.CSTNode] = [a.node for a in scope.accesses[name]]
+        start = self.pos(name_node).start
+        if any(_before(self.pos(u).start, start) for u in uses):
+            return None  # used before it's assigned (another value): don't plan rewrites
+        return uses
 
     # --- holders (statements that carry markers) ----------------------------------------------
 
@@ -449,6 +455,7 @@ class _Transformer(cst.CSTTransformer):
     # --- attributes: internals, stored refs, mocks ----------------------------------------------
 
     def leave_Attribute(self, original_node: cst.Attribute, updated_node: cst.Attribute) -> Any:
+        self._flush_pending(original_node)
         if original_node in self.replace:
             return self.replace[original_node]
         attr = original_node.attr.value
@@ -561,7 +568,13 @@ class _Transformer(cst.CSTTransformer):
 
     # --- subscripts: create-return, query-result -------------------------------------------------
 
+    def _flush_pending(self, node: cst.CSTNode) -> None:
+        item = self.pending.pop(node, None)
+        if item is not None:
+            self.record(item[0], item[1], item[2], node)
+
     def leave_Subscript(self, original_node: cst.Subscript, updated_node: cst.Subscript) -> Any:
+        self._flush_pending(original_node)
         if original_node in self.replace:
             return self.replace[original_node]
         if original_node in self.unwrap:
@@ -582,8 +595,9 @@ class _Transformer(cst.CSTTransformer):
             self.record(
                 "login",
                 "todo",
-                "choose a login flow (ClientCredentials, JwtBearer, WebServerFlow, StaticToken) and "
-                "construct esf.Salesforce / esf.AsyncSalesforce; password login isn't supported",
+                "construct esf.Salesforce / esf.AsyncSalesforce with a login flow: ClientCredentials, "
+                "JwtBearer or WebServerFlow; StaticToken(access_token, instance_url) replaces "
+                "session_id=/instance=; username/password login isn't supported",
                 original_node,
             )
             return updated_node
@@ -746,6 +760,7 @@ class _Transformer(cst.CSTTransformer):
                 for x in id_uses:
                     assert x is not None
                     self.replace[x] = cst.Name(name.value)
+                    self.record("create-return", "rewritten", f'{name.value}["id"] → {name.value}', x)
                 self.record(
                     "create-return",
                     "rewritten",
@@ -926,6 +941,7 @@ class _Transformer(cst.CSTTransformer):
                 for x in rec_uses:
                     assert x is not None
                     self.replace[x] = cst.Name(name.value)
+                    self.record("query-all", "rewritten", f'{name.value}["records"] → {name.value}', x)
                 self.record(
                     "query-all",
                     status,
@@ -967,11 +983,10 @@ class _Transformer(cst.CSTTransformer):
                 new = cst.Attribute(value=sub.value, attr=cst.Name(QUERY_KEYS[key]))
                 self.record("query-result", "rewritten", f'["{key}"] → .{QUERY_KEYS[key]}', sub, new)
             else:
-                self.record(
+                self.pending[sub] = (
                     "query-result",
                     "todo",
                     "query() returns a QueryResult (records, total_size, done, cursor), not a dict",
-                    sub,
                 )
 
     def _query_result_get(self, attr: cst.Attribute) -> None:
@@ -987,11 +1002,10 @@ class _Transformer(cst.CSTTransformer):
             self.replace[call] = new
             self.record("query-result", "rewritten", f'.get("{key}") → .{QUERY_KEYS[key]}', call, new)
             return
-        self.record(
+        self.pending[attr] = (
             "query-result",
             "todo",
             "query() returns a QueryResult (records, total_size, done, cursor), not a dict",
-            attr,
         )
 
     # raw requests
@@ -1072,6 +1086,10 @@ class _Transformer(cst.CSTTransformer):
         return updated_node
 
 
+def _before(a: Any, b: Any) -> bool:
+    return (a.line, a.column) < (b.line, b.column)
+
+
 def _slice(sub: cst.Subscript) -> cst.BaseExpression | None:
     if len(sub.slice) == 1 and isinstance(sub.slice[0].slice, cst.Index):
         return sub.slice[0].slice.value
@@ -1109,7 +1127,8 @@ class _ImportFixer(cst.CSTTransformer):
             return updated_node
         if not keep:
             return cst.RemoveFromParent()
-        keep[-1] = keep[-1].with_changes(comma=cst.MaybeSentinel.DEFAULT)
+        # keep the original layout: the last kept name takes the original last name's comma
+        keep[-1] = keep[-1].with_changes(comma=updated_node.names[-1].comma)
         return updated_node.with_changes(names=keep)
 
     def leave_Module(self, original_node: cst.Module, updated_node: cst.Module) -> cst.Module:

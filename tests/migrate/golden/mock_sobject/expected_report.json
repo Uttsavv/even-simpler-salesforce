@@ -1,0 +1,22 @@
+[
+  {
+    "rule": "mock-sobject",
+    "status": "needs-review",
+    "line": 5
+  },
+  {
+    "rule": "mock-sobject",
+    "status": "needs-review",
+    "line": 6
+  },
+  {
+    "rule": "mock-sobject",
+    "status": "needs-review",
+    "line": 8
+  },
+  {
+    "rule": "mock-sobject",
+    "status": "needs-review",
+    "line": 9
+  }
+]

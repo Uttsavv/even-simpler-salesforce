@@ -1,0 +1,22 @@
+[
+  {
+    "rule": "client-internals",
+    "status": "todo",
+    "line": 5
+  },
+  {
+    "rule": "client-internals",
+    "status": "rewritten",
+    "line": 6
+  },
+  {
+    "rule": "client-internals",
+    "status": "todo",
+    "line": 7
+  },
+  {
+    "rule": "client-internals",
+    "status": "todo",
+    "line": 8
+  }
+]

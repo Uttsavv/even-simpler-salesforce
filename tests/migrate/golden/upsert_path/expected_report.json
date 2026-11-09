@@ -1,0 +1,47 @@
+[
+  {
+    "rule": "login",
+    "status": "todo",
+    "line": 3
+  },
+  {
+    "rule": "sobject-attr",
+    "status": "rewritten",
+    "line": 7
+  },
+  {
+    "rule": "upsert-path",
+    "status": "rewritten",
+    "line": 7
+  },
+  {
+    "rule": "sobject-attr",
+    "status": "rewritten",
+    "line": 8
+  },
+  {
+    "rule": "upsert-path",
+    "status": "rewritten",
+    "line": 8
+  },
+  {
+    "rule": "sobject-attr",
+    "status": "rewritten",
+    "line": 9
+  },
+  {
+    "rule": "upsert-path",
+    "status": "rewritten",
+    "line": 9
+  },
+  {
+    "rule": "sobject-attr",
+    "status": "rewritten",
+    "line": 10
+  },
+  {
+    "rule": "upsert-path",
+    "status": "todo",
+    "line": 10
+  }
+]
