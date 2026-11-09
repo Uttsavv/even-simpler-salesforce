@@ -149,7 +149,7 @@ release since June 2024, has a single maintainer, and also lacks refresh-token f
 | O11 | Multi-pod refresh | `TokenStore` MAY provide `lock(key)` and compare-and-swap `save`. In-process single-flight is the default. |
 | O12 | Describe cache | In-memory TTL by default, plus a `Cache` protocol for shared caches (e.g. Redis). |
 | O13 | Docs versions on 0.x | Two copies: `latest` (last release) and `dev` (main). Per-version copies from 1.0. |
-| O14 | Maintainers | Utsav Singh plus at least one named co-maintainer in `CONTRIBUTING.md` before 1.0. |
+| O14 | Maintainers | **Utsav Singh, sole maintainer.** No co-maintainer is planned. Single-maintainer risk is reduced by automation instead: fully scripted releases, CI that catches regressions, docs for every process, and `AGENTS.md` so AI agents can do most maintenance work. |
 | O15 | Out of scope | Data Cloud, Einstein, CometD, Event Monitoring log files. |
 
 ---
@@ -1195,7 +1195,7 @@ Bulk 2.0 ingest/query, Tooling incl. execute anonymous, GraphQL, Composite/Graph
 ### 0.4 — UI API, Reports, Metadata
 ### 0.5 — Pub/Sub API
 ### 1.0 — stabilise
-Interface freeze, per-version docs, second maintainer named, migration guide complete, all
+Interface freeze, per-version docs, migration guide complete, all
 deprecations resolved.
 
 ---
@@ -1272,7 +1272,10 @@ origin). help.salesforce.com needs JavaScript to render.
   Copyright 2026 Utsav Singh
   ```
 - Contributors keep copyright on their contributions and license them under Apache-2.0 (section 5 of the licence). No CLA. Commits carry a DCO `Signed-off-by:` line, checked by CI.
-- **Maintainers:** Utsav Singh (lead). At least one co-maintainer named in `CONTRIBUTING.md` before 1.0 (O14).
+- **Maintainer:** Utsav Singh, sole maintainer (O14).
+- **Repository:** https://github.com/Uttsavv/even-simpler-salesforce
+- **Docs:** https://uttsavv.github.io/even-simpler-salesforce/ (GitHub Pages, source: GitHub Actions)
+- **PyPI:** https://pypi.org/project/even-simpler-salesforce/
 - **Trademark:** "Salesforce" is a trademark of Salesforce, Inc.; README states the project is not affiliated with or endorsed by Salesforce.
 
 ---
