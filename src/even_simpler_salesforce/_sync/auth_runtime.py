@@ -10,19 +10,19 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 
-import httpx
-
 from ..auth.flows import Auth
 from ..auth.store import TokenStore, store_lock_sync
 from ..auth.token import Token, merge_token, parse_token_response
 from ..core.http import RawResponse
 from ..core.retry import backoff_delay
 from ..errors import (
+    ConnectError,
     OAuthError,
     ReauthorizationRequired,
     RefreshFailed,
     SessionExpired,
     TokenConflict,
+    TransportError,
     UnexpectedResponse,
 )
 
@@ -36,7 +36,6 @@ _log = logging.getLogger("esf")
 EXPIRY_SKEW = timedelta(seconds=60)
 BUSY_ATTEMPTS = 3  # total token POSTs while Salesforce says "already being processed"
 _BUSY_TEXT = "already being processed"
-_NEVER_SENT = (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout, httpx.UnsupportedProtocol)
 
 
 def key_hash(key: str) -> str:
@@ -133,12 +132,7 @@ class AuthRuntime:
             return tok
 
     def _post_form(self, url: str, form: dict[str, str]) -> RawResponse:
-        r = self.transport.http.post(
-            url,
-            data=form,
-            headers={"Accept": "application/json", "User-Agent": self.transport.user_agent},
-        )
-        return RawResponse(r.status_code, r.headers, r.content, str(r.url), loads=self.transport.loads)
+        return self.transport.post_form(url, form)
 
     def _reload_if_changed(self, base: Token | None) -> Token | None:
         reloaded = self.store.load(self.key)
@@ -162,12 +156,12 @@ class AuthRuntime:
                 form = self.auth.token_form(base)  # may raise ReauthorizationRequired
                 try:
                     resp = self._post_form(self.auth.token_url, form)
-                except _NEVER_SENT as exc:
+                except ConnectError as exc:  # never sent: safe to retry
                     if attempts < policy.max_attempts:
                         self.transport.sleep(backoff_delay(policy, attempts))
                         continue
                     raise RefreshFailed(f"token endpoint unreachable: {exc}", ambiguous=False) from exc
-                except httpx.HTTPError as exc:
+                except TransportError as exc:  # may have reached Salesforce
                     if not self.auth.uses_refresh_token:
                         if attempts < policy.max_attempts:  # a fresh token request is safe to resend
                             self.transport.sleep(backoff_delay(policy, attempts))

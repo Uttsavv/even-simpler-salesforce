@@ -1,0 +1,1 @@
+JSON request bodies containing NaN or ±Infinity (as `float` or `Decimal`, at any depth) now raise `ValueError` before anything is sent, with both the stdlib and orjson backends. Previously orjson turned them into `null` and would have blanked the field in Salesforce.
