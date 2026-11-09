@@ -1049,8 +1049,8 @@ esf migrate <path>... [--write] [--report FILE] [--check]
 | `--exclude` | skip paths (`.venv`, `site-packages`, `node_modules`, `.git` are always skipped) |
 
 Exit codes: `0` nothing left to do; `1` items need review or are TODO (with `--check`, or after a
-run that left markers); `2` usage error or a file that doesn't parse (reported, other files still
-processed). A second run over already-migrated code makes no changes (idempotent).
+run that left markers), or a dry run with rewrites still pending; `2` usage error or a file that
+doesn't parse (reported, other files still processed). A second run over already-migrated code makes no changes (idempotent).
 
 #### 9.19.1 Detection
 
@@ -1066,10 +1066,21 @@ A site is **confirmed** (not just shaped) when any of these hold, in order:
 2. `<expr>` is a name or attribute annotated with, assigned from, or returned by a
    simple-salesforce client type or constructor in the same module (libcst scope analysis; no
    cross-module type inference);
-3. no `--client-names` was given and `<Name>` starts with an uppercase letter.
+3. no `--client-names` was given, `<Name>` starts with an uppercase letter, **and** the module
+   imports simple-salesforce or holds a client confirmed by case 2 (the *fallback*).
 
-Shaped but unconfirmed sites are rewritten only with rule `not-a-client` status `needs-review`
-(case 3 without `--client-names`) or left alone (when `--client-names` is given and doesn't match).
+Shaped but unconfirmed sites:
+
+- case 3 holds → rewritten with rule `not-a-client`, status `needs-review`;
+- otherwise, if `<Name>` **looks like an sObject** (a custom suffix `__c`, `__e`, `__mdt`, `__x`,
+  `__b`, `__kav`, or one of a fixed list of common standard objects: `Account`, `Contact`, `Lead`,
+  `Opportunity`, `Case`, `Task`, `Event`, `User`, ...) → not rewritten; a `not-a-client` **TODO**
+  with the suggested rewrite. This also applies with `--client-names` when the name doesn't match,
+  so every client-shaped site is either rewritten or marked, and `--check` counts it;
+- anything else → left alone (`config.Settings.get(...)` is not a Salesforce call).
+
+In test files, mock-shaped chains (`X.Obj.method.assert_*`, ...) on sObject-looking names use the
+fallback without the import condition (tests rarely import simple-salesforce).
 
 #### 9.19.2 Rules
 
@@ -1086,19 +1097,30 @@ Every finding carries a stable rule id. Ids are part of the public interface (do
 | `create-return` | result of `create()` used any other way (passed on, returned, `r["success"]`, stored) | marker only | `todo` |
 | `stored-ref` | `v = X.Obj` (an object accessor stored in a name or attribute) | → `v = X.sobject("Obj")` if every use of `v` in scope is a per-object method call | `rewritten`; otherwise `todo` |
 | `mock-sobject` | in test files (`test_*.py`, `*_test.py`, `conftest.py`, under `tests/`): `X.Obj.method.<mock attr>` where `<mock attr>` is `assert_*`, `return_value`, `side_effect`, `call_args*`, `call_count`, `await_count`, `await_args*`, `mock_calls` | text rewritten like `sobject-attr` | `needs-review` (see below) |
-| `query-all` | `X.query_all(q)` / `X.query_all_iter(q, ...)` | → `list(X.query_iter(q))` (sync) / `[r async for r in X.query_iter(q)]` (async) / `X.query_iter(q, ...)` | `rewritten` |
+| `return-value` | result of `update()` / `upsert()` / `delete()` used (they returned HTTP status codes; now `None` / `UpsertResult`) | marker only | `needs-review` |
+| `query-result` | `X.query(q)` result used as `["records"]` / `.get("records")`, `["totalSize"]`, `["done"]` (confirmed client) | → `.records`, `.total_size`, `.done` | `rewritten`; `todo` for other keys |
+| `query-all` | `X.query_all(q)` / `X.query_all_iter(q, ...)` | → `list(X.query_iter(q))` (sync) / `[r async for r in X.query_iter(q)]` (async) / `X.query_iter(q, ...)` | `rewritten` when the result is used only as `["records"]`; `needs-review` for other uses of the bare result; `todo` for an un-awaited async call |
 | `query-more` | `X.query_more(url, True)` | marker only (needs a `Cursor`, not a URL) | `todo` |
 | `format-soql` | `format_soql("... {} ...", v)` passed directly to a query method | → values in SOQL methods | `rewritten`; `todo` when the formatted string is built elsewhere |
 | `restful` | `X.restful(path, method=..., json=...)` | → `X.request(method, path, json=...)` | `rewritten` |
-| `apexecute` | `X.apexecute(path, method=, data=)` | → `X.apex.<method>("/" + path, json=data)` | `rewritten` |
-| `exceptions` | `except SalesforceExpiredSession`, `SalesforceMalformedRequest`, `SalesforceResourceNotFound`, ... and the imports | → the §8 error class from the §20 table | `rewritten` when 1:1, else `todo` |
+| `apexecute` | `X.apexecute(path, method=, data=)` | → `X.request(METHOD, "/services/apexrest/<path>", json=data)` (until `sf.apex` ships in 0.2) | `rewritten` for a literal path; else `todo` |
+| `exceptions` | simple-salesforce exceptions in `except`, `isinstance`, `raise` and the imports | 1:1: `SalesforceError` → `esf.SalesforceError`, `SalesforceResourceNotFound` → `esf.NotFound`, `SalesforceMoreThanOneRecord` → `esf.MultipleMatches`, `SalesforceRefusedRequest` → `esf.Forbidden`, `SalesforceAuthenticationFailed` → `esf.AuthError`; `import even_simpler_salesforce as esf` added once | `rewritten`; `todo` (with a suggestion) for `SalesforceExpiredSession` (§20: refresh is automatic), `SalesforceMalformedRequest`, `SalesforceGeneralError` |
 | `client-internals` | `X.sf_version` | → `X.api_version` | `rewritten` |
 | `client-internals` | `X.session_id`, `X.base_url`, `X.sf_instance`, `X.headers`, `X.session` | marker only, with the §20 replacement in the message | `todo` |
 | `login` | `Salesforce(...)` / `AsyncSalesforce(...)` / `SalesforceLogin(...)` construction | marker only (auth is a design choice, §6) | `todo` |
-| `not-a-client` | a shaped site that couldn't be confirmed (§9.19.1 case 3) | rewritten like its rule | `needs-review` |
+| `not-a-client` | a shaped site that couldn't be confirmed (§9.19.1) | case 3: rewritten like its rule; sObject-looking: marker with suggestion | `needs-review` / `todo` |
 
-Rules not listed (Bulk v1, `toolingexecute`, SOAP-only calls) produce a generic `unsupported`
-`todo` pointing at §20.
+More cases:
+
+- **Method references** (`fn = sf.Lead.create`) on a confirmed client → `fn = sf.sobject("Lead").create`
+  (`sobject-attr`, `rewritten`). **Monkeypatching** (`sf.Lead.create = x`) → `sobject-attr` `todo`
+  (`sobject()` returns a new object each time).
+- `describe_layout()`, the `headers=` / `raw_response=` keywords, and `upsert(record_id=...)` as a
+  keyword have no direct equivalent → `todo` (`unsupported` / `upsert-path`).
+- Rules not listed (Bulk v1, `bulk2`, `toolingexecute`, `mdapi`, SOAP-only calls) produce a
+  generic `unsupported` `todo` pointing at §20.
+- A simple-salesforce import that is still needed after the run (some name from it is still used)
+  gets an `unsupported` `todo` on the import statement; imports no longer used are removed.
 
 **Why `mock-sobject` is review, not done.** `MagicMock().sobject("Lead")` and
 `MagicMock().sobject("Task")` return the same child mock, so after the text rewrite an assertion no
@@ -1117,11 +1139,16 @@ res = await sf_client.sobject("Lead").create(data)
 sf_client.sobject("Lead").update.assert_awaited_once_with(LEAD_ID, {"Status": "Working"})
 ```
 
-- Format: `# esf-migrate: (TODO|REVIEW)[<rule>] <message>`. One marker per finding; a rerun never
-  duplicates a marker that is already there.
+- Format: `# esf-migrate: (TODO|REVIEW)[<rule>] <message>`. One marker per finding; identical
+  marker texts on one statement are written once, and a rerun never duplicates a marker that is
+  already there.
+- Markers go above the statement that contains the site; for a site in a decorator, default
+  argument, base class or `match` subject, above the decorator / `def` / `class` / `match` header.
 - A person or agent resolves a finding by fixing the code and deleting the marker.
   `# esf-migrate: ignore[<rule>]` on the line above suppresses that rule for that statement
-  (e.g. a real false positive).
+  (e.g. a real false positive). Ignoring `sobject-attr` also suppresses its sub-rules
+  (`create-return`, `upsert-path`, `get-by-custom-id`, `return-value`, `not-a-client`), and
+  `--rules` with a sub-rule implies `sobject-attr`.
 - `--check` counts remaining `TODO`/`REVIEW` markers plus any client-shaped site still in old form.
 
 #### 9.19.4 Report
@@ -1152,10 +1179,14 @@ sf_client.sobject("Lead").update.assert_awaited_once_with(LEAD_ID, {"Status": "W
 ```
 
 - `status` is one of `rewritten`, `needs-review`, `todo`. Line numbers refer to the file **after**
-  the run (with `--write`) or the original file (dry run); `mode` (`"write"` or `"dry-run"`) says which.
+  the run (with `--write`, mapped through a line diff of the original and the written file) or the
+  original file (dry run and `--check`); `mode` (`"write"` or `"dry-run"`; `--check` reports
+  `"dry-run"`) says which.
 - `suggestion` holds suggested replacement code when the tool has one but can't prove it safe.
-- The report never contains string literal contents longer than 80 characters or anything that
-  looks like a secret (same redaction as §11).
+- The report never contains string literal contents longer than 80 characters (including
+  multi-line strings) or anything that looks like a secret (same redaction as §11): bearer tokens,
+  session ids, and the values of `password`, `secret`, `token`, `session_id`, `private_key`, `key`
+  and similar names.
 
 #### 9.19.5 Acceptance
 
@@ -1538,7 +1569,7 @@ The docs page contains this table (extended per release). No compatibility shim 
 | a whole codebase | `esf migrate src/` rewrites the mechanical rows of this table and marks the rest (§9.19) |
 | `sf.restful("composite/sobjects", method="PATCH", json=...)` | `sf.collections.update(...)` |
 | `sf.restful(path, ...)` | `sf.request(method, path, ...)` |
-| `sf.apexecute("path", method="POST", data=...)` | `sf.apex.post("/path", json=...)` |
+| `sf.apexecute("path", method="POST", data=...)` | `sf.request("POST", "/services/apexrest/path", json=...)` (0.1); `sf.apex.post("/path", json=...)` from 0.2 |
 | `sf.bulk.Lead.insert(rows)` (Bulk v1) | `sf.bulk.ingest("Lead", "insert", rows=rows)` (Bulk 2.0) |
 | `sf.bulk2.Lead.query(q)` | `sf.bulk.query(q)` |
 | `sf.toolingexecute(...)` | `sf.tooling.request(...)` / `sf.tooling.query(...)` |

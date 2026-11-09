@@ -29,8 +29,9 @@ migrated code changes nothing.
 | `--rules r1,r2` | run only these [rules](#rules) |
 | `--exclude GLOB,...` | skip paths; `.venv`, `site-packages`, `node_modules` and `.git` are always skipped |
 
-Exit codes: **0** nothing left to do; **1** items need review or are TODO; **2** a usage error or a
-file that doesn't parse (it is reported and the other files are still processed).
+Exit codes: **0** nothing left to do; **1** items need review or are TODO, or (in a dry run)
+rewrites are still pending; **2** a usage error or a file that doesn't parse (it is reported and
+the other files are still processed).
 
 ## How it finds Salesforce calls
 
@@ -48,10 +49,24 @@ A site is rewritten as a sure thing when the client is **confirmed**:
    simple-salesforce client type or constructor (`sf: AsyncSalesforce`, `sf = Salesforce(...)`,
    `self.sf = sf` where `sf` is such a parameter, a function annotated `-> AsyncSalesforce`).
 
-Without `--client-names`, a shaped site whose object name starts with an upper-case letter is
-still rewritten, but marked [`not-a-client`](#not-a-client) for review. With `--client-names`,
-unconfirmed sites are left alone. **Tip:** pass `--client-names` with the names your code base
-uses for clients; it removes most review items.
+Sites that aren't confirmed are handled like this:
+
+- **Fallback.** Without `--client-names`, in a module that imports simple-salesforce or holds a
+  confirmed client, a shaped site whose object name starts with an upper-case letter is still
+  rewritten, but marked [`not-a-client`](#not-a-client) for review.
+- **Looks like an sObject.** Otherwise, if the object name has a custom suffix (`__c`, `__e`,
+  `__mdt`, `__x`, `__b`, `__kav`) or is a common standard object (`Account`, `Contact`, `Lead`,
+  `Opportunity`, `Case`, `Task`, `Event`, `User`, ...), the site is not rewritten but gets a
+  `not-a-client` TODO with the suggested rewrite. This also applies with `--client-names` when the
+  name doesn't match, so every client-shaped site is either rewritten or marked, and `--check`
+  counts it.
+- **Anything else** is left alone (`config.Settings.get(...)` is not a Salesforce call).
+
+In test files, mock chains (`X.Lead.create.assert_called_once()`) on sObject-looking names use the
+fallback even without the import (tests rarely import simple-salesforce).
+
+**Tip:** pass `--client-names` with the names your code base uses for clients; it removes most
+review items.
 
 ## Markers
 
@@ -66,8 +81,13 @@ res = await sf_client.sobject("Task").create(data)
 - `REVIEW[...]`: the tool converted it, but you should check the result.
 - Resolve a finding by fixing the code and deleting the marker.
 - `# esf-migrate: ignore[<rule>]` on the line above a statement turns that rule off for it (for
-  a real false positive).
-- Reruns never add a marker that is already there.
+  a real false positive). Ignoring `sobject-attr` also turns off the rules that build on it
+  (`create-return`, `upsert-path`, `get-by-custom-id`, `return-value`, `not-a-client`); likewise
+  `--rules create-return` implies `sobject-attr`.
+- A site inside a decorator, a default argument, a base class or a `match` subject gets its marker
+  above the decorator, `def`, `class` or `match` line.
+- Identical markers on one statement are written once, and reruns never add a marker that is
+  already there.
 
 ## The report
 
@@ -98,10 +118,13 @@ res = await sf_client.sobject("Task").create(data)
 
 - `status` is `rewritten`, `needs-review` or `todo`.
 - With `--write`, line numbers refer to the file **after** the run (markers included); in a dry
-  run they refer to the original file. `mode` says which.
+  run and with `--check` they refer to the original file. `mode` (`"write"` or `"dry-run"`) says
+  which.
 - `suggestion` holds replacement code the tool has but can't prove safe.
-- String literals longer than 80 characters and anything that looks like a secret (session ids,
-  bearer tokens, `password=`/`token=` values) are replaced in `before`/`after`/`suggestion`.
+- String literals longer than 80 characters (multi-line strings included) and anything that looks
+  like a secret (session ids, bearer tokens, values of `password`, `secret`, `token`,
+  `session_id`, `private_key`, `key` and similar names) are replaced in
+  `before`/`after`/`suggestion`.
 
 ## Rules
 
@@ -115,6 +138,11 @@ Rule ids are stable: new rules may be added, ids are never renamed.
 - lead = await sf.Lead.get(lead_id)
 + lead = await sf.sobject("Lead").get(lead_id)
 ```
+
+Method references (`fn = sf.Lead.create`) are rewritten the same way. Assigning to one
+(`sf.Lead.create = fake`, monkeypatching) is a TODO: `sobject()` returns a new object each time,
+so the patch would not stick. `describe_layout()` and the `headers=` / `raw_response=` keywords
+have no equivalent and get an [`unsupported`](#unsupported) TODO.
 
 ### `sobject-getattr`
 
@@ -130,7 +158,7 @@ a variable) → `X.sobject(name)`. Needs a confirmed client. **Status:** rewritt
 
 simple-salesforce took `"Field/value"` as one string; `upsert()` here takes the external id field
 and value separately. Literals and f-strings are split on the first literal `/`. **Status:**
-rewritten; TODO when the path is a variable.
+rewritten; TODO when the path is a variable or passed as `record_id=`.
 
 ```diff
 - sf.Account.upsert(f"Ext__c/{code}", data)
@@ -187,6 +215,7 @@ the list of rows:
   the keyword. **Status:** rewritten.
 - Any other use of the result: rewritten to the list, **needs review** (for example, change
   `res["totalSize"]` to `len(res)`).
+- An async `query_all(q)` that isn't awaited: TODO.
 
 ### `query-result`
 
@@ -232,7 +261,7 @@ is added once (an existing alias is reused):
 | `SalesforceMoreThanOneRecord` | `esf.MultipleMatches` |
 | `SalesforceRefusedRequest` | `esf.Forbidden` |
 | `SalesforceAuthenticationFailed` | `esf.AuthError` |
-| `SalesforceExpiredSession` | `esf.SessionExpired` (refresh is automatic; usually you can drop the handler) |
+| `SalesforceExpiredSession` | TODO: refresh is automatic; `esf.SessionExpired` means a 401 survived a refresh and a dead refresh token raises `esf.ReauthorizationRequired`. Catch `esf.AuthError` or both; often the handler can go |
 | `SalesforceMalformedRequest` | TODO: split into `RequestError` / `RecordError` and specific classes (`InvalidField`, `ValidationRuleFailed`, ...) |
 | `SalesforceGeneralError` | TODO: `esf.ServerError` (5xx) or `esf.SalesforceError` |
 
@@ -253,19 +282,29 @@ username/password login isn't supported.
 
 ### `not-a-client`
 
-A shaped site whose client couldn't be confirmed (no `--client-names`, no type information in
-the module): rewritten like its rule and marked for **review**. Passing `--client-names` turns
-these into plain rewrites (or leaves non-matching names alone).
+A shaped site whose client couldn't be confirmed ([how it finds calls](#how-it-finds-salesforce-calls)):
+
+- under the fallback (no `--client-names`, the module imports simple-salesforce or holds a
+  confirmed client, upper-case object name): rewritten like its rule and marked for **review**;
+- otherwise, when the object name looks like an sObject: not rewritten; a **TODO** with the
+  suggested rewrite in `suggestion`.
+
+Passing `--client-names` turns matching sites into plain rewrites.
 
 ### `unsupported`
 
 APIs without a 0.1 replacement: Bulk API v1 (`X.bulk.Obj.insert(...)`), `bulk2`,
-`toolingexecute`, `mdapi`. TODO with a pointer to the [migration guide](migrating-from-simple-salesforce.md).
+`toolingexecute`, `mdapi`, `describe_layout()`, the `headers=` / `raw_response=` keywords. TODO
+with a pointer to the [migration guide](migrating-from-simple-salesforce.md).
+
+A simple-salesforce import that is still needed after the run (some name from it is still used)
+gets an `unsupported` TODO on the import line; imports that are no longer used are removed.
 
 ## Limits
 
 - Detection is per module: types are not followed across imports, so a client passed in from
-  another module is confirmed only by `--client-names` (or treated as `not-a-client`).
+  another module is confirmed only by `--client-names` (or treated as
+  [`not-a-client`](#not-a-client)).
 - It doesn't evaluate code: values computed at runtime (a path in a variable, a query built
   elsewhere) get TODOs.
 - A blank line followed by a whitespace-only line at the very end of a file can collapse into
