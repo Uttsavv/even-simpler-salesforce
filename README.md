@@ -1,11 +1,6 @@
 <h1 align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/assets/logo-dark.png">
-    <img src="https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/assets/logo-light.png" alt="even-simpler-salesforce" width="520">
-  </picture>
+  <img src="https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/assets/banner.png" alt="even-simpler-salesforce: the Salesforce client your web app deserves." width="100%">
 </h1>
-
-<p align="center">The Salesforce client your web app deserves.</p>
 
 A typed Salesforce client for Python built on [httpx](https://www.python-httpx.org/). It is
 async-first, and a sync client with the same methods is generated from the async code. OAuth
