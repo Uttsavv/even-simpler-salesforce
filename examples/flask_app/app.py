@@ -191,7 +191,7 @@ def create_app(client: Any = None, on_summary: OnSummary = log_summary) -> Flask
             _check_id(str(i))
         results = sf().collections.update("Lead", [{"Id": i, "Status": status} for i in ids])
         return {
-            "updated": [r.id for r in results.ok],
+            "updated": [r.id for r in results.succeeded],
             "failed": [
                 {
                     "id": lead_id,

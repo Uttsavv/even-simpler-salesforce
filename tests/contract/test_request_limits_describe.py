@@ -46,7 +46,7 @@ def test_request_bodies(h: Harness, mock: respx.MockRouter) -> None:
     assert req.headers["Content-Type"] == "text/csv"
     assert h.run(sf.request("PUT", "x", content=b"abc")) == "plain text"
     assert route.calls.last.request.headers["Content-Type"] == "application/octet-stream"
-    assert h.run(sf.request("PUT", "x")) == "��"
+    assert h.run(sf.request("PUT", "x")) == b"\xff\xfe"  # binary bodies come back as bytes, intact
     with pytest.raises(ValueError, match="not both"):
         h.run(sf.request("PUT", "x", json={}, content=b"x"))
 

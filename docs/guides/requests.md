@@ -40,8 +40,9 @@ print(counts["sObjects"])
 - Pass `json=` or `content=`, not both (`ValueError`).
 - `GET` and `HEAD` can't have a body (`ValueError`).
 - The return value is the decoded JSON for JSON responses, `None` for an empty body (e.g.
-  `204`), and the text for any other body. Every 2xx status counts as success. `X-PrettyPrint`
-  is never sent.
+  `204`), a `str` for text bodies (`text/*`, XML, or any `charset=`), and `bytes` for
+  everything else, such as file contents from `sobjects/ContentVersion/{id}/VersionData`.
+  Every 2xx status counts as success. `X-PrettyPrint` is never sent.
 
 ```python
 score = await sf.request("POST", "/services/apexrest/LeadScore", json={"email": "ada@example.com"})

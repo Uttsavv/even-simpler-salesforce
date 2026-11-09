@@ -57,6 +57,8 @@ only the async classes are shown in full.
 
 ::: even_simpler_salesforce.soql_identifier
 
+::: even_simpler_salesforce.sosl_term
+
 ::: even_simpler_salesforce.Cursor
 
 ::: even_simpler_salesforce.flatten

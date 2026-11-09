@@ -270,3 +270,24 @@ def test_soql_hash_normalises() -> None:
     c = soql_hash("SELECT Id FROM Contact WHERE Email = 'a@b.c'")
     assert a == b != c
     assert re.fullmatch(r"[0-9a-f]{12}", a)
+
+
+# --- SOSL search terms ------------------------------------------------------------------------
+
+
+def test_sosl_term_escapes_every_reserved_character() -> None:
+    reserved = "?&|!{}[]()^~*:\\\"'+-"
+    assert esf.sosl_term(reserved) == "{" + "".join("\\" + c for c in reserved) + "}"
+    assert esf.sosl_term("Ada Lovelace") == "{Ada Lovelace}"
+    assert esf.sosl_term("café ✓") == "{café ✓}"
+
+
+@pytest.mark.parametrize("bad", ["", "   "])
+def test_sosl_term_rejects_empty(bad: str) -> None:
+    with pytest.raises(ValueError, match="empty"):
+        esf.sosl_term(bad)
+
+
+def test_sosl_term_rejects_non_str() -> None:
+    with pytest.raises(TypeError):
+        esf.sosl_term(42)  # type: ignore[arg-type]

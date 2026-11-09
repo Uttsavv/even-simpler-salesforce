@@ -29,7 +29,7 @@ from .config import Budget, DescribeCacheConfig, RetryPolicy, Timeouts
 from .context import call_context
 from .core.cursor import Cursor
 from .core.records import flatten
-from .core.soql import soql, soql_identifier, soql_like
+from .core.soql import soql, soql_identifier, soql_like, sosl_term
 from .errors import (
     ApexError,
     AuthError,
@@ -174,4 +174,5 @@ __all__ = [
     "soql",
     "soql_identifier",
     "soql_like",
+    "sosl_term",
 ]

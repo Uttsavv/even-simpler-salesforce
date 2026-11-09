@@ -110,7 +110,7 @@ def test_partial_failure_via_raise_for_errors(h: Harness, mock: respx.MockRouter
     mock.post(f"{DATA}/composite/sobjects").respond(json=load_fixture("collections/mixed.json"))
     sf = h.client()
     res = h.run(sf.collections.create([{"Name": "ok"}, {"Name": ""}], sobject="Account"))
-    assert len(res.ok) == 1
+    assert len(res.succeeded) == 1
     assert len(res.failed) == 1
     assert res.failed[0].errors[0].error_code == "REQUIRED_FIELD_MISSING"
     with pytest.raises(esf.PartialFailure) as ei:

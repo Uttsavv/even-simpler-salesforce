@@ -27,9 +27,9 @@ sf = esf.AsyncSalesforce(auth)
 ```python
 rows = [{"LastName": f"Imported {i}", "Company": "Acme"} for i in range(450)]
 created = await sf.collections.create(rows, sobject="Lead")  # 3 requests: 200 + 200 + 50
-print(len(created), len(created.ok), len(created.failed))
+print(len(created), len(created.succeeded), len(created.failed))
 
-ids = [r.id for r in created.ok]
+ids = [r.id for r in created.succeeded]
 await sf.collections.update("Lead", [{"Id": i, "Status": "Working"} for i in ids])
 await sf.collections.upsert(
     "Lead",
@@ -57,7 +57,7 @@ await sf.collections.delete(ids)
 | `created` | upsert only: `True` for an insert, `False` for an update |
 | `errors` | tuple of `esf.ErrorDetail(error_code, message, fields, extended)` |
 
-`BatchResult` also has `.ok` and `.failed` (lists of results), `.results`, indexing, `len()`,
+`BatchResult` also has `.succeeded` and `.failed` (lists of results), `.results`, indexing, `len()`,
 iteration, `.operation` and `.sobject`.
 
 ```python
@@ -121,7 +121,7 @@ except esf.PartialFailure as exc:
         if not res.ok and res.errors[0].extended.get("outcome") == "unknown"
     ]
     print(f"{len(unknown)} rows may or may not exist; check before re-sending them")
-print(len(result.ok))
+print(len(result.succeeded))
 ```
 
 Writes are **not** resent automatically after a timeout or 5xx, because the first attempt may
@@ -180,7 +180,7 @@ applies on top of this. The sync client runs chunks on a thread pool of the same
 
 ```python
 result = await sf.collections.update(
-    "Lead", [{"Id": r.id, "Rating": "Warm"} for r in created.ok], concurrency=2
+    "Lead", [{"Id": r.id, "Rating": "Warm"} for r in created.succeeded], concurrency=2
 )
 print(len(result))
 await sf.aclose()

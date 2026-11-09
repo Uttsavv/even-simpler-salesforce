@@ -283,6 +283,9 @@ print(esf.flatten(row))
 found = await sf.search("FIND {Lovelace} IN NAME FIELDS RETURNING Lead(Id, Name)")
 print([r["Name"] for r in found])
 
+term = "Ada (Countess) & co."  # user input
+found = await sf.search(f"FIND {esf.sosl_term(term)} IN NAME FIELDS RETURNING Lead(Id, Name)")
+
 found = await sf.parameterized_search(
     "Lovelace",
     sobjects=["Lead", {"name": "Contact", "fields": ["Id", "Name"], "limit": 5}],
@@ -299,9 +302,10 @@ await sf.aclose()
   as `overallLimit`, and any other keyword goes into the body unchanged. For a key that is a
   Python keyword, use `**{"in": "NAME"}`.
 
-SOSL braces (`FIND {...}`) are literal SOSL syntax, not `esf.soql()` placeholders. Escape user
-input for SOSL yourself, or use `parameterized_search`, which takes the search term as a plain
-string.
+SOSL braces (`FIND {...}`) are literal SOSL syntax, not `esf.soql()` placeholders, and SOQL
+quoting does not protect them. Wrap user input in `esf.sosl_term(value)`: it returns the term
+with its braces and escapes every SOSL reserved character, so input can't close the braces or
+add wildcards. Words like `AND` and `OR` still act as SOSL operators.
 
 ## What gets logged
 

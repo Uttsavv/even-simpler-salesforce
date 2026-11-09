@@ -159,7 +159,7 @@ def test_binary_text_and_gzip_bodies(tmp_path: Path) -> None:
     with esf.Salesforce(
         _auth(), http_client=httpx.Client(transport=record(path, httpx.MockTransport(_org)))
     ) as sf:
-        assert sf.request("GET", "/services/apexrest/bin") == "\x00�\x10"
+        assert sf.request("GET", "/services/apexrest/bin") == b"\x00\xff\x10"
         with pytest.raises(esf.NotFound):
             sf.request(
                 "POST",
@@ -175,7 +175,7 @@ def test_binary_text_and_gzip_bodies(tmp_path: Path) -> None:
     assert inter[3]["request"]["headers"]["content-type"] == "application/json"
     assert len(inter[3]["request"]["json"]["records"]) == 200
     with esf.Salesforce(_auth(), http_client=httpx.Client(transport=replay(path))) as sf:
-        assert sf.request("GET", "/services/apexrest/bin") == "\x00�\x10"
+        assert sf.request("GET", "/services/apexrest/bin") == b"\x00\xff\x10"
 
 
 def test_replay_mismatch_and_options(tmp_path: Path) -> None:

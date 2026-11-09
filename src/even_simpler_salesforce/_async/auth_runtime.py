@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 from ..auth.flows import Auth
 from ..auth.store import AsyncTokenStore, store_lock_async
 from ..auth.token import Token, merge_token, parse_token_response
-from ..core.http import RawResponse
+from ..core.http import RawResponse, check_instance_url
 from ..core.retry import backoff_delay
 from ..errors import (
     ConnectError,
@@ -59,12 +59,22 @@ class AsyncAuthRuntime:
     ) -> None:
         self.auth = auth
         #: Overrides the instance URL from the token response, for this auth only.
-        self.instance_url = instance_url.rstrip("/") if instance_url else None
+        self.instance_url = check_instance_url(instance_url) if instance_url else None
         self.transport = transport
         self.store = store
         self.key = auth.token_key
-        self.key_hash = key_hash(self.key)
         self._introspect_warned = False
+
+    @property
+    def key(self) -> str:
+        """Token-store key of this runtime's token."""
+        return self._key
+
+    @key.setter
+    def key(self, value: str) -> None:
+        # Keep the hash used in events in step with the key (sf.auth rebinds it).
+        self._key = value
+        self.key_hash = key_hash(value)
 
     # --- public ----------------------------------------------------------------------
 
@@ -131,6 +141,7 @@ class AsyncAuthRuntime:
     async def forget(self) -> None:
         async with self.transport.lock_for(self.key):
             self.transport.tokens.pop(self.key, None)
+            self.transport.refresh_outcomes.pop(self.key, None)
             await self.store.delete(self.key)
 
     # --- internals -------------------------------------------------------------------

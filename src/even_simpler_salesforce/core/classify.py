@@ -167,8 +167,9 @@ def error_from_detail(
     errors: tuple[E.ErrorDetail, ...] = (),
     request_id: str | None = None,
     raw: bytes | str | None = None,
+    body: Any = None,
 ) -> E.SalesforceError:
-    """Build a typed exception for one error entry."""
+    """Build a typed exception for one error entry (``body`` is kept on :class:`ApexError`)."""
     cls = error_class_for(detail.error_code, status, dml=dml)
     if (
         cls is E.NotFound
@@ -181,6 +182,8 @@ def error_from_detail(
     kw: dict[str, Any] = {}
     if issubclass(cls, E.DuplicateDetected):
         kw["duplicates"] = detail.extended.get("duplicateResult")
+    if issubclass(cls, E.ApexError):
+        kw["body"] = body
     retryable: bool | None = None
     if cls is E.ServerError and status is not None:
         retryable = status in _RETRYABLE_STATUS or detail.error_code == "SERVER_UNAVAILABLE"
@@ -200,6 +203,10 @@ def error_from_detail(
         tag=tag,
         **kw,
     )
+
+
+def _is_oauth_path(path: str) -> bool:
+    return path.split("?", 1)[0].startswith("/services/oauth2/")
 
 
 def _truncate(content: bytes) -> bytes:
@@ -255,8 +262,14 @@ def classify(
             **common,
         )
 
-    # OAuth endpoints: {"error": "...", "error_description": "..."}
-    if isinstance(body, Mapping) and "error" in body and "errorCode" not in body:
+    # OAuth endpoints: {"error": "...", "error_description": "..."}. Only under /services/oauth2/:
+    # an Apex REST class may return {"error": "..."} too, and that is not an OAuth failure.
+    if (
+        _is_oauth_path(spec.path)
+        and isinstance(body, Mapping)
+        and "error" in body
+        and "errorCode" not in body
+    ):
         err = str(body.get("error") or "")  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]
         desc = str(body.get("error_description") or "")  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]
         if err in ("invalid_token",) or status == 401:
@@ -277,6 +290,7 @@ def classify(
             errors=details,
             request_id=resp.request_id,
             raw=raw,
+            body=body,
         )
         if isinstance(exc, E.RequestLimitExceeded):
             exc.retry_after = parse_retry_after(resp.headers.get("retry-after"))
