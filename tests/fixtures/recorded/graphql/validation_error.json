@@ -1,0 +1,22 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Salesforce GraphQL API Developer Guide (Request and Response Structure, Status Codes and Error Responses, Paginate with Record Connections); no org recording yet",
+  "body": {
+    "data": null,
+    "errors": [
+      {
+        "message": "Validation error of type FieldUndefined: Field 'Nmae' in type 'Lead' is undefined @ 'uiapi/query/Lead/edges/node/Nmae'",
+        "locations": [
+          {
+            "line": 1,
+            "column": 62
+          }
+        ],
+        "path": null,
+        "extensions": {
+          "ErrorType": "ValidationError"
+        }
+      }
+    ]
+  }
+}

@@ -467,15 +467,28 @@ class ApexError(SalesforceError):
 
 
 class GraphQLError(SalesforceError):
-    """GraphQL response with an ``errors`` array. ``.graphql_errors`` holds it."""
+    """GraphQL response with an ``errors`` array.
+
+    ``.graphql_errors`` holds the entries as Salesforce sent them (``message``, ``locations``,
+    ``path``, ``extensions``). ``.errors`` holds them as :class:`ErrorDetail`, with
+    ``extensions.ErrorType`` as the error code. ``.data`` holds the partial ``data`` that came
+    with the errors, or ``None``.
+    """
 
     graphql_errors: tuple[Mapping[str, Any], ...]
+    data: Any
 
     def __init__(
-        self, message: str = "", *, graphql_errors: tuple[Mapping[str, Any], ...] = (), **kw: Any
+        self,
+        message: str = "",
+        *,
+        graphql_errors: tuple[Mapping[str, Any], ...] = (),
+        data: Any = None,
+        **kw: Any,
     ) -> None:
         super().__init__(message, **kw)
         self.graphql_errors = tuple(graphql_errors)
+        self.data = data
 
 
 class SoapFault(SalesforceError):

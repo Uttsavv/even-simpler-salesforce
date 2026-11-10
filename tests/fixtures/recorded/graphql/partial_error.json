@@ -1,0 +1,65 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Salesforce GraphQL API Developer Guide (Request and Response Structure, Status Codes and Error Responses, Paginate with Record Connections); no org recording yet",
+  "body": {
+    "data": {
+      "uiapi": {
+        "query": {
+          "Lead": {
+            "edges": [
+              {
+                "node": {
+                  "Id": "00Qxx0000000001AAA",
+                  "Name": {
+                    "value": "Ada Lovelace"
+                  }
+                }
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": false,
+              "endCursor": "djE6MQ=="
+            }
+          },
+          "Account": null
+        }
+      }
+    },
+    "errors": [
+      {
+        "message": "Account is not supported by UI API",
+        "locations": [
+          {
+            "line": 1,
+            "column": 120
+          }
+        ],
+        "path": [
+          "uiapi",
+          "query",
+          "Account"
+        ],
+        "extensions": {
+          "ErrorType": "DataFetchingException"
+        }
+      },
+      {
+        "message": "Second problem",
+        "locations": [
+          {
+            "line": 2,
+            "column": 3
+          }
+        ],
+        "path": [
+          "uiapi",
+          "query",
+          "Account"
+        ],
+        "extensions": {
+          "ErrorType": "DataFetchingException"
+        }
+      }
+    ]
+  }
+}
