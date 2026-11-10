@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlparse
 
+from ..core.http import check_instance_url
 from ..errors import UnexpectedResponse
 
 __all__ = ["Token", "merge_token", "parse_token_response"]
@@ -71,12 +72,22 @@ def _parse_issued_at(value: Any, now: datetime) -> datetime:
 
 
 def parse_token_response(data: Mapping[str, Any], *, now: datetime | None = None) -> Token:
-    """Build a :class:`Token` from a ``/services/oauth2/token`` JSON response."""
+    """Build a :class:`Token` from a ``/services/oauth2/token`` JSON response.
+
+    Raises:
+        UnexpectedResponse: ``access_token`` or ``instance_url`` is missing, or
+            ``instance_url`` is not ``https://`` (plain ``http://`` only for loopback hosts).
+            The client sends the bearer token to that URL, so it is checked like a configured one.
+    """
     now = now or datetime.now(timezone.utc)
     access = data.get("access_token")
     instance = data.get("instance_url")
     if not isinstance(access, str) or not isinstance(instance, str):
         raise UnexpectedResponse("token response lacks access_token or instance_url")
+    try:
+        instance = check_instance_url(instance, what="token response instance_url")
+    except ValueError as exc:
+        raise UnexpectedResponse(str(exc)) from None
     id_url = data.get("id")
     org_id, user_id = _parse_id_url(id_url if isinstance(id_url, str) else None)
     scope_raw = data.get("scope")
@@ -85,7 +96,7 @@ def parse_token_response(data: Mapping[str, Any], *, now: datetime | None = None
     sig = data.get("signature")
     return Token(
         access_token=access,
-        instance_url=instance.rstrip("/"),
+        instance_url=instance,
         issued_at=_parse_issued_at(data.get("issued_at"), now),
         refresh_token=refresh if isinstance(refresh, str) else None,
         id_url=id_url if isinstance(id_url, str) else None,

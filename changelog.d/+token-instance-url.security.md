@@ -1,0 +1,1 @@
+The client now checks the `instance_url` of every token from the token endpoint or a token store. A non-https URL raises an error before the bearer token is sent; plain http is allowed only for loopback hosts.

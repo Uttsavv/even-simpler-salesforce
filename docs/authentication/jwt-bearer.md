@@ -51,7 +51,7 @@ Salesforce checks the `aud` claim against the login host. The client infers it f
 | `domain` | Inferred `aud` |
 |---|---|
 | `"login"` or a production My Domain | `https://login.salesforce.com` |
-| `"test"` or `https://<name>--<sandbox>.sandbox.my.salesforce.com` | `https://test.salesforce.com` |
+| `"test"`, `https://test.salesforce.com` or `https://<name>--<sandbox>.sandbox.my.salesforce.com` | `https://test.salesforce.com` |
 
 Set `audience=` when this guess is wrong, for example for an Experience Cloud site URL:
 
