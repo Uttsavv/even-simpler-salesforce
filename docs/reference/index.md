@@ -2,7 +2,8 @@
 
 This reference is generated from the docstrings. The **public, SemVer-covered surface** is
 every name in `even_simpler_salesforce.__all__`, plus the documented submodules
-`even_simpler_salesforce.testing` and `even_simpler_salesforce.observability`. Classes shown
+`even_simpler_salesforce.testing`, `even_simpler_salesforce.observability`,
+`even_simpler_salesforce.contrib.fastapi` and `even_simpler_salesforce.contrib.flask`. Classes shown
 here under private module paths (the objects returned by `sf.sobject()`, `sf.collections` and
 `sf.auth`) are public through those attributes, not through their import path.
 
@@ -126,6 +127,12 @@ The reasons behind the design are written down in the
       members_order: source
 
 ::: even_simpler_salesforce.EsfDeprecationWarning
+
+## Framework integrations
+
+::: even_simpler_salesforce.contrib.fastapi.SalesforceIntegration
+
+::: even_simpler_salesforce.contrib.flask.Salesforce
 
 ## Testing
 

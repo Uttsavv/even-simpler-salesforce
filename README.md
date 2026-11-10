@@ -55,7 +55,7 @@ The only required dependency is `httpx`. Extras add optional features:
 | `otel` | opentelemetry-api | `esf.observability.OpenTelemetry` |
 | `structlog` | structlog | `esf.observability.Structlog` |
 | `testing` | pytest, respx | the `esf.testing` helpers and pytest plugin |
-| `fastapi`, `flask` | the framework | the example apps (integrations ship in 0.2) |
+| `fastapi`, `flask` | the framework | the `even_simpler_salesforce.contrib.fastapi` and `.contrib.flask` integrations |
 | `all` | everything above | |
 
 ```sh
