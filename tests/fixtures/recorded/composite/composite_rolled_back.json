@@ -1,0 +1,44 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Salesforce REST API Developer Guide, Composite and allOrNone Parameters in Composite and Collections Requests; no org recording yet",
+  "body": {
+    "compositeResponse": [
+      {
+        "body": [
+          {
+            "errorCode": "PROCESSING_HALTED",
+            "message": "The transaction was rolled back since another operation in the same transaction failed."
+          }
+        ],
+        "httpHeaders": {},
+        "httpStatusCode": 400,
+        "referenceId": "acc"
+      },
+      {
+        "body": [
+          {
+            "message": "[ADDR_REQUIRED] Street is required",
+            "errorCode": "FIELD_CUSTOM_VALIDATION_EXCEPTION",
+            "fields": [
+              "Street"
+            ]
+          }
+        ],
+        "httpHeaders": {},
+        "httpStatusCode": 400,
+        "referenceId": "Contact2"
+      },
+      {
+        "body": [
+          {
+            "errorCode": "PROCESSING_HALTED",
+            "message": "The transaction was rolled back since another operation in the same transaction failed."
+          }
+        ],
+        "httpHeaders": {},
+        "httpStatusCode": 400,
+        "referenceId": "query3"
+      }
+    ]
+  }
+}
