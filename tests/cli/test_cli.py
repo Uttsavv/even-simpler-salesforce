@@ -80,9 +80,10 @@ def test_help_and_usage_errors(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["query", "SELECT Id FROM Lead", "--json", "--csv"]) == EXIT_USAGE
 
 
-def test_generate_is_0_2(capsys: pytest.CaptureFixture[str]) -> None:
+def test_generate_needs_a_generator_and_options(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["generate"]) == EXIT_USAGE
     assert main(["generate", "actions"]) == EXIT_USAGE
-    assert "not available until 0.2" in capsys.readouterr().err
+    assert "--include" in capsys.readouterr().err
 
 
 def test_missing_login(capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:

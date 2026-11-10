@@ -1,0 +1,225 @@
+"""``esf generate actions`` (§9.7, §9.18) against respx-mocked, **synthetic** describe responses.
+
+The describe and list shapes follow the Salesforce Actions Developer Guide (see
+tests/contract/test_actions.py for the URLs); no org recording exists yet.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+import pytest
+import respx
+
+import even_simpler_salesforce as esf
+from even_simpler_salesforce.cli import EXIT_OK, EXIT_USAGE, main
+from even_simpler_salesforce.cli._actions_codegen import (
+    ActionDescribe,
+    class_name,
+    py_type,
+    render_actions,
+    snake_case,
+)
+from even_simpler_salesforce.cli._generate_actions import env_prefix, parse_include
+from even_simpler_salesforce.testing import FakeSalesforce
+
+from ..fixtures import load_fixture
+
+INSTANCE = "https://acme.my.salesforce.com"
+API = f"{INSTANCE}/services/data/v68.0"
+
+
+@pytest.fixture(autouse=True)
+def static_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    for n in ("DOMAIN", "CLIENT_ID", "CLIENT_SECRET", "USERNAME", "PRIVATE_KEY_FILE", "API_VERSION", "DEBUG"):
+        monkeypatch.delenv(f"ESF_{n}", raising=False)
+    monkeypatch.setenv("ESF_ACCESS_TOKEN", "AT-cli-0001")
+    monkeypatch.setenv("ESF_INSTANCE_URL", INSTANCE)
+
+
+def _load(path: Path, name: str) -> Any:
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None
+    assert spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[name] = mod  # dataclasses resolve string annotations through sys.modules
+    try:
+        spec.loader.exec_module(mod)
+    finally:
+        del sys.modules[name]
+    return mod
+
+
+def _mock_org(mock: respx.MockRouter) -> None:
+    mock.get(f"{API}/actions/custom/flow").respond(
+        json={
+            "actions": [
+                {"name": "Assign_Lead", "label": "Assign Lead", "type": "FLOW"},
+                {"name": "Archive_Old", "label": "Archive", "type": "FLOW"},
+            ]
+        }
+    )
+    mock.get(f"{API}/actions/custom/flow/Assign_Lead").respond(
+        json=load_fixture("actions/describe_flow.json")
+    )
+    mock.get(f"{API}/actions/custom/flow/Archive_Old").respond(json={"name": "Archive_Old", "inputs": []})
+    mock.get(f"{API}/actions/custom/apex/OrderService").respond(
+        json={
+            "name": "OrderService",
+            "inputs": [{"name": "orderIds", "type": "ID", "required": True, "maxOccurs": 2000}],
+            "outputs": [{"name": "total", "type": "DOUBLE"}],
+        }
+    )
+
+
+def test_generate_dataclasses(
+    tmp_path: Path, mock: respx.MockRouter, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _mock_org(mock)
+    out = tmp_path / "sf_actions.py"
+    code = main(
+        ["generate", "actions", "--include", "flow:Assign*", "--include", "flow:Assign_Lead",
+         "--include", "apex:OrderService", "--out", str(out)]
+    )  # fmt: skip
+    assert code == EXIT_OK, capsys.readouterr().err
+    assert "wrote 2 actions" in capsys.readouterr().err
+    text = out.read_text()
+    assert f"Org: {INSTANCE}" in text
+    assert "API version: 68.0" in text
+    assert "Generated: " in text
+    mod = _load(out, "gen_dc")
+    stub = mod.AssignLead(lead_id="00Qxx0000000001AAA")
+    assert stub.region is None
+    assert mod.AssignLead.__action__ == ("flow", "Assign_Lead")
+    order = mod.OrderService(order_ids=["801xx0000000001AAA"])
+
+    fake = FakeSalesforce()
+    fake.on_action("flow", "Assign_Lead", {"assignedTo": "005", "Flow__InterviewStatus": "Finished"})
+    fake.on_action("apex", "OrderService", lambda inputs: {"total": float(len(inputs["orderIds"]))})
+    result = fake.run(stub)
+    assert result == mod.AssignLeadResult(assigned_to="005", flow_interview_status="Finished")
+    assert fake.run(order).total == 1.0
+    assert fake.calls[0].args["inputs"] == {"leadId": "00Qxx0000000001AAA"}
+
+
+def test_generate_pydantic(tmp_path: Path, mock: respx.MockRouter, monkeypatch: pytest.MonkeyPatch) -> None:
+    pytest.importorskip("pydantic")
+    _mock_org(mock)
+    monkeypatch.delenv("ESF_ACCESS_TOKEN")
+    monkeypatch.delenv("ESF_INSTANCE_URL")
+    monkeypatch.setenv("ESF_SANDBOX_ACCESS_TOKEN", "AT-sandbox")
+    monkeypatch.setenv("ESF_SANDBOX_INSTANCE_URL", INSTANCE)
+    out = tmp_path / "sf_models.py"
+    assert (
+        main(
+            [
+                "generate",
+                "actions",
+                "--org",
+                "sandbox",
+                "--include",
+                "flow:*",
+                "--out",
+                str(out),
+                "--pydantic",
+            ]
+        )
+        == 0
+    )
+    mod = _load(out, "gen_pd")
+    stub = mod.AssignLead(lead_id="00Qxx0000000001AAA")
+    assert stub.model_dump(by_alias=True, exclude_none=True) == {"leadId": "00Qxx0000000001AAA"}
+    fake = FakeSalesforce()
+    fake.on_action("flow", "Assign_Lead", {"assignedTo": "005"})
+    assert fake.run(stub).assigned_to == "005"
+    assert mod.ArchiveOld().model_dump() == {}
+
+
+def test_generate_errors(tmp_path: Path, mock: respx.MockRouter, capsys: pytest.CaptureFixture[str]) -> None:
+    _mock_org(mock)
+    out = str(tmp_path / "x.py")
+    assert main(["generate", "actions", "--include", "quickAction:X", "--out", out]) == EXIT_USAGE
+    assert "KIND:NAME" in capsys.readouterr().err
+    assert main(["generate", "actions", "--include", "flow:Nope*", "--out", out]) == EXIT_USAGE
+    assert "no flow actions match" in capsys.readouterr().err
+    assert main(["generate", "actions", "--include", "flow:a/b", "--out", out]) == EXIT_USAGE
+    assert (
+        main(["generate", "actions", "--org", "bad-name", "--include", "flow:A", "--out", out]) == EXIT_USAGE
+    )
+    assert "--org" in capsys.readouterr().err
+    mock.get(f"{API}/actions/custom/flow/Missing").respond(
+        404, json=[{"errorCode": "NOT_FOUND", "message": "The requested resource does not exist"}]
+    )
+    assert main(["generate", "actions", "--include", "flow:Missing", "--out", out]) == 1
+    assert not Path(out).exists()
+
+
+def test_pydantic_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    real = importlib.util.find_spec
+    monkeypatch.setattr(importlib.util, "find_spec", lambda n, *a: None if n == "pydantic" else real(n, *a))
+    args = ["generate", "actions", "--include", "flow:A", "--out", str(tmp_path / "x.py"), "--pydantic"]
+    assert main(args) == EXIT_USAGE
+    assert "[pydantic]" in capsys.readouterr().err
+
+
+# --- pure helpers ------------------------------------------------------------------------
+
+
+def test_names_and_types() -> None:
+    assert snake_case("leadId") == "lead_id"
+    assert snake_case("Flow__InterviewStatus") == "flow_interview_status"
+    assert snake_case("HTTPStatus") == "http_status"
+    assert snake_case("class") == "class_"
+    assert snake_case("model_name") == "model_name_"
+    assert snake_case("1st") == "f_1st"
+    assert snake_case("$$") == "field"
+    assert class_name("Assign_Lead") == "AssignLead"
+    assert class_name("ns__orderService") == "NsOrderService"
+    assert class_name("1x") == "A1x"
+    assert class_name("__") == "Action"
+    assert py_type({"type": "boolean"}) == "bool"
+    assert py_type({"type": "STRING", "maxOccurs": 5}) == "list[str]"
+    assert py_type({"type": "APEX"}) == "Any"
+    assert py_type({}) == "Any"
+
+
+def test_render_edge_cases(tmp_path: Path) -> None:
+    describe = {
+        "description": 'Says "hi" """ \\ twice',
+        "inputs": [{"name": "a", "type": "STRING"}, {"name": "A", "type": "INTEGER"}, {"name": ""}, "junk"],
+        "outputs": "junk",
+    }
+    actions = [ActionDescribe("standard", "a", describe), ActionDescribe("flow", "A", {})]
+    for pyd in (False, True):
+        src = render_actions(
+            actions,
+            org="",
+            api_version="68.0",
+            generated_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            pydantic=pyd,
+        )
+        assert "class A(" in src
+        assert "class A2(" in src  # same class name from two actions
+        assert "a2: int | None" in src  # same field name twice
+        compile(src, "gen.py", "exec")
+        if not pyd:
+            (tmp_path / "e.py").write_text(src)
+            mod = _load(tmp_path / "e.py", "gen_edge")
+            assert mod.A(a="x").a == "x"
+            assert esf.Action in type(mod.A2()).__mro__
+
+
+def test_helpers() -> None:
+    assert env_prefix(None) == "ESF_"
+    assert env_prefix("Prod_EU") == "ESF_PROD_EU_"
+    assert parse_include("apex:*") == ("apex", "*")
+    with pytest.raises(ValueError):
+        parse_include("flow")
+    with pytest.raises(ValueError):
+        parse_include("flow:")

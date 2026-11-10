@@ -5,6 +5,7 @@ Usage::
     esf whoami [--json]
     esf limits [--json]
     esf query "SELECT Id, Name FROM Lead LIMIT 10" [--json | --csv] [--all]
+    esf generate actions --include flow:Assign_Lead --out sf_actions.py [--pydantic]
     esf version
 
 Login comes from the environment only (first complete set wins):
@@ -83,9 +84,22 @@ def _build_parser() -> argparse.ArgumentParser:
         "migrate", help="rewrite simple-salesforce code (needs the [migrate] extra)", add_help=False
     )
 
-    g = sub.add_parser("generate", help="code generation (available from 0.2)")
-    g.add_argument("what", nargs="?", default="actions")
-    g.add_argument("rest", nargs=argparse.REMAINDER)
+    g = sub.add_parser("generate", help="generate typed code from the org")
+    gen = g.add_subparsers(dest="what", metavar="WHAT")
+    gen.required = True
+    ga = gen.add_parser("actions", help="typed stubs for invocable actions (sf.run)")
+    ga.add_argument(
+        "--include",
+        action="append",
+        required=True,
+        metavar="KIND:NAME",
+        help="action to include, e.g. flow:Assign_Lead or apex:* (repeatable; kinds: standard, flow, apex)",
+    )
+    ga.add_argument("--out", required=True, help="Python file to write")
+    ga.add_argument(
+        "--pydantic", action="store_true", help="emit Pydantic models (needs the [pydantic] extra)"
+    )
+    ga.add_argument("--org", default=None, help="read the login from ESF_<ORG>_* instead of ESF_*")
     return p
 
 
@@ -164,12 +178,12 @@ def _json(value: Any, out: TextIO) -> None:
 # --- commands ---------------------------------------------------------------------------
 
 
-def _client(env: Mapping[str, str]) -> Any:
+def _client(env: Mapping[str, str], prefix: str = "ESF_") -> Any:
     from .. import Salesforce
 
-    auth = auth_from_env(env)
+    auth = auth_from_env(env, prefix)
     kwargs: dict[str, Any] = {"user_agent": f"esf-cli/{__version__}"}
-    version = env.get("ESF_API_VERSION", "").strip()
+    version = env.get(f"{prefix}API_VERSION", "").strip()
     if version:
         kwargs["api_version"] = version.removeprefix("v")
     try:
@@ -283,6 +297,15 @@ def _cmd_version(out: TextIO) -> int:
     return EXIT_OK
 
 
+def _cmd_generate(args: argparse.Namespace, env: Mapping[str, str], out: TextIO, err: TextIO) -> int:
+    if args.what == "actions":
+        from ._generate_actions import generate_actions
+
+        return generate_actions(args, env, err, _client)
+    err.write(f"esf: unknown generator {args.what!r}\n")  # pragma: no cover - argparse rejects it
+    return EXIT_USAGE  # pragma: no cover
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the ``esf`` CLI and return its exit code.
 
@@ -313,8 +336,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "version":
             return _cmd_version(out)
         if args.command == "generate":
-            err.write(f"esf: 'esf generate {args.what}' is not available until 0.2\n")
-            return EXIT_USAGE
+            return _cmd_generate(args, env, out, err)
         if args.command == "whoami":
             return _cmd_whoami(args, env, out)
         if args.command == "limits":
