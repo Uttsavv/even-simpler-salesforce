@@ -26,7 +26,7 @@ You need an app with the Client Credentials Flow and a Run As user.
 
 | Argument | Default | What it does |
 |---|---|---|
-| `domain` | required | the My Domain URL; `"login"` and `"test"` raise `ValueError` |
+| `domain` | required | the My Domain URL; `"login"`, `"test"` and a URL with a path raise `ValueError` |
 | `client_id` | required | consumer key of the app |
 | `client_secret` | required | consumer secret of the app; `repr(auth)` never shows it |
 | `token_key` | hash of domain and client id | [token store](token-stores.md) key |

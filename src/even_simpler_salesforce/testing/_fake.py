@@ -13,7 +13,7 @@ from types import TracebackType
 from typing import Any
 
 from .._async.client import DEFAULT_API_VERSION
-from ..auth.flows import Auth, WebServerFlow
+from ..auth.flows import Auth, StaticToken, WebServerFlow
 from ..auth.token import Token
 from ..config import Budget, Priority
 from ..core.cursor import Cursor
@@ -21,7 +21,7 @@ from ..core.http import check_instance_url, check_sobject
 from ..core.limits import LimitInfo
 from ..core.records import apply_model
 from ..core.soql import soql_identifier, soql_values
-from ..errors import MultipleMatches, NotFound, SalesforceError
+from ..errors import MultipleMatches, NotFound, SalesforceError, SessionExpired
 from ..models import BatchResult, Limit, QueryPlan, QueryResult, RecordResult, UpsertResult
 from ..observability.events import Observer, ObserverHub
 from ..usage import UsageTracker
@@ -601,6 +601,23 @@ class FakeAuthApi:
         """A fake token (no call is recorded: the real method does no I/O when a token is cached)."""
         return self._token()
 
+    def refresh(self) -> Token:
+        """Records an ``oauth.refresh`` call and returns a fake token.
+
+        Like the real client, a fake built with :class:`StaticToken` raises
+        :class:`SessionExpired`. ``fail_next("oauth.refresh", ...)`` injects other failures.
+        """
+
+        def go() -> Token:
+            if isinstance(self._sf.auth_config, StaticToken):
+                raise SessionExpired(
+                    "StaticToken can't be refreshed; create a new client with a new token",
+                    error_code="INVALID_SESSION_ID",
+                )
+            return self._token()
+
+        return self._run("oauth.refresh", {}, go, "POST", "/services/oauth2/token")
+
 
 class AsyncFakeAuthApi:
     """Async ``fake.auth``; see :class:`FakeAuthApi`."""
@@ -629,6 +646,10 @@ class AsyncFakeAuthApi:
     async def token(self) -> Token:
         """See :meth:`FakeAuthApi.token`."""
         return self._inner.token()
+
+    async def refresh(self) -> Token:
+        """See :meth:`FakeAuthApi.refresh`."""
+        return self._inner.refresh()
 
 
 class FakeSalesforce(_FakeControls):

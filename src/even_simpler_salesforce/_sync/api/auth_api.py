@@ -127,3 +127,25 @@ class AuthApi:
     def token(self) -> Token:
         """The current token (acquiring one if needed). Treat it as a secret."""
         return self._sf._runtime.token()
+
+    def refresh(self) -> Token:
+        """Refresh this client's token now, even if it looks valid, and return the new token.
+
+        Use it when Salesforce rejects a token that the client can't see. An example is a
+        SOAP ``SessionHeader`` sent in a :meth:`~Salesforce.request` body: the
+        ``INVALID_SESSION_ID`` fault arrives in the body, so the automatic refresh on
+        ``401`` doesn't run.
+
+        Concurrent calls share one refresh and get the same token. The new token is saved to
+        the token store, and the client emits ``sf.auth.refreshed``. Treat the token as a secret.
+
+        Returns:
+            The new token, of the same type as :meth:`token`.
+
+        Raises:
+            SessionExpired: the client uses ``StaticToken``, which can't be refreshed.
+            ReauthorizationRequired: the refresh token is expired, revoked or missing.
+            RefreshFailed: the token endpoint failed or its outcome is unknown.
+            OAuthError: the token endpoint returned another OAuth error.
+        """
+        return self._sf._runtime.force_refresh()

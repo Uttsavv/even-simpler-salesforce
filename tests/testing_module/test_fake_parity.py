@@ -101,6 +101,23 @@ def test_fake_auth_api() -> None:
     assert ops == ["oauth.exchange_code", "oauth.revoke", "oauth.userinfo", "oauth.introspect"]
 
 
+def test_fake_auth_refresh() -> None:
+    fake = FakeSalesforce()
+    assert fake.auth.refresh().access_token == "fake-access-token"
+    fake.fail_next("oauth.refresh", esf.ReauthorizationRequired("log in again"))
+    with pytest.raises(esf.ReauthorizationRequired):
+        fake.auth.refresh()
+    with pytest.raises(esf.SessionExpired, match="StaticToken"):
+        FakeSalesforce(AUTH).auth.refresh()
+    assert [c.operation for c in fake.calls] == ["oauth.refresh", "oauth.refresh"]
+
+    async def main() -> None:
+        async with AsyncFakeSalesforce() as afake:
+            assert (await afake.auth.refresh()).access_token == "fake-access-token"
+
+    asyncio.run(main())
+
+
 def test_async_fake_query_helpers_and_auth() -> None:
     async def main() -> None:
         async with AsyncFakeSalesforce(AUTH) as fake:

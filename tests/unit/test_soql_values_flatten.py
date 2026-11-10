@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -100,6 +101,23 @@ def test_flatten_does_not_mutate_and_rejects_models() -> None:
     with pytest.raises(TypeError, match="plain dict"):
         flatten(Lead("1"))  # type: ignore[arg-type]
     assert esf.flatten is flatten
+    with pytest.raises(TypeError, match="plain dict row, not str"):
+        flatten("Id")  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [
+        [{"Id": "1"}],
+        ({"Id": "1"},),
+        esf.QueryResult(records=[{"Id": "1"}], total_size=1, done=True),
+        iter([{"Id": "1"}]),
+    ],
+    ids=["list", "tuple", "QueryResult", "iterator"],
+)
+def test_flatten_many_rows_points_to_comprehension(rows: object) -> None:
+    with pytest.raises(TypeError, match=re.escape("[esf.flatten(r) for r in page]")):
+        flatten(rows)  # type: ignore[arg-type]
 
 
 # --- explain ---------------------------------------------------------------------------------

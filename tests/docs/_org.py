@@ -358,6 +358,8 @@ class FakeOrg:
         try:
             if path.startswith("/services/oauth2/"):
                 return self._oauth(request, path.rsplit("/", 1)[1])
+            if path.startswith("/services/Soap/"):
+                return self._soap(request)
             auth = request.headers.get("authorization", "")
             if not auth.startswith("Bearer ") or auth[7:] in self.revoked:
                 raise Rejected("INVALID_SESSION_ID", "Session expired or invalid", status=401)
@@ -372,6 +374,25 @@ class FakeOrg:
             if exc.status == 300:
                 return self._json(["/services/data/v68.0/sobjects/Lead/00Q8d0000000000001"], 300)
             return self._json(exc.body(), exc.status)
+
+    def _soap(self, request: httpx.Request) -> httpx.Response:
+        """A SOAP call: checks the ``sessionId`` in the body, like Salesforce does."""
+        m = re.search(rb"<(?:\w+:)?sessionId>([^<]*)</", request.content)
+        session = m.group(1).decode() if m else ""
+        xml = {"content-type": "text/xml;charset=UTF-8"}
+        envelope = '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"><soapenv:Body>{}</soapenv:Body></soapenv:Envelope>'
+        if not session.startswith("AT-docs-") or session in self.revoked:
+            fault = (
+                "<soapenv:Fault><faultcode>sf:INVALID_SESSION_ID</faultcode>"
+                "<faultstring>INVALID_SESSION_ID: Invalid Session ID found in SessionHeader</faultstring>"
+                "</soapenv:Fault>"
+            )
+            return httpx.Response(500, headers=xml, content=envelope.format(fault).encode())
+        result = (
+            '<getUserInfoResponse xmlns="urn:partner.soap.sforce.com">'
+            f"<result><userId>{USER_ID}</userId></result></getUserInfoResponse>"
+        )
+        return httpx.Response(200, headers=xml, content=envelope.format(result).encode())
 
     def _json(self, body: Any, status: int = 200, headers: dict[str, str] | None = None) -> httpx.Response:
         h = {

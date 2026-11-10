@@ -39,14 +39,37 @@ Every login flow except `StaticToken` takes `domain=`. It names the host the cli
 | `"login"` | `https://login.salesforce.com` | production and Developer Edition |
 | `"test"` | `https://test.salesforce.com` | sandboxes |
 | `"https://acme.my.salesforce.com"` | your My Domain | any org; also `https://acme--uat.sandbox.my.salesforce.com` |
+| `"https://acme.my.site.com/partners"` | an Experience Cloud site | site members; see [Experience Cloud sites](#experience-cloud-sites) |
 
 ```python
 print(auth.token_url)  # https://acme.my.salesforce.com/services/oauth2/token
 ```
 
 If you pass anything else, the login flow raises `ValueError` when you create it. That includes
-`http://` URLs, paths and bare host names. `ClientCredentials` needs the My Domain URL, because
-Salesforce doesn't support `login` or `test` for that flow.
+`http://` URLs, bare host names, query strings and fragments. `ClientCredentials` needs the My
+Domain URL, because Salesforce doesn't support `login`, `test` or a site URL for that flow.
+
+### Experience Cloud sites
+
+Members of an Experience Cloud site log in through the site URL. Pass the site URL as `domain`,
+with its path prefix. The client then calls every OAuth endpoint under that URL.
+
+```python
+site = esf.WebServerFlow(
+    domain="https://acme.my.site.com/partners",
+    client_id="3MVG9...",
+    redirect_uri="https://app.example.com/oauth/callback",
+    token_key="member:42",
+)
+print(site.token_url)  # https://acme.my.site.com/partners/services/oauth2/token
+```
+
+- Use the site URL without `/s` or a page name. The client drops a trailing `/`.
+- The path may hold only letters, digits, `-`, `.`, `_` and `~`, in segments split by `/`.
+  The client rejects `.` and `..` segments.
+- Authorize, token, revoke and introspect requests go to the site URL. `sf.auth.userinfo()`
+  and every API call go to the `instance_url` from the token response.
+- For `JwtBearer`, the `aud` claim is the site URL. See [JWT bearer](jwt-bearer.md#audience).
 
 ## Proactive refresh (opt-in)
 
@@ -97,6 +120,7 @@ async with esf.AsyncSalesforce(auth) as sf:
 | Call | What it does |
 |---|---|
 | `await sf.auth.token()` | the current `Token`, acquiring one if needed; treat it as a secret |
+| `await sf.auth.refresh()` | a new `Token`, even if the current one looks valid; see [Force a refresh](#force-a-refresh) |
 | `await sf.auth.userinfo()` | `GET /services/oauth2/userinfo` for the current token |
 | `await sf.auth.introspect(token_key=None, *, auth=None)` | `POST /services/oauth2/introspect` |
 | `await sf.auth.revoke(token_key=None, *, auth=None)` | `POST /services/oauth2/revoke`, then deletes the token from memory and the store |
@@ -105,6 +129,28 @@ async with esf.AsyncSalesforce(auth) as sf:
 `Token` is a frozen dataclass with `access_token`, `instance_url`, `issued_at`,
 `refresh_token`, `id_url`, `org_id`, `user_id`, `scope`, `signature`, `expires_at` and
 `version`. The client parses `user_id` from the identity URL. The token store manages `version`.
+
+### Force a refresh
+
+The client refreshes the token when Salesforce answers `401`. Sometimes Salesforce rejects a
+token in a way the client can't see. An example is a SOAP `SessionHeader` in a request body.
+Then call `sf.auth.refresh()` and send the request again with the new token.
+
+```python
+async with esf.AsyncSalesforce(auth) as sf:
+    old = await sf.auth.token()
+    new = await sf.auth.refresh()
+    assert new.access_token != old.access_token
+```
+
+- The client requests a new token even if the current token looks valid.
+- Concurrent calls share one refresh and get the same token.
+- The client saves the new token to the token store and emits `sf.auth.refreshed`.
+- A client with `StaticToken` raises `SessionExpired`, because it can't refresh.
+- Other failures raise the same errors as an automatic refresh, such as
+  `ReauthorizationRequired`.
+
+[Raw requests](../guides/requests.md#tokens-in-the-request-body) shows the SOAP case.
 
 ## Limitations
 
