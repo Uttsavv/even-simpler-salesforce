@@ -1,0 +1,1 @@
+`esf generate actions` writes a module that loads when a description contains quotes or control characters, or a name matches a Python keyword or a name the module uses; an unwritable `--out` is a usage error (exit 2) and the file starts with the same header as `esf generate models`.
