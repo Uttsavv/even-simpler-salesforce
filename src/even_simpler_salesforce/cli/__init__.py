@@ -22,17 +22,21 @@ Exit codes: ``0`` success, ``1`` Salesforce/API error, ``2`` usage or configurat
 from __future__ import annotations
 
 import argparse
+import copy
 import csv
 import json
 import os
 import re
 import sys
 from collections.abc import Iterable, Mapping, Sequence
-from typing import Any, TextIO
+from typing import TYPE_CHECKING, Any, TextIO
 
 from .._version import __version__
 from ..core.records import flatten
 from ._env import EnvConfigError, auth_from_env
+
+if TYPE_CHECKING:
+    from ..errors import SalesforceError
 
 __all__ = ["EXIT_API_ERROR", "EXIT_INTERRUPTED", "EXIT_OK", "EXIT_USAGE", "main"]
 
@@ -283,6 +287,19 @@ def _cmd_version(out: TextIO) -> int:
     return EXIT_OK
 
 
+def _write_error(exc: SalesforceError, err: TextIO) -> None:
+    """One escaped error line, then the hint and the docs link on their own lines."""
+    hint, docs_url = exc.hint, exc.docs_url
+    plain = copy.copy(exc)
+    plain.hint = plain.docs_url = None  # str() without them; they are printed below
+    # The message comes from Salesforce and can hold terminal escape sequences.
+    err.write(f"esf: {type(exc).__name__}: {_printable(str(plain))}\n")
+    if hint:
+        err.write(f"  hint: {_printable(hint)}\n")
+    if docs_url:
+        err.write(f"  docs: {docs_url}\n")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the ``esf`` CLI and return its exit code.
 
@@ -325,8 +342,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         err.write(f"esf: configuration error: {exc}\n")
         return EXIT_USAGE
     except SalesforceError as exc:
-        # The message comes from Salesforce and can hold terminal escape sequences.
-        err.write(f"esf: {type(exc).__name__}: {_printable(str(exc))}\n")
+        _write_error(exc, err)
         return EXIT_API_ERROR
     except ValueError as exc:
         err.write(f"esf: error: {_printable(str(exc))}\n")

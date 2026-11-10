@@ -515,6 +515,7 @@ class FakeOrg:
                 {"name": "Id", "type": "id"},
                 {"name": "Name", "type": "string"},
                 {"name": "LastName", "type": "string", "length": 80},
+                *({"name": f, "type": "string", "custom": True} for f in sorted(CUSTOM_FIELDS)),
             ]
             return self._json(
                 {"name": sobject, "label": sobject, "createable": True, "fields": fields},

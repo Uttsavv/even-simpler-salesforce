@@ -9,6 +9,7 @@ auth → budget guard → concurrency gate → compress → send → parse limit
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import random
 import threading
 import time
@@ -24,6 +25,7 @@ from ..cache import Cache
 from ..config import DescribeCacheConfig, RetryPolicy, Timeouts
 from ..core import jsonlib
 from ..core.classify import classify
+from ..core.hints import add_hint
 from ..core.http import (
     GZIP_THRESHOLD,
     LOOPBACK_MOUNTS,
@@ -240,6 +242,21 @@ class Transport:
                 if entry[1] == 0 and self._flights.get(key) is entry:
                     del self._flights[key]
 
+    def describe_key(self, token: Token, runtime_key: str, what: str) -> str:
+        """Cache key of one describe result (per org, API version, object and user)."""
+        user = hashlib.sha256((token.user_id or runtime_key).encode()).hexdigest()[:12]
+        return f"esf:describe:{token.org_id or token.instance_url}:{self.api_version}:{what}:{user}"
+
+    def cached_describe(self, runtime: AuthRuntime, sobject: str) -> dict[str, Any] | None:
+        """The cached describe of ``sobject`` (fresh or stale), or ``None``. Never calls the API."""
+        token = runtime.current()
+        if token is None:
+            return None
+        entry: Any = self.cache.get(self.describe_key(token, runtime.key, f"sobject:{sobject}"))
+        if isinstance(entry, dict) and isinstance(entry.get("data"), dict):  # pyright: ignore[reportUnknownMemberType]
+            return cast("dict[str, Any]", entry["data"])
+        return None
+
     def emit(self, name: str, fields: Mapping[str, Any]) -> None:
         event = self.hub.emit(name, fields)
         record_event(event)
@@ -377,6 +394,13 @@ class Transport:
             # Not only SalesforceError: a rejected path (ValueError), a cancelled task or a
             # bug must not be reported as outcome="ok".
             failure = exc
+            if isinstance(exc, SalesforceError):
+                add_hint(
+                    exc,
+                    soql=spec.soql,
+                    refreshed=refreshed,
+                    describe=lambda name: self.cached_describe(runtime, name),
+                )
             raise
         finally:
             self.refresh_outcomes.unpin(pinned_key)

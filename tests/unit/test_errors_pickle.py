@@ -53,6 +53,8 @@ COMMON: dict[str, Any] = {
     "errors": list(DETAILS),
     "raw": b'[{"errorCode":"SOME_CODE"}]',
     "tag": "MY_TAG",
+    "hint": "did you mean 'Email'?",
+    "docs_url": "https://example.com/runbook#some-code",
 }
 
 _SNAPSHOT = UsageSnapshot(
@@ -105,6 +107,8 @@ BASE_ATTRS = (
     "errors",
     "raw",
     "tag",
+    "hint",
+    "docs_url",
 )
 
 
@@ -172,6 +176,7 @@ def test_roundtrip_keeps_type_text_and_every_attribute(cls: type[E.SalesforceErr
     assert type(out) is cls
     assert isinstance(out, E.SalesforceError)
     assert str(out) == str(exc)
+    assert str(out).endswith("\n  hint: did you mean 'Email'?\n  docs: https://example.com/runbook#some-code")
     assert repr(out) == repr(exc)
     assert repr(out).startswith(f"{cls.__name__}(")
     assert out.args == exc.args == ("something failed",)
@@ -198,7 +203,9 @@ def test_roundtrip_with_defaults_only(cls: type[E.SalesforceError]) -> None:
     out = pickle.loads(pickle.dumps(exc))
     assert type(out) is cls
     assert out.__dict__ == exc.__dict__
-    assert str(out) == str(exc) == ""
+    assert str(out) == str(exc) == f"\n  docs: {E.docs_url_for(cls)}"
+    assert out.docs_url is not None
+    assert out.docs_url.endswith("#" + cls.__name__.lower())
     assert out.retryable is cls.default_retryable
 
 
