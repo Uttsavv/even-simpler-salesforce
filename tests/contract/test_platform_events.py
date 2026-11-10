@@ -175,3 +175,17 @@ def test_publish_many_partial_failure_without_results(
     with pytest.raises(esf.PartialFailure) as ei:
         h.run(sf.platform_events.publish_many(EVENT, [{}]))
     assert ei.value.results is None
+
+
+def test_publish_many_request_failure_is_mapped(h: Harness, mock: respx.MockRouter) -> None:
+    """When the only collections request fails as a whole, the error gets its EventBus class
+    (and that class's docs entry), as with ``publish()``."""
+    mock.post(f"{DATA}/composite/sobjects").respond(
+        503, json=load_fixture("platform_events/publish_unavailable.json")
+    )
+    sf = h.client()
+    with pytest.raises(esf.EventPublishUnavailable) as ei:
+        h.run(sf.platform_events.publish_many(EVENT, [{"Order_Number__c": "1"}]))
+    assert ei.value.retryable is True
+    assert ei.value.docs_url is not None
+    assert ei.value.docs_url.endswith("#eventpublishunavailable")

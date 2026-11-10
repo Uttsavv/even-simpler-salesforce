@@ -365,7 +365,8 @@ def test_event_error_mapping() -> None:
         "platform_events.publish",
         "x",
     )
-    assert str(mapped) == str(plain)
+    assert str(mapped).splitlines()[0] == str(plain).splitlines()[0]
+    assert str(mapped).endswith("#eventpublishfailed")
 
     unknown = events.event_error(esf.RecordError("y", error_code="SOMETHING_NEW"))
     assert type(unknown) is esf.EventPublishFailed
@@ -400,3 +401,13 @@ def test_body_found_after_header() -> None:
         "<success>true</success></result></mergeResponse></soapenv:Body></soapenv:Envelope>"
     ).encode()
     assert soap.parse_merge_results(body)[0].id == ACC
+
+
+def test_event_error_points_at_its_own_docs_entry() -> None:
+    from even_simpler_salesforce import errors as E
+    from even_simpler_salesforce.core.events import event_error
+
+    mapped = event_error(E.RecordError("x", error_code="PLATFORM_EVENT_PUBLISHING_UNAVAILABLE"))
+    assert type(mapped) is E.EventPublishUnavailable
+    assert mapped.docs_url == E.docs_url_for(E.EventPublishUnavailable)
+    assert "#eventpublishunavailable" in str(mapped)
