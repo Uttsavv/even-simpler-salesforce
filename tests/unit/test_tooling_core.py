@@ -78,12 +78,20 @@ def test_parse_anonymous_failure_fields() -> None:
 @pytest.mark.parametrize("value", [True, "3", 2.0, None])
 def test_parse_anonymous_ignores_non_int_positions(value: Any) -> None:
     result = T.parse_anonymous({"compiled": False, "success": False, "line": value, "column": value})
-    assert result.line is None and result.column is None
+    assert result.line is None
+    assert result.column is None
 
 
 @pytest.mark.parametrize(
     "body",
-    [[], "x", None, {"compiled": True}, {"compiled": "true", "success": True}, {"compiled": True, "success": 1}],
+    [
+        [],
+        "x",
+        None,
+        {"compiled": True},
+        {"compiled": "true", "success": True},
+        {"compiled": True, "success": 1},
+    ],
 )
 def test_parse_anonymous_rejects_bad_bodies(body: Any) -> None:
     with pytest.raises(esf.UnexpectedResponse) as ei:
@@ -106,7 +114,7 @@ def test_trace_flag_body() -> None:
         "StartDate": "2030-01-01T12:00:00Z",
         "ExpirationDate": "2030-01-01T12:10:00Z",
     }
-    assert T.TRACE_FLAG_TTL < timedelta(hours=24)  # Salesforce caps a flag at 24 hours
+    assert timedelta(hours=24) > T.TRACE_FLAG_TTL  # Salesforce caps a flag at 24 hours
     with pytest.raises(ValueError):
         T.trace_flag_body("005'", LEVEL, NOW)
 
@@ -117,9 +125,19 @@ def _log(rid: str, op: Any, start: Any) -> dict[str, Any]:
 
 def test_pick_log_takes_the_newest_anonymous_log_after_the_start() -> None:
     rows = [
-        _log("07Lxx0000000001AAA", "/services/data/v68.0/tooling/executeAnonymous/", "2030-01-01T11:58:00.000+0000"),
-        _log("07Lxx0000000002AAA", "/services/data/v68.0/tooling/executeAnonymous/", "2030-01-01T12:00:01.000+0000"),
-        _log("07Lxx0000000003AAA", "/services/data/v68.0/tooling/executeAnonymous/", "2030-01-01T11:59:30.000Z"),
+        _log(
+            "07Lxx0000000001AAA",
+            "/services/data/v68.0/tooling/executeAnonymous/",
+            "2030-01-01T11:58:00.000+0000",
+        ),
+        _log(
+            "07Lxx0000000002AAA",
+            "/services/data/v68.0/tooling/executeAnonymous/",
+            "2030-01-01T12:00:01.000+0000",
+        ),
+        _log(
+            "07Lxx0000000003AAA", "/services/data/v68.0/tooling/executeAnonymous/", "2030-01-01T11:59:30.000Z"
+        ),
         _log("07Lxx0000000004AAA", "Api", "2030-01-01T12:00:05.000+0000"),
     ]
     assert T.pick_log(rows, NOW) == "07Lxx0000000002AAA"
@@ -159,7 +177,9 @@ def test_run_tests_body() -> None:
         T.run_tests_body(["01p'x"])
 
 
-@pytest.mark.parametrize("body", ["707xx0000000001", '"707xx0000000001"', b"707xx0000000001\n", ' "707xx0000000001" '])
+@pytest.mark.parametrize(
+    "body", ["707xx0000000001", '"707xx0000000001"', b"707xx0000000001\n", ' "707xx0000000001" ']
+)
 def test_parse_job_id(body: Any) -> None:
     assert T.parse_job_id(body) == "707xx0000000001"
 

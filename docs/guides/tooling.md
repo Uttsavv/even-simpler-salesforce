@@ -133,9 +133,9 @@ warns too. The flag then expires on its own within 10 minutes.
 `AsyncApexJob` id. It doesn't wait for the tests to finish.
 
 ```python
-test_class = (
-    await sf.tooling.query("SELECT Id FROM ApexClass WHERE Name = {}", "OrderServiceTest")
-).records[0]
+test_class = (await sf.tooling.query("SELECT Id FROM ApexClass WHERE Name = {}", "OrderServiceTest")).records[
+    0
+]
 job_id = await sf.tooling.run_tests_async([test_class["Id"]])
 print(job_id)  # '707...'
 ```

@@ -18,10 +18,13 @@ def test_query_and_query_more_use_tooling_operations() -> None:
     rows = [{"Id": f"01pxx{i:010d}AAA", "Name": f"C{i}"} for i in range(2001)]
     fake.on_query("SELECT Id, Name FROM ApexClass", rows=rows)
     page = fake.tooling.query("SELECT Id, Name FROM ApexClass")
-    assert len(page.records) == 2000 and page.total_size == 2001 and page.cursor is not None
+    assert len(page.records) == 2000
+    assert page.total_size == 2001
+    assert page.cursor is not None
     assert page.records[0]["attributes"]["type"] == "ApexClass"
     nxt = fake.query_more(page.cursor)
-    assert [r["Name"] for r in nxt] == ["C2000"] and nxt.cursor is None
+    assert [r["Name"] for r in nxt] == ["C2000"]
+    assert nxt.cursor is None
     assert [c.operation for c in fake.calls] == ["tooling.query", "tooling.query_more"]
     assert fake.calls[0].sobject == "ApexClass"
 
@@ -38,7 +41,8 @@ def test_query_iter_and_model() -> None:
     rows = [{"Id": f"01pxx{i:010d}AAA", "Name": f"C{i}"} for i in range(2001)]
     fake.on_query(re.compile("FROM ApexClass"), rows=rows)
     got = list(fake.tooling.query_iter("SELECT Id, Name FROM ApexClass WHERE Name LIKE {}", "C%", model=Cls))
-    assert len(got) == 2001 and got[-1] == Cls("01pxx0000002000AAA", "C2000")
+    assert len(got) == 2001
+    assert got[-1] == Cls("01pxx0000002000AAA", "C2000")
     assert [c.operation for c in fake.calls] == ["tooling.query", "tooling.query_more"]
     assert fake.calls[0].args["soql"] == "SELECT Id, Name FROM ApexClass WHERE Name LIKE 'C%'"
     assert isinstance(fake.tooling.query("SELECT Id, Name FROM ApexClass", model=Cls).records[0], Cls)
@@ -73,14 +77,18 @@ def test_execute_anonymous_scripts() -> None:
     ok = fake.on_execute_anonymous("System.debug(1);")
     fake.on_execute_anonymous(
         re.compile(r"1 / 0"),
-        esf.AnonymousResult(compiled=True, success=False, exception_message="System.MathException: Divide by 0"),
+        esf.AnonymousResult(
+            compiled=True, success=False, exception_message="System.MathException: Divide by 0"
+        ),
     )
     fake.on_execute_anonymous(
         lambda code: "log" in code,
         lambda code: esf.AnonymousResult(compiled=True, success=True, log=f"USER_DEBUG|{code}"),
     )
     fake.on_execute_anonymous("boom;", esf.ServerError("down"), times=1)
-    assert fake.tooling.execute_anonymous("System.debug(1);") == esf.AnonymousResult(compiled=True, success=True)
+    assert fake.tooling.execute_anonymous("System.debug(1);") == esf.AnonymousResult(
+        compiled=True, success=True
+    )
     assert ok.hits == 1
     assert fake.tooling.execute_anonymous("Integer i = 1 / 0;").exception_message
     assert fake.tooling.execute_anonymous("// log", capture_log=True).log == "USER_DEBUG|// log"

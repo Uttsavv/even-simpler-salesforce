@@ -61,15 +61,20 @@ def test_query_uses_the_tooling_path_and_query_more_follows_its_cursor(
     h: Harness, mock: respx.MockRouter, rec: Recorder
 ) -> None:
     route = mock.get(f"{TOOLING}/query").respond(json=PAGE1)
-    more = mock.get(f"{TOOLING}/query/01gxx0000000001AAA-2").respond(json=load_fixture("tooling/query_page2.json"))
+    more = mock.get(f"{TOOLING}/query/01gxx0000000001AAA-2").respond(
+        json=load_fixture("tooling/query_page2.json")
+    )
     sf = _client(h, rec)
     page = h.run(sf.tooling.query("SELECT Id, Name FROM ApexClass WHERE Name LIKE {}", "Order%"))
     assert [r["Name"] for r in page] == ["OrderService", "OrderServiceTest"]
-    assert page.total_size == 3 and not page.done and page.cursor is not None
+    assert page.total_size == 3
+    assert not page.done
+    assert page.cursor is not None
     assert route.calls[0].request.url.params["q"] == "SELECT Id, Name FROM ApexClass WHERE Name LIKE 'Order%'"
     assert "sforce-query-options" not in route.calls[0].request.headers
     nxt = h.run(sf.query_more(page.cursor))
-    assert [r["Name"] for r in nxt] == ["LeadScoring"] and nxt.cursor is None
+    assert [r["Name"] for r in nxt] == ["LeadScoring"]
+    assert nxt.cursor is None
     assert more.called
     ops = [(e["operation"], e["sobject"], e["path_template"]) for e in rec.requests]
     assert ops == [
@@ -99,7 +104,9 @@ def test_query_model(h: Harness, mock: respx.MockRouter) -> None:
     assert h.run(sf.tooling.query("SELECT Id, Name FROM ApexClass", model=Cls)).records == [
         Cls("01pxx0000000003AAA", "LeadScoring")
     ]
-    assert h.collect(sf.tooling.query_iter("SELECT Id, Name FROM ApexClass", model=Cls))[0].Name == "LeadScoring"
+    assert (
+        h.collect(sf.tooling.query_iter("SELECT Id, Name FROM ApexClass", model=Cls))[0].Name == "LeadScoring"
+    )
 
 
 def test_tooling_cursor_shape_is_validated(h: Harness) -> None:
@@ -111,8 +118,12 @@ def test_tooling_cursor_shape_is_validated(h: Harness) -> None:
 
 def test_sobject_methods_use_tooling_paths(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:
     base = f"{TOOLING}/sobjects/ApexClass"
-    get = mock.get(f"{base}/01pxx0000000001AAA").respond(json={"Id": "01pxx0000000001AAA", "Name": "OrderService"})
-    create = mock.post(f"{base}/").respond(201, json={"id": "01pxx0000000009AAA", "success": True, "errors": []})
+    get = mock.get(f"{base}/01pxx0000000001AAA").respond(
+        json={"Id": "01pxx0000000001AAA", "Name": "OrderService"}
+    )
+    create = mock.post(f"{base}/").respond(
+        201, json={"id": "01pxx0000000009AAA", "success": True, "errors": []}
+    )
     update = mock.patch(f"{base}/01pxx0000000009AAA").respond(204)
     delete = mock.delete(f"{base}/01pxx0000000009AAA").respond(204)
     describe = mock.get(f"{base}/describe").respond(json={"name": "ApexClass", "fields": [{"name": "Body"}]})
@@ -142,7 +153,8 @@ def test_tooling_describe_does_not_share_the_rest_cache(h: Harness, mock: respx.
     sf = _client(h)
     assert h.run(sf.sobject("User").describe())["api"] == "rest"
     assert h.run(sf.tooling.sobject("User").describe())["api"] == "tooling"
-    assert rest.called and tool.called
+    assert rest.called
+    assert tool.called
 
 
 def test_sobject_external_id_path_template(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:
@@ -178,7 +190,8 @@ def test_execute_anonymous_success(h: Harness, mock: respx.MockRouter, rec: Reco
 def test_execute_anonymous_compile_error(h: Harness, mock: respx.MockRouter) -> None:
     mock.get(ANON).respond(json=load_fixture("tooling/execute_compile_error.json"))
     result = h.run(_client(h).tooling.execute_anonymous("System debug('x');"))
-    assert not result.compiled and not result.success
+    assert not result.compiled
+    assert not result.success
     assert result.compile_problem == "Unexpected token 'debug'."
     assert (result.line, result.column) == (1, 13)
     assert result.exception_message is None
@@ -187,7 +200,8 @@ def test_execute_anonymous_compile_error(h: Harness, mock: respx.MockRouter) -> 
 def test_execute_anonymous_exception(h: Harness, mock: respx.MockRouter) -> None:
     mock.get(ANON).respond(json=load_fixture("tooling/execute_exception.json"))
     result = h.run(_client(h).tooling.execute_anonymous("Integer i = 1 / 0;"))
-    assert result.compiled and not result.success
+    assert result.compiled
+    assert not result.success
     assert result.exception_message == "System.MathException: Divide by 0"
     assert result.exception_stack_trace == "AnonymousBlock: line 1, column 1"
 
@@ -199,7 +213,9 @@ def test_execute_anonymous_is_never_resent(h: Harness, mock: respx.MockRouter, f
         route = mock.get(ANON).mock(side_effect=httpx.ReadTimeout("slow"))
         expected: type[Exception] = esf.RequestTimeout
     else:
-        route = mock.get(ANON).respond(int(failure), json=[{"errorCode": "SERVER_UNAVAILABLE", "message": "busy"}])
+        route = mock.get(ANON).respond(
+            int(failure), json=[{"errorCode": "SERVER_UNAVAILABLE", "message": "busy"}]
+        )
         expected = esf.ServerError
     sf = _client(h)
     with pytest.raises(expected):
@@ -237,7 +253,11 @@ class _Org:
         self.soql.append(q)
         if "FROM TraceFlag" in q:
             self.order.append("query TraceFlag")
-            recs = [{"attributes": {"type": "TraceFlag"}, "Id": "7tfxx0000000077AAA"}] if self.active_flag else []
+            recs = (
+                [{"attributes": {"type": "TraceFlag"}, "Id": "7tfxx0000000077AAA"}]
+                if self.active_flag
+                else []
+            )
             return httpx.Response(200, json={**_empty("TraceFlag"), "records": recs, "totalSize": len(recs)})
         if "FROM DebugLevel" in q:
             self.order.append("query DebugLevel")
@@ -283,7 +303,8 @@ def test_capture_log_full_flow(h: Harness, mock: respx.MockRouter, rec: Recorder
     sf = _client(h, rec)
     result = h.run(sf.tooling.execute_anonymous("System.debug('hello');", capture_log=True))
     assert result.success
-    assert result.log is not None and "USER_DEBUG|[1]|DEBUG|hello" in result.log
+    assert result.log is not None
+    assert "USER_DEBUG|[1]|DEBUG|hello" in result.log
     assert org.order == [
         "query TraceFlag",
         "query DebugLevel",
@@ -325,12 +346,15 @@ def test_capture_log_reuses_the_debug_level(h: Harness, mock: respx.MockRouter) 
     assert [n for n, _ in org.created] == ["TraceFlag"]
 
 
-def test_capture_log_with_an_active_flag_neither_creates_nor_deletes(h: Harness, mock: respx.MockRouter) -> None:
+def test_capture_log_with_an_active_flag_neither_creates_nor_deletes(
+    h: Harness, mock: respx.MockRouter
+) -> None:
     org = _Org(active_flag=True)
     org.install(mock)
     result = h.run(_client(h).tooling.execute_anonymous("System.debug(1);", capture_log=True))
     assert result.log is not None
-    assert org.created == [] and org.deleted == []
+    assert org.created == []
+    assert org.deleted == []
 
 
 def test_capture_log_deletes_the_flag_when_the_run_fails(h: Harness, mock: respx.MockRouter) -> None:
@@ -360,7 +384,8 @@ def test_capture_log_warns_when_the_delete_fails_after_a_run(h: Harness, mock: r
     )
     with pytest.warns(RuntimeWarning, match="could not delete TraceFlag"):
         result = h.run(_client(h).tooling.execute_anonymous("System.debug(1);", capture_log=True))
-    assert result.success and result.log
+    assert result.success
+    assert result.log
 
 
 def test_capture_log_returns_the_result_when_the_log_cant_be_read(h: Harness, mock: respx.MockRouter) -> None:
@@ -371,7 +396,8 @@ def test_capture_log_returns_the_result_when_the_log_cant_be_read(h: Harness, mo
     )
     with pytest.warns(RuntimeWarning, match="debug log could not be read"):
         result = h.run(_client(h).tooling.execute_anonymous("System.debug(1);", capture_log=True))
-    assert result.success and result.log is None
+    assert result.success
+    assert result.log is None
     assert org.deleted == [FLAG_ID]
     assert org.order.count("executeAnonymous") == 1
 
@@ -382,7 +408,8 @@ def test_capture_log_without_a_matching_log(h: Harness, mock: respx.MockRouter) 
     sf = _client(h)
     sf._transport.now = lambda: datetime(2031, 1, 1, tzinfo=timezone.utc)  # every log is older
     result = h.run(sf.tooling.execute_anonymous("System.debug(1);", capture_log=True))
-    assert result.success and result.log is None
+    assert result.success
+    assert result.log is None
     assert org.deleted == [FLAG_ID]
 
 
