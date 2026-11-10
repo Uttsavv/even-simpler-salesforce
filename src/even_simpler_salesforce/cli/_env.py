@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
+from .._version import __version__
 from ..auth.flows import Auth, ClientCredentials, JwtBearer, StaticToken
 
-__all__ = ["EnvConfigError", "auth_from_env", "env_auth_configured"]
+__all__ = ["EnvConfigError", "auth_from_env", "client_from_env", "env_auth_configured"]
 
 
 class EnvConfigError(ValueError):
@@ -101,3 +103,18 @@ def auth_from_env(env: Mapping[str, str], prefix: str = "ESF_", *, read_key: boo
         f"{p}DOMAIN + {p}CLIENT_ID + {p}CLIENT_SECRET, or "
         f"{p}DOMAIN + {p}CLIENT_ID + {p}USERNAME + {p}PRIVATE_KEY_FILE"
     )
+
+
+def client_from_env(env: Mapping[str, str]) -> Any:
+    """A sync ``Salesforce`` client for the CLI: login from ``env``, ``ESF_API_VERSION`` if set."""
+    from .. import Salesforce
+
+    auth = auth_from_env(env)
+    kwargs: dict[str, Any] = {"user_agent": f"esf-cli/{__version__}"}
+    version = env.get("ESF_API_VERSION", "").strip()
+    if version:
+        kwargs["api_version"] = version.removeprefix("v")
+    try:
+        return Salesforce(auth, **kwargs)
+    except ValueError as exc:
+        raise EnvConfigError(str(exc)) from None

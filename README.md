@@ -126,7 +126,7 @@ with esf.Salesforce(auth) as sf:
   `ESF_DEBUG=1` output.
 - **Testing:** `FakeSalesforce` / `AsyncFakeSalesforce`, a recorder and replayer for redacted
   traffic, and a pytest plugin.
-- **CLI:** `esf whoami`, `esf limits` and `esf query`.
+- **CLI:** `esf whoami`, `esf limits`, `esf query`, `esf describe`, `esf request` and `esf generate models`.
 
 Composite, GraphQL, Bulk API 2.0, files, invocable actions, Apex REST helpers, lead convert and
 merge, Tooling, UI API, reports, Metadata and Pub/Sub are planned for later 0.x releases; see the

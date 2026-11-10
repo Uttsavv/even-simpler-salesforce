@@ -128,3 +128,8 @@ def test_transport_errors_get_a_docs_url_too(h: Harness, mock: respx.MockRouter)
         h.run(h.client(retry=esf.RetryPolicy(max_attempts=1)).limits())
     assert info.value.hint is None
     assert info.value.docs_url == f"{ERRORS_PAGE}#connecterror"
+
+
+def test_cached_describe_before_any_token_is_none(h: Harness) -> None:
+    sf = h.client(token=False)
+    assert sf._transport.cached_describe(sf._runtime, "Lead") is None  # no token yet: no cache key
