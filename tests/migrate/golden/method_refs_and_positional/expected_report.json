@@ -10,6 +10,11 @@
     "line": 5
   },
   {
+    "rule": "create-return",
+    "status": "needs-review",
+    "line": 7
+  },
+  {
     "rule": "sobject-attr",
     "status": "rewritten",
     "line": 7
@@ -28,5 +33,30 @@
     "rule": "query-result",
     "status": "rewritten",
     "line": 10
+  },
+  {
+    "rule": "get-by-custom-id",
+    "status": "rewritten",
+    "line": 11
+  },
+  {
+    "rule": "sobject-attr",
+    "status": "rewritten",
+    "line": 11
+  },
+  {
+    "rule": "sobject-attr",
+    "status": "rewritten",
+    "line": 12
+  },
+  {
+    "rule": "upsert-path",
+    "status": "needs-review",
+    "line": 12
+  },
+  {
+    "rule": "unsupported",
+    "status": "todo",
+    "line": 13
   }
 ]

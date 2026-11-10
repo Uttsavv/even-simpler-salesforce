@@ -173,7 +173,9 @@ Each finding has a rule id. Rule ids are stable: new rules can come, but ids nev
 + lead = await sf.sobject("Lead").get(lead_id)
 ```
 
-The codemod rewrites method references such as `fn = sf.Lead.create` in the same way.
+The codemod rewrites method references such as `fn = sf.Lead.create` in the same way. A
+reference to `get_by_custom_id` becomes `get_by_external_id`. References to `create` and `upsert`
+need review, because the codemod can't see their calls.
 
 An assignment to a method, such as `sf.Lead.create = fake` for monkeypatching, gets a TODO.
 `sobject()` returns a new object each time, so the patch would not stick.

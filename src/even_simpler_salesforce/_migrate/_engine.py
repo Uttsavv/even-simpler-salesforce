@@ -159,6 +159,15 @@ NO_EQUIVALENT = {
     "describe_layout": "describe_layout() has no 0.1 method; use "
     'sf.request("GET", "sobjects/<Obj>/describe/layouts/<recordTypeId>")',
 }
+#: Method references whose calls the tool can't see: (rule, review message).
+REF_REVIEW = {
+    "create": ("create-return", "create() now returns the id (str), not a dict; check the callers"),
+    "upsert": (
+        "upsert-path",
+        'upsert() now takes the field and value separately: upsert("Ext__c", value, data); '
+        "check the callers",
+    ),
+}
 #: Keywords of simple-salesforce per-object calls with no equivalent here.
 UNKNOWN_KEYWORDS = frozenset({"headers", "raw_response"})
 SUB_RULES = frozenset({"create-return", "upsert-path", "get-by-custom-id", "return-value", "not-a-client"})
@@ -870,6 +879,9 @@ class _Transformer(cst.CSTTransformer):
         if conf is None:
             return updated
         new = updated.with_changes(value=_sobject_call(cast(cst.Attribute, updated.value).value, self.s(obj)))
+        method = original.attr.value
+        if method == "get_by_custom_id" and not self.is_store(original):
+            new = new.with_changes(attr=cst.Name("get_by_external_id"))
         if mock:
             if not self.enabled("mock-sobject"):
                 return updated
@@ -887,9 +899,16 @@ class _Transformer(cst.CSTTransformer):
                     original,
                 )
             return updated
-        if conf != "yes" or not self.enabled("sobject-attr"):
+        if conf != "yes" or not self.enabled("sobject-attr") or self.ignored("sobject-attr"):
+            return updated
+        if method in NO_EQUIVALENT:
+            self.record("unsupported", "todo", NO_EQUIVALENT[method].replace("<Obj>", obj), original)
             return updated
         self.record("sobject-attr", "rewritten", "method reference through sobject()", original, new)
+        if method == "get_by_custom_id":
+            self.record("get-by-custom-id", "rewritten", "get_by_custom_id → get_by_external_id", original)
+        elif method in REF_REVIEW:
+            self.record(REF_REVIEW[method][0], "needs-review", REF_REVIEW[method][1], original)
         return new
 
     def _is_mock_use(self, node: cst.Attribute, parent: cst.CSTNode | None) -> bool:
