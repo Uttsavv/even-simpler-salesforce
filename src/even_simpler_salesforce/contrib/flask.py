@@ -23,7 +23,13 @@ import contextlib
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
 
-from flask import Flask, Request, Response, current_app, g, jsonify, request
+try:
+    from flask import Flask, Request, Response, current_app, g, jsonify, request
+except ImportError as exc:
+    raise ImportError(
+        "even_simpler_salesforce.contrib.flask needs the [flask] extra: "
+        'pip install "even-simpler-salesforce[flask]"'
+    ) from exc
 
 from .._sync.client import Salesforce as SyncSalesforce
 from ..observability.summary import Summary, capture

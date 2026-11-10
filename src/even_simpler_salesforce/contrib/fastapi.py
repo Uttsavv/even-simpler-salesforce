@@ -19,8 +19,14 @@ from collections.abc import AsyncIterator, Awaitable, Callable, MutableMapping
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any, cast
 
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+try:
+    from fastapi import FastAPI, Request
+    from fastapi.responses import JSONResponse
+except ImportError as exc:
+    raise ImportError(
+        "even_simpler_salesforce.contrib.fastapi needs the [fastapi] extra: "
+        'pip install "even-simpler-salesforce[fastapi]"'
+    ) from exc
 
 from .._async.client import AsyncSalesforce
 from ..observability.summary import capture
