@@ -23,5 +23,10 @@
     "rule": "sobject-attr",
     "status": "todo",
     "line": 9
+  },
+  {
+    "rule": "query-result",
+    "status": "rewritten",
+    "line": 10
   }
 ]

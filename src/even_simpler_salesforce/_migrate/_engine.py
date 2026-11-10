@@ -326,8 +326,27 @@ class _Collector(cst.CSTVisitor):
                 self.format_soql_names.add(local)
 
     def _is_client_type(self, node: cst.BaseExpression) -> bool:
-        names = _annotation_names(node)
-        return bool(names & (self.client_types | CLIENT_TYPES))
+        """``node`` names a simple-salesforce client type: a bare name imported from
+        simple-salesforce, or ``<simple_salesforce alias>.[...].Salesforce``. A bare
+        ``Salesforce`` that wasn't imported from there (``esf.Salesforce``) doesn't count."""
+        attrs = {id(a.attr) for a in m.findall(node, m.Attribute()) if isinstance(a, cst.Attribute)}
+        for n in m.findall(node, m.Name() | m.Attribute()):
+            if isinstance(n, cst.Attribute):
+                if n.attr.value in CLIENT_TYPES and _root_name(n.value) in self.sf_module_aliases:
+                    return True
+            elif isinstance(n, cst.Name) and id(n) not in attrs and n.value in self.client_types:
+                return True
+        for s in m.findall(node, m.SimpleString()):  # "AsyncSalesforce" / "ss.Salesforce"
+            v = _string_value(cast(cst.SimpleString, s))
+            if not v:
+                continue
+            try:
+                parsed = cst.parse_expression(v.strip())
+            except Exception:  # not an expression: not a type
+                continue
+            if not m.findall(parsed, m.SimpleString()) and self._is_client_type(parsed):
+                return True
+        return False
 
     def _is_client_value(self, value: cst.BaseExpression) -> bool:
         if isinstance(value, cst.Await):
@@ -956,19 +975,63 @@ class _Transformer(cst.CSTTransformer):
         if method == "apexecute" and self.enabled("apexecute") and not self.ignored("apexecute"):
             return self._apexecute(original_node, updated_node)
         if method in ("query", "query_iter") and self.confirm(target) == "yes":  # "query" is a generic name
+            if self._starred(original_node, "query-result"):
+                return updated_node
             self._query_result(original_node)
-            args = list(updated_node.args)
-            if (
-                method == "query"
-                and len(args) >= 2
-                and args[1].keyword is None
-                and isinstance(args[1].value, cst.Name)
-                and args[1].value.value in ("True", "False")
-            ):
-                # simple-salesforce: query(q, True) meant include_deleted; here positional values fill {}
-                args[1] = args[1].with_changes(keyword=cst.Name("include_deleted"), equal=_eq())
-            return self._format_soql_arg(original_node, updated_node.with_changes(args=args))
+            updated_node = self._query_positional(original_node, updated_node)
+            return self._format_soql_arg(original_node, updated_node)
         return updated_node
+
+    def _starred(self, call: cst.Call, rule: str) -> bool:
+        """``*args`` / ``**kwargs`` hide which argument is which: mark the call and skip it."""
+        if not any(a.star for a in call.args):
+            return False
+        if self.enabled(rule) and not self.ignored(rule):
+            self.record(rule, "todo", "*args / **kwargs: rewrite this call by hand", call)
+        return True
+
+    def _query_positional(self, original: cst.Call, updated: cst.Call) -> cst.Call:
+        """simple-salesforce ``query(q, flag)``: the second positional argument is include_deleted.
+
+        Here positional values after the query fill ``{}`` placeholders, so a literal query with
+        as many ``{}`` as values is already in the new form and stays as it is.
+        """
+        method = cast(cst.Attribute, original.func).attr.value
+        positional = [a for a in original.args if a.keyword is None]
+        if method != "query" or len(positional) < 2 or not self.enabled("query-result"):
+            return updated
+        if self.ignored("query-result"):
+            return updated
+        first = positional[0].value
+        tmpl = _string_value(first)
+        if tmpl is not None and len(_PLACEHOLDER.findall(tmpl)) == len(positional) - 1:
+            return updated  # query("... = {}", value): the new form
+        formatted = isinstance(first, cst.Call) and _last_segment(first.func) in self.facts.format_soql_names
+        no_values = formatted or (tmpl is not None and not _PLACEHOLDER.findall(tmpl))
+        flag = positional[1].value
+        is_bool = isinstance(flag, cst.Name) and flag.value in ("True", "False")
+        if len(positional) == 2 and (no_values or is_bool):
+            idx = list(original.args).index(positional[1])
+            args = list(updated.args)
+            args[idx] = args[idx].with_changes(keyword=cst.Name("include_deleted"), equal=_eq())
+            new = updated.with_changes(args=args)
+            status: Status = "rewritten" if no_values else "needs-review"
+            self.record(
+                "query-result",
+                status,
+                "query(q, flag): include_deleted is a keyword argument now",
+                original,
+                new,
+            )
+            return new
+        self.record(
+            "query-result",
+            "todo",
+            "query(q, x) passed include_deleted positionally; positional values now fill {} "
+            "placeholders, so write include_deleted=x",
+            original,
+        )
+        return updated
 
     def _has_format_soql(self, call: cst.Call) -> bool:
         first = call.args[0].value if call.args else None
@@ -1293,7 +1356,7 @@ class _Transformer(cst.CSTTransformer):
         if not self.enabled("query-all") or self.ignored("query-all"):
             return updated
         conf = self.confirm_distinctive(func.value)
-        if conf is None:
+        if conf is None or self._starred(original, "query-all"):
             return updated
         args = list(updated.args)
         if len(args) >= 2 and args[1].keyword is None:  # include_deleted is the second positional
@@ -1430,7 +1493,7 @@ class _Transformer(cst.CSTTransformer):
     def _restful(self, original: cst.Call, updated: cst.Call) -> Any:
         func = cast(cst.Attribute, original.func)
         conf = self.confirm_distinctive(func.value)
-        if conf is None:
+        if conf is None or self._starred(original, "restful"):
             return updated
         args = list(updated.args)
         positional = [a for a in args if a.keyword is None]
@@ -1461,7 +1524,7 @@ class _Transformer(cst.CSTTransformer):
     def _apexecute(self, original: cst.Call, updated: cst.Call) -> Any:
         func = cast(cst.Attribute, original.func)
         conf = self.confirm_distinctive(func.value)
-        if conf is None:
+        if conf is None or self._starred(original, "apexecute"):
             return updated
         args = list(updated.args)
         positional = [a for a in args if a.keyword is None]

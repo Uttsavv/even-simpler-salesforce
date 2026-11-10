@@ -1,0 +1,52 @@
+[
+  {
+    "rule": "unsupported",
+    "status": "todo",
+    "line": 1
+  },
+  {
+    "rule": "query-result",
+    "status": "rewritten",
+    "line": 5
+  },
+  {
+    "rule": "query-result",
+    "status": "needs-review",
+    "line": 6
+  },
+  {
+    "rule": "query-result",
+    "status": "todo",
+    "line": 7
+  },
+  {
+    "rule": "query-result",
+    "status": "rewritten",
+    "line": 8
+  },
+  {
+    "rule": "format-soql",
+    "status": "rewritten",
+    "line": 8
+  },
+  {
+    "rule": "restful",
+    "status": "todo",
+    "line": 10
+  },
+  {
+    "rule": "restful",
+    "status": "todo",
+    "line": 11
+  },
+  {
+    "rule": "apexecute",
+    "status": "todo",
+    "line": 12
+  },
+  {
+    "rule": "query-all",
+    "status": "todo",
+    "line": 13
+  }
+]
