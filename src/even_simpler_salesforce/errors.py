@@ -24,6 +24,8 @@ __all__ = [
     "ConnectError",
     "DuplicateDetected",
     "ErrorDetail",
+    "EventPublishFailed",
+    "EventPublishUnavailable",
     "FlowFailed",
     "Forbidden",
     "Gone",
@@ -372,6 +374,20 @@ class FlowFailed(RecordError):
 
 class StorageLimitExceeded(RecordError):
     """``STORAGE_LIMIT_EXCEEDED``."""
+
+
+class EventPublishFailed(RecordError):
+    """Salesforce rejected a platform event publish (``EventBus`` error).
+
+    ``error_code`` tells you why, for example ``LIMIT_EXCEEDED`` (the hourly publishing
+    allocation is used up) or ``PLATFORM_EVENT_PUBLISH_FAILED``.
+    """
+
+
+class EventPublishUnavailable(EventPublishFailed):
+    """``PLATFORM_EVENT_PUBLISHING_UNAVAILABLE``: publishing is down for a moment (retryable)."""
+
+    default_retryable = True
 
 
 # --- limits ------------------------------------------------------------------------------

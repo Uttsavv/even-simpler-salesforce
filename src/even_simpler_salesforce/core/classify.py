@@ -10,6 +10,7 @@ from typing import Any
 
 from .. import errors as E
 from .http import RawResponse, RequestSpec, path_template
+from .soap import is_soap_path, parse_fault
 
 __all__ = [
     "CODE_MAP",
@@ -249,6 +250,33 @@ def _as_apex_error(err: E.SalesforceError, body: Any) -> E.SalesforceError:
     )
 
 
+def _soap_error(
+    detail: E.ErrorDetail,
+    resp: RawResponse,
+    error_tags: Mapping[str, type[E.SalesforceError]] | None,
+    raw: bytes,
+    common: dict[str, Any],
+) -> E.SalesforceError:
+    """Typed error for a SOAP fault: a known ``exceptionCode`` gets its class, else ``SoapFault``.
+
+    SOAP faults always arrive as HTTP 500, so the status never picks the class.
+    """
+    code = detail.error_code
+    cls: type[E.SalesforceError] = (CODE_MAP.get(code) if code else None) or E.SoapFault
+    cls, message, tag = _apply_tag(cls, detail.message, error_tags)
+    kw: dict[str, Any] = {}
+    if issubclass(cls, E.SoapFault):
+        kw["fault_code"] = detail.extended.get("fault_code")
+    if issubclass(cls, E.RequestLimitExceeded):
+        kw["retry_after"] = parse_retry_after(resp.headers.get("retry-after"))
+    retryable: bool | None = None
+    if cls is E.ServerError:
+        retryable = code == "SERVER_UNAVAILABLE"
+    return cls(
+        message, error_code=code, errors=(detail,), raw=raw, tag=tag, retryable=retryable, **common, **kw
+    )
+
+
 def classify(
     resp: RawResponse,
     spec: RequestSpec,
@@ -290,6 +318,14 @@ def _classify(
         "request_id": resp.request_id,
     }
     raw = _truncate(resp.content)
+
+    if is_soap_path(spec.path) and resp.content and "xml" in resp.content_type:
+        try:
+            fault = parse_fault(resp.content)
+        except E.UnexpectedResponse:
+            fault = None
+        if fault is not None:
+            return _soap_error(fault, resp, error_tags, raw, common)
 
     body: Any = None
     parsed = False

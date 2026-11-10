@@ -8,12 +8,17 @@ from datetime import datetime
 from typing import Any, Generic, TypeVar
 
 from .core.cursor import Cursor
+from .core.http import check_record_id
 from .errors import ErrorDetail, PartialFailure
 
 __all__ = [
     "ActionResult",
     "BatchResult",
+    "LeadConvert",
+    "LeadConvertResult",
     "Limit",
+    "MergeResult",
+    "PublishResult",
     "QueryPlan",
     "QueryPlanNote",
     "QueryResult",
@@ -220,3 +225,107 @@ class UsageSnapshot:
     projected_exhaustion: datetime | None
     api_bursts_used: int | None = None
     api_bursts_max: int | None = None
+
+
+# --- lead convert, merge, platform events (0.2) ------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class LeadConvert:
+    """One lead to convert with ``sf.leads.convert_many()`` (Partner ``LeadConvert``).
+
+    Attributes:
+        lead_id: The lead to convert.
+        converted_status: A converted ``LeadStatus`` value of the org, e.g. ``"Closed - Converted"``.
+        account_id: Merge into this existing account instead of creating one.
+        contact_id: Merge into this existing contact (needs ``account_id``; not for person accounts).
+        opportunity_name: Name of the new opportunity (default: the company name).
+        do_not_create_opportunity: Don't create an opportunity.
+        owner_id: Owner of the new records (default: the lead owner).
+        send_email: Email the new owner (``sendNotificationEmail``).
+        overwrite_lead_source: Overwrite ``LeadSource`` on an existing contact.
+
+    Raises:
+        ValueError: an id is not a 15- or 18-character Salesforce id, ``converted_status`` is
+            empty, or ``contact_id`` is set without ``account_id``.
+    """
+
+    lead_id: str
+    converted_status: str
+    account_id: str | None = None
+    contact_id: str | None = None
+    opportunity_name: str | None = None
+    do_not_create_opportunity: bool = False
+    owner_id: str | None = None
+    send_email: bool = False
+    overwrite_lead_source: bool = False
+
+    def __post_init__(self) -> None:
+        check_record_id(self.lead_id)
+        for value in (self.account_id, self.contact_id, self.owner_id):
+            if value is not None:
+                check_record_id(value)
+        if not isinstance(self.converted_status, str) or not self.converted_status:  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise ValueError("converted_status must be a non-empty LeadStatus value")
+        if self.contact_id is not None and self.account_id is None:
+            raise ValueError("contact_id needs account_id (the contact's account)")
+
+
+@dataclass(frozen=True, slots=True)
+class LeadConvertResult:
+    """Outcome of one lead conversion (Partner ``LeadConvertResult``).
+
+    Attributes:
+        ok: Whether the lead was converted.
+        lead_id: The converted lead.
+        account_id: The new account, or the one you passed.
+        contact_id: The new contact, or the one you passed.
+        opportunity_id: The new opportunity, or ``None`` when none was created.
+        errors: Why the conversion failed.
+    """
+
+    ok: bool
+    lead_id: str | None = None
+    account_id: str | None = None
+    contact_id: str | None = None
+    opportunity_id: str | None = None
+    errors: tuple[ErrorDetail, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class MergeResult:
+    """Outcome of ``sf.merge()`` (Partner ``MergeResult``).
+
+    Attributes:
+        ok: Whether the records were merged.
+        id: The master record.
+        merged_ids: The records merged into the master and deleted.
+        updated_related_ids: Related records that now point to the master.
+        errors: Why the merge failed.
+    """
+
+    ok: bool
+    id: str | None = None
+    merged_ids: tuple[str, ...] = ()
+    updated_related_ids: tuple[str, ...] = ()
+    errors: tuple[ErrorDetail, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class PublishResult:
+    """Outcome of publishing one platform event.
+
+    ``ok`` means Salesforce queued the event; delivery happens later. Use ``uuid`` to match the
+    event to its ``EventUuid`` on the subscriber side.
+
+    Attributes:
+        ok: Whether Salesforce queued the event.
+        id: The id Salesforce returned for the publish call.
+        uuid: The event's ``EventUuid`` (from the ``OPERATION_ENQUEUED`` entry).
+        errors: Why the publish failed.
+    """
+
+    ok: bool
+    id: str | None = None
+    uuid: str | None = None
+    errors: tuple[ErrorDetail, ...] = ()

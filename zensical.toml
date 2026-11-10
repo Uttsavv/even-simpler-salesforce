@@ -35,6 +35,8 @@ nav = [
     { "Invocable actions" = "guides/actions.md" },
     { "Apex REST" = "guides/apex.md" },
     { "Raw requests" = "guides/requests.md" },
+    { "Lead convert and merge" = "guides/leads.md" },
+    { "Platform events" = "guides/platform-events.md" },
   ] },
   { "In production" = [
     { "Errors" = "errors.md" },

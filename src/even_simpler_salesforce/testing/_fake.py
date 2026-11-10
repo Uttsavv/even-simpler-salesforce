@@ -7,6 +7,7 @@ drift apart. The async facade simply awaits nothing: every method completes sync
 from __future__ import annotations
 
 import builtins
+import copy
 import re
 from collections.abc import AsyncIterator, Callable, Iterable, Iterator, Mapping, Sequence
 from datetime import datetime
@@ -32,9 +33,19 @@ from ..core.limits import LimitInfo
 from ..core.records import apply_model
 from ..core.soql import soql_identifier, soql_values
 from ..errors import MultipleMatches, NotFound, SalesforceError
-from ..models import ActionResult, BatchResult, Limit, QueryPlan, QueryResult, RecordResult, UpsertResult
+from ..models import (
+    ActionResult,
+    BatchResult,
+    Limit,
+    MergeResult,
+    QueryPlan,
+    QueryResult,
+    RecordResult,
+    UpsertResult,
+)
 from ..observability.events import Observer, ObserverHub
 from ..usage import UsageTracker
+from ._fake_org import AsyncFakeLeads, AsyncFakePlatformEvents, FakeLeads, FakePlatformEvents, fake_merge
 from ._state import FakeCall, FakeRequest, FakeState, Match, QueryScript, RowsSpec, Who, _sobject_of
 
 __all__ = [
@@ -267,6 +278,11 @@ class _FakeControls:
     def add_many(self, sobject: str, rows: Iterable[Mapping[str, Any]]) -> list[str]:
         """Seed several records. Returns their ids."""
         return [self._state.seed(sobject, r) for r in rows]
+
+    def published(self, name: str) -> list[dict[str, Any]]:
+        """Copies of the platform events published to ``name`` (``Order_Event__e``), oldest first."""
+        with self._state.lock:
+            return copy.deepcopy(self._state.events.get(name, []))
 
     def records(self, sobject: str) -> list[dict[str, Any]]:
         """Copies of every stored record of ``sobject`` (with ``attributes`` and ``Id``)."""
@@ -922,6 +938,8 @@ class FakeSalesforce(_FakeControls):
         self.auth = FakeAuthApi(self)
         self.actions = FakeActions(self._state, self._who)
         self.apex = FakeApex(self)
+        self.leads = FakeLeads(self._state, self._who)
+        self.platform_events = FakePlatformEvents(self._state, self._who)
 
     @classmethod
     def _view(
@@ -937,6 +955,8 @@ class FakeSalesforce(_FakeControls):
         view.auth = FakeAuthApi(view)
         view.actions = FakeActions(state, who)
         view.apex = FakeApex(view)
+        view.leads = FakeLeads(state, who)
+        view.platform_events = FakePlatformEvents(state, who)
         return view
 
     def __repr__(self) -> str:
@@ -989,6 +1009,10 @@ class FakeSalesforce(_FakeControls):
     def sobject(self, name: str) -> FakeSObject:
         """Operations on one sObject type."""
         return FakeSObject(self._state, self._who, name)
+
+    def merge(self, master_id: str, duplicate_ids: Sequence[str], *, sobject: str) -> MergeResult:
+        """Delete the duplicates and point fields that held their ids at the master."""
+        return fake_merge(self._state, self._who, master_id, duplicate_ids, sobject)
 
     def describe_global(self, *, cached: bool = True) -> dict[str, Any]:
         """Lists every sObject the fake knows about."""
@@ -1516,6 +1540,8 @@ class AsyncFakeSalesforce(_FakeControls):
         self.auth = AsyncFakeAuthApi(inner.auth)
         self.actions = AsyncFakeActions(inner.actions)
         self.apex = AsyncFakeApex(inner.apex)
+        self.leads = AsyncFakeLeads(inner.leads)
+        self.platform_events = AsyncFakePlatformEvents(inner.platform_events)
 
     @property
     def instance_url(self) -> str:
@@ -1569,6 +1595,10 @@ class AsyncFakeSalesforce(_FakeControls):
     def sobject(self, name: str) -> AsyncFakeSObject:
         """Operations on one sObject type."""
         return AsyncFakeSObject(self._sync.sobject(name))
+
+    async def merge(self, master_id: str, duplicate_ids: Sequence[str], *, sobject: str) -> MergeResult:
+        """See :meth:`FakeSalesforce.merge`."""
+        return self._sync.merge(master_id, duplicate_ids, sobject=sobject)
 
     async def describe_global(self, *, cached: bool = True) -> dict[str, Any]:
         """See :meth:`FakeSalesforce.describe_global`."""

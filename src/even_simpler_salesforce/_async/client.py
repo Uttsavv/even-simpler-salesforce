@@ -24,7 +24,7 @@ from ..core.http import RawResponse, RequestSpec, check_sobject
 from ..core.records import apply_model, parse_query_plans
 from ..core.soql import soql_values
 from ..errors import MultipleMatches, NotFound, SalesforceError, UnexpectedResponse
-from ..models import Limit, QueryPlan, QueryResult
+from ..models import Limit, MergeResult, QueryPlan, QueryResult
 from ..observability.debug import DebugPrinter, debug_level
 from ..observability.events import Observer, ObserverHub
 from ..usage import UsageTracker
@@ -33,6 +33,9 @@ from .api.actions import AsyncActions
 from .api.apex import AsyncApex
 from .api.auth_api import AsyncAuthApi
 from .api.collections import AsyncCollections
+from .api.leads import AsyncLeads
+from .api.platform_events import AsyncPlatformEvents
+from .api.soap import merge as _merge
 from .api.sobject import AsyncSObject
 from .auth_runtime import AsyncAuthRuntime
 from .token_store import AsyncInMemoryTokenStore
@@ -193,6 +196,8 @@ class AsyncSalesforce:
         self.auth = AsyncAuthApi(self)
         self.actions = AsyncActions(self)
         self.apex = AsyncApex(self)
+        self.leads = AsyncLeads(self)
+        self.platform_events = AsyncPlatformEvents(self)
 
     @classmethod
     def _child(
@@ -302,6 +307,25 @@ class AsyncSalesforce:
     def sobject(self, name: str) -> AsyncSObject:
         """Operations on one sObject type, e.g. ``sf.sobject("Lead").get(id)``."""
         return AsyncSObject(self, name)
+
+    async def merge(self, master_id: str, duplicate_ids: Sequence[str], *, sobject: str) -> MergeResult:
+        """Merge up to two records into a master record (SOAP ``merge``; REST has none).
+
+        Salesforce deletes the merged records and moves their related records to the master.
+
+        Args:
+            master_id: The record to keep.
+            duplicate_ids: One or two records of the same object to merge into the master.
+            sobject: ``"Lead"``, ``"Contact"`` or ``"Account"``.
+
+        Returns:
+            The master id, the merged ids and the related records that moved.
+
+        Raises:
+            ValueError: unsupported ``sobject``, malformed ids, or not 1 to 2 distinct duplicates.
+            RecordError: Salesforce refused the merge; the subclass follows the status code.
+        """
+        return await _merge(self, master_id, duplicate_ids, sobject)
 
     async def describe_global(self, *, cached: bool = True) -> dict[str, Any]:
         """``GET sobjects``: list of sObjects, served from the describe cache when fresh."""

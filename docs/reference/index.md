@@ -5,8 +5,8 @@ every name in `even_simpler_salesforce.__all__`, plus the documented submodules
 `even_simpler_salesforce.testing`, `even_simpler_salesforce.observability`,
 `even_simpler_salesforce.contrib.fastapi` and `even_simpler_salesforce.contrib.flask`. Classes shown
 here under private module paths (the objects returned by `sf.sobject()`, `sf.collections`,
-`sf.auth`, `sf.actions` and `sf.apex`) are public through those attributes, not through their
-import path.
+`sf.auth`, `sf.actions`, `sf.apex`, `sf.leads` and `sf.platform_events`) are public through those
+attributes, not through their import path.
 
 `Salesforce` is generated from `AsyncSalesforce` and has the same methods without `async`, so
 only the async classes are shown in full.
@@ -33,6 +33,10 @@ The reasons behind the design are written down in the
 ::: even_simpler_salesforce._async.api.apex.AsyncApex
 
 ::: even_simpler_salesforce.Action
+
+::: even_simpler_salesforce._async.api.leads.AsyncLeads
+
+::: even_simpler_salesforce._async.api.platform_events.AsyncPlatformEvents
 
 ## Login flows and tokens
 
@@ -85,6 +89,14 @@ The reasons behind the design are written down in the
 ::: even_simpler_salesforce.ActionResult
 
 ::: even_simpler_salesforce.UpsertResult
+
+::: even_simpler_salesforce.LeadConvert
+
+::: even_simpler_salesforce.LeadConvertResult
+
+::: even_simpler_salesforce.MergeResult
+
+::: even_simpler_salesforce.PublishResult
 
 ::: even_simpler_salesforce.QueryPlan
 

@@ -44,6 +44,8 @@ def test_fake_matches_real_surface(real_cls: Any, fake_cls: Any) -> None:
     assert _compare(real.auth, fake.auth) == []
     assert _compare(real.actions, fake.actions) == []
     assert _compare(real.apex, fake.apex) == []
+    assert _compare(real.leads, fake.leads) == []
+    assert _compare(real.platform_events, fake.platform_events) == []
 
 
 def test_positional_values_and_single_row_helpers() -> None:

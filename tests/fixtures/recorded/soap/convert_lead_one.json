@@ -1,0 +1,5 @@
+{
+  "synthetic": true,
+  "source": "hand-written from the SOAP API Developer Guide, convertLead() and LeadConvertResult: https://developer.salesforce.com/docs/atlas.en-us.api.meta/api/sforce_api_calls_convertlead.htm and https://developer.salesforce.com/docs/atlas.en-us.api.meta/api/sforce_api_calls_convertlead_leadconvertresult.htm",
+  "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns=\"urn:partner.soap.sforce.com\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:sf=\"urn:fault.partner.soap.sforce.com\"><soapenv:Body><convertLeadResponse><result><accountId>001xx0000000001AAA</accountId><contactId>003xx0000000001AAA</contactId><leadId>00Qxx0000000001AAA</leadId><opportunityId xsi:nil=\"true\"/><success>true</success></result></convertLeadResponse></soapenv:Body></soapenv:Envelope>"
+}

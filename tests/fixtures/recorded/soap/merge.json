@@ -1,0 +1,5 @@
+{
+  "synthetic": true,
+  "source": "hand-written from the SOAP API Developer Guide, merge() and MergeResult: https://developer.salesforce.com/docs/atlas.en-us.api.meta/api/sforce_api_calls_merge.htm",
+  "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns=\"urn:partner.soap.sforce.com\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:sf=\"urn:fault.partner.soap.sforce.com\"><soapenv:Body><mergeResponse><result><id>001xx0000000001AAA</id><mergedRecordIds>001xx0000000002AAA</mergedRecordIds><mergedRecordIds>001xx0000000003AAA</mergedRecordIds><success>true</success><updatedRelatedIds>003xx0000000001AAA</updatedRelatedIds></result></mergeResponse></soapenv:Body></soapenv:Envelope>"
+}
