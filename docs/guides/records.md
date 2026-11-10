@@ -237,7 +237,7 @@ The client encodes values as JSON. The rules are the same with orjson and the st
 - The client sends a `Decimal` as an exact JSON number, never through `float`.
 - NaN and ±Infinity raise `ValueError` before the client sends anything. So a field never
   becomes blank by accident.
-- `datetime` and `date` become ISO 8601 strings.
+- `datetime`, `date` and `time` become ISO 8601 strings from `isoformat()`.
 - `set`, `frozenset` and `tuple` become arrays.
 
 ```python
