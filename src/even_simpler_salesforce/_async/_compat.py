@@ -4,10 +4,19 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from typing import Any, TypeVar
 
-__all__ = ["Lock", "Periodic", "Semaphore", "gather_settled", "nullcontext", "sleep"]
+__all__ = [
+    "Lock",
+    "Periodic",
+    "Semaphore",
+    "gather_settled",
+    "iter_bytes",
+    "nullcontext",
+    "sleep",
+    "to_thread",
+]
 
 T = TypeVar("T")
 
@@ -70,3 +79,13 @@ class Periodic:
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await task
+
+
+def iter_bytes(response: Any) -> AsyncIterator[bytes]:
+    """Decoded body chunks of a streamed ``httpx.Response``."""
+    return response.aiter_bytes()
+
+
+async def to_thread(fn: Callable[..., T], *args: Any) -> T:
+    """Run blocking ``fn`` (a file read) off the event loop."""
+    return await asyncio.to_thread(fn, *args)

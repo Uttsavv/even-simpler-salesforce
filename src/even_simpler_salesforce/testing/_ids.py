@@ -20,6 +20,7 @@ KNOWN_PREFIXES: dict[str, str] = {
     "RecordType": "012",
     "ContentVersion": "068",
     "ContentDocument": "069",
+    "ContentDocumentLink": "06A",
     "Organization": "00D",
     "UserRole": "00E",
     "Group": "00G",

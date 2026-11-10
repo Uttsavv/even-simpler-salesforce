@@ -28,7 +28,8 @@ from ..core.actions import (
     build_action_result,
 )
 from ..core.cursor import Cursor
-from ..core.http import check_instance_url, check_sobject
+from ..core.files import safe_filename
+from ..core.http import check_instance_url, check_record_id, check_sobject
 from ..core.limits import LimitInfo
 from ..core.records import apply_model
 from ..core.soql import soql_identifier, soql_values
@@ -46,6 +47,7 @@ from ..models import (
 from ..observability.events import Observer, ObserverHub
 from ..usage import UsageTracker
 from ._fake_org import AsyncFakeLeads, AsyncFakePlatformEvents, FakeLeads, FakePlatformEvents, fake_merge
+from ._files import AsyncFakeFiles, FakeFiles
 from ._state import FakeCall, FakeRequest, FakeState, Match, QueryScript, RowsSpec, Who, _sobject_of
 
 __all__ = [
@@ -291,6 +293,23 @@ class _FakeControls:
     def record(self, sobject: str, record_id: str) -> dict[str, Any] | None:
         """A copy of one stored record, or ``None``."""
         return self._state.snapshot_record(sobject, record_id)
+
+    def add_file(
+        self, data: bytes, *, filename: str, title: str | None = None, link_to: str | None = None
+    ) -> str:
+        """Seed one file (ContentDocument, ContentVersion and, with ``link_to``, a link).
+
+        Does not record a call. Returns the ContentVersion id.
+        """
+        with self._state.lock:
+            return FakeFiles(self._state, self._who)._store_file(  # pyright: ignore[reportPrivateUsage]
+                bytes(data), safe_filename(filename), title, link_to and check_record_id(link_to), None, None
+            )
+
+    def file_content(self, content_version_id: str) -> bytes | None:
+        """The bytes stored for a ContentVersion (uploaded or seeded), or ``None``."""
+        with self._state.lock:
+            return self._state.blobs.get(content_version_id[:15])
 
     def new_id(self, sobject: str) -> str:
         """A fresh, valid-looking 18-character id with ``sobject``'s key prefix."""
@@ -940,6 +959,7 @@ class FakeSalesforce(_FakeControls):
         self.apex = FakeApex(self)
         self.leads = FakeLeads(self._state, self._who)
         self.platform_events = FakePlatformEvents(self._state, self._who)
+        self.files = FakeFiles(self._state, self._who)
 
     @classmethod
     def _view(
@@ -957,6 +977,7 @@ class FakeSalesforce(_FakeControls):
         view.apex = FakeApex(view)
         view.leads = FakeLeads(state, who)
         view.platform_events = FakePlatformEvents(state, who)
+        view.files = FakeFiles(state, who)
         return view
 
     def __repr__(self) -> str:
@@ -1542,6 +1563,7 @@ class AsyncFakeSalesforce(_FakeControls):
         self.apex = AsyncFakeApex(inner.apex)
         self.leads = AsyncFakeLeads(inner.leads)
         self.platform_events = AsyncFakePlatformEvents(inner.platform_events)
+        self.files = AsyncFakeFiles(inner.files)
 
     @property
     def instance_url(self) -> str:

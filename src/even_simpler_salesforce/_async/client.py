@@ -33,6 +33,7 @@ from .api.actions import AsyncActions
 from .api.apex import AsyncApex
 from .api.auth_api import AsyncAuthApi
 from .api.collections import AsyncCollections
+from .api.files import AsyncFiles
 from .api.leads import AsyncLeads
 from .api.platform_events import AsyncPlatformEvents
 from .api.soap import merge as _merge
@@ -198,6 +199,7 @@ class AsyncSalesforce:
         self.apex = AsyncApex(self)
         self.leads = AsyncLeads(self)
         self.platform_events = AsyncPlatformEvents(self)
+        self.files = AsyncFiles(self)
 
     @classmethod
     def _child(

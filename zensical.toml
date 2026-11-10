@@ -34,6 +34,7 @@ nav = [
     { "Collections" = "guides/collections.md" },
     { "Invocable actions" = "guides/actions.md" },
     { "Apex REST" = "guides/apex.md" },
+    { "Files" = "guides/files.md" },
     { "Raw requests" = "guides/requests.md" },
     { "Lead convert and merge" = "guides/leads.md" },
     { "Platform events" = "guides/platform-events.md" },

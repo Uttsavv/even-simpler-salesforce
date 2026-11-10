@@ -44,6 +44,7 @@ implementation. They have the methods of the real clients for these areas:
 - query and search
 - Collections
 - lead convert, merge and platform events
+- [Files](guides/files.md)
 - `request`, `limits` and `usage`
 - `with_auth` and `tagged`
 
@@ -72,6 +73,8 @@ The Collections methods follow the same rules.
 | `fake.set_describe(sobject, describe)` | what `describe()` returns; otherwise the fake makes up a minimal one |
 | `fake.set_limits({...})` | what `limits()` returns |
 | `fake.set_api_usage(used, max)` | pretend the fake saw a `Sforce-Limit-Info` header; drives budgets |
+| `fake.add_file(data, filename=..., link_to=...)` | seed a file without recording a call; returns the ContentVersion id |
+| `fake.file_content(version_id)` | the bytes stored for a file, or `None` |
 
 The fake doesn't run validation rules, triggers or required-field checks. To simulate them, use
 [`reject()` or `fail_next()`](#inject-errors).

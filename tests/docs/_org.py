@@ -12,9 +12,14 @@ The org enforces a few rules so error examples have something to hit:
 - a ``Lead`` with ``Country`` but no ``Street`` fails the validation rule
   ``[ADDR_REQUIRED] Street is required when Country is set`` (``FIELD_CUSTOM_VALIDATION_EXCEPTION``);
 - custom fields other than ``External_Id__c`` / ``Score__c`` don't exist (``INVALID_FIELD``);
-- objects other than Lead, Account, Contact, Opportunity and User don't exist (``INVALID_TYPE``);
+- objects other than Lead, Account, Contact, Opportunity, User and the Files objects
+  (ContentVersion, ContentDocument, ContentDocumentLink, Attachment) don't exist (``INVALID_TYPE``);
 - platform events (``*__e``) are accepted and kept in :attr:`FakeOrg.events`;
 - the Partner SOAP endpoint answers ``convertLead`` and ``merge``.
+
+Files: a multipart ``POST sobjects/ContentVersion`` stores the bytes and creates the
+ContentDocument (plus a ContentDocumentLink for ``FirstPublishLocationId``);
+``GET .../VersionData`` and ``GET sobjects/Attachment/{id}/Body`` return the bytes.
 """
 
 from __future__ import annotations
@@ -38,9 +43,20 @@ USER_ID = "005xx0000000001AAA"
 ID_URL = f"https://login.salesforce.com/id/{ORG_ID}/{USER_ID}"
 API_MAX = 100_000
 
-PREFIXES = {"Lead": "00Q", "Account": "001", "Contact": "003", "Opportunity": "006", "User": "005"}
+PREFIXES = {
+    "Lead": "00Q",
+    "Account": "001",
+    "Contact": "003",
+    "Opportunity": "006",
+    "User": "005",
+    "ContentVersion": "068",
+    "ContentDocument": "069",
+    "ContentDocumentLink": "06A",
+    "Attachment": "00P",
+}
 CUSTOM_FIELDS = {"External_Id__c", "Score__c"}
 CHILD_RELATIONSHIPS = {"Contacts": ("Contact", "AccountId"), "Opportunities": ("Opportunity", "AccountId")}
+PARENT_RELATIONSHIPS = {"ContentDocument": ("ContentDocument", "ContentDocumentId")}
 CHILD_PAGE = 2  # tiny on purpose, so ``expand_children`` has something to follow
 
 _SOAP = re.compile(r"^/services/Soap/u/\d+\.\d$")
@@ -122,6 +138,7 @@ class FakeOrg:
         self.requests: list[httpx.Request] = []
         self.describe_modified = _now() - timedelta(days=3)
         self.events: list[tuple[str, dict[str, Any]]] = []
+        self.blobs: dict[str, bytes] = {}
         self._seed()
 
     # --- data ------------------------------------------------------------------------
@@ -167,6 +184,10 @@ class FakeOrg:
                     "External_Id__c": f"ext-{last.lower()}",
                 },
             )
+        self.upload("price-list.pdf", b"%PDF-1.7 price list", accounts[0]["Id"])
+        self.blobs[
+            self._store("Attachment", {"Name": "contract.pdf", "ParentId": accounts[0]["Id"]})["Id"]
+        ] = b"%PDF-1.4 legacy attachment"
         for i in range(447):
             self._store(
                 "Lead",
@@ -208,7 +229,67 @@ class FakeOrg:
         if sobject not in self.records:
             raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
 
+    def upload(
+        self, path_on_client: str, data: bytes, first_publish: str | None, title: str | None = None
+    ) -> str:
+        ext = path_on_client.rsplit(".", 1)[1].lower() if "." in path_on_client else None
+        info = {"Title": title or path_on_client, "FileExtension": ext, "ContentSize": len(data)}
+        doc = self._store("ContentDocument", info)
+        version = self._store(
+            "ContentVersion", {**info, "PathOnClient": path_on_client, "ContentDocumentId": doc["Id"]}
+        )
+        doc["LatestPublishedVersionId"] = version["Id"]
+        self.blobs[version["Id"]] = data
+        if first_publish:
+            self.link(doc["Id"], first_publish, "I", "AllUsers")
+        return version["Id"]
+
+    def link(self, doc_id: str, record_id: str, share_type: str, visibility: str | None) -> str:
+        if doc_id not in self.records["ContentDocument"]:
+            raise Rejected("INVALID_CROSS_REFERENCE_KEY", "invalid cross reference id", ["ContentDocumentId"])
+        rec = self._store(
+            "ContentDocumentLink",
+            {
+                "ContentDocumentId": doc_id,
+                "LinkedEntityId": record_id,
+                "ShareType": share_type,
+                "Visibility": visibility or "AllUsers",
+            },
+        )
+        return rec["Id"]
+
+    def _multipart(self, request: httpx.Request) -> httpx.Response:
+        """A ContentVersion upload: ``entity_content`` JSON plus a ``VersionData`` file part."""
+        m = re.search(r'boundary="?([^";]+)"?', request.headers.get("content-type", ""))
+        if not m:
+            raise Rejected("INVALID_MULTIPART_REQUEST", "multipart body expected")
+        entity: dict[str, Any] = {}
+        data = b""
+        for part in request.content.split(b"--" + m.group(1).encode())[1:-1]:
+            head, _, body = part.removeprefix(b"\r\n").partition(b"\r\n\r\n")
+            body = body.removesuffix(b"\r\n")
+            if b'name="entity_content"' in head:
+                entity = json.loads(body)
+            elif b'name="VersionData"' in head:
+                data = body
+        if not entity.get("PathOnClient"):
+            raise Rejected(
+                "REQUIRED_FIELD_MISSING", "Required fields are missing: [PathOnClient]", ["PathOnClient"]
+            )
+        rid = self.upload(
+            entity["PathOnClient"], data, entity.get("FirstPublishLocationId"), entity.get("Title")
+        )
+        return self._json({"id": rid, "success": True, "errors": []}, 201)
+
     def create(self, sobject: str, data: dict[str, Any]) -> dict[str, Any]:
+        if sobject == "ContentDocumentLink":
+            rid = self.link(
+                data["ContentDocumentId"],
+                data["LinkedEntityId"],
+                data.get("ShareType", "V"),
+                data.get("Visibility"),
+            )
+            return self.records[sobject][rid]
         self._validate(sobject, data, creating=True)
         return self._store(sobject, data)
 
@@ -273,7 +354,16 @@ class FakeOrg:
                 ]
                 out[rel] = self._page(kids, CHILD_PAGE, version) if kids else None
             elif "." in f:
-                out[f.split(".", 1)[0]] = None
+                rel, field = f.split(".", 1)
+                parent_obj, fk = PARENT_RELATIONSHIPS.get(rel, ("", ""))
+                parent = self.records.get(parent_obj, {}).get(str(rec.get(fk)))
+                if parent is None:
+                    out[rel] = None
+                else:
+                    url = f"/services/data/v{version}/sobjects/{parent_obj}/{parent['Id']}"
+                    out.setdefault(rel, {"attributes": {"type": parent_obj, "url": url}})[field] = parent.get(
+                        field
+                    )
             else:
                 out[f] = _value(sobject, rec, f)
         return out
@@ -516,6 +606,8 @@ class FakeOrg:
         sobject = parts[0]
         self._known(sobject)
         if len(parts) == 1:
+            if method == "POST" and sobject == "ContentVersion":
+                return self._multipart(request)
             if method == "POST":
                 rec = self.create(sobject, self._body(request) or {})
                 return self._json({"id": rec["Id"], "success": True, "errors": []}, 201)
@@ -552,6 +644,21 @@ class FakeOrg:
                     "earliestDateAvailable": params.get("start"),
                     "latestDateCovered": params.get("end"),
                 }
+            )
+        if len(parts) == 3 and (sobject, parts[2]) in (
+            ("ContentVersion", "VersionData"),
+            ("Attachment", "Body"),
+        ):
+            blob = self.blobs.get(parts[1])
+            if blob is None:
+                raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+            return httpx.Response(
+                200,
+                headers={
+                    "content-type": "application/octet-stream",
+                    "sforce-limit-info": f"api-usage={self.api_used}/{API_MAX}",
+                },
+                content=blob,
             )
         if len(parts) == 3:  # external id
             field, value = parts[1], parts[2]

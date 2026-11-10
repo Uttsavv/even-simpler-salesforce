@@ -30,6 +30,7 @@ from ._fake import (
     FakeSObject,
 )
 from ._fake_org import AsyncFakeLeads, AsyncFakePlatformEvents, FakeLeads, FakePlatformEvents
+from ._files import AsyncFakeFiles, AsyncFakeFileStream, FakeFiles, FakeFileStream
 from ._ids import key_prefix
 from ._state import FakeCall, FakeRequest, QueryScript, UnscriptedCall
 from .recorder import RecordingTransport, Redactor, ReplayMismatch, record, replay
@@ -44,6 +45,8 @@ __all__ = [
     "AsyncFakeCollections",
     "AsyncFakeLeads",
     "AsyncFakePlatformEvents",
+    "AsyncFakeFileStream",
+    "AsyncFakeFiles",
     "AsyncFakeSObject",
     "AsyncFakeSalesforce",
     "AsyncTokenStoreContract",
@@ -53,6 +56,8 @@ __all__ = [
     "FakeCollections",
     "FakeLeads",
     "FakePlatformEvents",
+    "FakeFileStream",
+    "FakeFiles",
     "FakeRequest",
     "FakeSObject",
     "FakeSalesforce",

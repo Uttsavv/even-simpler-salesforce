@@ -10,8 +10,10 @@
 
 from ._async.client import AsyncSalesforce
 from ._async.token_store import AsyncInMemoryTokenStore
+from ._async.transport import AsyncFileStream
 from ._sync.client import Salesforce
 from ._sync.token_store import InMemoryTokenStore
+from ._sync.transport import FileStream
 from ._version import __version__
 from .auth import (
     AsyncTokenStore,
@@ -81,6 +83,7 @@ from .errors import (
 from .models import (
     ActionResult,
     BatchResult,
+    FileLink,
     LeadConvert,
     LeadConvertResult,
     Limit,
@@ -104,6 +107,7 @@ __all__ = [
     "Action",
     "ActionResult",
     "ApexError",
+    "AsyncFileStream",
     "AsyncInMemoryTokenStore",
     "AsyncSalesforce",
     "AsyncTokenStore",
@@ -126,6 +130,8 @@ __all__ = [
     "Event",
     "EventPublishFailed",
     "EventPublishUnavailable",
+    "FileLink",
+    "FileStream",
     "FlowFailed",
     "Forbidden",
     "Gone",

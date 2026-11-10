@@ -56,7 +56,7 @@ if TYPE_CHECKING:
     from ..auth.token import Token
     from .auth_runtime import AuthRuntime
 
-__all__ = ["DEFAULT_USER_AGENT", "Transport"]
+__all__ = ["DEFAULT_USER_AGENT", "FileStream", "Transport"]
 
 DEFAULT_USER_AGENT = f"even-simpler-salesforce/{__version__}"
 _NEVER_SENT = (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout, httpx.UnsupportedProtocol)
@@ -142,6 +142,75 @@ def _failed_row(item: Any) -> bool:
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+class FileStream:
+    """The body of a file download, read chunk by chunk. You get one from ``sf.files.download()``.
+
+    Iterate over it once to get ``bytes`` chunks. The connection stays open until the
+    ``with`` block of ``sf.files.download()`` ends; the ``sf.request`` event for the
+    download is emitted then, with the number of bytes read.
+
+    Attributes:
+        content_type: ``Content-Type`` of the file, if Salesforce sent one.
+        content_length: Size in bytes from ``Content-Length``, if Salesforce sent one.
+    """
+
+    def __init__(self, response: httpx.Response, spec: RequestSpec) -> None:
+        self._response = response
+        self._spec = spec
+        # Bound by Transport.send to emit the sf.request event; a no-op until then.
+        self._finish: Callable[[BaseException | None, int], None] = lambda error, n: None
+        self._error: BaseException | None = None
+        self._closed = False
+        self.content_type: str | None = response.headers.get("content-type")
+        length = response.headers.get("content-length")
+        self.content_length: int | None = int(length) if length and length.isdigit() else None
+
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__} {self.content_type or 'unknown type'}, {self.content_length} bytes>"
+
+    def __iter__(self) -> Iterator[bytes]:
+        if self._closed:
+            raise RuntimeError("the file stream is closed")
+        spec = self._spec
+        try:
+            for chunk in _compat.iter_bytes(self._response):
+                yield chunk
+        except httpx.TimeoutException as exc:
+            self._error = RequestTimeout(
+                f"timed out reading the file: {type(exc).__name__}",
+                operation=spec.operation,
+                method=spec.method,
+            )
+            raise self._error from exc
+        except httpx.HTTPError as exc:
+            self._error = TransportError(
+                f"transport error reading the file: {exc!r}", operation=spec.operation, method=spec.method
+            )
+            raise self._error from exc
+        except GeneratorExit:  # the caller stopped iterating early: not an error
+            raise
+        except BaseException as exc:
+            self._error = exc
+            raise
+
+    def close(self) -> None:
+        """Close the connection and emit the ``sf.request`` event. Safe to call twice."""
+        if self._closed:
+            return
+        self._closed = True
+        try:
+            self._response.close()
+        finally:
+            self._finish(self._error, self._response.num_bytes_downloaded)
+
+
+def _counted(chunks: Iterator[bytes], total: list[int]) -> Iterator[bytes]:
+    """Pass ``chunks`` through, adding their length to ``total[0]`` (for ``bytes_out``)."""
+    for chunk in chunks:
+        total[0] += len(chunk)
+        yield chunk
 
 
 class Transport:
@@ -357,6 +426,9 @@ class Transport:
                             raw.json()  # raises InvalidJSONResponse inside the pipeline
                         return raw
 
+                    if spec.body_once:
+                        raise err  # the caller's stream was (partly) read; it can't be resent
+
                     # SOAP reports a rejected session as an HTTP 500 fault with INVALID_SESSION_ID.
                     if isinstance(err, SessionExpired) and (
                         err.status == 401 or err.error_code == "INVALID_SESSION_ID"
@@ -407,20 +479,39 @@ class Transport:
             raise
         finally:
             self.refresh_outcomes.unpin(pinned_key)
-            self._finish(
-                spec,
-                runtime,
-                raw,
-                failure,
-                started,
-                attempts,
-                reasons,
-                refreshed,
-                bytes_in,
-                bytes_out,
-                caller,
-                priority,
-            )
+            stream = raw.stream if raw is not None and failure is None else None
+            if isinstance(stream, FileStream):
+                # Emit the event when the caller closes the body, with the bytes it read.
+                sent_out, read_in, ok_raw = bytes_out, bytes_in, raw
+                stream._finish = lambda error, n: self._finish(  # pyright: ignore[reportPrivateUsage]
+                    spec,
+                    runtime,
+                    ok_raw,
+                    error,
+                    started,
+                    attempts,
+                    reasons,
+                    refreshed,
+                    read_in + n,
+                    sent_out,
+                    caller,
+                    priority,
+                )
+            else:
+                self._finish(
+                    spec,
+                    runtime,
+                    raw,
+                    failure,
+                    started,
+                    attempts,
+                    reasons,
+                    refreshed,
+                    bytes_in,
+                    bytes_out,
+                    caller,
+                    priority,
+                )
 
     def _attempt(
         self, spec: RequestSpec, token: Token, instance_url: str | None = None
@@ -441,20 +532,33 @@ class Transport:
         headers.update(spec.headers)
         if self.call_options:
             headers = merge_call_options(headers, self.call_options)
-        if content is not None:
+        sent_bytes = [0]
+        body: Any = content
+        if spec.body_stream is not None:
+            headers.setdefault("Content-Type", spec.content_type or "application/octet-stream")
+            if spec.body_length is not None:
+                headers["Content-Length"] = str(spec.body_length)
+            body = _counted(spec.body_stream(), sent_bytes)
+        elif content is not None:
             headers.setdefault("Content-Type", spec.content_type or "application/json")
             if spec.compress and len(content) > GZIP_THRESHOLD:
                 content = gzip_body(content)
                 headers["Content-Encoding"] = "gzip"
+            body = content
         request = self.http.build_request(
             spec.method,
             url,
             params=spec.params,
-            content=content,
+            content=body,
             headers=headers,  # pyright: ignore[reportArgumentType]
         )
         try:
-            response = self.http.send(request)
+            response = self.http.send(request, stream=spec.stream_response)
+            if spec.stream_response and not 200 <= response.status_code < 300:
+                try:
+                    response.read()  # error bodies are small; classify them as usual
+                finally:
+                    response.close()
         except _NEVER_SENT as exc:
             raise _AttemptFailed(
                 ConnectError(f"could not connect: {exc}", operation=spec.operation, method=spec.method),
@@ -491,11 +595,21 @@ class Transport:
                         k: ("<redacted>" if k.lower() in _REDACT_HEADERS else v)
                         for k, v in response.headers.items()
                     },
-                    "elapsed_ms": round(response.elapsed.total_seconds() * 1000, 1),
+                    # A streamed body is still open, and httpx sets ``elapsed`` only once closed.
+                    "elapsed_ms": None
+                    if spec.stream_response and not response.is_closed
+                    else round(response.elapsed.total_seconds() * 1000, 1),
                 },
             )
+        out = sent_bytes[0] if spec.body_stream is not None else (len(content) if content else 0)
+        if spec.stream_response and 200 <= response.status_code < 300:
+            stream = FileStream(response, spec)
+            raw = RawResponse(
+                response.status_code, response.headers, b"", url, loads=self.loads, stream=stream
+            )
+            return raw, 0, out
         raw = RawResponse(response.status_code, response.headers, response.content, url, loads=self.loads)
-        return raw, response.num_bytes_downloaded, len(content) if content else 0
+        return raw, response.num_bytes_downloaded, out
 
     def _error_message(self, spec: RequestSpec, error: SalesforceError | None) -> str | None:
         # Salesforce DML messages can quote record values (e.g. STRING_TOO_LONG), and §11.3 says

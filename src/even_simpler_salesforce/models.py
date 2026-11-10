@@ -16,6 +16,7 @@ __all__ = [
     "BatchResult",
     "LeadConvert",
     "LeadConvertResult",
+    "FileLink",
     "Limit",
     "MergeResult",
     "PublishResult",
@@ -188,6 +189,32 @@ class UpsertResult:
 
     id: str | None
     created: bool
+
+
+@dataclass(frozen=True, slots=True)
+class FileLink:
+    """A file linked to a record: one ``ContentDocumentLink`` row, from ``sf.files.list_for()``.
+
+    Attributes:
+        link_id: Id of the ``ContentDocumentLink``.
+        content_document_id: Id of the ``ContentDocument`` (the file).
+        latest_version_id: Id of the latest published ``ContentVersion``. Pass it to
+            ``sf.files.download()``.
+        title: Title of the file.
+        file_extension: File extension without the dot, for example ``"pdf"``.
+        size: Size of the latest version in bytes.
+        share_type: ``"V"`` (viewer), ``"C"`` (collaborator) or ``"I"`` (inferred).
+        visibility: ``"AllUsers"``, ``"InternalUsers"`` or ``"SharedUsers"``.
+    """
+
+    link_id: str
+    content_document_id: str
+    latest_version_id: str | None
+    title: str | None
+    file_extension: str | None
+    size: int | None
+    share_type: str | None
+    visibility: str | None
 
 
 @dataclass(frozen=True, slots=True)

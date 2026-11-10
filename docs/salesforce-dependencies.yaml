@@ -96,6 +96,27 @@ rest_endpoints:
     used_by: sobject.deleted(start, end)
     docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_getdeleted.htm
     checked: null
+  - path: sobjects/ContentVersion
+    methods: [POST]
+    used_by: "sf.files.upload() (multipart: entity_content JSON + VersionData file; 2 GB max)"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/dome_sobject_insert_update_blob.htm
+    checked: null
+    # Part names and the 2 GB limit read 2026-11-10 from search excerpts of this page (V12, V29)
+  - path: "sobjects/ContentVersion/{}/VersionData"
+    methods: [GET]
+    used_by: "sf.files.download() (streamed), sf.files.download_bytes()"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/dome_sobject_blob_retrieve.htm
+    checked: null
+  - path: "sobjects/Attachment/{}/Body"
+    methods: [GET]
+    used_by: sf.files.download_attachment()
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/dome_sobject_blob_retrieve.htm
+    checked: null
+  - path: sobjects/ContentDocumentLink
+    methods: [POST]
+    used_by: "sf.files.link(), sf.files.upload(share_type=/visibility=)"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_contentdocumentlink.htm
+    checked: null
   - path: composite/sobjects
     methods: [POST, PATCH, DELETE]
     used_by: collections.create/update/delete()

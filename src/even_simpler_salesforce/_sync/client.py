@@ -35,6 +35,7 @@ from .api.actions import Actions
 from .api.apex import Apex
 from .api.auth_api import AuthApi
 from .api.collections import Collections
+from .api.files import Files
 from .api.leads import Leads
 from .api.platform_events import PlatformEvents
 from .api.soap import merge as _merge
@@ -200,6 +201,7 @@ class Salesforce:
         self.apex = Apex(self)
         self.leads = Leads(self)
         self.platform_events = PlatformEvents(self)
+        self.files = Files(self)
 
     @classmethod
     def _child(

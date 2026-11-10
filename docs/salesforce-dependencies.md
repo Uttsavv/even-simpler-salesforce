@@ -40,6 +40,10 @@ Paths are relative to `/services/data/vXX.X/` unless they start with `/services/
 | `sobjects/{}/{}/{}` | GET, PATCH | sobject.get_by_external_id/upsert() (300 on multiple matches) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_sobject_upsert.htm) |  |
 | `sobjects/{}/updated/` | GET | sobject.updated(start, end) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_getupdated.htm) |  |
 | `sobjects/{}/deleted/` | GET | sobject.deleted(start, end) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_getdeleted.htm) |  |
+| `sobjects/ContentVersion` | POST | sf.files.upload() (multipart: entity_content JSON + VersionData file; 2 GB max) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/dome_sobject_insert_update_blob.htm) |  |
+| `sobjects/ContentVersion/{}/VersionData` | GET | sf.files.download() (streamed), sf.files.download_bytes() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/dome_sobject_blob_retrieve.htm) |  |
+| `sobjects/Attachment/{}/Body` | GET | sf.files.download_attachment() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/dome_sobject_blob_retrieve.htm) |  |
+| `sobjects/ContentDocumentLink` | POST | sf.files.link(), sf.files.upload(share_type=/visibility=) | [docs](https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_contentdocumentlink.htm) |  |
 | `composite/sobjects` | POST, PATCH, DELETE | collections.create/update/delete() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobjects_collections.htm) |  |
 | `composite/sobjects/{}` | POST | collections.retrieve() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobjects_collections_retrieve.htm) |  |
 | `composite/sobjects/{}/{}` | PATCH | collections.upsert() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobjects_collections_upsert.htm) |  |
