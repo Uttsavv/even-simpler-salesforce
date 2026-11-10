@@ -50,11 +50,12 @@ An unhandled exception in the class also raises `ApexError`, with `.error_code` 
 `APEX_ERROR` and the exception text in `.message`. A path that no class maps raises
 `ApexError` with `.error_code` set to `NOT_FOUND`.
 
-These errors keep their own class, because the cause is not the Apex class:
+These errors keep their own class, because the cause is not the Apex class. A `401` or `429`
+that your class sets itself, with its own body, raises `ApexError` like any other status:
 
 | Error | Raised for |
 |---|---|
-| `SessionExpired` | a `401` that remains after one token refresh |
+| `SessionExpired` | `INVALID_SESSION_ID` that remains after one token refresh |
 | `RequestLimitExceeded` | `REQUEST_LIMIT_EXCEEDED` |
 | `ServerError` | `SERVER_UNAVAILABLE`, or a 5xx with an empty body |
 | `UnexpectedResponse` | an error page that is not JSON, for example from a proxy |

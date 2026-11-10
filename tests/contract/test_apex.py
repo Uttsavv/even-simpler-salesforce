@@ -139,7 +139,24 @@ def test_non_401_invalid_session_is_not_resent(h: Harness, mock: respx.MockRoute
     assert not token.called
 
 
-@pytest.mark.parametrize("bad", ["orders", "/services/apexrest/orders", "/a?x=1", "/../data"])
+@pytest.mark.parametrize("status", [401, 429])
+def test_class_own_401_or_429_is_apex_error(h: Harness, mock: respx.MockRouter, status: int) -> None:
+    """A class that sets statusCode=401/429 with its own body gets ApexError with .body; the
+    client doesn't refresh the token or resend (the class ran)."""
+    from ..conftest import TOKEN_URL, token_body
+
+    token = mock.post(TOKEN_URL).respond(json=token_body("AT-fresh-0002"))
+    route = mock.get(f"{APEX}/me").respond(status, json={"error": "not_allowed"})
+    sf = h.client()
+    with pytest.raises(esf.ApexError) as ei:
+        h.run(sf.apex.get("/me", idempotent=True))
+    assert ei.value.status == status
+    assert ei.value.body == {"error": "not_allowed"}
+    assert route.call_count == 1
+    assert not token.called
+
+
+@pytest.mark.parametrize("bad", ["orders", "/services/apexrest/orders", "/a?x=1", "/../data", "/a#b"])
 def test_bad_paths(h: Harness, mock: respx.MockRouter, bad: str) -> None:
     sf = h.client()
     with pytest.raises(ValueError):
