@@ -9,37 +9,34 @@ Run it (from the ``examples/`` directory)::
 
 What it shows:
 
-- one ``AsyncSalesforce`` per process, created and closed in the app lifespan;
-- every HTTP request wrapped in ``esf.capture()``, the roll-up logged on ``request.completed``;
+- ``even_simpler_salesforce.contrib.fastapi``: one ``AsyncSalesforce`` per process, closed in
+  the app lifespan, handed to routes with a dependency;
+- every HTTP request's Salesforce roll-up logged on ``request.completed``;
 - queries built with ``esf.soql`` and paginated with opaque cursors;
 - single-record reads/writes and a bulk update through sObject Collections;
-- typed errors mapped to HTTP responses.
-
-(0.2 will ship ``even_simpler_salesforce.contrib.fastapi`` that packages this wiring.)
+- typed errors mapped to HTTP responses by the integration.
 """
 
-from __future__ import annotations
+# No ``from __future__ import annotations``: FastAPI resolves the route annotations at runtime,
+# and ``SF`` is local to ``create_app()``.
 
 import logging
 import os
-from collections.abc import AsyncIterator, Awaitable, Callable, MutableMapping
-from contextlib import asynccontextmanager
+from collections.abc import Callable
 from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, Path, Query, Request, Response
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 import even_simpler_salesforce as esf
+from even_simpler_salesforce.contrib.fastapi import SalesforceIntegration
 
 log = logging.getLogger("examples.fastapi_app")
 
 LEAD_FIELDS = ["Id", "FirstName", "LastName", "Company", "Email", "Status"]
 ID_PATTERN = r"^[A-Za-z0-9]{15}([A-Za-z0-9]{3})?$"
 
-Scope = MutableMapping[str, Any]
-ASGIApp = Callable[[Scope, Callable[[], Awaitable[Any]], Callable[[Any], Awaitable[None]]], Awaitable[None]]
-OnSummary = Callable[[Scope, dict[str, Any]], None]
+OnSummary = Callable[[Request, dict[str, Any]], None]
 
 
 # --- wiring -------------------------------------------------------------------------------
@@ -58,42 +55,18 @@ def client_from_env() -> esf.AsyncSalesforce:
     )
 
 
-def log_summary(scope: Scope, fields: dict[str, Any]) -> None:
+def log_summary(request: Request, fields: dict[str, Any]) -> None:
     """Merge the Salesforce roll-up into the app's canonical request log line."""
     log.info(
         "request.completed %s %s sf_calls=%s sf_ms=%s",
-        scope.get("method"),
-        scope.get("path"),
+        request.method,
+        request.url.path,
         fields["sf_calls"],
         fields["sf_ms"],
-        extra={"http_method": scope.get("method"), "http_path": scope.get("path"), **fields},
+        extra={"http_method": request.method, "http_path": request.url.path, **fields},
     )
 
 
-class SalesforceSummaryMiddleware:
-    """Pure ASGI middleware: wraps each HTTP request in ``esf.capture()``."""
-
-    def __init__(self, app: ASGIApp, on_summary: OnSummary = log_summary) -> None:
-        self.app = app
-        self.on_summary = on_summary
-
-    async def __call__(self, scope: Scope, receive: Any, send: Any) -> None:
-        if scope["type"] != "http":
-            await self.app(scope, receive, send)
-            return
-        with esf.capture() as summary:
-            try:
-                await self.app(scope, receive, send)
-            finally:
-                self.on_summary(scope, summary.as_fields())
-
-
-def get_sf(request: Request) -> esf.AsyncSalesforce:
-    """Dependency: the client created in the lifespan."""
-    return request.app.state.sf
-
-
-SF = Annotated[esf.AsyncSalesforce, Depends(get_sf)]
 LeadId = Annotated[str, Path(pattern=ID_PATTERN)]
 
 
@@ -125,51 +98,19 @@ def _clean(record: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in record.items() if k != "attributes"}
 
 
-def _error_body(exc: esf.SalesforceError) -> dict[str, Any]:
-    # Validation messages help the caller fix input, but can quote record values: only return
-    # them to callers allowed to see that record.
-    return {"error_code": exc.error_code, "message": exc.message, "fields": list(exc.fields)}
-
-
 # --- app ----------------------------------------------------------------------------------
 
 
-def create_app(
-    client_factory: Callable[[], Any] = client_from_env,
-    on_summary: OnSummary = log_summary,
-) -> FastAPI:
-    """Build the app. Tests pass a factory returning a fake or a mocked client."""
-
-    @asynccontextmanager
-    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        app.state.sf = client_factory()
-        try:
-            yield
-        finally:
-            await app.state.sf.aclose()
-
-    app = FastAPI(title="Leads (even-simpler-salesforce example)", lifespan=lifespan)
-    app.add_middleware(SalesforceSummaryMiddleware, on_summary=on_summary)
-
-    @app.exception_handler(esf.NotFound)
-    async def not_found(request: Request, exc: esf.NotFound) -> JSONResponse:
-        return JSONResponse({"error_code": exc.error_code, "message": "not found"}, status_code=404)
-
-    @app.exception_handler(esf.RecordError)
-    async def record_error(request: Request, exc: esf.RecordError) -> JSONResponse:
-        return JSONResponse(_error_body(exc), status_code=422)
-
-    @app.exception_handler(esf.MalformedQuery)
-    async def bad_cursor(request: Request, exc: esf.MalformedQuery) -> JSONResponse:
-        return JSONResponse({"error_code": exc.error_code, "message": "invalid cursor"}, status_code=400)
-
-    @app.exception_handler(esf.LimitError)
-    async def limited(request: Request, exc: esf.LimitError) -> JSONResponse:
-        return JSONResponse(
-            {"error_code": exc.error_code, "message": "Salesforce is busy"},
-            status_code=503,
-            headers={"Retry-After": "30"},
-        )
+def create_app(client: Any = None, on_summary: OnSummary = log_summary) -> FastAPI:
+    """Build the app. Tests pass a fake or a mocked client."""
+    esf_app = SalesforceIntegration(
+        client=client if client is not None else client_from_env(),
+        on_summary=on_summary,
+        error_handlers=True,  # NotFound -> 404, RecordError -> 422, bad cursor -> 400, limits -> 503, ...
+    )
+    app = FastAPI(title="Leads (even-simpler-salesforce example)", lifespan=esf_app.lifespan)
+    esf_app.init_app(app)
+    SF = Annotated[esf.AsyncSalesforce, Depends(esf_app.admin)]
 
     @app.get("/leads")
     async def list_leads(

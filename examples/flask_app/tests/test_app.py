@@ -28,7 +28,7 @@ def summaries() -> list[dict[str, Any]]:
 
 @pytest.fixture
 def client(esf_fake: FakeSalesforce, summaries: list[dict[str, Any]]) -> FlaskClient:
-    app = create_app(esf_fake, on_summary=lambda environ, fields: summaries.append(fields))
+    app = create_app(esf_fake, on_summary=lambda request, fields: summaries.append(fields))
     app.testing = True
     return app.test_client()
 
@@ -54,7 +54,9 @@ def test_list_leads_with_cursor_pagination(
 
 
 def test_bad_inputs(client: FlaskClient) -> None:
-    assert client.get("/leads?cursor=garbage").status_code == 400
+    resp = client.get("/leads?cursor=garbage")
+    assert resp.status_code == 400
+    assert resp.get_json() == {"code": "salesforce_invalid_cursor", "error_code": "INVALID_CURSOR"}
     assert client.get("/leads?page_size=5").status_code == 400
     assert client.get("/leads?page_size=x").status_code == 400
     assert client.get("/leads/not-an-id").status_code == 422

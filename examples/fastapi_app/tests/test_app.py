@@ -29,7 +29,7 @@ def summaries() -> list[dict[str, Any]]:
 
 @pytest.fixture
 def client(esf_async_fake: AsyncFakeSalesforce, summaries: list[dict[str, Any]]) -> Iterator[TestClient]:
-    app = create_app(lambda: esf_async_fake, on_summary=lambda scope, fields: summaries.append(fields))
+    app = create_app(esf_async_fake, on_summary=lambda request, fields: summaries.append(fields))
     with TestClient(app) as tc:
         yield tc
 
@@ -62,7 +62,7 @@ def test_list_leads_with_cursor_pagination(
 def test_tampered_cursor_is_400(client: TestClient) -> None:
     resp = client.get("/leads", params={"cursor": "not-a-cursor"})
     assert resp.status_code == 400
-    assert resp.json()["error_code"] == "INVALID_CURSOR"
+    assert resp.json() == {"code": "salesforce_invalid_cursor", "error_code": "INVALID_CURSOR"}
 
 
 def test_status_is_quoted_safely(client: TestClient, esf_async_fake: AsyncFakeSalesforce) -> None:
@@ -116,6 +116,7 @@ def test_validation_rule_is_422(
     resp = client.patch(f"/leads/{lead_id}", json={"Email": "nope"})
     assert resp.status_code == 422
     assert resp.json() == {
+        "code": "salesforce_record_error",
         "error_code": "FIELD_CUSTOM_VALIDATION_EXCEPTION",
         "message": "Email is invalid",
         "fields": ["Email"],
@@ -155,7 +156,7 @@ def test_bulk_status_reports_partial_failures(
 
 
 def test_client_closed_on_shutdown(esf_async_fake: AsyncFakeSalesforce) -> None:
-    with TestClient(create_app(lambda: esf_async_fake)):
+    with TestClient(create_app(esf_async_fake)):
         assert not esf_async_fake.closed
     assert esf_async_fake.closed
 
@@ -178,11 +179,9 @@ def test_with_real_client_and_respx(caplog: pytest.LogCaptureFixture) -> None:
         )
     )
 
-    def factory() -> esf.AsyncSalesforce:
-        return esf.AsyncSalesforce(esf.StaticToken("00Dx!token", INSTANCE))
-
+    sf = esf.AsyncSalesforce(esf.StaticToken("00Dx!token", INSTANCE))
     caplog.set_level(logging.INFO, logger="examples.fastapi_app")
-    with TestClient(create_app(factory)) as tc:
+    with TestClient(create_app(sf)) as tc:
         page = tc.get("/leads").json()
         assert page["records"] == [{"Id": "00Q000000000001AAA", "LastName": "Doe", "Status": "Open"}]
         resp = tc.post("/leads/bulk-status", json={"ids": ["00Q000000000001AAA"], "status": "Working"})

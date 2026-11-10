@@ -9,28 +9,26 @@ Run it (from the ``examples/`` directory)::
 
 What it shows:
 
-- one sync ``esf.Salesforce`` per process, shared by all threads, closed at exit;
-- every request wrapped in ``esf.capture()`` (WSGI middleware), the roll-up logged on
-  ``request.completed``;
+- ``even_simpler_salesforce.contrib.flask``: one sync ``esf.Salesforce`` per process, shared by
+  all threads, closed at exit;
+- every request's Salesforce roll-up logged on ``request.completed``;
 - queries built with ``esf.soql`` and paginated with opaque cursors;
 - single-record reads/writes and a bulk update through sObject Collections;
-- typed errors mapped to HTTP responses.
-
-(0.2 will ship ``even_simpler_salesforce.contrib.flask`` that packages this wiring.)
+- typed errors mapped to HTTP responses by the extension.
 """
 
 from __future__ import annotations
 
-import atexit
 import logging
 import os
 import re
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 from typing import Any
 
-from flask import Flask, Response, current_app, jsonify, request
+from flask import Flask, Request, Response, jsonify, request
 
 import even_simpler_salesforce as esf
+from even_simpler_salesforce.contrib.flask import Salesforce
 
 log = logging.getLogger("examples.flask_app")
 
@@ -38,8 +36,7 @@ LEAD_FIELDS = ["Id", "FirstName", "LastName", "Company", "Email", "Status"]
 WRITABLE = ("FirstName", "LastName", "Company", "Email", "Status")
 ID_RE = re.compile(r"^[A-Za-z0-9]{15}([A-Za-z0-9]{3})?$")
 
-Environ = dict[str, Any]
-OnSummary = Callable[[Environ, dict[str, Any]], None]
+OnSummary = Callable[[Request, dict[str, Any]], None]
 
 
 def client_from_env() -> esf.Salesforce:
@@ -55,37 +52,16 @@ def client_from_env() -> esf.Salesforce:
     )
 
 
-def log_summary(environ: Environ, fields: dict[str, Any]) -> None:
+def log_summary(request: Request, fields: dict[str, Any]) -> None:
     """Merge the Salesforce roll-up into the app's canonical request log line."""
-    method, path = environ.get("REQUEST_METHOD"), environ.get("PATH_INFO")
     log.info(
         "request.completed %s %s sf_calls=%s sf_ms=%s",
-        method,
-        path,
+        request.method,
+        request.path,
         fields["sf_calls"],
         fields["sf_ms"],
-        extra={"http_method": method, "http_path": path, **fields},
+        extra={"http_method": request.method, "http_path": request.path, **fields},
     )
-
-
-class SalesforceSummaryMiddleware:
-    """WSGI middleware: wraps each request in ``esf.capture()`` and reports the roll-up."""
-
-    def __init__(self, wsgi_app: Callable[..., Iterable[bytes]], on_summary: OnSummary) -> None:
-        self.wsgi_app = wsgi_app
-        self.on_summary = on_summary
-
-    def __call__(self, environ: Environ, start_response: Callable[..., Any]) -> Iterable[bytes]:
-        with esf.capture() as summary:
-            try:
-                return self.wsgi_app(environ, start_response)
-            finally:
-                self.on_summary(environ, summary.as_fields())
-
-
-def sf() -> esf.Salesforce:
-    """The process-wide client."""
-    return current_app.extensions["salesforce"]
 
 
 def _clean(record: dict[str, Any]) -> dict[str, Any]:
@@ -108,36 +84,19 @@ class _InvalidInput(ValueError):
 def create_app(client: Any = None, on_summary: OnSummary = log_summary) -> Flask:
     """Build the app. Tests pass a fake or a mocked client."""
     app = Flask(__name__)
-    if client is None:
-        client = client_from_env()
-        atexit.register(client.close)
-    app.extensions["salesforce"] = client
-    app.wsgi_app = SalesforceSummaryMiddleware(app.wsgi_app, on_summary)  # type: ignore[method-assign]
+    ext = Salesforce(
+        app,
+        client=client if client is not None else client_from_env(),  # closed at process exit
+        on_summary=on_summary,
+        error_handlers=True,  # NotFound -> 404, RecordError -> 422, bad cursor -> 400, limits -> 503, ...
+    )
+
+    def sf() -> esf.Salesforce:
+        return ext.client
 
     @app.errorhandler(_InvalidInput)
     def invalid(exc: _InvalidInput) -> tuple[Response, int]:
         return _bad_request(str(exc), 422)
-
-    @app.errorhandler(esf.NotFound)
-    def not_found(exc: esf.NotFound) -> tuple[Response, int]:
-        return jsonify({"error_code": exc.error_code, "message": "not found"}), 404
-
-    @app.errorhandler(esf.RecordError)
-    def record_error(exc: esf.RecordError) -> tuple[Response, int]:
-        return jsonify(
-            # Validation messages help the caller fix input, but can quote record values: only
-            # return them to callers allowed to see that record.
-            {"error_code": exc.error_code, "message": exc.message, "fields": list(exc.fields)}
-        ), 422
-
-    @app.errorhandler(esf.MalformedQuery)
-    def bad_cursor(exc: esf.MalformedQuery) -> tuple[Response, int]:
-        return jsonify({"error_code": exc.error_code, "message": "invalid cursor"}), 400
-
-    @app.errorhandler(esf.LimitError)
-    def limited(exc: esf.LimitError) -> tuple[Response, int, dict[str, str]]:
-        body = jsonify({"error_code": exc.error_code, "message": "Salesforce is busy"})
-        return body, 503, {"Retry-After": "30"}
 
     @app.get("/leads")
     def list_leads() -> Any:
