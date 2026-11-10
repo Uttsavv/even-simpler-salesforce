@@ -102,6 +102,8 @@ INTERNALS_TODO = {
     "base_url": "use sf.instance_url to build links, sf.request(...) for calls",
     "sf_instance": "use sf.instance_url (the instance of the current token; None before the first call)",
 }
+#: Attributes of simple-salesforce exceptions -> the closest attribute of esf errors.
+CAUGHT_ATTRS = {"content": "raw", "resource_name": "sobject", "url": "path"}
 DISTINCTIVE_INTERNALS = frozenset({"sf_instance", "sf_version"})  # names only simple-salesforce uses
 QUERY_KEYS = {"records": "records", "totalSize": "total_size", "done": "done"}
 UNSUPPORTED = {
@@ -419,6 +421,7 @@ class _Transformer(cst.CSTTransformer):
         self._in_import = 0
         self.fquotes: list[str] = []  # quote characters of the enclosing f-strings
         self.async_defs: list[bool] = []  # enclosing functions: async def?
+        self.caught: list[str | None] = []  # names bound by enclosing `except <sf exception> as e`
         self.leftover: set[str] = set()  # simple-salesforce names still used (second pass)
         self.alias = "even_simpler_salesforce" if facts.esf_conflict else (facts.esf_alias or "esf")
 
@@ -603,9 +606,34 @@ class _Transformer(cst.CSTTransformer):
 
     def visit_ExceptHandler(self, node: cst.ExceptHandler) -> None:
         self._push(node)
+        self.caught.append(self._caught_name(node))
 
     def leave_ExceptHandler(self, original_node: Any, updated_node: Any) -> Any:
+        self.caught.pop()
         return self._pop(updated_node)
+
+    def visit_ExceptStarHandler(self, node: cst.ExceptStarHandler) -> None:
+        self._push(node)
+        self.caught.append(self._caught_name(node))
+
+    def leave_ExceptStarHandler(self, original_node: Any, updated_node: Any) -> Any:
+        self.caught.pop()
+        return self._pop(updated_node)
+
+    def _caught_name(self, node: cst.ExceptHandler | cst.ExceptStarHandler) -> str | None:
+        """``e`` in ``except SalesforceResourceNotFound as e`` (any simple-salesforce exception)."""
+        if node.type is None or node.name is None or not isinstance(node.name.name, cst.Name):
+            return None
+        for n in m.findall(node.type, m.Name() | m.Attribute()):
+            if isinstance(n, cst.Name) and n.value in self.facts.exception_names:
+                return node.name.name.value
+            if (
+                isinstance(n, cst.Attribute)
+                and n.attr.value in EXCEPTIONS
+                and _root_name(n.value) in self.facts.sf_module_aliases
+            ):
+                return node.name.name.value
+        return None
 
     def visit_If(self, node: cst.If) -> None:
         self._push(node)
@@ -695,6 +723,18 @@ class _Transformer(cst.CSTTransformer):
 
     def _exception(self, sf_name: str, node: cst.BaseExpression, updated: cst.BaseExpression) -> Any:
         target, exact = EXCEPTIONS[sf_name]
+        call = self.parent(node)
+        if exact and isinstance(call, cst.Call) and call.func is node and call.args:
+            # simple-salesforce takes (url, status, resource_name, content); esf classes take a message
+            self.record(
+                "exceptions",
+                "todo",
+                f"{sf_name}(...) takes (url, status, resource_name, content); esf.{target} takes "
+                "a message and keyword arguments (status=, sobject=, path=, raw=)",
+                call,
+                suggestion=f'esf.{target}("message", status=...)',
+            )
+            return updated
         if exact:
             new = cst.Attribute(value=cst.Name(self.alias), attr=cst.Name(target))
             self.need_esf = True
@@ -731,6 +771,21 @@ class _Transformer(cst.CSTTransformer):
         if attr in EXCEPTIONS and _root_name(inner) in self.facts.sf_module_aliases:
             if self.enabled("exceptions") and not self.is_store(original_node):
                 return self._exception(attr, original_node, updated_node)
+            return updated_node
+        # e.content / e.resource_name / e.url on a caught simple-salesforce exception
+        if (
+            attr in CAUGHT_ATTRS
+            and isinstance(inner, cst.Name)
+            and inner.value in self.caught
+            and self.enabled("exceptions")
+        ):
+            self.record(
+                "exceptions",
+                "todo",
+                f"simple-salesforce exceptions had .{attr}; esf errors have .{CAUGHT_ATTRS[attr]}",
+                original_node,
+                suggestion=f"{inner.value}.{CAUGHT_ATTRS[attr]}",
+            )
             return updated_node
         # client internals
         if attr in INTERNALS_TODO or attr == "sf_version":
@@ -1626,6 +1681,7 @@ class _Referenced(cst.CSTVisitor):
     def __init__(self) -> None:
         self.names: set[str] = set()
         self._in_import = 0
+        self._skip: set[int] = set()  # Name nodes that are attribute or keyword names
 
     def visit_Import(self, node: cst.Import) -> None:
         self._in_import += 1
@@ -1639,8 +1695,15 @@ class _Referenced(cst.CSTVisitor):
     def leave_ImportFrom(self, original_node: cst.ImportFrom) -> None:
         self._in_import -= 1
 
+    def visit_Attribute(self, node: cst.Attribute) -> None:
+        self._skip.add(id(node.attr))  # `esf.SalesforceError` doesn't use a name SalesforceError
+
+    def visit_Arg(self, node: cst.Arg) -> None:
+        if node.keyword is not None:
+            self._skip.add(id(node.keyword))
+
     def visit_Name(self, node: cst.Name) -> None:
-        if not self._in_import:
+        if not self._in_import and id(node) not in self._skip:
             self.names.add(node.value)
 
 

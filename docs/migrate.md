@@ -328,6 +328,18 @@ handler. `esf.SessionExpired` means a 401 survived a refresh. A dead refresh tok
 `SalesforceMalformedRequest` splits into `RequestError`, `RecordError` and specific classes such as
 `InvalidField` and `ValidationRuleFailed`.
 
+These cases get a TODO:
+
+- A call with arguments, such as `raise SalesforceResourceNotFound(url, 404, name, content)`. The
+  error classes here take a message and keyword arguments.
+- An attribute of a caught exception that has a new name:
+
+| simple-salesforce | even-simpler-salesforce |
+|---|---|
+| `e.content` | `e.raw` |
+| `e.resource_name` | `e.sobject` |
+| `e.url` | `e.path` |
+
 ### `client-internals`
 
 | Before | After | Status |
