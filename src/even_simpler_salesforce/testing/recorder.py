@@ -77,7 +77,9 @@ from __future__ import annotations
 import base64
 import gzip
 import json
+import os
 import re
+import tempfile
 import threading
 from collections.abc import Callable, Mapping
 from pathlib import Path
@@ -378,9 +380,17 @@ class RecordingTransport(httpx.BaseTransport, httpx.AsyncBaseTransport):
             text = f'{{\n  "esf_fixture": {FIXTURE_VERSION},\n  "interactions": [\n{body}\n  ]\n}}\n'
         else:
             text = f'{{\n  "esf_fixture": {FIXTURE_VERSION},\n  "interactions": []\n}}\n'
-        tmp = self.path.with_suffix(self.path.suffix + ".tmp")
-        tmp.write_text(text, encoding="utf-8")
-        tmp.replace(self.path)
+        # A unique temporary name in the same directory: never an existing file or symlink that
+        # someone planted, and the final rename is atomic.
+        fd, tmp_name = tempfile.mkstemp(dir=self.path.parent, prefix=f".{self.path.name}.", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(text)
+            os.chmod(tmp_name, 0o644)  # mkstemp makes the file 0600; fixtures are shared files
+            os.replace(tmp_name, self.path)
+        except BaseException:
+            Path(tmp_name).unlink(missing_ok=True)
+            raise
 
     def _record(self, request: httpx.Request, response: httpx.Response) -> None:
         entry = {
