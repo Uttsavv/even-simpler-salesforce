@@ -672,20 +672,186 @@ a.md-header__title:focus {
   display: none;
 }
 
-/* "Beyond simple-salesforce" table on the landing page: the row label is strong, the
-   simple-salesforce column is quiet, so the eye lands on the right-hand column. */
-.md-typeset .esf-compare table:not([class]) {
-  display: table;
-  width: 100%;
+/* ---- landing: "Beyond simple-salesforce" ------------------------------------------ */
+
+.esf-why {
+  margin: 1rem 0 2.5rem;
+}
+
+.md-typeset .esf-why__eyebrow {
+  margin: 0 0 0.4rem;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--esf-accent-a);
+}
+
+.md-typeset .esf-why__title {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 1.35rem;
+  line-height: 1.25;
+}
+
+.md-typeset .esf-why__title::after {
+  display: none;
+}
+
+.md-typeset .esf-why__lede {
+  margin: 0.5rem 0 1.6rem;
+  color: var(--esf-muted-fg);
+}
+
+.esf-why__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.md-typeset a.esf-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 1rem 1rem 0.8rem;
+  border: 1px solid var(--hero-border);
+  border-radius: 0.75rem;
+  background-color: var(--hero-window-bg);
+  color: inherit;
+  font-weight: 400;
+  text-decoration: none;
+  transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.md-typeset a.esf-card:hover,
+.md-typeset a.esf-card:focus-visible {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--esf-accent-a) 45%, var(--hero-border));
+  box-shadow: var(--hero-window-shadow);
+}
+
+.esf-card__title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--esf-fg);
+}
+
+.esf-card__text {
+  margin-top: 0.25rem;
+  font-size: 0.66rem;
+  line-height: 1.5;
+  color: var(--esf-muted-fg);
+}
+
+.md-typeset .esf-card__code {
+  flex: 1;
+  margin: 0.8rem 0;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--hero-border);
+  border-radius: 0.5rem;
+  background-color: var(--hero-window-bar);
+  font-size: 0.56rem;
+  line-height: 1.65;
+  white-space: pre;
+}
+
+/* The card fragments are illustrations, not snippets to paste. */
+.esf-card button,
+.esf-card nav {
+  display: none;
+}
+
+.md-typeset .esf-card__code code {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: inherit;
+  color: inherit;
+}
+
+.esf-card__vs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: baseline;
+  padding-top: 0.6rem;
+  border-top: 1px dashed var(--hero-border);
+  font-size: 0.6rem;
+  color: var(--esf-muted-fg);
+}
+
+.esf-card__vs > span {
+  font-weight: 600;
+  opacity: 0.75;
+}
+
+.esf-card__vs > span::after {
+  content: ":";
+}
+
+.md-typeset a.esf-migrate {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1.2rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.8rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--hero-border);
+  border-radius: 0.75rem;
+  color: var(--esf-fg);
+  font-weight: 400;
+  text-decoration: none;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--esf-accent-a) 12%, transparent), transparent 70%),
+    var(--hero-window-bg);
+  transition: border-color 150ms ease, transform 150ms ease;
+}
+
+.md-typeset a.esf-migrate:hover,
+.md-typeset a.esf-migrate:focus-visible {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--esf-accent-a) 45%, var(--hero-border));
+}
+
+.esf-migrate__text {
   font-size: 0.72rem;
 }
 
-.md-typeset .esf-compare table:not([class]) td:first-child {
-  font-weight: 600;
-  color: var(--esf-fg);
-  white-space: nowrap;
+.md-typeset .esf-migrate__cmd {
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--hero-border);
+  border-radius: 0.4rem;
+  background-color: var(--hero-window-bar);
+  font-size: 0.66rem;
 }
 
-.md-typeset .esf-compare table:not([class]) td:nth-child(2) {
-  color: var(--esf-muted-fg);
+.md-typeset .esf-migrate__cmd::before {
+  content: "$ ";
+  color: var(--tok-comment);
+}
+
+@media screen and (max-width: 76em) {
+  .esf-why__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media screen and (max-width: 44.9375em) {
+  .esf-why__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .md-typeset a.esf-card,
+  .md-typeset a.esf-migrate {
+    transition: none;
+  }
+
+  .md-typeset a.esf-card:hover,
+  .md-typeset a.esf-migrate:hover {
+    transform: none;
+  }
 }
