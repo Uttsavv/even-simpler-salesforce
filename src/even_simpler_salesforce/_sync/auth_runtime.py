@@ -172,7 +172,9 @@ class AuthRuntime:
     def set_token(self, token: Token) -> Token:
         """Save ``token`` to the store and memory (used by ``exchange_code``)."""
         with self.transport.single_flight(self.key):
-            current = self._load()
+            # The store's raw record: only its version is needed, and a stored entry with a bad
+            # instance_url must not stop a new login from replacing it.
+            current = self.store.load(self.key)
             saved = self.store.save(
                 self.key, token, expected_version=current.version if current is not None else None
             )

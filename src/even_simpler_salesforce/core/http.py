@@ -100,7 +100,12 @@ class RequestSpec:
             return self.idempotent
         if self.dml or self.method.upper() not in ("GET", "HEAD"):
             return False
-        return not _RUNS_CODE.search(self.path.split("?", 1)[0])
+        return not self.runs_code
+
+    @property
+    def runs_code(self) -> bool:
+        """Whether the path runs the org's own code (Apex REST, ``executeAnonymous``)."""
+        return bool(_RUNS_CODE.search(self.path.split("?", 1)[0]))
 
 
 _UNPARSED: Any = object()

@@ -278,10 +278,12 @@ def classify(
             return E.ReauthorizationRequired(desc or err, error_code=err, raw=raw, **common)
         return E.OAuthError(desc or err, error=err, error_description=desc, raw=raw, **common)
 
-    # A rejected bearer token in OAuth form, on any path (e.g. userinfo through a proxy). The
-    # error code tells the transport the token was refused before anything ran.
+    # A rejected bearer token in OAuth form, on any path that doesn't run org code (e.g. userinfo
+    # through a proxy). The error code tells the transport the token was refused before anything
+    # ran. Apex REST is excluded: a class can return this body itself after its code ran.
     if (
         status == 401
+        and not spec.runs_code
         and isinstance(body, Mapping)
         and body.get("error") == "invalid_token"  # pyright: ignore[reportUnknownMemberType]
         and "errorCode" not in body
