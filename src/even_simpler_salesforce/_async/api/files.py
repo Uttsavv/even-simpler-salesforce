@@ -55,12 +55,16 @@ def _bytes_source(data: bytes | bytearray | memoryview) -> _Source:
     return _Source(chunks, len(view), False, None)
 
 
+def _open_binary(path: str) -> IO[bytes]:
+    return open(path, "rb")  # the chunk generator closes it
+
+
 def _path_source(path: str | os.PathLike[str]) -> _Source:
     fspath = os.fspath(path)
     size = os.stat(fspath).st_size  # raises FileNotFoundError before anything is sent
 
     async def chunks() -> AsyncIterator[bytes]:
-        f = await _compat.to_thread(open, fspath, "rb")
+        f = await _compat.to_thread(_open_binary, fspath)
         try:
             while chunk := await _compat.to_thread(f.read, CHUNK_SIZE):
                 yield chunk
