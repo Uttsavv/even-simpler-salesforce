@@ -141,6 +141,7 @@ class FileResult:
     updated: str
     findings: list[Finding] = field(default_factory=lambda: [])
     error: str | None = None
+    encoding: str = "utf-8"  # PEP 263 encoding of the file; "utf-8-sig" keeps a BOM
 
     @property
     def changed(self) -> bool:

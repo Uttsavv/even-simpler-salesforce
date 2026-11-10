@@ -9,10 +9,12 @@ from __future__ import annotations
 import argparse
 import difflib
 import fnmatch
+import io
 import json
 import os
 import sys
 import tempfile
+import tokenize
 from collections.abc import Iterable, Iterator, Sequence
 from pathlib import Path, PurePosixPath
 from typing import Any, TextIO
@@ -94,7 +96,40 @@ def _walk(root: Path, globs: Sequence[str] = ()) -> list[Path]:
     return out
 
 
-def _write_atomic(path: Path, text: str) -> None:
+def _read_source(path: Path) -> tuple[str, str]:
+    """The text of ``path`` and its encoding: a PEP 263 coding cookie or BOM, else UTF-8.
+
+    Line endings stay as they are. ``utf-8-sig`` decodes and writes back a BOM.
+    """
+    data = path.read_bytes()
+    encoding, _ = tokenize.detect_encoding(io.BytesIO(data).readline)
+    return data.decode(encoding), encoding
+
+
+def _encodable(text: str, encoding: str) -> str:
+    """``text`` with characters that ``encoding`` can't hold replaced.
+
+    Only marker comments add non-ASCII text, and a file in a legacy encoding can't contain
+    characters outside it, so this touches markers only: ``→`` becomes ``->``.
+    """
+    try:
+        text.encode(encoding)
+    except UnicodeEncodeError:
+        pass
+    else:
+        return text
+
+    def fits(ch: str) -> bool:
+        try:
+            ch.encode(encoding)
+        except UnicodeEncodeError:
+            return False
+        return True
+
+    return "".join(ch if fits(ch) else ("->" if ch == "→" else "?") for ch in text)
+
+
+def _write_atomic(path: Path, text: str, encoding: str = "utf-8") -> None:
     """Replace ``path`` with ``text`` in one step, keeping its line endings and permissions.
 
     The new content goes to a temporary file in the same directory first, so an interrupted
@@ -104,7 +139,7 @@ def _write_atomic(path: Path, text: str) -> None:
     fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".esf-migrate.tmp")
     tmp = Path(tmp_name)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="") as fh:
+        with os.fdopen(fd, "w", encoding=encoding, newline="") as fh:
             fh.write(text)
         os.chmod(tmp, path.stat().st_mode & 0o7777)
         os.replace(tmp, path)
@@ -127,9 +162,8 @@ def migrate_files(
     out: list[FileResult] = []
     for path in files:
         try:
-            with path.open(encoding="utf-8", newline="") as fh:  # keep CRLF/LF as they are
-                source = fh.read()
-        except (OSError, UnicodeDecodeError) as exc:
+            source, encoding = _read_source(path)
+        except (OSError, SyntaxError, UnicodeDecodeError, LookupError) as exc:
             out.append(FileResult(path.as_posix(), "", "", error=f"read error: {exc}"))
             continue
         opts = Options(client_names=names, rules=rule_set, is_test_file=_is_test_file(path))
@@ -144,7 +178,8 @@ def migrate_files(
             continue
         for f in findings:
             f.file = path.as_posix()
-        out.append(FileResult(path.as_posix(), source, updated, findings))
+        updated = _encodable(updated, encoding)
+        out.append(FileResult(path.as_posix(), source, updated, findings, encoding=encoding))
     return out
 
 
@@ -254,7 +289,7 @@ def _run(argv: Sequence[str] | None, out: TextIO, err: TextIO) -> int:
         for r in results:
             if r.changed and not r.error:
                 try:
-                    _write_atomic(Path(r.path), r.updated)
+                    _write_atomic(Path(r.path), r.updated, r.encoding)
                 except OSError as exc:  # report it like a read error; keep going
                     r.error = f"write error: {exc}"
                     continue

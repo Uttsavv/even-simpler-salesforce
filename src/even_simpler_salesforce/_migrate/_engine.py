@@ -276,6 +276,7 @@ class _Collector(cst.CSTVisitor):
         self.sync_module = False  # imports the sync simple_salesforce.Salesforce
         self.async_clients: set[str] = set()
         self.sync_clients: set[str] = set()
+        self.sf_star = False  # `from simple_salesforce import *`
 
     def _note_kind(self, seg: str, value_or_type: cst.BaseExpression) -> None:
         names = _annotation_names(value_or_type)
@@ -292,7 +293,9 @@ class _Collector(cst.CSTVisitor):
     @property
     def sf_related(self) -> bool:
         """The module imports simple-salesforce or holds a known client (§9.19.1 case 3)."""
-        return bool(self.sf_imported or self.sf_module_aliases or self.clients or self.client_types)
+        return bool(
+            self.sf_imported or self.sf_module_aliases or self.clients or self.client_types or self.sf_star
+        )
 
     @property
     def esf_conflict(self) -> bool:
@@ -313,18 +316,22 @@ class _Collector(cst.CSTVisitor):
                 self.esf_alias = local
 
     def visit_ImportFrom(self, node: cst.ImportFrom) -> None:
-        if node.module is None or isinstance(node.names, cst.ImportStar):
+        if node.module is None:
             return
         mod = _code(node.module)
         if mod.split(".")[0] not in SF_MODULES:
             return
         if mod.endswith(".aio"):
             self.async_module = True
-        for alias in node.names:
-            name = _code(alias.name)
-            local = (
-                alias.asname.name.value if alias.asname and isinstance(alias.asname.name, cst.Name) else name
-            )
+        if isinstance(node.names, cst.ImportStar):
+            # `from simple_salesforce import *`: every public name we know may come from here
+            self.sf_star = True
+            aio = mod.endswith(".aio")
+            known = (*CLIENT_TYPES, *LOGIN_CALLS, *EXCEPTIONS, "format_soql")
+            pairs = [(n, n) for n in known if n.startswith("Async") == aio or n not in LOGIN_CALLS]
+        else:
+            pairs = [(_code(a.name), _alias(a) or _code(a.name)) for a in node.names]
+        for name, local in pairs:
             self.sf_imported.add(local)
             if name == "AsyncSalesforce":
                 self.async_module = True
@@ -575,12 +582,13 @@ class _Transformer(cst.CSTTransformer):
             return updated
         # One marker per finding; a rerun never adds a marker that is already there.
         above = self._lines_above(holder.node, updated.leading_lines)
-        existing = {line.comment.value.strip() for line in above if line.comment is not None}
+        # "->" too: files in a legacy encoding get "→" written as "->" (see migrate_files)
+        existing = {_ascii(line.comment.value.strip()) for line in above if line.comment is not None}
         new_lines = list(updated.leading_lines)
         added: set[str] = set()
         for f in marks:
             text = marker_text(f.status, f.rule, f.message)
-            if text in existing or text in added:
+            if _ascii(text) in existing or text in added:
                 continue
             added.add(text)
             new_lines.append(cst.EmptyLine(comment=cst.Comment(text)))
@@ -592,7 +600,7 @@ class _Transformer(cst.CSTTransformer):
         self._push(node)
 
     def leave_SimpleStatementLine(self, original_node: Any, updated_node: Any) -> Any:
-        if self.leftover:
+        if self.leftover or self.facts.sf_star:
             self._mark_leftover(original_node)
         return self._pop(updated_node)
 
@@ -600,10 +608,19 @@ class _Transformer(cst.CSTTransformer):
         for small in stmt.body:
             names: list[str] = []
             if isinstance(small, cst.ImportFrom) and small.module is not None:
-                if _code(small.module).split(".")[0] in SF_MODULES and not isinstance(
-                    small.names, cst.ImportStar
-                ):
-                    names = [_alias(a) or _code(a.name) for a in small.names]
+                if _code(small.module).split(".")[0] not in SF_MODULES:
+                    continue
+                if isinstance(small.names, cst.ImportStar):
+                    if self.enabled("unsupported"):
+                        self.record(
+                            "unsupported",
+                            "todo",
+                            "import * from simple-salesforce; import the names you still use, "
+                            "then remove it",
+                            small,
+                        )
+                    continue
+                names = [_alias(a) or _code(a.name) for a in small.names]
             elif isinstance(small, cst.Import):
                 for a in small.names:
                     full = _code(a.name)
@@ -1743,6 +1760,10 @@ class _Transformer(cst.CSTTransformer):
         if original_node in self.replace:
             return self.replace[original_node]
         return updated_node
+
+
+def _ascii(text: str) -> str:
+    return text.replace("→", "->")
 
 
 def _before(a: Any, b: Any) -> bool:

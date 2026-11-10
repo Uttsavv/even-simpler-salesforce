@@ -13,7 +13,8 @@ esf migrate src/ --write        # applies the rewrites and inserts markers
 
 The codemod handles the sync `simple_salesforce.Salesforce` and the async
 `simple_salesforce.aio.AsyncSalesforce`. It edits the syntax tree with libcst, so it keeps your
-comments and formatting. If you run it again on migrated code, it changes nothing.
+comments and formatting. It also keeps the encoding of each file, a byte order mark and the line
+endings. If you run it again on migrated code, it changes nothing.
 
 ## Tell it your client names
 
@@ -409,6 +410,7 @@ These APIs have no replacement in 0.1, so they get a TODO with a link to the
 
 The codemod removes simple-salesforce imports that are no longer used. If code still uses a name
 from an import, the import line gets an `unsupported` TODO.
+`from simple_salesforce import *` always gets an `unsupported` TODO.
 
 ## How it finds Salesforce calls
 

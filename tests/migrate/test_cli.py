@@ -324,3 +324,48 @@ def test_exclude_prunes_directories(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(os, "walk", spy)
     assert list(iter_python_files([str(tmp_path)], ["build"])) == []
     assert all("deep" not in w for w in walked)
+
+
+def test_write_keeps_a_utf8_bom(tmp_path: Path) -> None:
+    f = tmp_path / "app.py"
+    f.write_bytes(b"\xef\xbb\xbf" + CLEAN.encode())
+    assert run(["--write", str(f)])[0] == 1
+    data = f.read_bytes()
+    assert data.startswith(b"\xef\xbb\xbf")
+    assert b'sf.sobject("Lead")' in data
+    assert run(["--write", str(f)])[0] == 1
+    assert f.read_bytes() == data  # idempotent
+
+
+def test_write_keeps_a_pep263_encoding(tmp_path: Path) -> None:
+    f = tmp_path / "app.py"
+    src = (
+        "# -*- coding: latin-1 -*-\n"
+        "from simple_salesforce import Salesforce\n\n\n"
+        "def f(sf: Salesforce):\n"
+        '    sf.Lead.update("00Q000000000001AAA", {"City": "Montréal"})\n'
+        "    return sf.restful('x', method='GET')\n"
+    )
+    f.write_bytes(src.encode("latin-1"))
+    assert run(["--write", str(f)])[0] == 1
+    text = f.read_bytes().decode("latin-1")
+    assert '"Montréal"' in text
+    assert 'sf.sobject("Lead").update' in text
+    assert run(["--write", str(f)])[0] == 1
+    assert f.read_bytes().decode("latin-1") == text  # idempotent, no duplicate markers
+
+
+def test_legacy_encoding_markers_become_ascii(tmp_path: Path) -> None:
+    f = tmp_path / "app.py"
+    src = (
+        "# -*- coding: latin-1 -*-\n"
+        "from simple_salesforce import format_soql\n\n\n"
+        "def f(db, x):\n"
+        "    return db.restful('x', method='GET')\n"
+    )
+    f.write_bytes(src.encode("latin-1"))
+    run(["--write", str(f)])  # an unconfirmed client: a REVIEW marker whose message has "→"
+    first = f.read_bytes().decode("latin-1")
+    assert "REVIEW[restful] restful(path, method=...) -> request(method, path)" in first
+    run(["--write", str(f)])
+    assert f.read_bytes().decode("latin-1") == first  # the "->" marker counts as already there
