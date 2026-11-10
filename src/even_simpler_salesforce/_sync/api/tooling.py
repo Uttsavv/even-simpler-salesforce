@@ -106,13 +106,15 @@ class Tooling:
             code: The Apex statements.
             capture_log: Create a short-lived ``TraceFlag`` for the running user, run the code,
                 read the new ``ApexLog`` into ``result.log`` and delete the trace flag, also
-                when the run fails. This costs about six more API calls, counted in usage.
+                when the run fails. This costs up to seven more API calls, counted in usage.
 
         Returns:
             Whether the code compiled and ran, with the compile problem or exception.
 
         Raises:
-            RequestTooLarge: the code is too long for the URL (about 16 KB after encoding).
+            ValueError: ``code`` is blank.
+            RequestTooLarge: Salesforce rejected the URL as too long (HTTP 414); the code
+                didn't run.
         """
         check_apex_code(code)
         if not capture_log:

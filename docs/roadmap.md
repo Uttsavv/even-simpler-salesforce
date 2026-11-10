@@ -8,7 +8,6 @@
 | Composite | 0.3 | Composite, Composite Graph, sObject Tree and Batch, with references between subrequests. |
 | GraphQL | 0.3 | `sf.graphql(query, variables)`, `GraphQLError` and cursor paging. |
 | Bulk API 2.0 | 0.3 | Ingest and query jobs, chunked uploads and `BulkJobFailed`. |
-| Tooling API | 0.3 | Tooling queries and requests, including anonymous Apex. |
 | UI API | 0.4 | Records with layout information, list views and picklist values. |
 | Reports and dashboards | 0.4 | Run reports and read dashboards. |
 | Metadata API | 0.4 | Metadata API operations. |

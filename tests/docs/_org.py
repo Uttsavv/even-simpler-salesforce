@@ -20,6 +20,11 @@ The org enforces a few rules so error examples have something to hit:
 Files: a multipart ``POST sobjects/ContentVersion`` stores the bytes and creates the
 ContentDocument (plus a ContentDocumentLink for ``FirstPublishLocationId``);
 ``GET .../VersionData`` and ``GET sobjects/Attachment/{id}/Body`` return the bytes.
+
+Tooling API (``tooling/...``): ``ApexClass``, ``TraceFlag``, ``DebugLevel`` and ``ApexLog``
+records; ``executeAnonymous`` fails to compile code containing ``System debug``, throws for
+``1 / 0`` and, while a ``USER_DEBUG`` trace flag exists, writes an ``ApexLog`` with one
+``USER_DEBUG`` line per ``System.debug('...')``.
 """
 
 from __future__ import annotations
@@ -54,6 +59,8 @@ PREFIXES = {
     "ContentDocumentLink": "06A",
     "Attachment": "00P",
 }
+TOOLING_PREFIXES = {"ApexClass": "01p", "TraceFlag": "7tf", "DebugLevel": "7dl", "ApexLog": "07L"}
+_DEBUG = re.compile(r"System\.debug\(\s*'((?:[^'\\]|\\.)*)'\s*\)")
 CUSTOM_FIELDS = {"External_Id__c", "Score__c"}
 CHILD_RELATIONSHIPS = {"Contacts": ("Contact", "AccountId"), "Opportunities": ("Opportunity", "AccountId")}
 PARENT_RELATIONSHIPS = {"ContentDocument": ("ContentDocument", "ContentDocumentId")}
@@ -139,6 +146,8 @@ class FakeOrg:
         self.describe_modified = _now() - timedelta(days=3)
         self.events: list[tuple[str, dict[str, Any]]] = []
         self.blobs: dict[str, bytes] = {}
+        self.tooling: dict[str, dict[str, dict[str, Any]]] = {name: {} for name in TOOLING_PREFIXES}
+        self.apex_logs: dict[str, str] = {}  # ApexLog id -> body
         self._seed()
 
     # --- data ------------------------------------------------------------------------
@@ -157,6 +166,9 @@ class FakeOrg:
         return rec
 
     def _seed(self) -> None:
+        for name in ("OrderService", "OrderServiceTest", "LeadScoring"):
+            rid = f"01p8d{next(self.ids):010d}AAA"
+            self.tooling["ApexClass"][rid] = {"Id": rid, "Name": name, "Status": "Active"}
         self._store("User", {"Username": "integration@acme.example", "LastName": "Integration"})
         accounts = [self._store("Account", {"Name": n}) for n in ("Acme", "Globex", "Initech")]
         for i, last in enumerate(("Doe", "Roe", "Poe")):
@@ -579,6 +591,8 @@ class FakeOrg:
             return self._json(
                 {"sObjects": [{"name": n, "count": len(self.records.get(n, {}))} for n in names if n]}
             )
+        if parts[0] == "tooling":
+            return self._tooling(request, method, parts[1:], params, version)
         if parts[0] == "actions":
             return self._actions(request, parts[1:])
         if parts[0] == "sobjects" and len(parts) == 2 and parts[1].endswith("__e") and method == "POST":
@@ -783,6 +797,95 @@ class FakeOrg:
                         ],
                     )
         return results
+
+    # --- Tooling API (synthetic) -----------------------------------------------------
+
+    def _tooling(
+        self, request: httpx.Request, method: str, parts: list[str], params: dict[str, str], version: str
+    ) -> httpx.Response:
+        if parts == ["query"]:
+            m = _FIELD_LIST.match(params["q"])
+            name = m.group("obj") if m else ""
+            if name not in self.tooling:
+                raise Rejected("INVALID_TYPE", f"sObject type '{name}' is not supported.")
+            rows = list(self.tooling[name].values())
+            for field, lit in _EQ.findall(m.group("tail") if m else ""):
+                if field in ("Name", "DeveloperName", "TracedEntityId", "LogUserId"):
+                    rows = [r for r in rows if r.get(field) == _literal(lit)]
+            if name == "ApexLog":  # the client asks ORDER BY StartTime DESC
+                rows.reverse()
+            recs = [{"attributes": {"type": name, "url": ""}, **r} for r in rows]
+            return self._json({"size": len(recs), "totalSize": len(recs), "done": True, "records": recs})
+        if parts == ["executeAnonymous"]:
+            return self._json(self._anonymous(params["anonymousBody"]))
+        if parts == ["runTestsAsynchronous"] and method == "POST":
+            return self._json(f"7078d{next(self.ids):010d}")
+        if parts == ["completions"]:
+            return self._json({"publicDeclarations": {"System": {"Math": [{"name": "abs"}], "String": []}}})
+        if len(parts) == 4 and parts[1] == "ApexLog" and parts[3] == "Body":
+            body = self.apex_logs.get(parts[2])
+            if body is None:
+                raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+            return httpx.Response(200, headers={"content-type": "text/plain"}, content=body.encode())
+        if parts[0] == "sobjects" and len(parts) >= 2 and parts[1] in self.tooling:
+            store = self.tooling[parts[1]]
+            if len(parts) == 2 and method == "POST":
+                rid = f"{TOOLING_PREFIXES[parts[1]]}8d{next(self.ids):010d}AAA"
+                store[rid] = {"Id": rid, **(self._body(request) or {})}
+                return self._json({"id": rid, "success": True, "errors": []}, 201)
+            rec = store.get(parts[2]) if len(parts) == 3 else None
+            if rec is None:
+                raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+            if method == "DELETE":
+                del store[parts[2]]
+                return self._json(None, 204)
+            if method == "PATCH":
+                rec.update(self._body(request) or {})
+                return self._json(None, 204)
+            return self._json({"attributes": {"type": parts[1]}, **rec})
+        raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+
+    def _anonymous(self, code: str) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "line": -1,
+            "column": -1,
+            "compiled": True,
+            "success": True,
+            "compileProblem": None,
+            "exceptionMessage": None,
+            "exceptionStackTrace": None,
+        }
+        if "System debug" in code:
+            col = code.index("System debug") + 8
+            return {
+                **result,
+                "compiled": False,
+                "success": False,
+                "line": 1,
+                "column": col,
+                "compileProblem": "Unexpected token 'debug'.",
+            }
+        if "1 / 0" in code:
+            result.update(
+                success=False,
+                line=1,
+                column=1,
+                exceptionMessage="System.MathException: Divide by 0",
+                exceptionStackTrace="AnonymousBlock: line 1, column 1",
+            )
+        if any(f.get("LogType") == "USER_DEBUG" for f in self.tooling["TraceFlag"].values()):
+            rid = f"07L8d{next(self.ids):010d}AAA"
+            start = _now().strftime("%Y-%m-%dT%H:%M:%S.000+0000")
+            self.tooling["ApexLog"][rid] = {
+                "Id": rid,
+                "LogUserId": USER_ID,
+                "Operation": "/services/data/v68.0/tooling/executeAnonymous/",
+                "StartTime": start,
+            }
+            lines = ["68.0 APEX_CODE,DEBUG", "Execute Anonymous: " + code.splitlines()[0]]
+            lines += [f"12:00:00.0 (1)|USER_DEBUG|[1]|DEBUG|{msg}" for msg in _DEBUG.findall(code)]
+            self.apex_logs[rid] = "\n".join(lines) + "\n"
+        return result
 
     # --- org automation (synthetic) -------------------------------------------------
 
