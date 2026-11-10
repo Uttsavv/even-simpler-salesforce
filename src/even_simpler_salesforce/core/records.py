@@ -149,11 +149,19 @@ def flatten(row: Mapping[str, Any]) -> dict[str, Any]:
     - A child subquery becomes a list of flattened child rows (only the rows present; use
       ``query_iter(..., expand_children=True)`` to fetch all of them).
 
+    It takes one row. For a page or a list of rows, write ``[esf.flatten(r) for r in page]``.
+
     Raises:
-        TypeError: ``row`` is not a plain mapping (e.g. a model instance from ``model=``).
+        TypeError: ``row`` is not a plain mapping: for example a list of rows, a
+            ``QueryResult`` or a model instance from ``model=``.
     """
     if not isinstance(row, Mapping):  # pyright: ignore[reportUnnecessaryIsInstance]
-        raise TypeError(f"flatten() takes a plain dict row, not {type(row).__name__}")
+        kind = type(row).__name__  # pyright: ignore[reportUnreachable]
+        if isinstance(row, Iterable) and not isinstance(row, (str, bytes, bytearray)):
+            raise TypeError(
+                f"flatten() takes one row, not a {kind}; for many rows use [esf.flatten(r) for r in page]"
+            )
+        raise TypeError(f"flatten() takes a plain dict row, not {kind}")
     out: dict[str, Any] = {}
     _flatten_into(row, "", out)
     return out
