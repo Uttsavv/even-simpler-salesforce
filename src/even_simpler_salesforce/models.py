@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import Enum
 from typing import Any, Generic, TypeVar
 
 from .core.cursor import Cursor
@@ -14,6 +15,9 @@ from .errors import ErrorDetail, PartialFailure
 __all__ = [
     "ActionResult",
     "BatchResult",
+    "BulkFailure",
+    "BulkJobInfo",
+    "BulkJobState",
     "LeadConvert",
     "LeadConvertResult",
     "FileLink",
@@ -356,3 +360,72 @@ class PublishResult:
     id: str | None = None
     uuid: str | None = None
     errors: tuple[ErrorDetail, ...] = ()
+
+
+class BulkJobState(str, Enum):
+    """State of a Bulk API 2.0 job (*Job States*, Bulk API 2.0 Developer Guide).
+
+    ``JobComplete``, ``Failed`` and ``Aborted`` are final: the job doesn't change after them.
+    The values equal the strings Salesforce sends, so ``state == "JobComplete"`` also works.
+    """
+
+    OPEN = "Open"
+    UPLOAD_COMPLETE = "UploadComplete"
+    IN_PROGRESS = "InProgress"
+    JOB_COMPLETE = "JobComplete"
+    FAILED = "Failed"
+    ABORTED = "Aborted"
+
+    @property
+    def is_final(self) -> bool:
+        """Whether the job has finished: ``JobComplete``, ``Failed`` or ``Aborted``."""
+        return self in (BulkJobState.JOB_COMPLETE, BulkJobState.FAILED, BulkJobState.ABORTED)
+
+
+@dataclass(frozen=True, slots=True)
+class BulkJobInfo:
+    """Status of a Bulk API 2.0 job, from the latest status call.
+
+    Attributes:
+        id: Job id (``750...``). For an ingest split over several jobs, the id of the first one.
+        operation: ``insert``, ``update``, ``upsert``, ``delete``, ``hardDelete``, ``query`` or
+            ``queryAll``.
+        sobject: The object of the job.
+        state: The job state.
+        api_version: The API version that created the job. Results are read with it.
+        records_processed: ``numberRecordsProcessed``.
+        records_failed: ``numberRecordsFailed`` (ingest jobs only).
+        created_date: When the job was created.
+        system_modstamp: When Salesforce last changed the job.
+        total_processing_ms: ``totalProcessingTime`` in milliseconds, if Salesforce sent it.
+        error_message: ``errorMessage`` of a failed job.
+        raw: The job info as Salesforce sent it. Empty for an ingest split over several jobs.
+    """
+
+    id: str
+    operation: str | None
+    sobject: str | None
+    state: BulkJobState
+    api_version: str
+    records_processed: int = 0
+    records_failed: int = 0
+    created_date: datetime | None = None
+    system_modstamp: datetime | None = None
+    total_processing_ms: int | None = None
+    error_message: str | None = None
+    raw: Mapping[str, Any] = field(default_factory=lambda: {}, repr=False, compare=False)
+
+
+@dataclass(frozen=True, slots=True)
+class BulkFailure:
+    """One row of the failed-results CSV of a Bulk ingest job.
+
+    Attributes:
+        error: The parsed ``sf__Error`` column: status code, message and fields.
+        id: ``sf__Id``: the record id, if Salesforce reported one.
+        fields: The other columns, as you uploaded them.
+    """
+
+    error: ErrorDetail
+    id: str | None = None
+    fields: Mapping[str, str] = field(default_factory=lambda: {})

@@ -20,6 +20,7 @@ __all__ = [
     "AuthError",
     "BudgetExceeded",
     "BulkJobFailed",
+    "BulkJobTimeout",
     "Conflict",
     "ConnectError",
     "DuplicateDetected",
@@ -435,7 +436,10 @@ class PartialFailure(SalesforceError):
 
 
 class BulkJobFailed(SalesforceError):
-    """A Bulk 2.0 job ended in state ``Failed``."""
+    """A Bulk 2.0 job ended in state ``Failed`` or ``Aborted``.
+
+    ``state`` says which. ``error_message`` is the job's ``errorMessage``, when Salesforce sent one.
+    """
 
     job_id: str | None
     state: str | None
@@ -454,6 +458,23 @@ class BulkJobFailed(SalesforceError):
         self.job_id = job_id
         self.state = state
         self.error_message = error_message
+
+
+class BulkJobTimeout(SalesforceError):
+    """A Bulk 2.0 job didn't finish within the ``timeout`` of ``wait()``.
+
+    The job keeps running in Salesforce. ``state`` is the last state the client saw.
+    """
+
+    job_id: str | None
+    state: str | None
+
+    def __init__(
+        self, message: str = "", *, job_id: str | None = None, state: str | None = None, **kw: Any
+    ) -> None:
+        super().__init__(message, **kw)
+        self.job_id = job_id
+        self.state = state
 
 
 class ApexError(SalesforceError):
