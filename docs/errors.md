@@ -211,7 +211,9 @@ SalesforceError
 │   ├── RowLocked                  UNABLE_TO_LOCK_ROW                   (retryable)
 │   ├── RecordSaveBlocked          CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY (often an unhandled trigger exception)
 │   ├── FlowFailed                 CANNOT_EXECUTE_FLOW_TRIGGER
-│   └── StorageLimitExceeded       STORAGE_LIMIT_EXCEEDED
+│   ├── StorageLimitExceeded       STORAGE_LIMIT_EXCEEDED
+│   └── EventPublishFailed         platform event publish refused, e.g. LIMIT_EXCEEDED
+│       └── EventPublishUnavailable  PLATFORM_EVENT_PUBLISHING_UNAVAILABLE  (retryable)
 ├── LimitError
 │   ├── RequestLimitExceeded       REQUEST_LIMIT_EXCEEDED (403) or 429; .retry_after
 │   └── BudgetExceeded             the library's own budget guard; .usage
@@ -220,12 +222,12 @@ SalesforceError
 ├── BulkJobFailed                  Bulk 2.0 job failed; .job_id, .state, .error_message   (used from 0.3)
 ├── ApexError                      APEX_ERROR, or an error from an Apex REST class; .body
 ├── GraphQLError                   GraphQL errors array; .graphql_errors                 (used from 0.3)
-├── SoapFault                      unmapped SOAP fault; .fault_code                      (used from 0.2)
+├── SoapFault                      unmapped SOAP fault (lead convert, merge); .fault_code
 └── UnexpectedResponse             HTML pages (proxies, maintenance), non-JSON bodies, unexpected shapes
 ```
 
-`BulkJobFailed`, `GraphQLError` and `SoapFault` exist now to keep the hierarchy stable. Nothing
-in 0.1 raises them.
+`BulkJobFailed` and `GraphQLError` exist now to keep the hierarchy stable. Nothing raises them
+yet.
 
 ## How it works
 
@@ -278,6 +280,20 @@ The client checks each response in this order:
 
 An unknown `errorCode` falls back to the status rule in step 6. `.error_code` still holds the
 code.
+
+### SOAP faults
+
+[Lead convert and merge](guides/leads.md) use the SOAP API. A SOAP fault maps by its
+`exceptionCode` with the table above, because a fault is always HTTP 500. An unknown code
+raises `SoapFault`, with the raw `faultcode` in `.fault_code`. A rejected session
+(`INVALID_SESSION_ID`) refreshes the token once, like a REST `401`.
+
+### Platform event errors
+
+When you publish a [platform event](guides/platform-events.md), `PLATFORM_EVENT_PUBLISHING_UNAVAILABLE`
+raises `EventPublishUnavailable`. `LIMIT_EXCEEDED`, `PLATFORM_EVENT_PUBLISH_FAILED` and any other
+unknown code raise `EventPublishFailed`. Known record errors keep their class, such as
+`RequiredFieldMissing`.
 
 ### What the client doesn't do
 

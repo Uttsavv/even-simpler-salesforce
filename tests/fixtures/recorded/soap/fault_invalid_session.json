@@ -1,0 +1,5 @@
+{
+  "synthetic": true,
+  "source": "hand-written from the SOAP API Developer Guide, Error Handling (API faults, ExceptionCode): https://developer.salesforce.com/docs/atlas.en-us.api.meta/api/sforce_api_concepts_errorhandling.htm",
+  "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns=\"urn:partner.soap.sforce.com\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:sf=\"urn:fault.partner.soap.sforce.com\"><soapenv:Body><soapenv:Fault><faultcode>sf:INVALID_SESSION_ID</faultcode><faultstring>INVALID_SESSION_ID: Invalid Session ID found in SessionHeader: Illegal Session</faultstring><detail><sf:UnexpectedErrorFault xsi:type=\"sf:UnexpectedErrorFault\"><sf:exceptionCode>INVALID_SESSION_ID</sf:exceptionCode><sf:exceptionMessage>Invalid Session ID found in SessionHeader: Illegal Session</sf:exceptionMessage></sf:UnexpectedErrorFault></detail></soapenv:Fault></soapenv:Body></soapenv:Envelope>"
+}

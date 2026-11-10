@@ -1,0 +1,5 @@
+{
+  "synthetic": true,
+  "source": "hand-written from the SOAP API Developer Guide, Error Handling (API faults, ExceptionCode): https://developer.salesforce.com/docs/atlas.en-us.api.meta/api/sforce_api_concepts_errorhandling.htm",
+  "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns=\"urn:partner.soap.sforce.com\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:sf=\"urn:fault.partner.soap.sforce.com\"><soapenv:Body><soapenv:Fault><faultcode>sf:INVALID_ID_FIELD</faultcode><faultstring>INVALID_ID_FIELD: invalid record id</faultstring><detail><sf:InvalidIdFault xsi:type=\"sf:InvalidIdFault\"><sf:exceptionCode>INVALID_ID_FIELD</sf:exceptionCode><sf:exceptionMessage>invalid record id</sf:exceptionMessage></sf:InvalidIdFault></detail></soapenv:Fault></soapenv:Body></soapenv:Envelope>"
+}

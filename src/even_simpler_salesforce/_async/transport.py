@@ -338,7 +338,10 @@ class AsyncTransport:
                             raw.json()  # raises InvalidJSONResponse inside the pipeline
                         return raw
 
-                    if isinstance(err, SessionExpired) and err.status == 401:
+                    # SOAP reports a rejected session as an HTTP 500 fault with INVALID_SESSION_ID.
+                    if isinstance(err, SessionExpired) and (
+                        err.status == 401 or err.error_code == "INVALID_SESSION_ID"
+                    ):
                         if refreshed or not runtime.can_refresh or not resend_after_401(spec, err):
                             if refreshed:
                                 err.message = f"{err.message} (still rejected after one token refresh)"
@@ -404,10 +407,14 @@ class AsyncTransport:
             "Accept-Encoding": "gzip, deflate",
             "User-Agent": self.user_agent,
         }
+        content = spec.content
+        if spec.session_body is not None:
+            # SOAP: the token travels in SessionHeader inside the body, built per attempt.
+            del headers["Authorization"]
+            content = spec.session_body(token.access_token)
         headers.update(spec.headers)
         if self.call_options:
             headers = merge_call_options(headers, self.call_options)
-        content = spec.content
         if content is not None:
             headers.setdefault("Content-Type", spec.content_type or "application/json")
             if spec.compress and len(content) > GZIP_THRESHOLD:

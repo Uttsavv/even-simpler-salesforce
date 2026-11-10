@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import gzip
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import quote as _urlquote
@@ -66,6 +66,9 @@ class RequestSpec:
         allow_not_modified: Treat 304 as success (conditional GETs).
         expect_json: A non-empty 2xx body must be JSON; otherwise the call fails inside the
             pipeline with ``UnexpectedResponse`` (so the ``sf.request`` event says ``error``).
+        session_body: SOAP only: builds the body from the access token of each attempt (the
+            token goes in ``SessionHeader``, so a refreshed token gets a new body). Replaces
+            ``content``; no ``Authorization`` header is sent.
     """
 
     method: str
@@ -85,6 +88,7 @@ class RequestSpec:
     priority: str | None = None
     allow_not_modified: bool = False
     expect_json: bool = True
+    session_body: Callable[[str], bytes] | None = field(default=None, repr=False, compare=False)
 
     @property
     def is_idempotent(self) -> bool:

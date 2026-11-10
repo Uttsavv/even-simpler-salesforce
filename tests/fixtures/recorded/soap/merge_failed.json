@@ -1,0 +1,5 @@
+{
+  "synthetic": true,
+  "source": "hand-written from the SOAP API Developer Guide, merge() and MergeResult: https://developer.salesforce.com/docs/atlas.en-us.api.meta/api/sforce_api_calls_merge.htm",
+  "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns=\"urn:partner.soap.sforce.com\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:sf=\"urn:fault.partner.soap.sforce.com\"><soapenv:Body><mergeResponse><result><errors><message>entity is deleted</message><statusCode>ENTITY_IS_DELETED</statusCode></errors><id xsi:nil=\"true\"/><success>false</success></result></mergeResponse></soapenv:Body></soapenv:Envelope>"
+}
