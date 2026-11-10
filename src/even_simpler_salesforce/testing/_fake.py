@@ -715,7 +715,7 @@ class FakeSalesforce(_FakeControls):
         self.close()
 
     def close(self) -> None:
-        """Close the fake family (later calls raise ``RuntimeError``). No-op on children."""
+        """Close the fake family (later calls raise ``TransportError``). No-op on children."""
         if self._root:
             self._state.closed = True
 
@@ -934,6 +934,8 @@ class FakeSalesforce(_FakeControls):
         """Dispatch to a handler registered with :meth:`on_request`."""
         if json is not None and content is not None:
             raise ValueError("pass json= or content=, not both")
+        if method.upper() in ("GET", "HEAD") and (json is not None or content is not None):
+            raise ValueError(f"{method.upper()} requests can't carry a body")
         req = FakeRequest(
             method.upper(),
             self._state.normalise_path(path),
@@ -1204,7 +1206,7 @@ class AsyncFakeSalesforce(_FakeControls):
         await self.aclose()
 
     async def aclose(self) -> None:
-        """Close the fake family (later calls raise ``RuntimeError``). No-op on children."""
+        """Close the fake family (later calls raise ``TransportError``). No-op on children."""
         self._sync.close()
 
     @property

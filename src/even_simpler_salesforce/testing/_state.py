@@ -13,13 +13,14 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, TypeVar
 
+from .._async.client import _sobject_of  # pyright: ignore[reportPrivateUsage]
 from ..config import Budget, Priority
 from ..context import current_call_context
 from ..core.cursor import Cursor, decode_cursor, encode_cursor
 from ..core.http import build_url, check_record_id, check_sobject, path_template
 from ..core.limits import LimitInfo
 from ..core.records import COLLECTION_WRITE_CHUNK, apply_model, chunked, format_sf_datetime, with_type
-from ..core.soql import soql_hash, soql_identifier
+from ..core.soql import redact_soql, soql_hash, soql_identifier
 from ..errors import (
     Conflict,
     ErrorDetail,
@@ -29,8 +30,10 @@ from ..errors import (
     NotFound,
     RequiredFieldMissing,
     SalesforceError,
+    TransportError,
 )
 from ..models import BatchResult, Limit, QueryPlan, QueryResult, RecordResult, UpsertResult
+from ..observability.debug import debug_level
 from ..observability.events import Observer, ObserverHub
 from ..observability.summary import record_event
 from ..usage import UsageTracker
@@ -51,7 +54,6 @@ Rows = Sequence[Mapping[str, Any]]
 RowsSpec = Rows | Callable[[str], Rows]
 Match = str | re.Pattern[str] | Callable[[str], bool]
 
-_FROM = re.compile(r"\bFROM\s+([A-Za-z][A-Za-z0-9_]*)", re.IGNORECASE)
 MAX_OPEN_LOCATORS = 1000
 _LOCATOR = re.compile(r"/query(?:All)?/([0-9A-Za-z]{15,18})-(\d+)$")
 _VERSIONED = re.compile(r"^/services/data/v\d+\.\d/")
@@ -207,11 +209,6 @@ def _norm(soql: str) -> str:
     return " ".join(soql.split())
 
 
-def _sobject_of(soql: str) -> str | None:
-    m = _FROM.search(soql)
-    return m.group(1) if m else None
-
-
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -280,6 +277,7 @@ class FakeState:
         self.explain_plans: list[QueryPlan] = []
         self.counter = 0
         self.closed = False
+        self.debug = debug_level()
 
     # --- plumbing -------------------------------------------------------------------
 
@@ -315,7 +313,7 @@ class FakeState:
         call = FakeCall(operation, sobject, dict(args), caller, priority)
         with self.lock:
             if self.closed:
-                raise RuntimeError("the fake client is closed")
+                raise TransportError("client is closed", operation=operation, method=method, retryable=False)
             self.calls.append(call)
         error: SalesforceError | None = None
         result: Any = None
@@ -357,6 +355,10 @@ class FakeState:
     ) -> None:
         if records is None and error is None and isinstance(result, (QueryResult, BatchResult, list)):
             records = len(result)  # pyright: ignore[reportUnknownArgumentType]
+        records_failed: int | None = None
+        if error is None and operation.startswith("collections."):
+            # Like the real client: failed rows of a Collections response (retrieve has none).
+            records_failed = len(result.failed) if isinstance(result, BatchResult) else 0  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
         used, mx = self.usage.latest()
         self.usage.record_call(
             operation=operation,
@@ -376,12 +378,13 @@ class FakeState:
                 "outcome": "error" if error else "ok",
                 "error_code": error.error_code if error else None,
                 "error_class": type(error).__name__ if error else None,
-                "error_message": error.message[:200] if error and error.message else None,
+                "error_message": self._error_message(error, soql),
                 "duration_ms": 0.0,
                 "attempts": 1,
                 "retry_reasons": [],
                 "refreshed": False,
                 "records": records,
+                "records_failed": records_failed,
                 "bytes_in": 0,
                 "bytes_out": 0,
                 "api_used": used,
@@ -395,6 +398,13 @@ class FakeState:
                 "fake": True,
             },
         )
+
+    def _error_message(self, error: SalesforceError | None, soql: str | None) -> str | None:
+        # Like the real client: the message can quote record values, so it is only in the
+        # event with ESF_DEBUG, and query text in it is redacted.
+        if error is None or not error.message or not self.debug:
+            return None
+        return (redact_soql(error.message) if soql else error.message)[:200]
 
     def _pop_failure(self, operation: str, sobject: str | None) -> BaseException | None:
         with self.lock:
@@ -530,14 +540,15 @@ class FakeState:
         return apply_model([self.project(found[0], fields)], model)[0]
 
     def _multiple(self, sobject: str, found: list[dict[str, Any]], operation: str) -> MultipleMatches:
-        ids = tuple(str(r["Id"]) for r in found)
+        # Salesforce answers HTTP 300 with the record URLs, which the real client passes on.
+        urls = tuple(self.url(sobject, str(r["Id"])) for r in found)
         return MultipleMatches(
-            f"{len(ids)} records match the external id",
+            f"{len(urls)} records match the external id",
             error_code="MULTIPLE_CHOICES",
             status=300,
             operation=operation,
             sobject=sobject,
-            matches=ids,
+            matches=urls,
         )
 
     def create(self, sobject: str, data: Mapping[str, Any], operation: str = "sobject.create") -> str:

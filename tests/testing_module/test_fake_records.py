@@ -285,7 +285,7 @@ def test_context_manager_and_close() -> None:
     with FakeSalesforce() as fake:
         fake.sobject("Lead").create({"LastName": "x"})
     assert fake.closed
-    with pytest.raises(RuntimeError):
+    with pytest.raises(esf.TransportError):
         fake.sobject("Lead").create({"LastName": "y"})
 
 
