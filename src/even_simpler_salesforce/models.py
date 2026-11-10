@@ -13,6 +13,7 @@ from .errors import ErrorDetail, PartialFailure
 
 __all__ = [
     "ActionResult",
+    "AnonymousResult",
     "BatchResult",
     "LeadConvert",
     "LeadConvertResult",
@@ -356,3 +357,31 @@ class PublishResult:
     id: str | None = None
     uuid: str | None = None
     errors: tuple[ErrorDetail, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class AnonymousResult:
+    """Outcome of ``sf.tooling.execute_anonymous(code)``. Anonymous Apex can't return values.
+
+    Check ``compiled`` first: ``success`` is ``False`` for code that did not compile too.
+
+    Attributes:
+        compiled: Whether the code compiled.
+        success: Whether the code compiled and ran without an unhandled exception.
+        compile_problem: Why compilation failed, else ``None``.
+        exception_message: The unhandled exception, else ``None``.
+        exception_stack_trace: Its stack trace, else ``None``.
+        line: Line of the compile problem or exception, else ``None``.
+        column: Column of the compile problem or exception, else ``None``.
+        log: The debug log of the run with ``capture_log=True`` (``System.debug`` output), else
+            ``None``. Also ``None`` when the client could not find or read the log.
+    """
+
+    compiled: bool
+    success: bool
+    compile_problem: str | None = None
+    exception_message: str | None = None
+    exception_stack_trace: str | None = None
+    line: int | None = None
+    column: int | None = None
+    log: str | None = None

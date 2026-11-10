@@ -40,6 +40,7 @@ from .api.leads import Leads
 from .api.platform_events import PlatformEvents
 from .api.soap import merge as _merge
 from .api.sobject import SObject
+from .api.tooling import Tooling
 from .auth_runtime import AuthRuntime
 from .token_store import InMemoryTokenStore
 from .transport import Transport
@@ -202,6 +203,7 @@ class Salesforce:
         self.leads = Leads(self)
         self.platform_events = PlatformEvents(self)
         self.files = Files(self)
+        self.tooling = Tooling(self)
 
     @classmethod
     def _child(
@@ -335,18 +337,23 @@ class Salesforce:
         """``GET sobjects``: list of sObjects, served from the describe cache when fresh."""
         return self._describe("sobjects", "global", cached, None)
 
-    def _describe(self, path: str, what: str, cached: bool, sobject: str | None) -> dict[str, Any]:
+    def _describe(
+        self, path: str, what: str, cached: bool, sobject: str | None, *, base: str = ""
+    ) -> dict[str, Any]:
         # Callers get their own copy: the cached dict is shared by the whole family.
+        # ``base="tooling/"`` describes a Tooling API object (own path, cache key and operation).
         t = self._transport
         tok = self._runtime.token()
-        key = t.describe_key(tok, self._runtime.key, what)
+        key = t.describe_key(tok, self._runtime.key, base + what)
+        op = ("tooling." if base else "") + ("sobject.describe" if sobject else "describe_global")
+        path = base + path
         if not cached:
-            return copy.deepcopy(self._describe_fetch(path, key, False, sobject))
+            return copy.deepcopy(self._describe_fetch(path, key, False, sobject, op))
         # Single flight: concurrent misses for one key wait for the first fetch, then hit the cache.
         with t.single_flight(key):
-            return copy.deepcopy(self._describe_fetch(path, key, True, sobject))
+            return copy.deepcopy(self._describe_fetch(path, key, True, sobject, op))
 
-    def _describe_fetch(self, path: str, key: str, cached: bool, sobject: str | None) -> Any:
+    def _describe_fetch(self, path: str, key: str, cached: bool, sobject: str | None, op: str) -> Any:
         t = self._transport
         cfg = t.describe_cache
         cached_value: Any = t.cache.get(key) if cached else None
@@ -365,7 +372,7 @@ class Salesforce:
                 "GET",
                 path,
                 headers=headers,
-                operation="sobject.describe" if sobject else "describe_global",
+                operation=op,
                 sobject=sobject,
                 allow_not_modified=bool(headers),
             )
@@ -404,15 +411,18 @@ class Salesforce:
             raise ValueError("page_size must be between 200 and 2000")
         return {"Sforce-Query-Options": f"batchSize={page_size}"}
 
-    def _query_body(self, soql: str, page_size: int | None, include_deleted: bool) -> Any:
+    def _query_body(
+        self, soql: str, page_size: int | None, include_deleted: bool, base: str = ""
+    ) -> Any:
+        # ``base`` is "" for the REST API or "tooling/" for the Tooling API (same resource shape).
         raw = self._send(
             RequestSpec(
                 "GET",
-                "queryAll" if include_deleted else "query",
+                "tooling/query" if base else ("queryAll" if include_deleted else "query"),
                 params={"q": soql},
                 headers=self._query_headers(page_size),
                 idempotent=True,
-                operation="query",
+                operation="tooling.query" if base else "query",
                 sobject=_sobject_of(soql),
                 soql=soql,
             )
@@ -420,13 +430,14 @@ class Salesforce:
         return raw.json()
 
     def _locator_body(self, path: str, page_size: int | None, soql: str | None = None) -> Any:
+        tooling = "/tooling/query/" in path
         raw = self._send(
             RequestSpec(
                 "GET",
                 path,
                 headers=self._query_headers(page_size),
                 idempotent=True,
-                operation="query_more",
+                operation="tooling.query_more" if tooling else "query_more",
                 sobject=_sobject_of(soql) if soql else None,
                 soql=soql,
             )
@@ -536,7 +547,10 @@ class Salesforce:
     def query_more(
         self, cursor: Cursor | str, *, page_size: int | None = None, model: Any = None
     ) -> QueryResult[Any]:
-        """Fetch the page after ``cursor``. Rejects tampered or foreign cursors."""
+        """Fetch the page after ``cursor``. Rejects tampered or foreign cursors.
+
+        Accepts cursors of ``sf.tooling.query`` too; the page then comes from the Tooling API.
+        """
         path = decode_cursor(cursor, self._transport.cursor_key)
         return self._page(self._locator_body(path, page_size), model)
 
@@ -556,7 +570,19 @@ class Salesforce:
         completion before the parent row is yielded.
         """
         soql = soql_values(soql, values)
-        body: Any = self._query_body(soql, page_size, include_deleted)
+        for rec in self._rows(soql, page_size, include_deleted, model, expand_children):
+            yield rec
+
+    def _rows(
+        self,
+        soql: str,
+        page_size: int | None,
+        include_deleted: bool,
+        model: Any,
+        expand_children: bool,
+        base: str = "",
+    ) -> Iterator[Any]:
+        body: Any = self._query_body(soql, page_size, include_deleted, base)
         while True:
             page = self._page(body, None)
             for rec in page.records:

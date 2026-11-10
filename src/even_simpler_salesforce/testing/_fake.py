@@ -49,6 +49,7 @@ from ..usage import UsageTracker
 from ._fake_org import AsyncFakeLeads, AsyncFakePlatformEvents, FakeLeads, FakePlatformEvents, fake_merge
 from ._files import AsyncFakeFiles, FakeFiles
 from ._state import FakeCall, FakeRequest, FakeState, Match, QueryScript, RowsSpec, Who, _sobject_of
+from ._tooling import AsyncFakeTooling, FakeTooling, set_anonymous_script, set_completions
 
 __all__ = [
     "AsyncFakeActions",
@@ -212,6 +213,28 @@ class _FakeControls:
                 method, re.compile(re.escape(_APEX) + f"(?:{path.pattern})"), response, times
             )
 
+    def on_execute_anonymous(
+        self, match: Match, result: Any = None, *, times: int | None = None
+    ) -> QueryScript:
+        """Script the answer to ``sf.tooling.execute_anonymous(code)``. The code never runs.
+
+        Args:
+            match: The Apex code (compared with whitespace collapsed), a compiled regex
+                (``re.search``) or a predicate ``(code) -> bool``. The newest match wins.
+            result: An ``esf.AnonymousResult`` (default: compiled and successful), a callable
+                ``(code) -> AnonymousResult``, or an exception instance to raise. Its ``log``
+                is returned only when the call passes ``capture_log=True``.
+            times: Match at most this many times (``None`` = unlimited).
+
+        Returns:
+            The script; its ``hits`` attribute counts how often it matched.
+        """
+        return set_anonymous_script(self._state, match, result, times)
+
+    def set_completions(self, type: str, completions: Mapping[str, Any]) -> None:
+        """Set what ``sf.tooling.completions(type)`` returns (``{}`` otherwise)."""
+        set_completions(self._state, type, completions)
+
     def fail_next(
         self,
         operation: str,
@@ -358,6 +381,9 @@ class _FakeControls:
 class FakeSObject:
     """Fake of ``sf.sobject(name)``. Same methods and signatures as the real one."""
 
+    _op = "sobject."  # "tooling.sobject." for ``fake.tooling.sobject(name)``
+    _base = ""
+
     def __init__(self, state: FakeState, who: Who, name: str) -> None:
         self._state = state
         self._who = who
@@ -367,7 +393,7 @@ class FakeSObject:
         return f"<FakeSObject {self.name}>"
 
     def _path(self, *parts: str) -> str:
-        return "/".join(["sobjects", self.name, *parts])
+        return self._base + "/".join(["sobjects", self.name, *parts])
 
     def get(
         self,
@@ -380,7 +406,7 @@ class FakeSObject:
         """Return a stored record. Raises :class:`~even_simpler_salesforce.NotFound` when missing."""
         return self._state.run(
             self._who,
-            "sobject.get",
+            self._op + "get",
             self.name,
             {"id": record_id, "fields": fields, "if_modified_since": if_modified_since},
             lambda: self._state.get(self.name, record_id, fields, model, if_modified_since),
@@ -394,7 +420,7 @@ class FakeSObject:
         """Return the record whose ``field`` equals ``value``."""
         return self._state.run(
             self._who,
-            "sobject.get_by_external_id",
+            self._op + "get_by_external_id",
             self.name,
             {"field": field, "value": value, "fields": fields},
             lambda: self._state.get_by_external_id(self.name, field, value, fields, model),
@@ -406,7 +432,7 @@ class FakeSObject:
         """The describe set with ``fake.set_describe`` or a minimal synthesised one."""
         return self._state.run(
             self._who,
-            "sobject.describe",
+            self._op + "describe",
             self.name,
             {"cached": cached},
             lambda: self._state.describe(self.name),
@@ -418,7 +444,7 @@ class FakeSObject:
         """Basic sObject info (``objectDescribe`` + empty ``recentItems``)."""
         return self._state.run(
             self._who,
-            "sobject.metadata",
+            self._op + "metadata",
             self.name,
             {},
             lambda: self._state.metadata(self.name),
@@ -430,7 +456,7 @@ class FakeSObject:
         """Ids of records created or changed in ``[start, end]``."""
         return self._state.run(
             self._who,
-            "sobject.updated",
+            self._op + "updated",
             self.name,
             {"start": start, "end": end},
             lambda: self._state.updated(self.name, start, end),
@@ -442,7 +468,7 @@ class FakeSObject:
         """Records deleted in ``[start, end]``."""
         return self._state.run(
             self._who,
-            "sobject.deleted",
+            self._op + "deleted",
             self.name,
             {"start": start, "end": end},
             lambda: self._state.deleted_between(self.name, start, end),
@@ -460,7 +486,7 @@ class FakeSObject:
         """Store a new record and return its 18-character id."""
         return self._state.run(
             self._who,
-            "sobject.create",
+            self._op + "create",
             self.name,
             {"data": dict(data), "assignment_rule_id": assignment_rule_id, "allow_save": allow_save},
             lambda: self._state.create(self.name, data),
@@ -481,7 +507,7 @@ class FakeSObject:
         """Merge ``data`` into a stored record. :class:`NotFound` / :class:`Conflict` like the real API."""
         self._state.run(
             self._who,
-            "sobject.update",
+            self._op + "update",
             self.name,
             {
                 "id": record_id,
@@ -509,7 +535,7 @@ class FakeSObject:
         soql_identifier(field)
         return self._state.run(
             self._who,
-            "sobject.upsert",
+            self._op + "upsert",
             self.name,
             {
                 "field": field,
@@ -528,7 +554,7 @@ class FakeSObject:
         """Delete a stored record (a second delete raises ``NotFound(ENTITY_IS_DELETED)``)."""
         self._state.run(
             self._who,
-            "sobject.delete",
+            self._op + "delete",
             self.name,
             {"id": record_id, "if_unmodified_since": if_unmodified_since},
             lambda: self._state.delete(self.name, record_id, if_unmodified_since),
@@ -960,6 +986,7 @@ class FakeSalesforce(_FakeControls):
         self.leads = FakeLeads(self._state, self._who)
         self.platform_events = FakePlatformEvents(self._state, self._who)
         self.files = FakeFiles(self._state, self._who)
+        self.tooling = FakeTooling(self._state, self._who)
 
     @classmethod
     def _view(
@@ -978,6 +1005,7 @@ class FakeSalesforce(_FakeControls):
         view.leads = FakeLeads(state, who)
         view.platform_events = FakePlatformEvents(state, who)
         view.files = FakeFiles(state, who)
+        view.tooling = FakeTooling(state, who)
         return view
 
     def __repr__(self) -> str:
@@ -1564,6 +1592,7 @@ class AsyncFakeSalesforce(_FakeControls):
         self.leads = AsyncFakeLeads(inner.leads)
         self.platform_events = AsyncFakePlatformEvents(inner.platform_events)
         self.files = AsyncFakeFiles(inner.files)
+        self.tooling = AsyncFakeTooling(inner.tooling)
 
     @property
     def instance_url(self) -> str:

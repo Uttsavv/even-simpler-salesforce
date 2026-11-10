@@ -1,8 +1,8 @@
 """Opaque query cursors that are safe to hand to a frontend (§9.2, O9).
 
 A cursor is the base64url-encoded ``nextRecordsUrl`` path, optionally followed by ``.`` and an
-HMAC-SHA256 tag. Decoding validates the path against the shape of a real query locator so a
-client-supplied cursor can't make the server call arbitrary URLs.
+HMAC-SHA256 tag. Decoding validates the path against the shape of a real query locator (REST
+or Tooling API) so a client-supplied cursor can't make the server call arbitrary URLs.
 """
 
 from __future__ import annotations
@@ -17,7 +17,10 @@ from ..errors import MalformedQuery
 
 __all__ = ["Cursor", "decode_cursor", "encode_cursor"]
 
-_LOCATOR_PATH = re.compile(r"^/services/data/v\d+\.\d/query(All)?/[0-9A-Za-z]{15,18}-\d+$")
+# Data API ``query``/``queryAll`` locators and Tooling API ``tooling/query`` locators.
+_LOCATOR_PATH = re.compile(
+    r"^/services/data/v\d+\.\d/(?:tooling/query|query(?:All)?)/[0-9A-Za-z]{15,18}-\d+$"
+)
 
 
 class Cursor(str):
