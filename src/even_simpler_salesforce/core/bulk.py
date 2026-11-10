@@ -72,6 +72,7 @@ __all__ = [
     "parse_job_state",
     "parse_locator",
     "parse_result_pages",
+    "has_result_pages",
     "query_job_body",
     "select_fields",
 ]
@@ -303,7 +304,6 @@ class CsvCutter:
         self._pos = 0  # absolute offset of the next chunk
         self._quoted = 0  # 1 when the next chunk starts inside a quoted field
         self._head = bytearray()
-        self._data_start = 0  # 3 when the file starts with a UTF-8 byte order mark
         self._header_end: int | None = None
         self._part_start = 0
         self._last = 0
@@ -312,9 +312,8 @@ class CsvCutter:
     @property
     def header(self) -> bytes:
         """The header row with its line ending (no byte order mark)."""
-        if self._header_end is None:
-            return bytes(self._head[self._data_start :])
-        return bytes(self._head[self._data_start : self._header_end])
+        start = len(_BOM) if self._head.startswith(_BOM) else 0
+        return bytes(self._head[start : self._header_end])
 
     def _check_utf8(self, chunk: bytes, final: bool = False) -> None:
         try:
@@ -329,8 +328,6 @@ class CsvCutter:
         self._check_utf8(chunk)
         base, i = self._pos, 0
         if self._header_end is None:
-            if base == 0 and chunk.startswith(_BOM):
-                self._data_start = len(_BOM)
             j = i
             while True:
                 j = chunk.find(b"\n", j)
@@ -389,12 +386,9 @@ class CsvCutter:
             raise ValueError("the CSV ends inside a quoted value")
         if self._header_end is None:
             raise ValueError("the CSV has no data rows")
-        if self._pos > self._last:  # the last record has no line ending
-            if len(self.header) + self._pos - self._part_start > self.limit:
-                if self._last == self._part_start:
-                    raise ValueError(f"a CSV record is larger than the upload limit of {self.limit} bytes")
-                self._cut(self._last)
-            self._last = self._pos
+        # feed() keeps the open part within the limit, so a last record without a line ending
+        # fits into it.
+        self._last = self._pos
         if self._last > self._part_start:
             self._parts.append((self._part_start, self._last))
         if not self._parts:
@@ -628,6 +622,18 @@ def parse_locator(headers: Mapping[str, str]) -> str | None:
     return value.strip()
 
 
+#: First API version with ``GET jobs/query/{id}/resultPages``.
+RESULT_PAGES_VERSION = 58.0
+
+
+def has_result_pages(api_version: str) -> bool:
+    """Whether ``api_version`` offers the ``resultPages`` resource for parallel downloads."""
+    try:
+        return float(api_version) >= RESULT_PAGES_VERSION
+    except ValueError:
+        return False
+
+
 def parse_result_pages(body: Any, prefix: str) -> tuple[list[str], str | None]:
     """The result URLs and the next ``resultPages`` URL of a ``resultPages`` response.
 
@@ -655,7 +661,8 @@ def parse_result_pages(body: Any, prefix: str) -> tuple[list[str], str | None]:
         checked(cast("dict[str, Any]", p).get("resultUrl") if isinstance(p, dict) else None)
         for p in cast("list[Any]", pages)
     ]
-    nxt: Any = data.get("nextRecordsUrl")
+    # The reference names the field ``nextRecordUrl``; its example shows ``nextRecordsUrl``.
+    nxt: Any = data.get("nextRecordsUrl") or data.get("nextRecordUrl")
     done = data.get("done")
     if done is True or not nxt:
         return urls, None

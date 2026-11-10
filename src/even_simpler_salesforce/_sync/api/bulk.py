@@ -31,6 +31,7 @@ from ...core.bulk import (
     check_line_ending,
     combine_infos,
     compound_hint,
+    has_result_pages,
     ingest_job_body,
     parse_bulk_error,
     parse_job_info,
@@ -544,8 +545,10 @@ class Bulk:
             *values: Values for the ``{}`` placeholders.
             include_deleted: Use ``queryAll``: also deleted and archived records.
             parallel_downloads: With more than 1, the client downloads up to this many result
-                pages at the same time (``resultPages``) and still yields rows in order. Pages
-                that wait their turn are kept in temporary files, not in memory.
+                pages at the same time and still yields rows in order. Salesforce hands out at
+                most five page URLs at a time (``resultPages``, API 58.0 and later), so values
+                above 5 don't download more. Pages that wait their turn are kept in temporary
+                files, not in memory.
             poll: How long to wait between status calls. Defaults to ``esf.Backoff()``.
             timeout: Seconds to wait for the job to finish.
 
@@ -578,7 +581,10 @@ class Bulk:
         infos = [info]
         _Jobs(self._sf, "query").wait(infos, poll, timeout, lambda i: hint(i.error_message))
         info = infos[0]
-        rows = self._serial(info) if parallel_downloads == 1 else self._parallel(info, parallel_downloads)
+        if parallel_downloads > 1 and has_result_pages(info.api_version):
+            rows = self._parallel(info, parallel_downloads)
+        else:  # resultPages needs API 58.0; older versions download one page at a time
+            rows = self._serial(info)
         try:
             for row in rows:
                 yield {k: (v if v != "" else None) for k, v in row.items()}
