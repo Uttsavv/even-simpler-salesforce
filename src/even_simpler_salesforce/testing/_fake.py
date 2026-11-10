@@ -46,6 +46,7 @@ from ..models import (
 )
 from ..observability.events import Observer, ObserverHub
 from ..usage import UsageTracker
+from ._bulk import AsyncFakeBulk, FakeBulk
 from ._fake_org import AsyncFakeLeads, AsyncFakePlatformEvents, FakeLeads, FakePlatformEvents, fake_merge
 from ._files import AsyncFakeFiles, FakeFiles
 from ._state import FakeCall, FakeRequest, FakeState, Match, QueryScript, RowsSpec, Who, _sobject_of
@@ -960,6 +961,7 @@ class FakeSalesforce(_FakeControls):
         self.leads = FakeLeads(self._state, self._who)
         self.platform_events = FakePlatformEvents(self._state, self._who)
         self.files = FakeFiles(self._state, self._who)
+        self.bulk = FakeBulk(self._state, self._who)
 
     @classmethod
     def _view(
@@ -978,6 +980,7 @@ class FakeSalesforce(_FakeControls):
         view.leads = FakeLeads(state, who)
         view.platform_events = FakePlatformEvents(state, who)
         view.files = FakeFiles(state, who)
+        view.bulk = FakeBulk(state, who)
         return view
 
     def __repr__(self) -> str:
@@ -1564,6 +1567,7 @@ class AsyncFakeSalesforce(_FakeControls):
         self.leads = AsyncFakeLeads(inner.leads)
         self.platform_events = AsyncFakePlatformEvents(inner.platform_events)
         self.files = AsyncFakeFiles(inner.files)
+        self.bulk = AsyncFakeBulk(inner.bulk)
 
     @property
     def instance_url(self) -> str:

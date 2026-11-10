@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from ._bulk import AsyncFakeBulk, AsyncFakeIngestJob, FakeBulk, FakeIngestJob
 from ._fake import (
     AsyncFakeActions,
     AsyncFakeApex,
@@ -42,22 +43,26 @@ if TYPE_CHECKING:
 __all__ = [
     "AsyncFakeActions",
     "AsyncFakeApex",
+    "AsyncFakeBulk",
     "AsyncFakeCollections",
     "AsyncFakeLeads",
     "AsyncFakePlatformEvents",
     "AsyncFakeFileStream",
     "AsyncFakeFiles",
+    "AsyncFakeIngestJob",
     "AsyncFakeSObject",
     "AsyncFakeSalesforce",
     "AsyncTokenStoreContract",
     "FakeActions",
     "FakeApex",
+    "FakeBulk",
     "FakeCall",
     "FakeCollections",
     "FakeLeads",
     "FakePlatformEvents",
     "FakeFileStream",
     "FakeFiles",
+    "FakeIngestJob",
     "FakeRequest",
     "FakeSObject",
     "FakeSalesforce",
