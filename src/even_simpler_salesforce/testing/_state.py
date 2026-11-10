@@ -596,20 +596,9 @@ class FakeState:
         self,
         sobject: str,
         rid: str,
-        if_unmodified_since: datetime | None = None,
         operation: str = "sobject.delete",
     ) -> None:
         self.find(sobject, rid, operation)
-        if if_unmodified_since is not None:
-            changed = self.modified.get(sobject, {}).get(rid[:15])
-            if changed is not None and changed > if_unmodified_since:
-                raise Conflict(
-                    "The record was modified after the If-Unmodified-Since date",
-                    error_code="PRECONDITION_FAILED",
-                    status=412,
-                    operation=operation,
-                    sobject=sobject,
-                )
         del self.store[sobject][rid[:15]]
         self.deleted.setdefault(sobject, {})[rid[:15]] = self.clock()
 

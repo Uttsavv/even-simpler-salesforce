@@ -415,14 +415,14 @@ class FakeSObject:
             records=1,
         )
 
-    def delete(self, record_id: str, *, if_unmodified_since: datetime | None = None) -> None:
+    def delete(self, record_id: str) -> None:
         """Delete a stored record (a second delete raises ``NotFound(ENTITY_IS_DELETED)``)."""
         self._state.run(
             self._who,
             "sobject.delete",
             self.name,
-            {"id": record_id, "if_unmodified_since": if_unmodified_since},
-            lambda: self._state.delete(self.name, record_id, if_unmodified_since),
+            {"id": record_id},
+            lambda: self._state.delete(self.name, record_id),
             method="DELETE",
             path=self._path(record_id),
             records=1,
@@ -1052,9 +1052,9 @@ class AsyncFakeSObject:
             field, value, data, assignment_rule_id=assignment_rule_id, allow_save=allow_save
         )
 
-    async def delete(self, record_id: str, *, if_unmodified_since: datetime | None = None) -> None:
+    async def delete(self, record_id: str) -> None:
         """See :meth:`FakeSObject.delete`."""
-        self._inner.delete(record_id, if_unmodified_since=if_unmodified_since)
+        self._inner.delete(record_id)
 
 
 class AsyncFakeCollections:
