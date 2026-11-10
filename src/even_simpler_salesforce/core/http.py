@@ -66,6 +66,7 @@ class RequestSpec:
         allow_not_modified: Treat 304 as success (conditional GETs).
         expect_json: A non-empty 2xx body must be JSON; otherwise the call fails inside the
             pipeline with ``UnexpectedResponse`` (so the ``sf.request`` event says ``error``).
+            With ``False``, only a body whose content type declares JSON is checked.
     """
 
     method: str

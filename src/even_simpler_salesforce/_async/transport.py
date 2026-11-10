@@ -330,7 +330,7 @@ class AsyncTransport:
                         raw, err, sent = None, f.error, f.sent
                     if err is None:
                         assert raw is not None
-                        if spec.expect_json and raw.content and raw.status != 304:
+                        if raw.content and raw.status != 304 and (spec.expect_json or raw.is_json):
                             raw.json()  # raises InvalidJSONResponse inside the pipeline
                         return raw
 
