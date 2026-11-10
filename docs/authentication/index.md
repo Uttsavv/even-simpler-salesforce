@@ -39,14 +39,37 @@ Every login flow except `StaticToken` takes `domain=`. It names the host the cli
 | `"login"` | `https://login.salesforce.com` | production and Developer Edition |
 | `"test"` | `https://test.salesforce.com` | sandboxes |
 | `"https://acme.my.salesforce.com"` | your My Domain | any org; also `https://acme--uat.sandbox.my.salesforce.com` |
+| `"https://acme.my.site.com/partners"` | an Experience Cloud site | site members; see [Experience Cloud sites](#experience-cloud-sites) |
 
 ```python
 print(auth.token_url)  # https://acme.my.salesforce.com/services/oauth2/token
 ```
 
 If you pass anything else, the login flow raises `ValueError` when you create it. That includes
-`http://` URLs, paths and bare host names. `ClientCredentials` needs the My Domain URL, because
-Salesforce doesn't support `login` or `test` for that flow.
+`http://` URLs, bare host names, query strings and fragments. `ClientCredentials` needs the My
+Domain URL, because Salesforce doesn't support `login`, `test` or a site URL for that flow.
+
+### Experience Cloud sites
+
+Members of an Experience Cloud site log in through the site URL. Pass the site URL as `domain`,
+with its path prefix. The client then calls every OAuth endpoint under that URL.
+
+```python
+site = esf.WebServerFlow(
+    domain="https://acme.my.site.com/partners",
+    client_id="3MVG9...",
+    redirect_uri="https://app.example.com/oauth/callback",
+    token_key="member:42",
+)
+print(site.token_url)  # https://acme.my.site.com/partners/services/oauth2/token
+```
+
+- Use the site URL without `/s` or a page name. The client drops a trailing `/`.
+- The path may hold only letters, digits, `-`, `.`, `_` and `~`, in segments split by `/`.
+  The client rejects `.` and `..` segments.
+- Authorize, token, revoke and introspect requests go to the site URL. `sf.auth.userinfo()`
+  and every API call go to the `instance_url` from the token response.
+- For `JwtBearer`, the `aud` claim is the site URL. See [JWT bearer](jwt-bearer.md#audience).
 
 ## Proactive refresh (opt-in)
 

@@ -419,7 +419,7 @@ All are frozen config objects implementing the `Auth` protocol. They hold no tok
 | `TokenExchange` *(later)* | RFC 8693 exchange | | |
 | `DeviceFlow` *(later)* | CLIs and devices | | |
 
-`domain` accepts `"login"`, `"test"`, or a full `https://<mydomain>.my.salesforce.com` URL.
+`domain` accepts `"login"`, `"test"`, a full `https://<mydomain>.my.salesforce.com` URL, or an Experience Cloud site URL with a path prefix (`https://<site>.my.site.com/<prefix>`; no query, fragment, `.`/`..` or empty segments). The OAuth endpoints (authorize, token, revoke, introspect) are built under that base; `userinfo` and API calls use the token's `instance_url`. For a site base, the JWT `aud` is the site URL. `ClientCredentials` rejects a site path (documented on My Domain only).
 
 **WebServerFlow helpers** (pure + one I/O call each):
 

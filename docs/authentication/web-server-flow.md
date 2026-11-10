@@ -9,7 +9,7 @@ import even_simpler_salesforce as esf
 
 def flow_for(user_id: str) -> esf.WebServerFlow:
     return esf.WebServerFlow(
-        domain="https://acme.my.salesforce.com",  # or "login" / "test"
+        domain="https://acme.my.salesforce.com",  # or "login", "test" or a site URL
         client_id="3MVG9...",
         client_secret="...",  # optional for public clients (PKCE only)
         redirect_uri="https://app.example.com/oauth/callback",
@@ -117,7 +117,7 @@ To check whether a stored token is still active, call `sf.auth.introspect(token_
 
 | Argument | Default | What it does |
 |---|---|---|
-| `domain` | required | `"login"`, `"test"` or a My Domain URL |
+| `domain` | required | `"login"`, `"test"`, a My Domain URL or an [Experience Cloud site URL](index.md#experience-cloud-sites) |
 | `client_id` | required | consumer key of the app |
 | `redirect_uri` | required | must exactly match the app's callback URL |
 | `token_key` | required | [token store](token-stores.md) key, one per Salesforce identity |
