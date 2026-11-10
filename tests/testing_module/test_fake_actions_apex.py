@@ -44,6 +44,7 @@ def test_single_bulk_and_errors() -> None:
     assert [c.operation for c in fake.calls] == ["actions.flow"] * 4
     assert fake.calls[0].args == {"name": "Assign_Lead", "inputs": {"leadId": "1"}}
     assert len(fake.actions.flow("Assign_Lead", [])) == 0
+    assert len(fake.calls) == 4  # like the real client, an empty batch makes no call
 
 
 def test_static_outputs_error_instance_and_times() -> None:
