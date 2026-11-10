@@ -278,6 +278,17 @@ def classify(
             return E.ReauthorizationRequired(desc or err, error_code=err, raw=raw, **common)
         return E.OAuthError(desc or err, error=err, error_description=desc, raw=raw, **common)
 
+    # A rejected bearer token in OAuth form, on any path (e.g. userinfo through a proxy). The
+    # error code tells the transport the token was refused before anything ran.
+    if (
+        status == 401
+        and isinstance(body, Mapping)
+        and body.get("error") == "invalid_token"  # pyright: ignore[reportUnknownMemberType]
+        and "errorCode" not in body
+    ):
+        desc = str(body.get("error_description") or "invalid_token")  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]
+        return E.SessionExpired(desc, error_code="invalid_token", raw=raw, **common)
+
     details = parse_details(body)
     if details:
         first = details[0]

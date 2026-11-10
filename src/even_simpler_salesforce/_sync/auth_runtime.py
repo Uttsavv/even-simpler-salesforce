@@ -17,6 +17,7 @@ from ..auth.token import Token, merge_token, parse_token_response
 from ..core.http import RawResponse, check_instance_url
 from ..core.retry import backoff_delay
 from ..errors import (
+    AuthError,
     ConnectError,
     OAuthError,
     ReauthorizationRequired,
@@ -136,7 +137,7 @@ class AuthRuntime:
     def set_token(self, token: Token) -> Token:
         """Save ``token`` to the store and memory (used by ``exchange_code``)."""
         with self.transport.single_flight(self.key):
-            current = self.store.load(self.key)
+            current = self._load()
             saved = self.store.save(
                 self.key, token, expected_version=current.version if current is not None else None
             )
@@ -171,7 +172,7 @@ class AuthRuntime:
                 tok = self.transport.tokens.get(self.key)
                 if tok is not None:
                     return tok
-                tok = self.store.load(self.key)
+                tok = self._load()
                 if tok is None:
                     self._raise_shared_failure(entered)
                     tok = self._refresh_recorded(None, proactive=False)
@@ -208,11 +209,25 @@ class AuthRuntime:
         self.transport.refresh_outcomes[self.key] = (generation, None)
         return new
 
+    def _load(self) -> Token | None:
+        """Load this key's token from the store and check its instance URL.
+
+        The client sends the bearer token to ``instance_url``, so a token store that was
+        tampered with must not be able to point it at another host or at plain http.
+        """
+        tok = self.store.load(self.key)
+        if tok is not None:
+            try:
+                check_instance_url(tok.instance_url, what="stored token instance_url")
+            except ValueError as exc:
+                raise AuthError(f"{exc} (token_key_hash={self.key_hash})") from None
+        return tok
+
     def _post_form(self, url: str, form: dict[str, str]) -> RawResponse:
         return self.transport.post_form(url, form)
 
     def _reload_if_changed(self, base: Token | None) -> Token | None:
-        reloaded = self.store.load(self.key)
+        reloaded = self._load()
         if reloaded is not None and (base is None or reloaded.access_token != base.access_token):
             return reloaded
         return None
@@ -221,7 +236,7 @@ class AuthRuntime:
         started = time.perf_counter()
         policy = self.transport.retry
         with store_lock_sync(self.store, self.key):
-            current = self.store.load(self.key)
+            current = self._load()
             newer = current is not None and (stale is None or current.access_token != stale.access_token)
             if newer and current is not None and not self._due(current):
                 return current  # another process refreshed already
@@ -314,7 +329,7 @@ class AuthRuntime:
                     self.key, new, expected_version=current.version if current is not None else None
                 )
             except TokenConflict:
-                reloaded = self.store.load(self.key)
+                reloaded = self._load()
                 if reloaded is None:
                     raise
                 return reloaded
@@ -379,7 +394,7 @@ class AuthRuntime:
         try:
             return self.store.save(self.key, updated, expected_version=saved.version)
         except TokenConflict:
-            return (self.store.load(self.key)) or saved
+            return (self._load()) or saved
 
     def _warn_introspect(self, msg: str) -> None:
         if not self._introspect_warned:

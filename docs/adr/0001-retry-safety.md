@@ -36,10 +36,18 @@ Unchanged: requests that **never left the client** (connect errors) are always r
 requests Salesforce explicitly **rejected without running** (`UNABLE_TO_LOCK_ROW`, 429 /
 `REQUEST_LIMIT_EXCEEDED` with `Retry-After`), for every method.
 
+A `401` gets one token refresh and one resend for every method only if Salesforce says it
+refused the token: `INVALID_SESSION_ID`, or OAuth `invalid_token`. Salesforce checks the token
+before it runs anything. Any other `401` may come from code that already ran: an Apex REST
+class can return `401` itself. That request is refreshed and resent only if it is a read by the
+rule above. Otherwise the client raises `SessionExpired` and sends nothing more (added
+2026-11-10).
+
 ## Consequences
 
 - A timeout on `update`/`delete`/`upsert`/Collections writes now surfaces as `RequestTimeout` (or
   `ServerError`) to the caller, who knows whether a second run is acceptable.
 - Callers that know a write is safe to repeat (no triggers, deterministic) can opt in with
   `sf.request(..., idempotent=True)`.
-- Guarded by `tests/unit/test_retry.py` and `tests/contract/test_review_fixes.py` (both clients).
+- Guarded by `tests/unit/test_retry.py`, `tests/contract/test_review_fixes.py` and
+  `tests/contract/test_auth_transport_review.py` (both clients).

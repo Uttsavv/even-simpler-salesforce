@@ -71,6 +71,21 @@ def test_parse_token_response_minimal_and_bad() -> None:
         parse_token_response({"access_token": 1, "instance_url": INSTANCE})
 
 
+@pytest.mark.parametrize(
+    "instance_url",
+    ["http://attacker.example", "ftp://acme.my.salesforce.com", "acme.my.salesforce.com", "https://"],
+)
+def test_parse_token_response_rejects_unsafe_instance_url(instance_url: str) -> None:
+    """The bearer token goes to ``instance_url``: it must be https (http only for loopback)."""
+    with pytest.raises(esf.UnexpectedResponse, match="instance_url"):
+        parse_token_response({"access_token": "a", "instance_url": instance_url})
+
+
+def test_parse_token_response_allows_loopback_http() -> None:
+    t = parse_token_response({"access_token": "a", "instance_url": "http://localhost:8080/"})
+    assert t.instance_url == "http://localhost:8080"
+
+
 def test_merge_token() -> None:
     prev = make_token("old", "RT-old").replace(version=7, scope=frozenset({"api"}))
     new = esf.Token(access_token="new", instance_url=INSTANCE, issued_at=datetime.now(timezone.utc))
@@ -269,6 +284,10 @@ def test_jwt_assertion_decodes(rsa_keys: tuple[bytes, bytes]) -> None:
         ("login", None, "https://login.salesforce.com"),
         ("test", None, "https://test.salesforce.com"),
         ("https://acme--dev.sandbox.my.salesforce.com", None, "https://test.salesforce.com"),
+        ("https://test.salesforce.com", None, "https://test.salesforce.com"),
+        ("https://TEST.salesforce.com/", None, "https://test.salesforce.com"),
+        ("https://login.salesforce.com", None, "https://login.salesforce.com"),
+        ("https://test.salesforce.com.attacker.example", None, "https://login.salesforce.com"),
         (INSTANCE, "test", "https://test.salesforce.com"),
         (INSTANCE, "login", "https://login.salesforce.com"),
         (INSTANCE, "https://custom.example.com", "https://custom.example.com"),
@@ -312,3 +331,14 @@ def test_jwt_audience_uses_hostname_not_substring() -> None:
 
     assert aud("https://acme--dev.sandbox.my.salesforce.com") == "https://test.salesforce.com"
     assert aud("https://x.sandbox.my.salesforce.com.attacker.example") == "https://login.salesforce.com"
+
+
+def test_auth_start_repr_hides_pkce_verifier_and_state() -> None:
+    start = _flow().authorization_url(state="st-secret-1")
+    assert start.code_verifier
+    text = repr(start)
+    assert start.code_verifier not in text
+    # state is part of the URL anyway; it is not repeated as a field.
+    assert ", state=" not in text
+    assert "code_verifier" not in text
+    assert start.url.split("?")[0] in text

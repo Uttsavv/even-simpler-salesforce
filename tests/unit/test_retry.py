@@ -6,7 +6,7 @@ import pytest
 
 import even_simpler_salesforce as esf
 from even_simpler_salesforce.core.http import RequestSpec
-from even_simpler_salesforce.core.retry import RetryDecision, backoff_delay, decide_retry
+from even_simpler_salesforce.core.retry import RetryDecision, backoff_delay, decide_retry, resend_after_401
 
 GET = RequestSpec("GET", "query")
 HEAD = RequestSpec("HEAD", "query")
@@ -162,3 +162,26 @@ def test_retry_policy_defaults_and_validation() -> None:
 def test_apexrest_get_can_opt_in() -> None:
     spec = RequestSpec("GET", "/services/apexrest/orders", idempotent=True)
     assert decide_retry(spec, esf.RequestTimeout("x"), sent=True).retry is True
+
+
+# --- 401: refresh and resend ----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("code", ["INVALID_SESSION_ID", "invalid_token"])
+@pytest.mark.parametrize("spec", ALL, ids=_ids(ALL))
+def test_401_token_rejected_resends_any_method(spec: RequestSpec, code: str) -> None:
+    """Salesforce rejects a bad token before it runs anything, so every method may be resent."""
+    assert resend_after_401(spec, esf.SessionExpired("x", error_code=code, status=401))
+
+
+@pytest.mark.parametrize("spec", IDEMPOTENT, ids=_ids(IDEMPOTENT))
+def test_other_401_resends_reads(spec: RequestSpec) -> None:
+    assert resend_after_401(spec, esf.SessionExpired("HTTP 401", status=401))
+
+
+@pytest.mark.parametrize("spec", NON_IDEMPOTENT, ids=_ids(NON_IDEMPOTENT))
+def test_other_401_does_not_resend_writes(spec: RequestSpec) -> None:
+    """An Apex REST class can return 401 after it ran: resending would run it twice."""
+    exc = esf.SessionExpired("customer PIN invalid", error_code="UNAUTHORIZED", status=401)
+    assert not resend_after_401(spec, exc)
+    assert not resend_after_401(spec, esf.SessionExpired("HTTP 401", status=401))

@@ -296,6 +296,23 @@ def test_error_key_outside_oauth_is_not_oauth() -> None:
     assert e404.raw is not None
     e401 = classify(resp(401, {"error": "custom"}), SPEC)
     assert not isinstance(e401, esf.OAuthError)
+    assert e401 is not None
+    assert e401.error_code is None
+
+
+def test_invalid_token_401_on_any_path_names_the_token() -> None:
+    """The transport resends a write after a 401 only if the error says the token was refused."""
+    apex = RequestSpec("POST", "/services/apexrest/Orders", operation="raw")
+    exc = classify(resp(401, {"error": "invalid_token", "error_description": "expired"}), apex)
+    assert type(exc) is esf.SessionExpired
+    assert (exc.error_code, exc.message, exc.status) == ("invalid_token", "expired", 401)
+    bare = classify(resp(401, {"error": "invalid_token"}), apex)
+    assert bare is not None
+    assert bare.message == "invalid_token"
+    # Not a 401, or a REST error list: no OAuth reading.
+    other = classify(resp(400, {"error": "invalid_token"}), apex)
+    assert other is not None
+    assert other.error_code is None
 
 
 def test_apex_error_keeps_body() -> None:

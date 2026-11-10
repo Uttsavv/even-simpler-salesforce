@@ -88,7 +88,8 @@ The client always resends reads. It resends writes only if Salesforce did not ru
 | 429 / `REQUEST_LIMIT_EXCEEDED` with `Retry-After` | retried | retried |
 | `REQUEST_LIMIT_EXCEEDED` without `Retry-After` | not retried | not retried |
 | any other 4xx | not retried | not retried |
-| `401` | one token refresh and resend (not counted as a retry) | same |
+| `401` with `INVALID_SESSION_ID` or `invalid_token` | one token refresh and resend (not counted as a retry) | same |
+| any other `401` | one token refresh and resend | not resent: raises `SessionExpired` |
 
 ### `retryable`
 

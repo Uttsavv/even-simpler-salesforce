@@ -59,8 +59,9 @@ class AuthStart:
     in the user's session until the callback."""
 
     url: str
-    state: str
-    code_verifier: str | None
+    state: str = field(repr=False)
+    #: PKCE secret: ``repr()`` leaves it out, like ``state``.
+    code_verifier: str | None = field(repr=False)
 
 
 class Auth:
@@ -346,8 +347,9 @@ class JwtBearer(Auth):
     def aud(self) -> str:
         """``aud`` claim: ``login``/``test``/a custom URL; inferred from ``domain`` when unset."""
         if self.audience is None:
-            host = (urlparse(self.domain).hostname or "").lower()
-            sandbox = self.domain == "test" or host.endswith(".sandbox.my.salesforce.com")
+            # Decide on the parsed host, so "test" and "https://test.salesforce.com" agree.
+            host = (urlparse(resolve_domain(self.domain)).hostname or "").lower()
+            sandbox = host == "test.salesforce.com" or host.endswith(".sandbox.my.salesforce.com")
             return _HOSTS["test" if sandbox else "login"]
         return _HOSTS.get(self.audience, self.audience)
 

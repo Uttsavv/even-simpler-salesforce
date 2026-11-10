@@ -28,7 +28,7 @@ shows how.
 
 `authorization_url()` builds the login URL. It makes no request. It returns an
 `AuthStart(url, state, code_verifier)`. Keep `state` and `code_verifier` in the user's
-server-side session until the callback.
+server-side session until the callback. `repr()` of an `AuthStart` leaves both out.
 
 ```python
 flow = flow_for("42")
