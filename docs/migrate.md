@@ -160,6 +160,7 @@ Each finding has a rule id. Rule ids are stable: new rules can come, but ids nev
 | [`apexecute`](#apexecute) | rewritten, or TODO |
 | [`exceptions`](#exceptions) | rewritten, or TODO |
 | [`client-internals`](#client-internals) | rewritten, or TODO |
+| [`client-methods`](#client-methods) | rewritten, or TODO |
 | [`login`](#login) | TODO |
 | [`not-a-client`](#not-a-client) | needs review, or TODO |
 | [`unsupported`](#unsupported) | TODO |
@@ -360,6 +361,20 @@ These cases get a TODO:
 `X.instance_url` is the instance of the current token. It is `None` before the first call. The
 access token isn't public by design. The codemod matches `session_id`, `headers` and `session` only
 on a confirmed client.
+
+### `client-methods`
+
+Some client methods changed name or result.
+
+| Before | After | Status |
+|---|---|---|
+| `X.describe()` | `X.describe_global()` | rewritten |
+| `X.quick_search(term)` | `X.parameterized_search(term)`, which returns the list of records | TODO |
+| `X.search(sosl)["searchRecords"]` | `X.search(sosl)`, which returns the list of records | TODO |
+| `X.limits()["X"]["Remaining"]`, `["Max"]` | `X.limits()["X"].remaining`, `.max` | TODO |
+| `X.is_sandbox()` | query `SELECT IsSandbox FROM Organization` | TODO |
+
+`describe()` needs a confirmed client, because `describe` is a common method name.
 
 ### `login`
 

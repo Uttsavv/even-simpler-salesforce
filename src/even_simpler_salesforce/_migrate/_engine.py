@@ -159,6 +159,7 @@ NO_EQUIVALENT = {
     "describe_layout": "describe_layout() has no 0.1 method; use "
     'sf.request("GET", "sobjects/<Obj>/describe/layouts/<recordTypeId>")',
 }
+CLIENT_METHODS = frozenset({"describe", "quick_search", "search", "limits", "is_sandbox"})
 #: Method references whose calls the tool can't see: (rule, review message).
 REF_REVIEW = {
     "create": ("create-return", "create() now returns the id (str), not a dict; check the callers"),
@@ -1035,6 +1036,10 @@ class _Transformer(cst.CSTTransformer):
             return updated_node
         method = func.attr.value
         target = func.value
+        if method in CLIENT_METHODS and self.enabled("client-methods") and not self.ignored("client-methods"):
+            done = self._client_method(original_node, updated_node)
+            if done is not None:
+                return done
         if method in PER_OBJECT and isinstance(target, cst.Attribute):
             return self._object_call(original_node, updated_node)
         if method in ("query_all", "query_all_iter"):
@@ -1110,6 +1115,85 @@ class _Transformer(cst.CSTTransformer):
             original,
         )
         return updated
+
+    def _client_method(self, original: cst.Call, updated: cst.Call) -> cst.BaseExpression | None:
+        """Client calls that changed name or result (``describe()``, ``limits()``, ...).
+
+        Returns the new call, or ``None`` when the call isn't one of them.
+        """
+        func = cast(cst.Attribute, original.func)
+        method, target = func.attr.value, func.value
+        if method == "describe":  # sf.describe(); sf.Lead.describe() is per-object
+            if original.args or self.confirm(target) != "yes":
+                return None
+            new = updated.with_changes(
+                func=cast(cst.Attribute, updated.func).with_changes(attr=cst.Name("describe_global"))
+            )
+            self.record("client-methods", "rewritten", "describe() → describe_global()", original, new)
+            return new
+        if self.confirm_distinctive(target) is None:
+            return None
+        if method == "quick_search":
+            self.record(
+                "client-methods",
+                "todo",
+                "quick_search(term) → parameterized_search(term), which returns the list of records",
+                original,
+                suggestion=_code(updated.with_changes(func=func.with_changes(attr=cst.Name("parameterized_search")))),
+            )
+        elif method == "is_sandbox":
+            self.record(
+                "client-methods",
+                "todo",
+                "is_sandbox() isn't provided; query SELECT IsSandbox FROM Organization",
+                original,
+            )
+        elif method == "search":
+            if any(self._key_of(u) == "searchRecords" for u in self._result_uses(original)):
+                self.record(
+                    "client-methods",
+                    "todo",
+                    'search() now returns the list of records; drop ["searchRecords"]',
+                    original,
+                )
+        elif method == "limits":
+            for u in self._result_uses(original):
+                outer = self.parent(u)
+                if self._key_of(u) is not None and self._key_of(outer) in ("Max", "Remaining"):
+                    self.record(
+                        "client-methods",
+                        "todo",
+                        'limits() returns dict[str, Limit]: ["X"]["Remaining"] → ["X"].remaining, '
+                        '["Max"] → .max',
+                        original,
+                    )
+                    break
+        return updated
+
+    def _result_uses(self, call: cst.Call) -> list[cst.CSTNode]:
+        """The call (or its ``await``) if used directly, else the loads of the one name it is
+        assigned to."""
+        node, parent = self._call_context(call)
+        if (
+            isinstance(parent, cst.Assign)
+            and len(parent.targets) == 1
+            and isinstance(parent.targets[0].target, cst.Name)
+        ):
+            return self.scope_uses(parent.targets[0].target) or []
+        return [node]
+
+    def _key_of(self, node: cst.CSTNode | None) -> str | None:
+        """``"k"`` when ``node`` is used as ``node["k"]`` or ``node.get("k"...)``."""
+        if node is None:
+            return None
+        p = self.parent(node)
+        if isinstance(p, cst.Subscript) and p.value is node:
+            return _string_value(_slice(p) or cst.Name("x"))
+        if isinstance(p, cst.Attribute) and p.value is node and p.attr.value == "get":
+            call = self.parent(p)
+            if isinstance(call, cst.Call) and call.args:
+                return _string_value(call.args[0].value)
+        return None
 
     def _has_format_soql(self, call: cst.Call) -> bool:
         first = call.args[0].value if call.args else None

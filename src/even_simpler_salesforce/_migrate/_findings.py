@@ -37,6 +37,7 @@ RULES: tuple[str, ...] = (
     "apexecute",
     "exceptions",
     "client-internals",
+    "client-methods",
     "login",
     "not-a-client",
     "unsupported",
