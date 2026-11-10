@@ -36,6 +36,7 @@ from ..core.http import (
     path_template,
 )
 from ..core.limits import parse_limit_info
+from ..core.soap import is_soap_path
 from ..core.retry import backoff_delay, decide_retry, resend_after_401
 from ..core.soql import redact_soql, soql_hash
 from ..errors import (
@@ -428,8 +429,11 @@ class AsyncTransport:
                         raise err  # the caller's stream was (partly) read; it can't be resent
 
                     # SOAP reports a rejected session as an HTTP 500 fault with INVALID_SESSION_ID.
+                    # Only there: on REST a non-401 status means code ran (an Apex REST class can
+                    # return any body), so it is never answered with a refresh and a resend.
                     if isinstance(err, SessionExpired) and (
-                        err.status == 401 or err.error_code == "INVALID_SESSION_ID"
+                        err.status == 401
+                        or (err.error_code == "INVALID_SESSION_ID" and is_soap_path(spec.path))
                     ):
                         if refreshed or not runtime.can_refresh or not resend_after_401(spec, err):
                             if refreshed:
