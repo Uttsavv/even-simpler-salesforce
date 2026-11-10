@@ -36,7 +36,7 @@ from ..core.http import (
     path_template,
 )
 from ..core.limits import parse_limit_info
-from ..core.retry import backoff_delay, decide_retry
+from ..core.retry import backoff_delay, decide_retry, resend_after_401
 from ..core.soql import redact_soql, soql_hash
 from ..errors import (
     ConnectError,
@@ -316,10 +316,14 @@ class Transport:
         self.refresh_outcomes.pin(pinned_key)
         try:
             self.usage.check(priority, operation=spec.operation)
-            with self.gate if self.gate is not None else _compat.nullcontext():
-                token = runtime.token()
-                retries_used = 0
-                while True:
+            token: Token | None = None
+            retries_used = 0
+            while True:
+                # The gate is held for one attempt (and a refresh), never across a backoff
+                # sleep, so a retrying call doesn't block unrelated calls.
+                with self.gate if self.gate is not None else _compat.nullcontext():
+                    if token is None:
+                        token = runtime.token()
                     attempts += 1
                     sent = True
                     generation = runtime.generation()
@@ -337,7 +341,7 @@ class Transport:
                         return raw
 
                     if isinstance(err, SessionExpired) and err.status == 401:
-                        if refreshed or not runtime.can_refresh:
+                        if refreshed or not runtime.can_refresh or not resend_after_401(spec, err):
                             if refreshed:
                                 err.message = f"{err.message} (still rejected after one token refresh)"
                                 err.args = (err.message,)
@@ -368,7 +372,7 @@ class Transport:
                             "status": err.status,
                         },
                     )
-                    self.sleep(delay)
+                self.sleep(delay)
         except BaseException as exc:
             # Not only SalesforceError: a rejected path (ValueError), a cancelled task or a
             # bug must not be reported as outcome="ok".

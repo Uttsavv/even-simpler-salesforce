@@ -22,7 +22,7 @@ For other tags or identities, use `tagged()` and `with_auth()` children. They ar
 share everything with the root client.
 
 `max_concurrency` limits the requests in flight for the whole client family. By default there
-is no limit.
+is no limit. A call that waits before a retry gives its place to another call.
 
 ## Make fewer calls
 

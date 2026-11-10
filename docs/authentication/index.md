@@ -121,24 +121,28 @@ async with esf.AsyncSalesforce(auth) as sf:
    finds none, it requests a new one.
 2. Each call sends the token the client holds. If Salesforce answers `401` with
    `INVALID_SESSION_ID`, the client refreshes once and resends the call. A second `401` raises
-   `SessionExpired`.
-3. Concurrent calls share one refresh. If many tasks or threads hit an expired token at once,
+   `SessionExpired`. A `401` without that code can come from an Apex REST class that already
+   ran. The client resends such a call only if it is a read.
+3. The client checks the `instance_url` of every token it gets from the token endpoint or the
+   token store. It must be `https://`, or `http://` to a loopback host. Otherwise the client
+   raises an error and doesn't send the bearer token.
+4. Concurrent calls share one refresh. If many tasks or threads hit an expired token at once,
    the client sends exactly one token request. The rest wait for it. If it fails, every waiting
    caller gets the same error. The next call tries again.
-4. For `WebServerFlow`, the client saves a rotated refresh token to the store before it uses the
+5. For `WebServerFlow`, the client saves a rotated refresh token to the store before it uses the
    new access token. It never resends a refresh request that may have reached Salesforce,
    because resending a rotated-out refresh token makes Salesforce revoke the whole token chain.
    If such a request times out, the client re-reads the store. If no other process stored a new
    token, it raises `RefreshFailed(ambiguous=True)`.
-5. If two requests use the same refresh token at once, Salesforce answers "token request is
+6. If two requests use the same refresh token at once, Salesforce answers "token request is
    already being processed". The client waits, re-reads the store and tries again, with at most 3 token
    requests in total.
-6. If the refresh token is dead, Salesforce answers `invalid_grant`. The client raises
+7. If the refresh token is dead, Salesforce answers `invalid_grant`. The client raises
    `ReauthorizationRequired` and emits the `sf.auth.reauth_required` event. The user has to log
    in again.
-7. If a `WebServerFlow` has no stored refresh token, the client raises `ReauthorizationRequired`
+8. If a `WebServerFlow` has no stored refresh token, the client raises `ReauthorizationRequired`
    with `error_code="no_refresh_token"`. It sends no token request.
-8. For `ClientCredentials` and `JwtBearer`, `invalid_grant` means a configuration problem and
+9. For `ClientCredentials` and `JwtBearer`, `invalid_grant` means a configuration problem and
    raises `OAuthError`.
 
 Token requests to `/services/oauth2/token` don't count as API calls in `sf.request` events.

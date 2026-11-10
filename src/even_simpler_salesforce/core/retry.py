@@ -9,7 +9,7 @@ from .. import errors as E
 from ..config import RetryPolicy
 from .http import RequestSpec
 
-__all__ = ["RetryDecision", "backoff_delay", "decide_retry"]
+__all__ = ["RetryDecision", "backoff_delay", "decide_retry", "resend_after_401"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +55,21 @@ def decide_retry(spec: RequestSpec, exc: E.SalesforceError, *, sent: bool) -> Re
         return RetryDecision(True, f"http_{status}") if idem else _NO
 
     return _NO
+
+
+# Error codes that say Salesforce rejected the access token itself, before running anything.
+_TOKEN_REJECTED = frozenset({"INVALID_SESSION_ID", "invalid_token"})
+
+
+def resend_after_401(spec: RequestSpec, exc: E.SalesforceError) -> bool:
+    """Whether a 401 may be answered with a token refresh and one resend (ADR 0001).
+
+    Salesforce rejects an expired or revoked token with ``INVALID_SESSION_ID`` (REST) or
+    ``invalid_token`` (OAuth endpoints) before it runs any code, so a resend is safe for every
+    method. Any other 401 may come from code that already ran: an Apex REST class can return
+    401 itself. Such a request is resent only if it is idempotent.
+    """
+    return exc.error_code in _TOKEN_REJECTED or spec.is_idempotent
 
 
 def backoff_delay(policy: RetryPolicy, attempt: int, rng: random.Random | None = None) -> float:
