@@ -43,6 +43,7 @@ implementation. They have the methods of the real clients for these areas:
 - records
 - query and search
 - Collections
+- lead convert, merge and platform events
 - `request`, `limits` and `usage`
 - `with_auth` and `tagged`
 
@@ -74,6 +75,27 @@ The Collections methods follow the same rules.
 
 The fake doesn't run validation rules, triggers or required-field checks. To simulate them, use
 [`reject()` or `fail_next()`](#inject-errors).
+
+### Lead convert, merge and platform events
+
+`fake.leads.convert()` creates the account, contact and opportunity in the fake's store. It
+also marks the lead converted. `fake.merge()` deletes the duplicates and points fields that held
+their ids at the kept record. `fake.published(name)` returns the events you published.
+
+```python
+from even_simpler_salesforce.testing import FakeSalesforce
+
+fake = FakeSalesforce()
+lead = fake.add("Lead", {"LastName": "Doe", "Company": "Acme"})
+result = fake.leads.convert(lead, converted_status="Closed - Converted")
+assert fake.record("Account", result.account_id)["Name"] == "Acme"
+
+fake.platform_events.publish("Order_Event__e", {"Order_Number__c": "A-1"})
+assert fake.published("Order_Event__e") == [{"Order_Number__c": "A-1"}]
+```
+
+`reject("Lead", error)` makes conversions fail, and `reject("Order_Event__e", error)` makes
+publishes fail.
 
 ## Script queries
 

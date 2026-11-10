@@ -16,6 +16,21 @@ lives in invocable actions, Flows and Apex.
   Apex REST. `esf generate actions` will produce typed stubs. Anonymous Apex lives under Tooling
   and runs only when called explicitly. Triggers can't be called directly (D26).
 
+## Implementation (0.2)
+
+- `sf.leads.convert()`, `sf.leads.convert_many()` (100 per call) and `sf.merge()` (Lead, Contact,
+  Account; one or two duplicates) post Partner SOAP envelopes to `/services/Soap/u/{version}`. The
+  access token goes in `SessionHeader.sessionId`, built per attempt so a refreshed token gets a new
+  body. No `Authorization` header goes to the SOAP endpoint.
+- Envelope building and parsing are pure functions in `core/soap.py`. The parser is stdlib `expat`
+  and refuses any DTD or entity declaration. Faults map by `exceptionCode` to the §8 classes, else
+  `SoapFault`.
+- Sources: [convertLead()](https://developer.salesforce.com/docs/atlas.en-us.api.meta/api/sforce_api_calls_convertlead.htm),
+  [LeadConvertResult](https://developer.salesforce.com/docs/atlas.en-us.api.meta/api/sforce_api_calls_convertlead_leadconvertresult.htm),
+  [merge()](https://developer.salesforce.com/docs/atlas.en-us.api.meta/api/sforce_api_calls_merge.htm),
+  [Error handling](https://developer.salesforce.com/docs/atlas.en-us.api.meta/api/sforce_api_concepts_errorhandling.htm).
+  The wire details still need a sandbox check (V11, V29).
+
 ## Consequences
 
 - None of this is in 0.1. Actions, Apex REST helpers and convert/merge are planned for 0.2, and

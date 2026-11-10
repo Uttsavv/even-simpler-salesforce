@@ -4,7 +4,7 @@ This reference is generated from the docstrings. The **public, SemVer-covered su
 every name in `even_simpler_salesforce.__all__`, plus the documented submodules
 `even_simpler_salesforce.testing` and `even_simpler_salesforce.observability`. Classes shown
 here under private module paths (the objects returned by `sf.sobject()`, `sf.collections` and
-`sf.auth`) are public through those attributes, not through their import path.
+`sf.auth`, `sf.leads`, `sf.platform_events`) are public through those attributes, not through their import path.
 
 `Salesforce` is generated from `AsyncSalesforce` and has the same methods without `async`, so
 only the async classes are shown in full.
@@ -25,6 +25,10 @@ The reasons behind the design are written down in the
 ::: even_simpler_salesforce._async.api.collections.AsyncCollections
 
 ::: even_simpler_salesforce._async.api.auth_api.AsyncAuthApi
+
+::: even_simpler_salesforce._async.api.leads.AsyncLeads
+
+::: even_simpler_salesforce._async.api.platform_events.AsyncPlatformEvents
 
 ## Login flows and tokens
 
@@ -75,6 +79,14 @@ The reasons behind the design are written down in the
 ::: even_simpler_salesforce.RecordResult
 
 ::: even_simpler_salesforce.UpsertResult
+
+::: even_simpler_salesforce.LeadConvert
+
+::: even_simpler_salesforce.LeadConvertResult
+
+::: even_simpler_salesforce.MergeResult
+
+::: even_simpler_salesforce.PublishResult
 
 ::: even_simpler_salesforce.QueryPlan
 

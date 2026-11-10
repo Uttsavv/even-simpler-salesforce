@@ -12,7 +12,9 @@ The org enforces a few rules so error examples have something to hit:
 - a ``Lead`` with ``Country`` but no ``Street`` fails the validation rule
   ``[ADDR_REQUIRED] Street is required when Country is set`` (``FIELD_CUSTOM_VALIDATION_EXCEPTION``);
 - custom fields other than ``External_Id__c`` / ``Score__c`` don't exist (``INVALID_FIELD``);
-- objects other than Lead, Account, Contact, Opportunity and User don't exist (``INVALID_TYPE``).
+- objects other than Lead, Account, Contact, Opportunity and User don't exist (``INVALID_TYPE``);
+- platform events (``*__e``) are accepted and kept in :attr:`FakeOrg.events`;
+- the Partner SOAP endpoint answers ``convertLead`` and ``merge``.
 """
 
 from __future__ import annotations
@@ -21,6 +23,8 @@ import gzip
 import itertools
 import json
 import re
+import uuid
+import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from email.utils import format_datetime
 from typing import Any
@@ -39,6 +43,10 @@ CUSTOM_FIELDS = {"External_Id__c", "Score__c"}
 CHILD_RELATIONSHIPS = {"Contacts": ("Contact", "AccountId"), "Opportunities": ("Opportunity", "AccountId")}
 CHILD_PAGE = 2  # tiny on purpose, so ``expand_children`` has something to follow
 
+_SOAP = re.compile(r"^/services/Soap/u/\d+\.\d$")
+_P = "{urn:partner.soap.sforce.com}"
+_O = "{urn:sobject.partner.soap.sforce.com}"
+_ENV = "{http://schemas.xmlsoap.org/soap/envelope/}"
 _DATA = re.compile(r"^/services/data/v(?P<v>\d+\.\d)/(?P<rest>.*)$")
 _FIELD_LIST = re.compile(r"^\s*SELECT\s+(?P<fields>.+?)\s+FROM\s+(?P<obj>\w+)(?P<tail>.*)$", re.I | re.S)
 _EQ = re.compile(r"(\w+)\s*=\s*('(?:[^'\\]|\\.)*'|true|false|null|-?\d+(?:\.\d+)?)", re.I)
@@ -113,12 +121,15 @@ class FakeOrg:
         self.revoked: set[str] = set()
         self.requests: list[httpx.Request] = []
         self.describe_modified = _now() - timedelta(days=3)
+        self.events: list[tuple[str, dict[str, Any]]] = []
         self._seed()
 
     # --- data ------------------------------------------------------------------------
 
     def new_id(self, sobject: str) -> str:
-        return f"{PREFIXES[sobject]}8d{next(self.ids):013d}"
+        # The counter sits in the first 15 characters, which are unique per record in Salesforce
+        # (the last 3 are a case checksum).
+        return f"{PREFIXES[sobject]}8d{next(self.ids):010d}AAA"
 
     def _store(self, sobject: str, data: dict[str, Any]) -> dict[str, Any]:
         rid = data.get("Id") or self.new_id(sobject)
@@ -358,6 +369,8 @@ class FakeOrg:
         try:
             if path.startswith("/services/oauth2/"):
                 return self._oauth(request, path.rsplit("/", 1)[1])
+            if _SOAP.match(path):
+                return self._soap(request)
             auth = request.headers.get("authorization", "")
             if not auth.startswith("Bearer ") or auth[7:] in self.revoked:
                 raise Rejected("INVALID_SESSION_ID", "Session expired or invalid", status=401)
@@ -476,6 +489,8 @@ class FakeOrg:
             return self._json(
                 {"sObjects": [{"name": n, "count": len(self.records.get(n, {}))} for n in names if n]}
             )
+        if parts[0] == "sobjects" and len(parts) == 2 and parts[1].endswith("__e") and method == "POST":
+            return self._json(self._publish(parts[1], self._body(request) or {}), 201)
         if parts[0] == "composite" and len(parts) >= 2 and parts[1] == "sobjects":
             return self._collections(request, method, parts[2:], params)
         if parts[0] == "sobjects":
@@ -592,6 +607,8 @@ class FakeOrg:
             return self._json(out)
         rows = body.get("records", [])
         aon = bool(body.get("allOrNone"))
+        if method == "POST" and rows and all(str(r["attributes"]["type"]).endswith("__e") for r in rows):
+            return self._json([self._publish(r["attributes"]["type"], r) for r in rows])
         if method == "POST":
             return self._json(self._batch(rows, aon, lambda r: self.create(r["attributes"]["type"], r)["Id"]))
         if method == "PATCH" and not parts:
@@ -656,3 +673,103 @@ class FakeOrg:
                         ],
                     )
         return results
+
+    # --- platform events ---------------------------------------------------------------
+
+    def _publish(self, name: str, data: dict[str, Any]) -> dict[str, Any]:
+        self.events.append((name, {k: v for k, v in data.items() if k != "attributes"}))
+        return {
+            "id": f"e008d{next(self.ids):010d}AAA",
+            "success": True,
+            "errors": [{"statusCode": "OPERATION_ENQUEUED", "message": str(uuid.uuid4()), "fields": []}],
+        }
+
+    # --- Partner SOAP (convertLead, merge) ---------------------------------------------
+
+    def _soap_reply(self, inner: str, status: int = 200) -> httpx.Response:
+        body = (
+            '<?xml version="1.0" encoding="UTF-8"?><soapenv:Envelope '
+            'xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns="urn:partner.soap.sforce.com" '
+            'xmlns:sf="urn:fault.partner.soap.sforce.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">'
+            f"<soapenv:Body>{inner}</soapenv:Body></soapenv:Envelope>"
+        )
+        return httpx.Response(
+            status, headers={"content-type": "text/xml; charset=utf-8"}, content=body.encode()
+        )
+
+    def _soap_fault(self, code: str, message: str) -> httpx.Response:
+        return self._soap_reply(
+            f"<soapenv:Fault><faultcode>sf:{code}</faultcode><faultstring>{code}: {message}</faultstring>"
+            f'<detail><sf:UnexpectedErrorFault xsi:type="sf:UnexpectedErrorFault">'
+            f"<sf:exceptionCode>{code}</sf:exceptionCode><sf:exceptionMessage>{message}</sf:exceptionMessage>"
+            "</sf:UnexpectedErrorFault></detail></soapenv:Fault>",
+            500,
+        )
+
+    @staticmethod
+    def _soap_errors(exc: Rejected) -> str:
+        fields = "".join(f"<fields>{f}</fields>" for f in exc.fields)
+        return f"<errors>{fields}<message>{exc.message}</message><statusCode>{exc.code}</statusCode></errors>"
+
+    def _soap(self, request: httpx.Request) -> httpx.Response:
+        root = ET.fromstring(request.content)
+        session = root.findtext(f"{_ENV}Header/{_P}SessionHeader/{_P}sessionId") or ""
+        if not session or session in self.revoked:
+            return self._soap_fault(
+                "INVALID_SESSION_ID", "Invalid Session ID found in SessionHeader: Illegal Session"
+            )
+        self.api_used += 1
+        body = root.find(f"{_ENV}Body")
+        call = body[0] if body is not None and len(body) else None
+        if call is not None and call.tag == f"{_P}convertLead":
+            results = [self._convert(c) for c in call.findall(f"{_P}leadConverts")]
+            return self._soap_reply(f"<convertLeadResponse>{''.join(results)}</convertLeadResponse>")
+        if call is not None and call.tag == f"{_P}merge":
+            results = [self._merge(r) for r in call.findall(f"{_P}request")]
+            return self._soap_reply(f"<mergeResponse>{''.join(results)}</mergeResponse>")
+        return self._soap_fault("INVALID_OPERATION", "unsupported call")
+
+    def _convert(self, c: ET.Element) -> str:
+        lead_id = c.findtext(f"{_P}leadId") or ""
+        lead = self.records["Lead"].get(lead_id)
+        if lead is None or lead.get("IsConverted"):
+            exc = Rejected("INVALID_CROSS_REFERENCE_KEY", "invalid cross reference id", [])
+            return f"<result>{self._soap_errors(exc)}<success>false</success></result>"
+        account = c.findtext(f"{_P}accountId") or self._store("Account", {"Name": lead["Company"]})["Id"]
+        contact = (
+            c.findtext(f"{_P}contactId")
+            or self._store(
+                "Contact", {"LastName": lead["LastName"], "AccountId": account, "Email": lead.get("Email")}
+            )["Id"]
+        )
+        opp = ""
+        if c.findtext(f"{_P}doNotCreateOpportunity") != "true":
+            name = c.findtext(f"{_P}opportunityName") or lead["Company"]
+            opp = self._store("Opportunity", {"Name": name, "AccountId": account})["Id"]
+        lead.update(Status=c.findtext(f"{_P}convertedStatus"), IsConverted=True)
+        return (
+            f"<result><accountId>{account}</accountId><contactId>{contact}</contactId><leadId>{lead_id}</leadId>"
+            + (f"<opportunityId>{opp}</opportunityId>" if opp else '<opportunityId xsi:nil="true"/>')
+            + "<success>true</success></result>"
+        )
+
+    def _merge(self, r: ET.Element) -> str:
+        sobject = r.findtext(f"{_P}masterRecord/{_O}type") or ""
+        master = r.findtext(f"{_P}masterRecord/{_O}Id") or ""
+        dups = [e.text or "" for e in r.findall(f"{_P}recordToMergeIds")]
+        table = self.records.get(sobject, {})
+        if master not in table or any(d not in table for d in dups):
+            exc = Rejected("ENTITY_IS_DELETED", "entity is deleted", [])
+            return f'<result>{self._soap_errors(exc)}<id xsi:nil="true"/><success>false</success></result>'
+        related: list[str] = []
+        for recs in self.records.values():
+            for rec in recs.values():
+                for k, v in list(rec.items()):
+                    if k != "Id" and v in dups:
+                        rec[k] = master
+                        related.append(rec["Id"])
+        for d in dups:
+            self.delete(sobject, d)
+        merged = "".join(f"<mergedRecordIds>{d}</mergedRecordIds>" for d in dups)
+        moved = "".join(f"<updatedRelatedIds>{i}</updatedRelatedIds>" for i in related)
+        return f"<result><id>{master}</id>{merged}<success>true</success>{moved}</result>"
