@@ -8,6 +8,7 @@ safe and records findings. Markers are attached to the statement that contains e
 from __future__ import annotations
 
 import re
+import warnings
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, cast
@@ -1903,7 +1904,9 @@ def _rules_can_apply(facts: _Collector, opts: Options) -> bool:
 
 def _compiles(source: str) -> bool:
     try:
-        compile(source, "<esf-migrate>", "exec", dont_inherit=True)
+        with warnings.catch_warnings():  # pass/fail only: no SyntaxWarnings about user files
+            warnings.simplefilter("ignore")
+            compile(source, "<esf-migrate>", "exec", dont_inherit=True)
     except (SyntaxError, ValueError):
         return False
     return True
@@ -1946,7 +1949,9 @@ def transform_source(source: str, opts: Options) -> tuple[str, list[Finding]]:
     code = new_module.code
     if code != source and _compiles(source):  # the original may use syntax newer than this Python
         try:
-            compile(code, "<esf-migrate>", "exec", dont_inherit=True)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                compile(code, "<esf-migrate>", "exec", dont_inherit=True)
         except SyntaxError as exc:  # safety net: never write code that doesn't compile
             raise RuntimeError(
                 f"a rewrite would produce invalid code ({exc.msg}, line {exc.lineno})"

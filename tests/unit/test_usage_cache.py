@@ -271,3 +271,24 @@ def test_org_key() -> None:
     assert org_key(None) is None
     assert org_key(tok) == "https://a.my.salesforce.com"
     assert org_key(tok.replace(org_id="00Dxx0000000001EAA")) == "00Dxx0000000001EAA"
+
+
+def test_bound_resolver_runs_outside_the_usage_lock() -> None:
+    tracker = UsageTracker(esf.Budget(block_all_above=0.99))
+    held: list[bool] = []
+
+    def resolve() -> str:
+        free = tracker._s.lock.acquire(blocking=False)  # pyright: ignore[reportPrivateUsage]
+        if free:
+            tracker._s.lock.release()  # pyright: ignore[reportPrivateUsage]
+        held.append(not free)
+        return "00Dorg"
+
+    view = tracker.bound(resolve)
+    view.observe(LimitInfo(api_used=1, api_max=10))
+    view.check("normal")
+    view.latest()
+    view.snapshot()
+    _ = view.fraction
+    assert held
+    assert not any(held)

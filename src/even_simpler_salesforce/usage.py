@@ -127,9 +127,13 @@ class UsageTracker:
     def bind(self, emit: Emit) -> None:
         self._s.emit = emit
 
-    def _org_locked(self, org: str | None) -> _OrgUsage | None:
+    def _resolved(self, org: str | None) -> str | None:
+        """``org``, else this view's org. Call it before taking the lock: ``resolve`` may lock too."""
         if org is None and self._resolve is not None:
-            org = self._resolve()
+            return self._resolve()
+        return org
+
+    def _org_locked(self, org: str | None) -> _OrgUsage | None:
         if org is None:
             org = self._s.last_org
         return self._s.orgs.get(org) if org is not None else None
@@ -141,8 +145,7 @@ class UsageTracker:
         s = self._s
         now = s.clock()
         crossed: list[float] = []
-        if org is None and self._resolve is not None:
-            org = self._resolve()
+        org = self._resolved(org)
         key = _DEFAULT_ORG if org is None else org
         with s.lock:
             state = s.orgs.get(key)
@@ -212,15 +215,17 @@ class UsageTracker:
 
     @property
     def fraction(self) -> float | None:
+        org = self._resolved(None)
         with self._s.lock:
-            state = self._org_locked(None)
+            state = self._org_locked(org)
             return state.fraction() if state else None
 
     def snapshot(self) -> UsageSnapshot:
         """Current usage: this org's header values plus the family's per-process counters."""
         s = self._s
+        org = self._resolved(None)
         with s.lock:
-            state = self._org_locked(None)
+            state = self._org_locked(org)
             info = (state.info if state else None) or LimitInfo()
             return UsageSnapshot(
                 api_used=info.api_used,
@@ -239,6 +244,7 @@ class UsageTracker:
             )
 
     def latest(self, *, org: str | None = None) -> tuple[int | None, int | None]:
+        org = self._resolved(org)
         with self._s.lock:
             state = self._org_locked(org)
             info = state.info if state else None
@@ -254,6 +260,7 @@ class UsageTracker:
         b = self._s.budget
         if b is None:
             return
+        org = self._resolved(org)
         with self._s.lock:
             state = self._org_locked(org)
             frac = state.fraction() if state else None

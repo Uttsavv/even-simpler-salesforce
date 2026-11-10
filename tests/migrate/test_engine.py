@@ -114,3 +114,10 @@ def test_client_types_come_from_simple_salesforce(annotation: str, confirmed: bo
     _, found = migrate(f"def f(sf: {annotation}):\n    return sf.session_id\n", header=header)
     # session_id is a generic name: only a confirmed client gets the TODO
     assert (("client-internals", "todo") in found) is confirmed
+
+
+def test_compile_check_prints_no_syntax_warnings(recwarn: pytest.WarningsRecorder) -> None:
+    from even_simpler_salesforce._migrate._engine import _compiles
+
+    assert _compiles('x = "\\d"\n')  # an invalid escape: SyntaxWarning on 3.12+
+    assert not [w for w in recwarn if issubclass(w.category, SyntaxWarning)]

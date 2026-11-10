@@ -135,7 +135,7 @@ For `COUNT(Id)` and other aggregates, use `query()` and read the aggregate row.
 
 ```python
 first = await sf.query("SELECT Id, Name FROM Lead", page_size=200)
-second = await sf.query_more(first.cursor)  # or the string the browser sent back
+second = await sf.query_more(first.cursor)  # to round-trip through a browser, sign it (below)
 print(len(first), len(second), second.done)
 ```
 
