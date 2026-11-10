@@ -65,7 +65,7 @@ class AsyncSObject:
         fields: Sequence[str] | None = None,
         *,
         model: None = None,
-        if_modified_since: datetime | None = None,
+        if_modified_since: None = None,
     ) -> dict[str, Any]: ...
     @overload
     async def get(
@@ -73,9 +73,27 @@ class AsyncSObject:
         record_id: str,
         fields: Sequence[str] | None = None,
         *,
+        model: None = None,
+        if_modified_since: datetime,
+    ) -> dict[str, Any] | None: ...
+    @overload
+    async def get(
+        self,
+        record_id: str,
+        fields: Sequence[str] | None = None,
+        *,
         model: type[M],
-        if_modified_since: datetime | None = None,
+        if_modified_since: None = None,
     ) -> M: ...
+    @overload
+    async def get(
+        self,
+        record_id: str,
+        fields: Sequence[str] | None = None,
+        *,
+        model: type[M],
+        if_modified_since: datetime,
+    ) -> M | None: ...
     async def get(
         self,
         record_id: str,
@@ -242,13 +260,17 @@ class AsyncSObject:
         body = raw.json() if raw.content else None
         return parse_upsert(raw.status, body)
 
-    async def delete(self, record_id: str, *, if_unmodified_since: datetime | None = None) -> None:
-        """``DELETE sobjects/{o}/{id}``."""
+    async def delete(self, record_id: str) -> None:
+        """``DELETE sobjects/{o}/{id}``.
+
+        Takes no conditional headers: Salesforce doesn't support them on DELETE
+        (REST API Developer Guide, *Conditional Request Headers*), so a precondition would be
+        ignored and the record deleted anyway.
+        """
         await self._sf._send(
             RequestSpec(
                 "DELETE",
                 f"sobjects/{self.name}/{check_record_id(record_id)}",
-                headers=_write_headers(None, None, if_unmodified_since),
                 operation="sobject.delete",
                 sobject=self.name,
                 records=1,

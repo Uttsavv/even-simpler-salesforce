@@ -128,8 +128,9 @@ easiest way to get exact numbers and real datetimes back.
 
 ## Update only if unchanged
 
-Pass `if_unmodified_since=` to `update` or `delete`. If the record changed after that time, the
-call raises `esf.Conflict` and changes nothing. You can also pass `if_modified_since=` to `get`.
+Pass `if_unmodified_since=` to `update`. If the record changed after that time, the call raises
+`esf.Conflict` and changes nothing. `delete` takes no such option, because Salesforce ignores
+conditional headers on `DELETE`. You can also pass `if_modified_since=` to `get`.
 If the record hasn't changed since then, `get` returns `None`.
 
 ```python
@@ -193,7 +194,7 @@ print(len(changed["ids"]), len(removed["deletedRecords"]))
 | `create(data, *, assignment_rule_id=None, allow_save=None)` | `POST sobjects/{o}` | the new id (`str`) |
 | `get(record_id, fields=None, *, model=None, if_modified_since=None)` | `GET sobjects/{o}/{id}` | the record (`None` on `304`) |
 | `update(record_id, data, *, assignment_rule_id=None, allow_save=None, if_unmodified_since=None)` | `PATCH sobjects/{o}/{id}` | `None` |
-| `delete(record_id, *, if_unmodified_since=None)` | `DELETE sobjects/{o}/{id}` | `None` |
+| `delete(record_id)` | `DELETE sobjects/{o}/{id}` | `None` |
 | `upsert(field, value, data, *, assignment_rule_id=None, allow_save=None)` | `PATCH sobjects/{o}/{field}/{value}` | `UpsertResult(id, created)` |
 | `get_by_external_id(field, value, fields=None, *, model=None)` | `GET sobjects/{o}/{field}/{value}` | the record |
 | `describe(*, cached=True)` | `GET sobjects/{o}/describe` | describe `dict` (cached) |
@@ -209,7 +210,7 @@ print(len(changed["ids"]), len(removed["deletedRecords"]))
 | `assignment_rule_id=True` / `False` | `Sforce-Auto-Assign: TRUE` / `FALSE` | run the default rule, or none |
 | `allow_save=True` / `False` | `Sforce-Duplicate-Rule-Header: allowSave=...` | save despite a duplicate-rule alert (or not) |
 | `if_modified_since=dt` (get) | `If-Modified-Since` | returns `None` when the record hasn't changed (`304`) |
-| `if_unmodified_since=dt` (update, delete) | `If-Unmodified-Since` | `esf.Conflict` (`412`) if the record changed after `dt` |
+| `if_unmodified_since=dt` (update) | `If-Unmodified-Since` | `esf.Conflict` (`412`) if the record changed after `dt` |
 
 ## Errors
 
@@ -236,7 +237,7 @@ The client encodes values as JSON. The rules are the same with orjson and the st
 - The client sends a `Decimal` as an exact JSON number, never through `float`.
 - NaN and ±Infinity raise `ValueError` before the client sends anything. So a field never
   becomes blank by accident.
-- `datetime` and `date` become ISO 8601 strings.
+- `datetime`, `date` and `time` become ISO 8601 strings from `isoformat()`.
 - `set`, `frozenset` and `tuple` become arrays.
 
 ```python

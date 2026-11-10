@@ -113,8 +113,10 @@ The suite runs against canned responses through `httpx.MockTransport`. It measur
 - parsing a page of 2,000 rows;
 - `query_iter` over 10 pages;
 - chunking 10,000 Collections rows;
-- parsing a CSV of 100,000 rows;
 - a single-flight refresh with 100 concurrent callers.
+
+A benchmark for parsing Bulk API CSV results comes with Bulk support in 0.3. Until then, the
+suite skips it.
 
 ## Defaults
 
@@ -129,7 +131,7 @@ The suite runs against canned responses through `httpx.MockTransport`. It measur
 | Describe cache | on | in memory, 1 h TTL, 500 entries (LRU), then checked again with `If-Modified-Since`; a `304` costs no download |
 | Fewer round trips | n/a | Collections: 200 records per write, 2,000 ids per read; `page_size` up to 2,000 rows per query page; `count()` |
 | Concurrency | unlimited / 4 | `max_concurrency` limits requests in flight for the client family; Collections run 4 chunks at a time |
-| Backoff | on | exponential with full jitter, capped at 8 s; the client honours `Retry-After` |
+| Backoff | on | exponential with full jitter, capped at 8 s; for `429` and `REQUEST_LIMIT_EXCEEDED`, the client waits for `Retry-After` instead if it is at most `max_retry_after` (30 s); 5xx retries use backoff |
 | JSON | stdlib | orjson with the `[speed]` extra, otherwise the stdlib; results are plain `dict` and `list` |
 
 ```python

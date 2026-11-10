@@ -1,0 +1,1 @@
+The NaN and ±Infinity check on JSON request bodies no longer builds a path for every value. It finds the path only after it finds a bad value, so a 200-record chunk spends several times less time in the check.

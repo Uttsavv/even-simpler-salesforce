@@ -201,3 +201,73 @@ def test_memory_cache_default_clock() -> None:
     c = esf.MemoryCache()
     c.set("k", "v", 60)
     assert c.get("k") == "v"
+
+
+def test_caller_tags_are_capped(monkeypatch: pytest.MonkeyPatch) -> None:
+    from even_simpler_salesforce import usage
+
+    monkeypatch.setattr(usage, "MAX_CALLERS", 3)
+    t, _, _ = tracker()
+    for caller in ["a", "b", None, "c", "d", "a"]:
+        t.record_call(operation="query", sobject=None, caller=caller, error_code=None, retries=0)
+    assert t.snapshot().calls_by_caller == {"a": 2, "b": 1, "-": 1, "other": 2}
+
+
+def test_limit_info_is_kept_per_org() -> None:
+    t, _, events = tracker(esf.Budget(warn_at=(0.5,), pause_low_priority_above=0.8))
+    t.observe(LimitInfo(10, 100), org="00DA")
+    t.observe(LimitInfo(90, 100), org="00DB")
+    a = t.bound(lambda: "00DA")
+    b = t.bound(lambda: "00DB")
+    assert (a.latest(), b.latest()) == ((10, 100), (90, 100))
+    assert (a.fraction, b.fraction) == (0.1, 0.9)
+    assert a.snapshot().api_used == 10
+    assert b.snapshot().api_used == 90
+    assert t.latest() == (90, 100)  # unbound: the org seen most recently
+    assert t.latest(org="00DA") == (10, 100)
+    a.check("low")
+    with pytest.raises(esf.BudgetExceeded) as ei:
+        a.check("low", org="00DB")
+    assert ei.value.usage is not None
+    assert ei.value.usage.api_used == 90
+    with pytest.raises(esf.BudgetExceeded):
+        b.check("low")
+    t.check("low", org="00DC")  # nothing known about this org: not blocked
+    assert t.latest(org="00DC") == (None, None)
+    assert [e[1]["used"] for e in events] == [90]  # thresholds are per org
+    t.observe(LimitInfo(60, 100), org="00DA")
+    assert [e[1]["used"] for e in events] == [90, 60]
+    # A view that can't name its org yet reads the org seen most recently.
+    unknown = t.bound(lambda: None)
+    assert unknown.latest() == (60, 100)
+    unknown.observe(LimitInfo(1, 100))
+    assert t.latest(org="") == (1, 100)
+
+
+def test_orgs_are_capped(monkeypatch: pytest.MonkeyPatch) -> None:
+    from even_simpler_salesforce import usage
+
+    monkeypatch.setattr(usage, "MAX_ORGS", 2)
+    t, _, _ = tracker()
+    t.observe(LimitInfo(1, 100), org="a")
+    t.observe(LimitInfo(2, 100), org="b")
+    t.observe(LimitInfo(3, 100), org="a")  # "a" is now the most recent
+    t.observe(LimitInfo(4, 100), org="c")  # drops "b"
+    assert [t.latest(org=k) for k in "abc"] == [(3, 100), (None, None), (4, 100)]
+
+
+def test_budget_is_shared_by_views() -> None:
+    t, _, _ = tracker()
+    view = t.bound(lambda: "x")
+    assert view.budget is None
+    view.budget = esf.Budget()
+    assert t.budget == esf.Budget()
+
+
+def test_org_key() -> None:
+    from even_simpler_salesforce.usage import org_key
+
+    tok = esf.Token(access_token="x", instance_url="https://a.my.salesforce.com", issued_at=T0)
+    assert org_key(None) is None
+    assert org_key(tok) == "https://a.my.salesforce.com"
+    assert org_key(tok.replace(org_id="00Dxx0000000001EAA")) == "00Dxx0000000001EAA"

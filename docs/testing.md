@@ -59,7 +59,7 @@ The other record methods behave like the API:
 - `get`, `update` and `delete` raise `NotFound` for missing ids.
 - A second delete raises `NotFound(ENTITY_IS_DELETED)`.
 - An ambiguous upsert raises `MultipleMatches`.
-- `if_unmodified_since` raises `Conflict`.
+- `update(..., if_unmodified_since=)` raises `Conflict`.
 
 The Collections methods follow the same rules.
 

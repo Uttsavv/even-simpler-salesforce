@@ -64,12 +64,15 @@ __all__ = [
 
 @dataclass(frozen=True, slots=True)
 class ErrorDetail:
-    """One entry of a (possibly multi-error) Salesforce error body."""
+    """One entry of a (possibly multi-error) Salesforce error body.
+
+    Hashable: ``extended`` takes part in ``==`` but not in ``hash()``, because it is a dict.
+    """
 
     error_code: str | None
     message: str
     fields: tuple[str, ...] = ()
-    extended: Mapping[str, Any] = field(default_factory=lambda: {})
+    extended: Mapping[str, Any] = field(default_factory=lambda: {}, hash=False)
 
 
 def _rebuild(cls: type[SalesforceError], state: dict[str, Any]) -> SalesforceError:
