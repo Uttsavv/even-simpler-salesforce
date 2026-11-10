@@ -77,9 +77,9 @@ def test_merge_call_options_unit() -> None:
         "Sforce-Call-Options": "client=b; x=1",  # caller's explicit client= wins for that call
     }
     # ADR 0012: the caller's value is split on ";" and ","; options are joined with "; ".
-    assert merge_call_options(
-        {"Sforce-Call-Options": "defaultNamespace=ns; x=1,y=2"}, "client=a"
-    ) == {"Sforce-Call-Options": "client=a; defaultNamespace=ns; x=1; y=2"}
+    assert merge_call_options({"Sforce-Call-Options": "defaultNamespace=ns; x=1,y=2"}, "client=a") == {
+        "Sforce-Call-Options": "client=a; defaultNamespace=ns; x=1; y=2"
+    }
     assert merge_call_options({"sforce-call-options": " ; ,"}, "client=a") == {
         "Sforce-Call-Options": "client=a"
     }

@@ -706,7 +706,8 @@ class AsyncSalesforce:
         if daily is not None:
             from ..core.limits import LimitInfo
 
-            self._transport.usage.observe(LimitInfo(daily.used, daily.max), org=org_key(self._runtime.current()))
+            org = org_key(self._runtime.current())
+            self._transport.usage.observe(LimitInfo(daily.used, daily.max), org=org)
         return out
 
     def start_limits_poller(self, interval: float = MIN_LIMITS_POLL_INTERVAL) -> None:

@@ -221,13 +221,15 @@ def test_limit_info_is_kept_per_org() -> None:
     b = t.bound(lambda: "00DB")
     assert (a.latest(), b.latest()) == ((10, 100), (90, 100))
     assert (a.fraction, b.fraction) == (0.1, 0.9)
-    assert a.snapshot().api_used == 10 and b.snapshot().api_used == 90
+    assert a.snapshot().api_used == 10
+    assert b.snapshot().api_used == 90
     assert t.latest() == (90, 100)  # unbound: the org seen most recently
     assert t.latest(org="00DA") == (10, 100)
     a.check("low")
     with pytest.raises(esf.BudgetExceeded) as ei:
         a.check("low", org="00DB")
-    assert ei.value.usage is not None and ei.value.usage.api_used == 90
+    assert ei.value.usage is not None
+    assert ei.value.usage.api_used == 90
     with pytest.raises(esf.BudgetExceeded):
         b.check("low")
     t.check("low", org="00DC")  # nothing known about this org: not blocked

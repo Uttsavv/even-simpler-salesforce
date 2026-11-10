@@ -6,7 +6,8 @@ Both backends behave identically:
   anything is sent. orjson would otherwise turn them into ``null`` and silently blank the field
   in Salesforce; the stdlib would emit ``NaN``, which is not JSON.
 - ``Decimal`` is encoded as a JSON *number* with its exact digits (never via ``float``).
-- ``datetime``, ``date`` and ``time`` become ``isoformat()`` strings; ``set``/``frozenset``/``tuple`` become arrays.
+- ``datetime``, ``date`` and ``time`` become ``isoformat()`` strings;
+  ``set``/``frozenset``/``tuple`` become arrays.
 """
 
 from __future__ import annotations

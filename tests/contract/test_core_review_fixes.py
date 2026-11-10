@@ -68,13 +68,15 @@ def test_describe_cache_stores_json_text(h: Harness, mock: respx.MockRouter) -> 
     second = h.run(sf.sobject("Lead").describe())
     third = h.run(sf.sobject("Lead").describe())
     assert first == second == third == DESCRIBE
-    assert second is not third and second["fields"] is not third["fields"]
+    assert second is not third
+    assert second["fields"] is not third["fields"]
     second["fields"][0]["name"] = "changed"
     assert h.run(sf.sobject("Lead").describe()) == DESCRIBE
     assert route.call_count == 1
     (key,) = cache._data  # pyright: ignore[reportPrivateUsage]
     entry = cache.get(key)
-    assert isinstance(entry["body"], str) and "data" not in entry
+    assert isinstance(entry["body"], str)
+    assert "data" not in entry
 
 
 def test_describe_cache_ignores_unknown_entry_shape(h: Harness, mock: respx.MockRouter) -> None:

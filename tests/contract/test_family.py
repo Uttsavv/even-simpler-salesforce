@@ -324,9 +324,7 @@ def test_usage_and_budget_are_per_org(h: Harness, mock: respx.MockRouter, rec: R
     other_route = mock.get(f"{other}/services/data/v68.0/limits").mock(return_value=limits_with_usage(95))
     store = h.new_store()
     base = h.client(store=store, recorder=rec, budget=esf.Budget(pause_low_priority_above=0.8))
-    h.seed(
-        store, "org:b", make_token("AT-org-b", instance_url=other).replace(org_id="00Dxx0000000002EAA")
-    )
+    h.seed(store, "org:b", make_token("AT-org-b", instance_url=other).replace(org_id="00Dxx0000000002EAA"))
     child = base.with_auth(web_auth(token_key="org:b"))
     h.run(base.limits())
     h.run(child.limits())

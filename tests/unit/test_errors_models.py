@@ -231,7 +231,8 @@ def test_error_detail_and_record_result_are_hashable() -> None:
     a = esf.ErrorDetail("CODE", "msg", ("A",), {"x": 1})
     b = esf.ErrorDetail("CODE", "msg", ("A",), {"x": 1})
     c = esf.ErrorDetail("CODE", "msg", ("A",), {"x": 2})
-    assert a == b and hash(a) == hash(b)
+    assert a == b
+    assert hash(a) == hash(b)
     assert a != c  # extended still counts for equality
     assert len({a, b, c}) == 2
     r = esf.RecordResult(False, None, None, (a,))
