@@ -32,6 +32,7 @@ nav = [
     { "Records" = "guides/records.md" },
     { "Query and search" = "guides/query.md" },
     { "Collections" = "guides/collections.md" },
+    { "Files" = "guides/files.md" },
     { "Raw requests" = "guides/requests.md" },
   ] },
   { "In production" = [

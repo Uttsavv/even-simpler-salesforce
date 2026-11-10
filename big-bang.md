@@ -1893,8 +1893,11 @@ before the release named.
 | V26 | Namespace prefix format accepted by `defaultNamespace` | 0.1 | **Open** — Salesforce help on registering a namespace prefix + sandbox with a managed package |
 | V27 | CDC bitmap bit order (bit 0 = least-significant bit of the hex value) and compound `{pos}-0x…` decoding | 0.5 | **Partly done**: format from *Event Deserialization Considerations*; bit order inferred from Salesforce's Python sample. Record a CDC event with several changed and nulled fields (including a compound field) in a sandbox |
 | V28 | How Pub/Sub Avro schemas mark Date/DateTime fields (logicalType or otherwise), so epoch values are converted only where the type is known | 0.5 | **Open**: `GetSchema` on a sandbox platform event and a change event |
+| V29 | Multipart `POST sobjects/ContentVersion`: part names `entity_content` / `VersionData`, a quoted `boundary="..."` parameter, and whether Salesforce accepts `Transfer-Encoding: chunked` (used for iterator and non-seekable uploads, where the size is unknown) | 0.2 | **Partly done**: part names, `filename` and the 2 GB limit from search excerpts of *Insert or Update Blob Data* (the page itself returns 403 to non-browser clients). Sandbox: upload with and without `Content-Length`; fixtures in `tests/fixtures/recorded/files` are `synthetic` |
+| V30 | `GET sobjects/ContentVersion/{id}/VersionData` and `Attachment/{id}/Body` with `Accept: */*`: response `Content-Type`, `Content-Length`, gzip, and the error body for a missing id | 0.2 | **Open**: sandbox |
+| V31 | Share type and visibility of the `ContentDocumentLink` that Salesforce creates for `FirstPublishLocationId` on a record | 0.2 | **Open**: sandbox; the docs (`sf.files.upload`) say "Salesforce chooses" until then |
 
-Remaining open: V4, V5b, V11 (sandbox half), V17, V18, V19, V20, V21, V24, V25, V26 — all need a sandbox (V18/V26 also a docs check). V27 and V28 (0.5) need a sandbox too.
+Remaining open: V4, V5b, V11 (sandbox half), V17, V18, V19, V20, V21, V24, V25, V26 — all need a sandbox (V18/V26 also a docs check). V27 and V28 (0.5) need a sandbox too, and so do V29–V31 (0.2, Files).
 
 Note: developer.salesforce.com blocks non-browser clients (403). In a real browser, each docs page
 has a Markdown version at the same path with `.md` instead of `.html` (fetch it from the page's

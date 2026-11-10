@@ -1,11 +1,10 @@
 # Roadmap
 
-0.1 covers authentication, records, queries, sObject Collections and raw requests. The API
-areas below come in later releases.
+0.1 covers authentication, records, queries, sObject Collections and raw requests. 0.2 adds
+[Files](guides/files.md). The API areas below come in later releases.
 
 | Area | Release | What's planned |
 |---|---|---|
-| Files | 0.2 | Upload and download ContentVersion files with streaming transfers. |
 | Invocable actions | 0.2 | Call standard, Flow and Apex actions; `esf generate actions` for typed stubs. |
 | Apex REST | 0.2 | Call your own `/services/apexrest/` classes, with errors mapped to `ApexError`. |
 | Lead convert and merge | 0.2 | Normal methods. They use SOAP internally, because REST has no resource for them. |
