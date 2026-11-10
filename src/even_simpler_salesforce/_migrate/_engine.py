@@ -102,7 +102,11 @@ INTERNALS_TODO = {
     "base_url": "use sf.instance_url to build links, sf.request(...) for calls",
     "sf_instance": "use sf.instance_url (the instance of the current token; None before the first call)",
 }
+#: Attributes of simple-salesforce exceptions -> the closest attribute of esf errors.
+CAUGHT_ATTRS = {"content": "raw", "resource_name": "sobject", "url": "path"}
 DISTINCTIVE_INTERNALS = frozenset({"sf_instance", "sf_version"})  # names only simple-salesforce uses
+QUERY_RESULT_ATTRS = frozenset({"records", "total_size", "done", "cursor"})
+QUERY_RESULT_MSG = "query() returns a QueryResult (records, total_size, done, cursor), not a dict"
 QUERY_KEYS = {"records": "records", "totalSize": "total_size", "done": "done"}
 UNSUPPORTED = {
     "bulk": "Bulk API v1 isn't supported; use sf.bulk (Bulk 2.0, planned for 0.3)",
@@ -154,6 +158,15 @@ CUSTOM_SUFFIXES = ("__c", "__e", "__mdt", "__x", "__b", "__kav")
 NO_EQUIVALENT = {
     "describe_layout": "describe_layout() has no 0.1 method; use "
     'sf.request("GET", "sobjects/<Obj>/describe/layouts/<recordTypeId>")',
+}
+CLIENT_METHODS = frozenset({"describe", "quick_search", "search", "limits", "is_sandbox"})
+#: Method references whose calls the tool can't see: (rule, review message).
+REF_REVIEW = {
+    "create": ("create-return", "create() now returns the id (str), not a dict; check the callers"),
+    "upsert": (
+        "upsert-path",
+        'upsert() now takes the field and value separately: upsert("Ext__c", value, data); check the callers',
+    ),
 }
 #: Keywords of simple-salesforce per-object calls with no equivalent here.
 UNKNOWN_KEYWORDS = frozenset({"headers", "raw_response"})
@@ -244,6 +257,16 @@ def _annotation_names(node: cst.BaseExpression) -> set[str]:
     return names
 
 
+def _parse_annotation(text: str | None) -> cst.BaseExpression | None:
+    """A string annotation as an expression, or ``None`` if it isn't one."""
+    if not text or not text.strip():
+        return None
+    try:
+        return cst.parse_expression(text.strip())
+    except cst.ParserSyntaxError:
+        return None
+
+
 class _Collector(cst.CSTVisitor):
     """Module facts: imported simple-salesforce names, client names, client-returning functions."""
 
@@ -262,6 +285,8 @@ class _Collector(cst.CSTVisitor):
         self.sync_module = False  # imports the sync simple_salesforce.Salesforce
         self.async_clients: set[str] = set()
         self.sync_clients: set[str] = set()
+        self.sf_star = False  # `from simple_salesforce import *`
+        self.sobject_like = False  # some `x.<Name>` looks like an sObject (Account, Foo__c)
 
     def _note_kind(self, seg: str, value_or_type: cst.BaseExpression) -> None:
         names = _annotation_names(value_or_type)
@@ -275,10 +300,16 @@ class _Collector(cst.CSTVisitor):
     def visit_Name(self, node: cst.Name) -> None:
         self.idents.add(node.value)
 
+    def visit_Attribute(self, node: cst.Attribute) -> None:
+        if looks_like_sobject(node.attr.value):
+            self.sobject_like = True
+
     @property
     def sf_related(self) -> bool:
         """The module imports simple-salesforce or holds a known client (§9.19.1 case 3)."""
-        return bool(self.sf_imported or self.sf_module_aliases or self.clients or self.client_types)
+        return bool(
+            self.sf_imported or self.sf_module_aliases or self.clients or self.client_types or self.sf_star
+        )
 
     @property
     def esf_conflict(self) -> bool:
@@ -299,18 +330,22 @@ class _Collector(cst.CSTVisitor):
                 self.esf_alias = local
 
     def visit_ImportFrom(self, node: cst.ImportFrom) -> None:
-        if node.module is None or isinstance(node.names, cst.ImportStar):
+        if node.module is None:
             return
         mod = _code(node.module)
         if mod.split(".")[0] not in SF_MODULES:
             return
         if mod.endswith(".aio"):
             self.async_module = True
-        for alias in node.names:
-            name = _code(alias.name)
-            local = (
-                alias.asname.name.value if alias.asname and isinstance(alias.asname.name, cst.Name) else name
-            )
+        if isinstance(node.names, cst.ImportStar):
+            # `from simple_salesforce import *`: every public name we know may come from here
+            self.sf_star = True
+            aio = mod.endswith(".aio")
+            known = (*CLIENT_TYPES, *LOGIN_CALLS, *EXCEPTIONS, "format_soql")
+            pairs = [(n, n) for n in known if n.startswith("Async") == aio or n not in LOGIN_CALLS]
+        else:
+            pairs = [(_code(a.name), _alias(a) or _code(a.name)) for a in node.names]
+        for name, local in pairs:
             self.sf_imported.add(local)
             if name == "AsyncSalesforce":
                 self.async_module = True
@@ -326,8 +361,25 @@ class _Collector(cst.CSTVisitor):
                 self.format_soql_names.add(local)
 
     def _is_client_type(self, node: cst.BaseExpression) -> bool:
-        names = _annotation_names(node)
-        return bool(names & (self.client_types | CLIENT_TYPES))
+        """``node`` names a simple-salesforce client type: a bare name imported from
+        simple-salesforce, or ``<simple_salesforce alias>.[...].Salesforce``. A bare
+        ``Salesforce`` that wasn't imported from there (``esf.Salesforce``) doesn't count."""
+        attrs = {id(a.attr) for a in m.findall(node, m.Attribute()) if isinstance(a, cst.Attribute)}
+        for n in m.findall(node, m.Name() | m.Attribute()):
+            if isinstance(n, cst.Attribute):
+                if n.attr.value in CLIENT_TYPES and _root_name(n.value) in self.sf_module_aliases:
+                    return True
+            elif isinstance(n, cst.Name) and id(n) not in attrs and n.value in self.client_types:
+                return True
+        for s in m.findall(node, m.SimpleString()):  # "AsyncSalesforce" / "ss.Salesforce"
+            parsed = _parse_annotation(_string_value(cast(cst.SimpleString, s)))
+            if (
+                parsed is not None
+                and not m.findall(parsed, m.SimpleString())
+                and self._is_client_type(parsed)
+            ):
+                return True
+        return False
 
     def _is_client_value(self, value: cst.BaseExpression) -> bool:
         if isinstance(value, cst.Await):
@@ -400,6 +452,7 @@ class _Transformer(cst.CSTTransformer):
         self._in_import = 0
         self.fquotes: list[str] = []  # quote characters of the enclosing f-strings
         self.async_defs: list[bool] = []  # enclosing functions: async def?
+        self.caught: list[str | None] = []  # names bound by enclosing `except <sf exception> as e`
         self.leftover: set[str] = set()  # simple-salesforce names still used (second pass)
         self.alias = "even_simpler_salesforce" if facts.esf_conflict else (facts.esf_alias or "esf")
 
@@ -409,8 +462,10 @@ class _Transformer(cst.CSTTransformer):
         rules = self.opts.rules
         if rules is None or rule in rules:
             return True
-        # per-object sub-rules run as part of sobject-attr
-        return rule == "sobject-attr" and bool(rules & SUB_RULES)
+        # sobject-attr and its sub-rules run together: a rewrite to sobject() without them (or
+        # them without it) leaves upsert paths, get_by_custom_id and results broken and unmarked
+        group = SUB_RULES | {"sobject-attr"}
+        return rule in group and bool(rules & group)
 
     def pos(self, node: cst.CSTNode) -> CodeRange:
         return cast(CodeRange, self.get_metadata(PositionProvider, node))
@@ -539,12 +594,13 @@ class _Transformer(cst.CSTTransformer):
             return updated
         # One marker per finding; a rerun never adds a marker that is already there.
         above = self._lines_above(holder.node, updated.leading_lines)
-        existing = {line.comment.value.strip() for line in above if line.comment is not None}
+        # "->" too: files in a legacy encoding get "→" written as "->" (see migrate_files)
+        existing = {_ascii(line.comment.value.strip()) for line in above if line.comment is not None}
         new_lines = list(updated.leading_lines)
         added: set[str] = set()
         for f in marks:
             text = marker_text(f.status, f.rule, f.message)
-            if text in existing or text in added:
+            if _ascii(text) in existing or text in added:
                 continue
             added.add(text)
             new_lines.append(cst.EmptyLine(comment=cst.Comment(text)))
@@ -556,7 +612,7 @@ class _Transformer(cst.CSTTransformer):
         self._push(node)
 
     def leave_SimpleStatementLine(self, original_node: Any, updated_node: Any) -> Any:
-        if self.leftover:
+        if self.leftover or self.facts.sf_star:
             self._mark_leftover(original_node)
         return self._pop(updated_node)
 
@@ -564,10 +620,18 @@ class _Transformer(cst.CSTTransformer):
         for small in stmt.body:
             names: list[str] = []
             if isinstance(small, cst.ImportFrom) and small.module is not None:
-                if _code(small.module).split(".")[0] in SF_MODULES and not isinstance(
-                    small.names, cst.ImportStar
-                ):
-                    names = [_alias(a) or _code(a.name) for a in small.names]
+                if _code(small.module).split(".")[0] not in SF_MODULES:
+                    continue
+                if isinstance(small.names, cst.ImportStar):
+                    if self.enabled("unsupported"):
+                        self.record(
+                            "unsupported",
+                            "todo",
+                            "import * from simple-salesforce; import the names you still use, then remove it",
+                            small,
+                        )
+                    continue
+                names = [_alias(a) or _code(a.name) for a in small.names]
             elif isinstance(small, cst.Import):
                 for a in small.names:
                     full = _code(a.name)
@@ -584,9 +648,34 @@ class _Transformer(cst.CSTTransformer):
 
     def visit_ExceptHandler(self, node: cst.ExceptHandler) -> None:
         self._push(node)
+        self.caught.append(self._caught_name(node))
 
     def leave_ExceptHandler(self, original_node: Any, updated_node: Any) -> Any:
+        self.caught.pop()
         return self._pop(updated_node)
+
+    def visit_ExceptStarHandler(self, node: cst.ExceptStarHandler) -> None:
+        self._push(node)
+        self.caught.append(self._caught_name(node))
+
+    def leave_ExceptStarHandler(self, original_node: Any, updated_node: Any) -> Any:
+        self.caught.pop()
+        return self._pop(updated_node)
+
+    def _caught_name(self, node: cst.ExceptHandler | cst.ExceptStarHandler) -> str | None:
+        """``e`` in ``except SalesforceResourceNotFound as e`` (any simple-salesforce exception)."""
+        if node.type is None or node.name is None or not isinstance(node.name.name, cst.Name):
+            return None
+        for n in m.findall(node.type, m.Name() | m.Attribute()):
+            if isinstance(n, cst.Name) and n.value in self.facts.exception_names:
+                return node.name.name.value
+            if (
+                isinstance(n, cst.Attribute)
+                and n.attr.value in EXCEPTIONS
+                and _root_name(n.value) in self.facts.sf_module_aliases
+            ):
+                return node.name.name.value
+        return None
 
     def visit_If(self, node: cst.If) -> None:
         self._push(node)
@@ -676,6 +765,18 @@ class _Transformer(cst.CSTTransformer):
 
     def _exception(self, sf_name: str, node: cst.BaseExpression, updated: cst.BaseExpression) -> Any:
         target, exact = EXCEPTIONS[sf_name]
+        call = self.parent(node)
+        if exact and isinstance(call, cst.Call) and call.func is node and call.args:
+            # simple-salesforce takes (url, status, resource_name, content); esf classes take a message
+            self.record(
+                "exceptions",
+                "todo",
+                f"{sf_name}(...) takes (url, status, resource_name, content); esf.{target} takes "
+                "a message and keyword arguments (status=, sobject=, path=, raw=)",
+                call,
+                suggestion=f'esf.{target}("message", status=...)',
+            )
+            return updated
         if exact:
             new = cst.Attribute(value=cst.Name(self.alias), attr=cst.Name(target))
             self.need_esf = True
@@ -712,6 +813,21 @@ class _Transformer(cst.CSTTransformer):
         if attr in EXCEPTIONS and _root_name(inner) in self.facts.sf_module_aliases:
             if self.enabled("exceptions") and not self.is_store(original_node):
                 return self._exception(attr, original_node, updated_node)
+            return updated_node
+        # e.content / e.resource_name / e.url on a caught simple-salesforce exception
+        if (
+            attr in CAUGHT_ATTRS
+            and isinstance(inner, cst.Name)
+            and inner.value in self.caught
+            and self.enabled("exceptions")
+        ):
+            self.record(
+                "exceptions",
+                "todo",
+                f"simple-salesforce exceptions had .{attr}; esf errors have .{CAUGHT_ATTRS[attr]}",
+                original_node,
+                suggestion=f"{inner.value}.{CAUGHT_ATTRS[attr]}",
+            )
             return updated_node
         # client internals
         if attr in INTERNALS_TODO or attr == "sf_version":
@@ -792,6 +908,9 @@ class _Transformer(cst.CSTTransformer):
         if conf is None:
             return updated
         new = updated.with_changes(value=_sobject_call(cast(cst.Attribute, updated.value).value, self.s(obj)))
+        method = original.attr.value
+        if method == "get_by_custom_id" and not self.is_store(original):
+            new = new.with_changes(attr=cst.Name("get_by_external_id"))
         if mock:
             if not self.enabled("mock-sobject"):
                 return updated
@@ -809,9 +928,16 @@ class _Transformer(cst.CSTTransformer):
                     original,
                 )
             return updated
-        if conf != "yes" or not self.enabled("sobject-attr"):
+        if conf != "yes" or not self.enabled("sobject-attr") or self.ignored("sobject-attr"):
+            return updated
+        if method in NO_EQUIVALENT:
+            self.record("unsupported", "todo", NO_EQUIVALENT[method].replace("<Obj>", obj), original)
             return updated
         self.record("sobject-attr", "rewritten", "method reference through sobject()", original, new)
+        if method == "get_by_custom_id":
+            self.record("get-by-custom-id", "rewritten", "get_by_custom_id → get_by_external_id", original)
+        elif method in REF_REVIEW:
+            self.record(REF_REVIEW[method][0], "needs-review", REF_REVIEW[method][1], original)
         return new
 
     def _is_mock_use(self, node: cst.Attribute, parent: cst.CSTNode | None) -> bool:
@@ -938,6 +1064,10 @@ class _Transformer(cst.CSTTransformer):
             return updated_node
         method = func.attr.value
         target = func.value
+        if method in CLIENT_METHODS and self.enabled("client-methods") and not self.ignored("client-methods"):
+            done = self._client_method(original_node, updated_node)
+            if done is not None:
+                return done
         if method in PER_OBJECT and isinstance(target, cst.Attribute):
             return self._object_call(original_node, updated_node)
         if method in ("query_all", "query_all_iter"):
@@ -956,19 +1086,144 @@ class _Transformer(cst.CSTTransformer):
         if method == "apexecute" and self.enabled("apexecute") and not self.ignored("apexecute"):
             return self._apexecute(original_node, updated_node)
         if method in ("query", "query_iter") and self.confirm(target) == "yes":  # "query" is a generic name
+            if self._starred(original_node, "query-result"):
+                return updated_node
             self._query_result(original_node)
-            args = list(updated_node.args)
-            if (
-                method == "query"
-                and len(args) >= 2
-                and args[1].keyword is None
-                and isinstance(args[1].value, cst.Name)
-                and args[1].value.value in ("True", "False")
-            ):
-                # simple-salesforce: query(q, True) meant include_deleted; here positional values fill {}
-                args[1] = args[1].with_changes(keyword=cst.Name("include_deleted"), equal=_eq())
-            return self._format_soql_arg(original_node, updated_node.with_changes(args=args))
+            updated_node = self._query_positional(original_node, updated_node)
+            return self._format_soql_arg(original_node, updated_node)
         return updated_node
+
+    def _starred(self, call: cst.Call, rule: str) -> bool:
+        """``*args`` / ``**kwargs`` hide which argument is which: mark the call and skip it."""
+        if not any(a.star for a in call.args):
+            return False
+        if self.enabled(rule) and not self.ignored(rule):
+            self.record(rule, "todo", "*args / **kwargs: rewrite this call by hand", call)
+        return True
+
+    def _query_positional(self, original: cst.Call, updated: cst.Call) -> cst.Call:
+        """simple-salesforce ``query(q, flag)``: the second positional argument is include_deleted.
+
+        Here positional values after the query fill ``{}`` placeholders, so a literal query with
+        as many ``{}`` as values is already in the new form and stays as it is.
+        """
+        method = cast(cst.Attribute, original.func).attr.value
+        positional = [a for a in original.args if a.keyword is None]
+        if method != "query" or len(positional) < 2 or not self.enabled("query-result"):
+            return updated
+        if self.ignored("query-result"):
+            return updated
+        first = positional[0].value
+        tmpl = _string_value(first)
+        if tmpl is not None and len(_PLACEHOLDER.findall(tmpl)) == len(positional) - 1:
+            return updated  # query("... = {}", value): the new form
+        formatted = isinstance(first, cst.Call) and _last_segment(first.func) in self.facts.format_soql_names
+        no_values = formatted or (tmpl is not None and not _PLACEHOLDER.findall(tmpl))
+        flag = positional[1].value
+        is_bool = isinstance(flag, cst.Name) and flag.value in ("True", "False")
+        if len(positional) == 2 and (no_values or is_bool):
+            idx = list(original.args).index(positional[1])
+            args = list(updated.args)
+            args[idx] = args[idx].with_changes(keyword=cst.Name("include_deleted"), equal=_eq())
+            new = updated.with_changes(args=args)
+            status: Status = "rewritten" if no_values else "needs-review"
+            self.record(
+                "query-result",
+                status,
+                "query(q, flag): include_deleted is a keyword argument now",
+                original,
+                new,
+            )
+            return new
+        self.record(
+            "query-result",
+            "todo",
+            "query(q, x) passed include_deleted positionally; positional values now fill {} "
+            "placeholders, so write include_deleted=x",
+            original,
+        )
+        return updated
+
+    def _client_method(self, original: cst.Call, updated: cst.Call) -> cst.BaseExpression | None:
+        """Client calls that changed name or result (``describe()``, ``limits()``, ...).
+
+        Returns the new call, or ``None`` when the call isn't one of them.
+        """
+        func = cast(cst.Attribute, original.func)
+        method, target = func.attr.value, func.value
+        if method == "describe":  # sf.describe(); sf.Lead.describe() is per-object
+            if original.args or self.confirm(target) != "yes":
+                return None
+            new = updated.with_changes(
+                func=cast(cst.Attribute, updated.func).with_changes(attr=cst.Name("describe_global"))
+            )
+            self.record("client-methods", "rewritten", "describe() → describe_global()", original, new)
+            return new
+        if self.confirm_distinctive(target) is None:
+            return None
+        if method == "quick_search":
+            self.record(
+                "client-methods",
+                "todo",
+                "quick_search(term) → parameterized_search(term), which returns the list of records",
+                original,
+                suggestion=_code(
+                    updated.with_changes(func=func.with_changes(attr=cst.Name("parameterized_search")))
+                ),
+            )
+        elif method == "is_sandbox":
+            self.record(
+                "client-methods",
+                "todo",
+                "is_sandbox() isn't provided; query SELECT IsSandbox FROM Organization",
+                original,
+            )
+        elif method == "search":
+            if any(self._key_of(u) == "searchRecords" for u in self._result_uses(original)):
+                self.record(
+                    "client-methods",
+                    "todo",
+                    'search() now returns the list of records; drop ["searchRecords"]',
+                    original,
+                )
+        elif method == "limits":
+            for u in self._result_uses(original):
+                outer = self.parent(u)
+                if self._key_of(u) is not None and self._key_of(outer) in ("Max", "Remaining"):
+                    self.record(
+                        "client-methods",
+                        "todo",
+                        'limits() returns dict[str, Limit]: ["X"]["Remaining"] → ["X"].remaining, '
+                        '["Max"] → .max',
+                        original,
+                    )
+                    break
+        return updated
+
+    def _result_uses(self, call: cst.Call) -> list[cst.CSTNode]:
+        """The call (or its ``await``) if used directly, else the loads of the one name it is
+        assigned to."""
+        node, parent = self._call_context(call)
+        if (
+            isinstance(parent, cst.Assign)
+            and len(parent.targets) == 1
+            and isinstance(parent.targets[0].target, cst.Name)
+        ):
+            return self.scope_uses(parent.targets[0].target) or []
+        return [node]
+
+    def _key_of(self, node: cst.CSTNode | None) -> str | None:
+        """``"k"`` when ``node`` is used as ``node["k"]`` or ``node.get("k"...)``."""
+        if node is None:
+            return None
+        p = self.parent(node)
+        if isinstance(p, cst.Subscript) and p.value is node:
+            return _string_value(_slice(p) or cst.Name("x"))
+        if isinstance(p, cst.Attribute) and p.value is node and p.attr.value == "get":
+            call = self.parent(p)
+            if isinstance(call, cst.Call) and call.args:
+                return _string_value(call.args[0].value)
+        return None
 
     def _has_format_soql(self, call: cst.Call) -> bool:
         first = call.args[0].value if call.args else None
@@ -1293,7 +1548,7 @@ class _Transformer(cst.CSTTransformer):
         if not self.enabled("query-all") or self.ignored("query-all"):
             return updated
         conf = self.confirm_distinctive(func.value)
-        if conf is None:
+        if conf is None or self._starred(original, "query-all"):
             return updated
         args = list(updated.args)
         if len(args) >= 2 and args[1].keyword is None:  # include_deleted is the second positional
@@ -1378,21 +1633,31 @@ class _Transformer(cst.CSTTransformer):
         return updated if is_async else listed
 
     def _query_result(self, call: cst.Call) -> None:
-        """``X.query(q)["records"]`` → ``.records`` (QueryResult isn't a dict)."""
+        """``X.query(q)["records"]`` → ``.records`` (QueryResult isn't a dict).
+
+        A ``query()`` result used in any way the tool can't follow (stored twice, returned,
+        passed on, iterated) gets a TODO on the call.
+        """
         if not self.enabled("query-result") or self.ignored("query-result"):
             return
-        _, parent = self._call_context(call)
+        node, parent = self._call_context(call)
         subs: list[cst.Subscript] = []
-        if isinstance(parent, cst.Subscript):
-            subs = [parent]
-        elif isinstance(parent, cst.Assign) and isinstance(parent.targets[0].target, cst.Name):
-            uses = self.scope_uses(parent.targets[0].target) or []
-            for u in uses:
-                p = self.parent(u)
-                if isinstance(p, cst.Subscript) and p.value is u:
-                    subs.append(p)
-                elif isinstance(p, cst.Attribute) and p.value is u and p.attr.value == "get":
-                    self._query_result_get(p)
+        proven = True
+        if isinstance(parent, cst.Expr):
+            pass  # result unused
+        elif isinstance(parent, (cst.Subscript, cst.Attribute)) and parent.value is node:
+            proven = self._query_use(node, subs)
+        elif (
+            isinstance(parent, cst.Assign)
+            and len(parent.targets) == 1
+            and isinstance(parent.targets[0].target, cst.Name)
+        ):
+            uses = self.scope_uses(parent.targets[0].target)
+            proven = uses is not None
+            for u in uses or ():
+                proven = self._query_use(u, subs) and proven
+        else:
+            proven = False
         for sub in subs:
             key = _string_value(_slice(sub) or cst.Name("x"))
             if key in QUERY_KEYS:
@@ -1400,11 +1665,22 @@ class _Transformer(cst.CSTTransformer):
                 new = cst.Attribute(value=sub.value, attr=cst.Name(QUERY_KEYS[key]))
                 self.record("query-result", "rewritten", f'["{key}"] → .{QUERY_KEYS[key]}', sub, new)
             else:
-                self.pending[sub] = (
-                    "query-result",
-                    "todo",
-                    "query() returns a QueryResult (records, total_size, done, cursor), not a dict",
-                )
+                self.pending[sub] = ("query-result", "todo", QUERY_RESULT_MSG)
+        if not proven and cast(cst.Attribute, call.func).attr.value == "query":
+            self.record("query-result", "todo", QUERY_RESULT_MSG + "; check how the result is used", call)
+
+    def _query_use(self, node: cst.CSTNode, subs: list[cst.Subscript]) -> bool:
+        """Handle one use of a query() result; ``False`` if the tool can't follow it."""
+        p = self.parent(node)
+        if isinstance(p, cst.Subscript) and p.value is node:
+            subs.append(p)
+            return True
+        if isinstance(p, cst.Attribute) and p.value is node:
+            if p.attr.value == "get":
+                self._query_result_get(p)
+                return True
+            return p.attr.value in QUERY_RESULT_ATTRS  # already QueryResult attributes
+        return False
 
     def _query_result_get(self, attr: cst.Attribute) -> None:
         """``r.get("records", [])`` → ``r.records`` (the attribute always exists)."""
@@ -1419,18 +1695,14 @@ class _Transformer(cst.CSTTransformer):
             self.replace[call] = new
             self.record("query-result", "rewritten", f'.get("{key}") → .{QUERY_KEYS[key]}', call, new)
             return
-        self.pending[attr] = (
-            "query-result",
-            "todo",
-            "query() returns a QueryResult (records, total_size, done, cursor), not a dict",
-        )
+        self.pending[attr] = ("query-result", "todo", QUERY_RESULT_MSG)
 
     # raw requests
 
     def _restful(self, original: cst.Call, updated: cst.Call) -> Any:
         func = cast(cst.Attribute, original.func)
         conf = self.confirm_distinctive(func.value)
-        if conf is None:
+        if conf is None or self._starred(original, "restful"):
             return updated
         args = list(updated.args)
         positional = [a for a in args if a.keyword is None]
@@ -1461,7 +1733,7 @@ class _Transformer(cst.CSTTransformer):
     def _apexecute(self, original: cst.Call, updated: cst.Call) -> Any:
         func = cast(cst.Attribute, original.func)
         conf = self.confirm_distinctive(func.value)
-        if conf is None:
+        if conf is None or self._starred(original, "apexecute"):
             return updated
         args = list(updated.args)
         positional = [a for a in args if a.keyword is None]
@@ -1501,6 +1773,10 @@ class _Transformer(cst.CSTTransformer):
         if original_node in self.replace:
             return self.replace[original_node]
         return updated_node
+
+
+def _ascii(text: str) -> str:
+    return text.replace("→", "->")
 
 
 def _before(a: Any, b: Any) -> bool:
@@ -1563,6 +1839,7 @@ class _Referenced(cst.CSTVisitor):
     def __init__(self) -> None:
         self.names: set[str] = set()
         self._in_import = 0
+        self._skip: set[int] = set()  # Name nodes that are attribute or keyword names
 
     def visit_Import(self, node: cst.Import) -> None:
         self._in_import += 1
@@ -1576,8 +1853,15 @@ class _Referenced(cst.CSTVisitor):
     def leave_ImportFrom(self, original_node: cst.ImportFrom) -> None:
         self._in_import -= 1
 
+    def visit_Attribute(self, node: cst.Attribute) -> None:
+        self._skip.add(id(node.attr))  # `esf.SalesforceError` doesn't use a name SalesforceError
+
+    def visit_Arg(self, node: cst.Arg) -> None:
+        if node.keyword is not None:
+            self._skip.add(id(node.keyword))
+
     def visit_Name(self, node: cst.Name) -> None:
-        if not self._in_import:
+        if not self._in_import and id(node) not in self._skip:
             self.names.add(node.value)
 
 
@@ -1595,6 +1879,36 @@ def _run(
     return MetadataWrapper(module, unsafe_skip_copy=True).visit(tf), tf
 
 
+_SOBJECT_WORD = re.compile(
+    r"\b(?:" + "|".join(sorted(STANDARD_OBJECTS)) + r")\b|\w(?:" + "|".join(CUSTOM_SUFFIXES) + r")\b"
+)
+
+
+def _may_apply(source: str, opts: Options) -> bool:
+    """A cheap text check, before parsing: ``False`` only if no rule can match.
+
+    Every rule needs one of: a simple-salesforce import, a ``--client-names`` name, or an
+    attribute that looks like an sObject (``not-a-client`` and ``mock-sobject``). Each of these
+    appears in the source text, so the text check never skips a file a rule would change.
+    """
+    if "simple_salesforce" in source or _SOBJECT_WORD.search(source):
+        return True
+    return any(name in source for name in opts.client_names)
+
+
+def _rules_can_apply(facts: _Collector, opts: Options) -> bool:
+    """The same condition as :func:`_may_apply`, on the parsed module."""
+    return facts.sf_related or facts.sobject_like or bool(opts.client_names & facts.idents)
+
+
+def _compiles(source: str) -> bool:
+    try:
+        compile(source, "<esf-migrate>", "exec", dont_inherit=True)
+    except (SyntaxError, ValueError):
+        return False
+    return True
+
+
 def transform_source(source: str, opts: Options) -> tuple[str, list[Finding]]:
     """Migrate one module's source.
 
@@ -1602,9 +1916,13 @@ def transform_source(source: str, opts: Options) -> tuple[str, list[Finding]]:
         libcst.ParserSyntaxError: the source doesn't parse.
         RuntimeError: a rewrite would produce invalid code (the file must be left unchanged).
     """
+    if not _may_apply(source, opts) and _compiles(source):
+        return source, []  # fast path: no rule can match (a file that doesn't compile still parses below)
     module = cst.parse_module(source)
     facts = _Collector()
     module.visit(facts)
+    if not _rules_can_apply(facts, opts):
+        return source, []
     new_module, tf = _run(module, facts, opts, set())
     used = _referenced(new_module)
     sf_locals = facts.sf_imported | facts.sf_module_aliases
@@ -1626,7 +1944,7 @@ def transform_source(source: str, opts: Options) -> tuple[str, list[Finding]]:
     if drop or add_import:
         new_module = new_module.visit(_ImportFixer(drop, add_import))
     code = new_module.code
-    if code != source:
+    if code != source and _compiles(source):  # the original may use syntax newer than this Python
         try:
             compile(code, "<esf-migrate>", "exec", dont_inherit=True)
         except SyntaxError as exc:  # safety net: never write code that doesn't compile
