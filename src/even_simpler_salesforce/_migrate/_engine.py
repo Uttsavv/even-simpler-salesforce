@@ -431,8 +431,10 @@ class _Transformer(cst.CSTTransformer):
         rules = self.opts.rules
         if rules is None or rule in rules:
             return True
-        # per-object sub-rules run as part of sobject-attr
-        return rule == "sobject-attr" and bool(rules & SUB_RULES)
+        # sobject-attr and its sub-rules run together: a rewrite to sobject() without them (or
+        # them without it) leaves upsert paths, get_by_custom_id and results broken and unmarked
+        group = SUB_RULES | {"sobject-attr"}
+        return rule in group and bool(rules & group)
 
     def pos(self, node: cst.CSTNode) -> CodeRange:
         return cast(CodeRange, self.get_metadata(PositionProvider, node))

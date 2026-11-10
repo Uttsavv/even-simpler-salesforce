@@ -1,0 +1,1 @@
+`esf migrate --rules` runs `sobject-attr` and its sub-rules as one group. Before, `--rules sobject-attr` rewrote `upsert()` and `get_by_custom_id()` calls to `sobject()` without fixing their arguments or marking them.

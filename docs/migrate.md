@@ -50,7 +50,8 @@ rules that build on it:
 - `return-value`
 - `not-a-client`
 
-In the same way, `--rules create-return` also runs `sobject-attr`.
+These rules also run as one group with `--rules`. For example, `--rules sobject-attr` also runs
+`upsert-path`, and `--rules create-return` also runs `sobject-attr`.
 
 Some sites sit inside a decorator, a default argument, a base class or a `match` subject. For
 these, the marker goes above the decorator, `def`, `class` or `match` line. The codemod writes
