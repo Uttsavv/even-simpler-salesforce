@@ -112,6 +112,50 @@ Some failures mean the request didn't run. The client retries these for every me
 
 See [Errors → Retries](../errors.md#retries) for the policy settings.
 
+## Tokens in the request body
+
+Some APIs take the access token in the body, not in the `Authorization` header. An example is
+the SOAP `SessionHeader`. If Salesforce rejects that token, the client can't refresh it for
+you, because the fault arrives in the body. Catch the fault, call `sf.auth.refresh()` and send
+the request again once.
+
+```python
+from xml.sax.saxutils import escape
+
+SOAP_PATH = "/services/Soap/u/68.0"
+
+
+def user_info_envelope(session_id: str) -> bytes:
+    return (
+        '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" '
+        'xmlns:urn="urn:partner.soap.sforce.com"><soapenv:Header><urn:SessionHeader>'
+        f"<urn:sessionId>{escape(session_id)}</urn:sessionId></urn:SessionHeader></soapenv:Header>"
+        "<soapenv:Body><urn:getUserInfo/></soapenv:Body></soapenv:Envelope>"
+    ).encode()
+
+
+async def soap_user_info(token: esf.Token) -> str:
+    return await sf.request(
+        "POST",
+        SOAP_PATH,
+        content=user_info_envelope(token.access_token),
+        headers={"Content-Type": "text/xml; charset=UTF-8", "SOAPAction": '""'},
+        operation="soap.get_user_info",
+    )
+
+
+try:
+    xml = await soap_user_info(await sf.auth.token())
+except esf.UnexpectedResponse as exc:  # a SOAP fault is HTTP 500 with an XML body
+    if b"INVALID_SESSION_ID" not in (exc.raw or b""):
+        raise
+    xml = await soap_user_info(await sf.auth.refresh())
+print("<userId>" in xml)  # True
+```
+
+Concurrent calls to `sf.auth.refresh()` share one refresh. See
+[Force a refresh](../authentication/index.md#force-a-refresh).
+
 ## Name the operation
 
 `operation=` names the call. The default is `"raw"`. The name appears in these places:

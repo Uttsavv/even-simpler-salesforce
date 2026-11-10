@@ -429,6 +429,7 @@ token = await sf.auth.exchange_code(flow, code, code_verifier=start.code_verifie
 await sf.auth.revoke(token_key)                  # POST /services/oauth2/revoke, clears store
 info  = await sf.auth.userinfo()                 # /services/oauth2/userinfo
 intro = await sf.auth.introspect(token_key)      # /services/oauth2/introspect
+token = await sf.auth.refresh()                  # forced refresh (single-flight); StaticToken → SessionExpired
 ```
 
 PKCE (S256) is on by default for `WebServerFlow`.

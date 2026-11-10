@@ -97,6 +97,7 @@ async with esf.AsyncSalesforce(auth) as sf:
 | Call | What it does |
 |---|---|
 | `await sf.auth.token()` | the current `Token`, acquiring one if needed; treat it as a secret |
+| `await sf.auth.refresh()` | a new `Token`, even if the current one looks valid; see [Force a refresh](#force-a-refresh) |
 | `await sf.auth.userinfo()` | `GET /services/oauth2/userinfo` for the current token |
 | `await sf.auth.introspect(token_key=None, *, auth=None)` | `POST /services/oauth2/introspect` |
 | `await sf.auth.revoke(token_key=None, *, auth=None)` | `POST /services/oauth2/revoke`, then deletes the token from memory and the store |
@@ -105,6 +106,28 @@ async with esf.AsyncSalesforce(auth) as sf:
 `Token` is a frozen dataclass with `access_token`, `instance_url`, `issued_at`,
 `refresh_token`, `id_url`, `org_id`, `user_id`, `scope`, `signature`, `expires_at` and
 `version`. The client parses `user_id` from the identity URL. The token store manages `version`.
+
+### Force a refresh
+
+The client refreshes the token when Salesforce answers `401`. Sometimes Salesforce rejects a
+token in a way the client can't see. An example is a SOAP `SessionHeader` in a request body.
+Then call `sf.auth.refresh()` and send the request again with the new token.
+
+```python
+async with esf.AsyncSalesforce(auth) as sf:
+    old = await sf.auth.token()
+    new = await sf.auth.refresh()
+    assert new.access_token != old.access_token
+```
+
+- The client requests a new token even if the current token looks valid.
+- Concurrent calls share one refresh and get the same token.
+- The client saves the new token to the token store and emits `sf.auth.refreshed`.
+- A client with `StaticToken` raises `SessionExpired`, because it can't refresh.
+- Other failures raise the same errors as an automatic refresh, such as
+  `ReauthorizationRequired`.
+
+[Raw requests](../guides/requests.md#tokens-in-the-request-body) shows the SOAP case.
 
 ## Limitations
 
