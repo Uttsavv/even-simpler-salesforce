@@ -277,6 +277,7 @@ class _Collector(cst.CSTVisitor):
         self.async_clients: set[str] = set()
         self.sync_clients: set[str] = set()
         self.sf_star = False  # `from simple_salesforce import *`
+        self.sobject_like = False  # some `x.<Name>` looks like an sObject (Account, Foo__c)
 
     def _note_kind(self, seg: str, value_or_type: cst.BaseExpression) -> None:
         names = _annotation_names(value_or_type)
@@ -289,6 +290,10 @@ class _Collector(cst.CSTVisitor):
 
     def visit_Name(self, node: cst.Name) -> None:
         self.idents.add(node.value)
+
+    def visit_Attribute(self, node: cst.Attribute) -> None:
+        if looks_like_sobject(node.attr.value):
+            self.sobject_like = True
 
     @property
     def sf_related(self) -> bool:
@@ -1866,6 +1871,28 @@ def _run(
     return MetadataWrapper(module, unsafe_skip_copy=True).visit(tf), tf
 
 
+_SOBJECT_WORD = re.compile(
+    r"\b(?:" + "|".join(sorted(STANDARD_OBJECTS)) + r")\b|\w(?:" + "|".join(CUSTOM_SUFFIXES) + r")\b"
+)
+
+
+def _may_apply(source: str, opts: Options) -> bool:
+    """A cheap text check, before parsing: ``False`` only if no rule can match.
+
+    Every rule needs one of: a simple-salesforce import, a ``--client-names`` name, or an
+    attribute that looks like an sObject (``not-a-client`` and ``mock-sobject``). Each of these
+    appears in the source text, so the text check never skips a file a rule would change.
+    """
+    if "simple_salesforce" in source or _SOBJECT_WORD.search(source):
+        return True
+    return any(name in source for name in opts.client_names)
+
+
+def _rules_can_apply(facts: _Collector, opts: Options) -> bool:
+    """The same condition as :func:`_may_apply`, on the parsed module."""
+    return facts.sf_related or facts.sobject_like or bool(opts.client_names & facts.idents)
+
+
 def _compiles(source: str) -> bool:
     try:
         compile(source, "<esf-migrate>", "exec", dont_inherit=True)
@@ -1881,9 +1908,13 @@ def transform_source(source: str, opts: Options) -> tuple[str, list[Finding]]:
         libcst.ParserSyntaxError: the source doesn't parse.
         RuntimeError: a rewrite would produce invalid code (the file must be left unchanged).
     """
+    if not _may_apply(source, opts) and _compiles(source):
+        return source, []  # fast path: no rule can match (a file that doesn't compile still parses below)
     module = cst.parse_module(source)
     facts = _Collector()
     module.visit(facts)
+    if not _rules_can_apply(facts, opts):
+        return source, []
     new_module, tf = _run(module, facts, opts, set())
     used = _referenced(new_module)
     sf_locals = facts.sf_imported | facts.sf_module_aliases

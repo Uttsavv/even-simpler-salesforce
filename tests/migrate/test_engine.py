@@ -45,3 +45,51 @@ def test_except_star_handler_holds_its_marker() -> None:
     i = lines.index("    except* SalesforceGeneralError:")
     assert lines[i - 1].lstrip().startswith("# esf-migrate: TODO[exceptions]")
     assert ("exceptions", "todo") in found
+
+
+def _no_shortcuts(monkeypatch: pytest.MonkeyPatch) -> None:
+    from even_simpler_salesforce._migrate import _engine
+
+    monkeypatch.setattr(_engine, "_may_apply", lambda source, opts: True)
+    monkeypatch.setattr(_engine, "_rules_can_apply", lambda facts, opts: True)
+
+
+UNRELATED = [
+    ("x = 1\n", {}),
+    ("# an Account note\nclass Settings:\n    def get(self):\n        return self.Config.get()\n", {}),
+    ('client.Lead.get("00Q000000000001AAA")\n', {}),  # not-a-client TODO without any import
+    ("mock_sf.Lead.create.assert_called_once()\n", {"is_test_file": True}),
+    ('sf.query_all("SELECT Id FROM Lead")\n', {"client_names": frozenset({"sf"})}),
+    ("sf.Lead.get(x)\n", {"client_names": frozenset({"other"})}),
+]
+
+
+@pytest.mark.parametrize(("source", "opts"), UNRELATED)
+def test_fast_paths_match_the_full_run(
+    source: str, opts: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fast = transform_source(source, Options(**opts))  # type: ignore[arg-type]
+    _no_shortcuts(monkeypatch)
+    full = transform_source(source, Options(**opts))  # type: ignore[arg-type]
+    assert (fast[0], [f.as_json() for f in fast[1]]) == (full[0], [f.as_json() for f in full[1]])
+
+
+def test_fast_path_skips_unrelated_library_code(monkeypatch: pytest.MonkeyPatch) -> None:
+    from pathlib import Path
+
+    from even_simpler_salesforce._migrate import _engine
+
+    source = (Path(_engine.__file__).parents[1] / "_async" / "client.py").read_text(encoding="utf-8")
+
+    def boom(*args: object) -> None:
+        raise AssertionError("the transformer ran on an unrelated file")
+
+    monkeypatch.setattr(_engine, "_run", boom)
+    assert transform_source(source, Options()) == (source, [])
+
+
+def test_fast_path_still_reports_parse_errors() -> None:
+    import libcst
+
+    with pytest.raises(libcst.ParserSyntaxError):
+        transform_source("def broken(:\n", Options())
