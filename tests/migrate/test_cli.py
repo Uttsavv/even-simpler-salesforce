@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -294,3 +295,32 @@ def test_failed_write_leaves_original_and_no_temp(tmp_path: Path, monkeypatch: p
     assert "write error: disk full" in out
     assert f.read_text() == CLEAN
     assert [p.name for p in tmp_path.iterdir()] == ["app.py"]
+
+
+@pytest.mark.parametrize("glob", ["build", "build/", "tests", "src/build", "src/build/*"])
+def test_exclude_matches_directories(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, glob: str) -> None:
+    for d in ("src/build", "src/tests", "src/app"):
+        (tmp_path / d).mkdir(parents=True)
+        (tmp_path / d / "m.py").write_text("x = 1\n")
+    monkeypatch.chdir(tmp_path)
+    for arg in ("src", str(tmp_path / "src")):  # relative and absolute path arguments
+        got = {p.parent.name for p in iter_python_files([arg], [glob])}
+        assert "app" in got
+        assert ("tests" in got) != (glob == "tests")
+        assert ("build" in got) == (glob == "tests")
+
+
+def test_exclude_prunes_directories(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / "build" / "deep").mkdir(parents=True)
+    (tmp_path / "build" / "deep" / "m.py").write_text("x = 1\n")
+    walked: list[str] = []
+    real_walk = os.walk
+
+    def spy(top: str, *a: object, **k: object):  # type: ignore[no-untyped-def]
+        for item in real_walk(top):
+            walked.append(item[0])
+            yield item
+
+    monkeypatch.setattr(os, "walk", spy)
+    assert list(iter_python_files([str(tmp_path)], ["build"])) == []
+    assert all("deep" not in w for w in walked)

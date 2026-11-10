@@ -14,7 +14,7 @@ import os
 import sys
 import tempfile
 from collections.abc import Iterable, Iterator, Sequence
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, TextIO
 
 from .._version import __version__
@@ -38,27 +38,59 @@ def _is_test_file(path: Path) -> bool:
 
 def iter_python_files(paths: Iterable[str], exclude: Sequence[str] = ()) -> Iterator[Path]:
     """Every ``.py`` file under ``paths``, skipping virtualenvs, VCS dirs and ``exclude`` globs."""
+    globs = [g.rstrip("/") for g in exclude if g.rstrip("/")]
     seen: set[Path] = set()
     for raw in paths:
         root = Path(raw)
-        files = [root] if root.is_file() else _walk(root)
+        files = [root] if root.is_file() else _walk(root, globs)
         for f in files:
             if f.suffix != ".py" or any(part in ALWAYS_SKIP for part in f.parts):
                 continue
-            rel = f.as_posix()
-            if any(fnmatch.fnmatch(rel, g) or fnmatch.fnmatch(f.name, g) for g in exclude):
+            if _excluded(f, root, globs):
                 continue
             if f not in seen:
                 seen.add(f)
                 yield f
 
 
-def _walk(root: Path) -> list[Path]:
-    """``*.py`` under ``root``, never descending into virtualenvs or VCS directories."""
+def _relative_forms(path: Path, root: Path) -> list[PurePosixPath]:
+    """``path`` as given, relative to the path argument, and relative to the working directory."""
+    forms = [PurePosixPath(path.as_posix())]
+    for base in (root, Path.cwd()):
+        try:
+            forms.append(PurePosixPath(path.resolve().relative_to(base.resolve()).as_posix()))
+        except (ValueError, OSError):
+            pass
+    return forms
+
+
+def _excluded(path: Path, root: Path, globs: Sequence[str]) -> bool:
+    """A glob matches the whole path (in any form from :func:`_relative_forms`), a directory
+    prefix of it, or one of its components below the path argument (``--exclude build``)."""
+    if not globs:
+        return False
+    forms = _relative_forms(path, root)
+    below = forms[1].parts if len(forms) > 1 else ()  # components below the path argument
+    names = {*below, path.name}
+    for g in globs:
+        if any(fnmatch.fnmatch(n, g) for n in names):
+            return True
+        for form in forms:
+            text = form.as_posix()
+            if fnmatch.fnmatch(text, g) or fnmatch.fnmatch(text, g + "/*"):
+                return True
+    return False
+
+
+def _walk(root: Path, globs: Sequence[str] = ()) -> list[Path]:
+    """``*.py`` under ``root``, never descending into virtualenvs, VCS or excluded directories."""
     out: list[Path] = []
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = sorted(d for d in dirnames if d not in ALWAYS_SKIP)
-        out.extend(Path(dirpath) / f for f in sorted(filenames) if f.endswith(".py"))
+        base = Path(dirpath)
+        dirnames[:] = sorted(
+            d for d in dirnames if d not in ALWAYS_SKIP and not _excluded(base / d, root, globs)
+        )
+        out.extend(base / f for f in sorted(filenames) if f.endswith(".py"))
     return out
 
 

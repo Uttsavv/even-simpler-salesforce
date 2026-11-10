@@ -86,7 +86,7 @@ See [The report](#the-report) for the format.
 | `--check` | changes nothing; exit 1 if any marker or unconverted pattern remains, else 0 |
 | `--client-names a,b` | names that hold a Salesforce client (the last attribute: `sf_client` matches `self.sf_client`) |
 | `--rules r1,r2` | run only these [rules](#rules) |
-| `--exclude GLOB,...` | skip paths; `.venv`, `venv`, `site-packages`, `node_modules`, `.git`, `__pycache__`, `.tox` and `.nox` are always skipped |
+| `--exclude GLOB,...` | skip paths that match a glob: a name such as `build`, or a path such as `src/gen/*`; `.venv`, `venv`, `site-packages`, `node_modules`, `.git`, `__pycache__`, `.tox` and `.nox` are always skipped |
 
 ## Exit codes
 
