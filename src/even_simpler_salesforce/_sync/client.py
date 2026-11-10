@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import copy
 import hashlib
 import re
 import time
@@ -21,6 +20,7 @@ from ..auth.store import TokenStore
 from ..cache import Cache, MemoryCache
 from ..config import Budget, DescribeCacheConfig, Priority, RetryPolicy, Timeouts
 from ..context import current_call_context
+from ..core import jsonlib
 from ..core.cursor import Cursor, decode_cursor, encode_cursor
 from ..core.http import RawResponse, RequestSpec, check_sobject
 from ..core.records import apply_model, parse_query_plans
@@ -305,31 +305,38 @@ class Salesforce:
         return self._describe("sobjects", "global", cached, None)
 
     def _describe(self, path: str, what: str, cached: bool, sobject: str | None) -> dict[str, Any]:
-        # Callers get their own copy: the cached dict is shared by the whole family.
         t = self._transport
         tok = self._runtime.token()
         user = hashlib.sha256((tok.user_id or self._runtime.key).encode()).hexdigest()[:12]
         key = f"esf:describe:{tok.org_id or tok.instance_url}:{t.api_version}:{what}:{user}"
         if not cached:
-            return copy.deepcopy(self._describe_fetch(path, key, False, sobject))
+            return (self._describe_fetch(path, key, False, sobject))[1]
         # Single flight: concurrent misses for one key wait for the first fetch, then hit the cache.
         with t.single_flight(key):
-            return copy.deepcopy(self._describe_fetch(path, key, True, sobject))
+            body, data = self._describe_fetch(path, key, True, sobject)
+        # The cache holds the JSON text, so each caller decodes its own private copy, outside
+        # the lock. Decoding is several times faster than deep-copying a large describe.
+        return data if data is not None else t.loads(body.encode())
 
-    def _describe_fetch(self, path: str, key: str, cached: bool, sobject: str | None) -> Any:
+    def _describe_fetch(
+        self, path: str, key: str, cached: bool, sobject: str | None
+    ) -> tuple[str, Any]:
+        """Return ``(json_text, parsed_or_None)``; ``parsed`` is set only for a fresh 200."""
         t = self._transport
         cfg = t.describe_cache
         cached_value: Any = t.cache.get(key) if cached else None
         entry: dict[str, Any] | None = (
-            cast("dict[str, Any]", cached_value) if isinstance(cached_value, dict) else None
+            cast("dict[str, Any]", cached_value)
+            if isinstance(cached_value, dict) and isinstance(cached_value.get("body"), str)  # pyright: ignore[reportUnknownMemberType]
+            else None
         )
         now = time.time()
         headers: dict[str, str] = {}
         if entry is not None:
-            if now - float(entry.get("fetched_at", 0)) < cfg.ttl:  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
-                return entry["data"]  # pyright: ignore[reportUnknownVariableType]
-            if cfg.revalidate and entry.get("last_modified"):  # pyright: ignore[reportUnknownMemberType]
-                headers["If-Modified-Since"] = str(entry["last_modified"])  # pyright: ignore[reportUnknownArgumentType]
+            if now - float(entry.get("fetched_at", 0)) < cfg.ttl:
+                return entry["body"], None
+            if cfg.revalidate and entry.get("last_modified"):
+                headers["If-Modified-Since"] = str(entry["last_modified"])
         raw = self._send(
             RequestSpec(
                 "GET",
@@ -340,15 +347,19 @@ class Salesforce:
                 allow_not_modified=bool(headers),
             )
         )
+        last_modified = raw.headers.get("last-modified") or formatdate(now, usegmt=True)
+        data: Any = None
         if raw.status == 304 and entry is not None:
-            data: Any = entry["data"]
+            body: str = entry["body"]
+            last_modified = str(entry.get("last_modified") or last_modified)
         else:
             data = raw.json()
-        last_modified = raw.headers.get("last-modified") or formatdate(now, usegmt=True)
-        if raw.status == 304 and entry is not None:
-            last_modified = str(entry.get("last_modified") or last_modified)
-        t.cache.set(key, {"data": data, "last_modified": last_modified, "fetched_at": now}, cfg.stale_ttl)
-        return data
+            try:
+                body = raw.content.decode("utf-8")
+            except UnicodeDecodeError:  # pragma: no cover - Salesforce sends UTF-8 JSON
+                body = jsonlib.dumps(data).decode("utf-8")
+        t.cache.set(key, {"body": body, "last_modified": last_modified, "fetched_at": now}, cfg.stale_ttl)
+        return body, data
 
     # --- query & search ----------------------------------------------------------------
 
