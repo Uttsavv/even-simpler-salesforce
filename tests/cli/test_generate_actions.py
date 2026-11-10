@@ -261,3 +261,15 @@ def test_unwritable_out_is_a_usage_error(
     code = main(["generate", "actions", "--include", "apex:OrderService", "--out", str(out)])
     assert code == 2
     assert "cannot write" in capsys.readouterr().err
+
+
+def test_render_keyword_class_and_control_characters(tmp_path: Path) -> None:
+    """An action named ``none`` must not render ``class None:``, and control characters or lone
+    surrogates in a description must not make the module unloadable or unwritable."""
+    describe = {"description": "a\x00b\x07c\ud800d\U000e0001e", "inputs": [], "outputs": []}
+    for pyd, name in ((False, "gen_kw_dc"), (True, "gen_kw_pd")):
+        src = render_actions([ActionDescribe("flow", "none", describe)], header="# test\n", pydantic=pyd)
+        path = tmp_path / f"{name}.py"
+        path.write_text(src, encoding="utf-8")
+        mod = _load(path, name)
+        assert mod.None_.__doc__ == "a\x00b\x07c\ufffdd\U000e0001e"

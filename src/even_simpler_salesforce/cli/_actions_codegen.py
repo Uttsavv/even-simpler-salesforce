@@ -75,6 +75,8 @@ def class_name(api_name: str) -> str:
     """``Assign_Lead`` → ``AssignLead``, ``ns__Order_Service`` → ``NsOrderService``."""
     parts = [p for p in _NOT_IDENT.sub("_", api_name).split("_") if p]
     name = "".join(p[:1].upper() + p[1:] for p in parts) or "Action"
+    if keyword.iskeyword(name):  # an action named "none" or "true" → None/True
+        return name + "_"
     return "A" + name if name[0].isdigit() else name
 
 
@@ -125,9 +127,18 @@ def _q(text: str) -> str:
     return json.dumps(text)
 
 
+def _escape(char: str) -> str:
+    code = ord(char)
+    if 0xD800 <= code <= 0xDFFF:  # a lone surrogate can't be encoded anywhere: replace it
+        code = 0xFFFD
+    return f"\\u{code:04x}" if code <= 0xFFFF else f"\\U{code:08x}"
+
+
 def _doc(text: Any) -> str:
     # Every quote escaped: a description ending in '"' would otherwise close the docstring early.
     one_line = " ".join(str(text or "").split()).replace("\\", "\\\\").replace('"', '\\"')
+    # Control characters (a NUL is a SyntaxError) become escapes, lone surrogates U+FFFD.
+    one_line = "".join(c if c.isprintable() else _escape(c) for c in one_line)
     return f'    """{one_line}"""' if one_line else ""
 
 
