@@ -105,6 +105,8 @@ INTERNALS_TODO = {
 #: Attributes of simple-salesforce exceptions -> the closest attribute of esf errors.
 CAUGHT_ATTRS = {"content": "raw", "resource_name": "sobject", "url": "path"}
 DISTINCTIVE_INTERNALS = frozenset({"sf_instance", "sf_version"})  # names only simple-salesforce uses
+QUERY_RESULT_ATTRS = frozenset({"records", "total_size", "done", "cursor"})
+QUERY_RESULT_MSG = "query() returns a QueryResult (records, total_size, done, cursor), not a dict"
 QUERY_KEYS = {"records": "records", "totalSize": "total_size", "done": "done"}
 UNSUPPORTED = {
     "bulk": "Bulk API v1 isn't supported; use sf.bulk (Bulk 2.0, planned for 0.3)",
@@ -1498,21 +1500,31 @@ class _Transformer(cst.CSTTransformer):
         return updated if is_async else listed
 
     def _query_result(self, call: cst.Call) -> None:
-        """``X.query(q)["records"]`` → ``.records`` (QueryResult isn't a dict)."""
+        """``X.query(q)["records"]`` → ``.records`` (QueryResult isn't a dict).
+
+        A ``query()`` result used in any way the tool can't follow (stored twice, returned,
+        passed on, iterated) gets a TODO on the call.
+        """
         if not self.enabled("query-result") or self.ignored("query-result"):
             return
-        _, parent = self._call_context(call)
+        node, parent = self._call_context(call)
         subs: list[cst.Subscript] = []
-        if isinstance(parent, cst.Subscript):
-            subs = [parent]
-        elif isinstance(parent, cst.Assign) and isinstance(parent.targets[0].target, cst.Name):
-            uses = self.scope_uses(parent.targets[0].target) or []
-            for u in uses:
-                p = self.parent(u)
-                if isinstance(p, cst.Subscript) and p.value is u:
-                    subs.append(p)
-                elif isinstance(p, cst.Attribute) and p.value is u and p.attr.value == "get":
-                    self._query_result_get(p)
+        proven = True
+        if isinstance(parent, cst.Expr):
+            pass  # result unused
+        elif isinstance(parent, (cst.Subscript, cst.Attribute)) and parent.value is node:
+            proven = self._query_use(node, subs)
+        elif (
+            isinstance(parent, cst.Assign)
+            and len(parent.targets) == 1
+            and isinstance(parent.targets[0].target, cst.Name)
+        ):
+            uses = self.scope_uses(parent.targets[0].target)
+            proven = uses is not None
+            for u in uses or ():
+                proven = self._query_use(u, subs) and proven
+        else:
+            proven = False
         for sub in subs:
             key = _string_value(_slice(sub) or cst.Name("x"))
             if key in QUERY_KEYS:
@@ -1520,11 +1532,22 @@ class _Transformer(cst.CSTTransformer):
                 new = cst.Attribute(value=sub.value, attr=cst.Name(QUERY_KEYS[key]))
                 self.record("query-result", "rewritten", f'["{key}"] → .{QUERY_KEYS[key]}', sub, new)
             else:
-                self.pending[sub] = (
-                    "query-result",
-                    "todo",
-                    "query() returns a QueryResult (records, total_size, done, cursor), not a dict",
-                )
+                self.pending[sub] = ("query-result", "todo", QUERY_RESULT_MSG)
+        if not proven and cast(cst.Attribute, call.func).attr.value == "query":
+            self.record("query-result", "todo", QUERY_RESULT_MSG + "; check how the result is used", call)
+
+    def _query_use(self, node: cst.CSTNode, subs: list[cst.Subscript]) -> bool:
+        """Handle one use of a query() result; ``False`` if the tool can't follow it."""
+        p = self.parent(node)
+        if isinstance(p, cst.Subscript) and p.value is node:
+            subs.append(p)
+            return True
+        if isinstance(p, cst.Attribute) and p.value is node:
+            if p.attr.value == "get":
+                self._query_result_get(p)
+                return True
+            return p.attr.value in QUERY_RESULT_ATTRS  # already QueryResult attributes
+        return False
 
     def _query_result_get(self, attr: cst.Attribute) -> None:
         """``r.get("records", [])`` → ``r.records`` (the attribute always exists)."""
@@ -1539,11 +1562,7 @@ class _Transformer(cst.CSTTransformer):
             self.replace[call] = new
             self.record("query-result", "rewritten", f'.get("{key}") → .{QUERY_KEYS[key]}', call, new)
             return
-        self.pending[attr] = (
-            "query-result",
-            "todo",
-            "query() returns a QueryResult (records, total_size, done, cursor), not a dict",
-        )
+        self.pending[attr] = ("query-result", "todo", QUERY_RESULT_MSG)
 
     # raw requests
 

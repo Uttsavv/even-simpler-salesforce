@@ -272,8 +272,14 @@ keys:
 | `["totalSize"]` | `.total_size` |
 | `["done"]` | `.done` |
 
-Other keys, such as `["nextRecordsUrl"]`, get a TODO. This rule needs a confirmed client, because
-`query` is a common method name.
+Other keys, such as `["nextRecordsUrl"]`, get a TODO. If the codemod can't follow every use of
+the result, the `query()` call gets a TODO. Examples are a result that your code returns, passes
+on or assigns twice. This rule needs a confirmed client, because `query` is a common method name.
+
+simple-salesforce took `include_deleted` as the second positional argument. Here, positional values
+after the query fill `{}` placeholders. So `X.query("SELECT ...", flag)` becomes
+`X.query("SELECT ...", include_deleted=flag)`. If the query isn't a literal, the call gets a TODO,
+or a review item for `True` and `False`.
 
 ### `query-more`
 

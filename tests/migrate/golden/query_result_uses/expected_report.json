@@ -1,0 +1,37 @@
+[
+  {
+    "rule": "unsupported",
+    "status": "todo",
+    "line": 1
+  },
+  {
+    "rule": "query-result",
+    "status": "todo",
+    "line": 5
+  },
+  {
+    "rule": "query-result",
+    "status": "todo",
+    "line": 6
+  },
+  {
+    "rule": "query-result",
+    "status": "todo",
+    "line": 11
+  },
+  {
+    "rule": "query-result",
+    "status": "todo",
+    "line": 16
+  },
+  {
+    "rule": "query-result",
+    "status": "rewritten",
+    "line": 23
+  },
+  {
+    "rule": "query-result",
+    "status": "rewritten",
+    "line": 23
+  }
+]

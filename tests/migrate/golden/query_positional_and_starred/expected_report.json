@@ -6,8 +6,18 @@
   },
   {
     "rule": "query-result",
+    "status": "todo",
+    "line": 5
+  },
+  {
+    "rule": "query-result",
     "status": "rewritten",
     "line": 5
+  },
+  {
+    "rule": "query-result",
+    "status": "todo",
+    "line": 6
   },
   {
     "rule": "query-result",
@@ -21,6 +31,16 @@
   },
   {
     "rule": "query-result",
+    "status": "todo",
+    "line": 7
+  },
+  {
+    "rule": "query-result",
+    "status": "todo",
+    "line": 8
+  },
+  {
+    "rule": "query-result",
     "status": "rewritten",
     "line": 8
   },
@@ -28,6 +48,11 @@
     "rule": "format-soql",
     "status": "rewritten",
     "line": 8
+  },
+  {
+    "rule": "query-result",
+    "status": "todo",
+    "line": 9
   },
   {
     "rule": "restful",
