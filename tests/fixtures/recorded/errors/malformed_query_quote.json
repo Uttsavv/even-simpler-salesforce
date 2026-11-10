@@ -1,0 +1,10 @@
+{
+  "synthetic": true,
+  "source": "hand-written from Salesforce REST API Developer Guide error examples and the SOQL Quoted String Escape Sequences page (https://developer.salesforce.com/docs/atlas.en-us.soql_sosl.meta/soql_sosl/sforce_api_calls_soql_select_quotedstringescapes.htm)",
+  "body": [
+    {
+      "message": "\nSELECT Id FROM Lead WHERE LastName = 'O'Brien'\n                                       ^\nERROR at Row:1:Column:40\nunexpected token: Brien",
+      "errorCode": "MALFORMED_QUERY"
+    }
+  ]
+}

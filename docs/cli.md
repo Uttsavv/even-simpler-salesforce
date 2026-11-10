@@ -67,6 +67,102 @@ last page, because the columns depend on every row. If a later page fails, the c
 esf limits
 ```
 
+## Describe an sObject
+
+`esf describe` prints the fields of an sObject: type, length, whether a value is required on
+create, and the active picklist values. Add `--json` to get JSON.
+
+```sh
+esf describe Lead
+```
+
+```console
+field      type      length  required  values
+---------  --------  ------  --------  -------------------------
+Id         id        18
+LastName   string    80      yes
+Email      email     80
+Status     picklist  40                (restricted) Open, Working
+```
+
+`required` means that Salesforce needs a value when you create a record. The field can't be
+empty, and Salesforce doesn't fill in a default.
+
+## Call any REST resource
+
+`esf request` sends one request with [`sf.request`](guides/requests.md), so you get the same
+login, refresh, retries and typed errors. The path is relative to `/services/data/vXX.X/`, or
+absolute under `/services/`.
+
+```sh
+esf request GET sobjects/Lead/describe/layouts
+esf request GET query --param "q=SELECT Id FROM Lead LIMIT 5"
+esf request PATCH sobjects/Lead/00Q5g00000AbCdE --json '{"Status": "Working"}'
+esf request POST /services/apexrest/orders --json @order.json
+```
+
+| Flag | What it does |
+|---|---|
+| `--json JSON` | send JSON as the request body; `@FILE` reads the body from a file |
+| `--param KEY=VALUE` | add a query parameter; repeat it for more parameters |
+
+The command prints a JSON response as indented JSON and a text response as text. It writes
+binary responses, such as file contents, to stdout unchanged. A write is not sent again if
+it times out. See [Retries](errors.md#which-failures-are-retried).
+
+## Generate code
+
+`esf generate` writes Python code from the describe data of your org. Each generated file
+starts with a comment that names the org, the API version, the time and the command. To update
+the file after a change in the org, run the command again.
+
+### `esf generate models`
+
+`esf generate models` writes one `TypedDict` per sObject. It makes one describe call for each
+sObject.
+
+```sh
+esf generate models Lead Account --out myapp/sf_models.py
+esf generate models Lead --pydantic --out myapp/sf_models.py
+```
+
+- Every model has `total=False`, because a query returns only the fields it selects.
+- A field that can be empty has the type `X | None`.
+- A restricted picklist becomes a `Literal` of its active values. Other picklists are `str`.
+- Dates and times are `str`, because the client returns them as text.
+
+Pass a model as `model=` to type the rows. A `TypedDict` only adds types: the rows stay `dict`s.
+
+```python
+from typing import Literal, TypedDict
+
+import even_simpler_salesforce as esf
+
+
+class Lead(TypedDict, total=False):  # from esf generate models Lead
+    Id: str
+    LastName: str
+    Status: Literal["Open", "Working"]
+
+
+auth = esf.ClientCredentials(
+    domain="https://acme.my.salesforce.com", client_id="3MVG9...", client_secret="..."
+)
+async with esf.AsyncSalesforce(auth) as sf:
+    page = await sf.query("SELECT Id, LastName FROM Lead LIMIT 2", model=Lead)
+    for lead in page.records:
+        print(lead["LastName"])  # your editor knows this key
+```
+
+With `--pydantic`, the command writes pydantic models instead. Every field is optional, and the
+model checks picklist values when it reads a row. You need `pydantic` installed to import the
+file.
+
+| Flag | What it does |
+|---|---|
+| `--out FILE` | write to `FILE` instead of stdout |
+| `--pydantic` | write pydantic models instead of `TypedDict`s |
+
 ## Commands
 
 | Command | What it does | API calls |
@@ -74,19 +170,19 @@ esf limits
 | `esf whoami [--json]` | prints the current user, org and login flow | `GET /services/oauth2/userinfo`, plus the token request |
 | `esf limits [--json]` | prints a table of every org limit | one `GET limits` |
 | `esf query SOQL` | runs a query and prints the rows | one per page |
+| `esf describe SOBJECT [--json]` | prints the fields of an sObject | one `GET sobjects/{o}/describe` |
+| `esf request METHOD PATH` | calls any REST resource and prints the response | one, plus retries |
+| `esf generate models SOBJECT...` | writes typed models from describe | one describe per sObject |
 | `esf version` | prints the library, default API version, httpx and Python versions | none |
 | `esf migrate PATH...` | rewrites simple-salesforce code; needs the `[migrate]` extra; see [`esf migrate`](migrate.md) | none, and no login |
-
-`esf generate` is reserved for code generation (`esf generate actions`), which is planned for 0.2.
-In 0.1 it exits with code 2.
 
 ## Exit codes
 
 | Code | Meaning |
 |---|---|
 | `0` | success |
-| `1` | Salesforce or API error; the CLI prints the exception class and message to stderr |
-| `2` | usage or configuration error: bad arguments, missing variables or an invalid API version |
+| `1` | Salesforce or API error; the CLI prints the exception class and message to stderr, then the [hint](errors.md#hints-and-docs-links) and the docs link |
+| `2` | usage or configuration error: bad arguments, missing variables, an invalid API version, or a file the CLI can't read or write |
 | `130` | interrupted with Ctrl-C |
 
 `esf migrate` has its own [exit codes](migrate.md#exit-codes).

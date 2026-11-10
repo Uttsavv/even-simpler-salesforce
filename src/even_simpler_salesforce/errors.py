@@ -72,6 +72,22 @@ class ErrorDetail:
     extended: Mapping[str, Any] = field(default_factory=lambda: {})
 
 
+#: Troubleshooting page; each public error class has an entry whose anchor is its lower-cased name.
+ERRORS_PAGE = "https://uttsavv.github.io/even-simpler-salesforce/latest/errors/"
+
+
+def docs_url_for(cls: type[BaseException]) -> str | None:
+    """The troubleshooting entry for ``cls``, e.g. ``.../errors/#invalidfield``.
+
+    A user subclass (such as a class registered in ``error_tags``) gets the entry of its
+    nearest library class.
+    """
+    for klass in cls.__mro__:
+        if klass.__module__ == __name__ and klass.__name__ in __all__:
+            return f"{ERRORS_PAGE}#{klass.__name__.lower()}"
+    return None
+
+
 def _rebuild(cls: type[SalesforceError], state: dict[str, Any]) -> SalesforceError:
     exc = cls.__new__(cls)
     Exception.__init__(exc, state.get("message", ""))
@@ -96,9 +112,15 @@ class SalesforceError(Exception):
         errors: Every error entry when Salesforce returned several.
         raw: Original response body, for debugging (never logged by the library).
         tag: Custom error tag parsed from the message (``"[TAG] ..."``), if any.
+        hint: A likely fix, computed from data the client already had (never an API call).
+            ``None`` when the library has nothing specific to say.
+        docs_url: Troubleshooting entry for this error class on the docs site.
     """
 
     default_retryable: bool = False
+    # Class-level fallbacks, so errors pickled before 0.2 still format.
+    hint: str | None = None
+    docs_url: str | None = None
 
     message: str
     error_code: str | None
@@ -130,6 +152,8 @@ class SalesforceError(Exception):
         errors: tuple[ErrorDetail, ...] | list[ErrorDetail] = (),
         raw: bytes | str | None = None,
         tag: str | None = None,
+        hint: str | None = None,
+        docs_url: str | None = None,
     ) -> None:
         super().__init__(message)
         self.message = message
@@ -145,13 +169,20 @@ class SalesforceError(Exception):
         self.errors = tuple(errors)
         self.raw = raw
         self.tag = tag
+        self.hint = hint
+        self.docs_url = docs_url if docs_url is not None else docs_url_for(type(self))
 
     def __str__(self) -> str:
         head = f"{self.error_code}: {self.message}" if self.error_code else self.message
         ctx = [p for p in (self.operation, self.sobject) if p]
         if self.status is not None:
             ctx.append(f"HTTP {self.status}")
-        return f"{head} ({', '.join(ctx)})" if ctx else head
+        text = f"{head} ({', '.join(ctx)})" if ctx else head
+        if self.hint:
+            text += f"\n  hint: {self.hint}"
+        if self.docs_url:
+            text += f"\n  docs: {self.docs_url}"
+        return text
 
     def __repr__(self) -> str:
         return (

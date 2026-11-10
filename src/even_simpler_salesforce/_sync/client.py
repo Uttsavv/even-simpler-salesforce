@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import copy
-import hashlib
 import re
 import time
 from collections.abc import Iterator, Iterable, Mapping, Sequence
@@ -308,8 +307,7 @@ class Salesforce:
         # Callers get their own copy: the cached dict is shared by the whole family.
         t = self._transport
         tok = self._runtime.token()
-        user = hashlib.sha256((tok.user_id or self._runtime.key).encode()).hexdigest()[:12]
-        key = f"esf:describe:{tok.org_id or tok.instance_url}:{t.api_version}:{what}:{user}"
+        key = t.describe_key(tok, self._runtime.key, what)
         if not cached:
             return copy.deepcopy(self._describe_fetch(path, key, False, sobject))
         # Single flight: concurrent misses for one key wait for the first fetch, then hit the cache.

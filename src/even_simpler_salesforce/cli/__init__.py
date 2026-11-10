@@ -5,6 +5,9 @@ Usage::
     esf whoami [--json]
     esf limits [--json]
     esf query "SELECT Id, Name FROM Lead LIMIT 10" [--json | --csv] [--all]
+    esf describe Lead [--json]
+    esf request GET sobjects/Lead/describe [--json BODY | --json @FILE] [--param KEY=VALUE]
+    esf generate models Lead Account [--out models.py] [--pydantic]
     esf version
 
 Login comes from the environment only (first complete set wins):
@@ -22,17 +25,23 @@ Exit codes: ``0`` success, ``1`` Salesforce/API error, ``2`` usage or configurat
 from __future__ import annotations
 
 import argparse
+import copy
 import csv
 import json
 import os
 import re
 import sys
 from collections.abc import Iterable, Mapping, Sequence
-from typing import Any, TextIO
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, TextIO
 
 from .._version import __version__
 from ..core.records import flatten
-from ._env import EnvConfigError, auth_from_env
+from ._env import EnvConfigError, auth_from_env, client_from_env
+from ._generate import add_generate_parser
+
+if TYPE_CHECKING:
+    from ..errors import SalesforceError
 
 __all__ = ["EXIT_API_ERROR", "EXIT_INTERRUPTED", "EXIT_OK", "EXIT_USAGE", "main"]
 
@@ -83,9 +92,19 @@ def _build_parser() -> argparse.ArgumentParser:
         "migrate", help="rewrite simple-salesforce code (needs the [migrate] extra)", add_help=False
     )
 
-    g = sub.add_parser("generate", help="code generation (available from 0.2)")
-    g.add_argument("what", nargs="?", default="actions")
-    g.add_argument("rest", nargs=argparse.REMAINDER)
+    d = sub.add_parser("describe", help="show an sObject's fields (costs one API call)")
+    d.add_argument("sobject", help="sObject API name, e.g. Lead")
+    d.add_argument("--json", action="store_true", help="print JSON")
+
+    r = sub.add_parser("request", help="call any REST resource with sf.request")
+    r.add_argument("method", type=str.upper, help="HTTP method, e.g. GET")
+    r.add_argument("path", help="path under /services/data/vXX.X/, or absolute under /services/")
+    r.add_argument("--json", dest="body", metavar="JSON", help="JSON request body; @FILE reads a file")
+    r.add_argument(
+        "--param", action="append", default=[], metavar="KEY=VALUE", help="query parameter (repeatable)"
+    )
+
+    add_generate_parser(sub)
     return p
 
 
@@ -165,17 +184,7 @@ def _json(value: Any, out: TextIO) -> None:
 
 
 def _client(env: Mapping[str, str]) -> Any:
-    from .. import Salesforce
-
-    auth = auth_from_env(env)
-    kwargs: dict[str, Any] = {"user_agent": f"esf-cli/{__version__}"}
-    version = env.get("ESF_API_VERSION", "").strip()
-    if version:
-        kwargs["api_version"] = version.removeprefix("v")
-    try:
-        return Salesforce(auth, **kwargs)
-    except ValueError as exc:
-        raise EnvConfigError(str(exc)) from None
+    return client_from_env(env)
 
 
 def _cmd_whoami(args: argparse.Namespace, env: Mapping[str, str], out: TextIO) -> int:
@@ -270,6 +279,105 @@ def _cmd_query(args: argparse.Namespace, env: Mapping[str, str], out: TextIO, er
     return EXIT_OK
 
 
+def _describe_rows(describe: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """One row per field: name, type, length, required, picklist values.
+
+    ``required`` means Salesforce needs a value on create: not nillable, createable and not
+    defaulted on create (``Field`` properties of *DescribeSObjectResult*).
+    """
+    fields: Any = describe.get("fields")
+    rows: list[dict[str, Any]] = []
+    for f in fields if isinstance(fields, list) else []:  # pyright: ignore[reportUnknownVariableType]
+        if not isinstance(f, Mapping):
+            continue
+        field: Mapping[str, Any] = f  # pyright: ignore[reportUnknownVariableType]
+        values: Any = field.get("picklistValues")
+        active = [
+            str(v.get("value"))  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
+            for v in (values if isinstance(values, list) else [])  # pyright: ignore[reportUnknownVariableType]
+            if isinstance(v, Mapping) and v.get("active", True)  # pyright: ignore[reportUnknownMemberType]
+        ]
+        rows.append(
+            {
+                "name": field.get("name"),
+                "type": field.get("type"),
+                "length": field.get("length") or None,
+                "required": (
+                    field.get("nillable") is False
+                    and field.get("createable") is True
+                    and not field.get("defaultedOnCreate")
+                ),
+                "restricted": bool(field.get("restrictedPicklist")),
+                "values": active,
+            }
+        )
+    return rows
+
+
+def _cmd_describe(args: argparse.Namespace, env: Mapping[str, str], out: TextIO) -> int:
+    with _client(env) as sf:
+        describe = sf.sobject(args.sobject).describe()
+    rows = _describe_rows(describe)
+    if args.json:
+        _json(rows, out)
+        return EXIT_OK
+    table = [
+        {
+            "field": r["name"],
+            "type": r["type"],
+            "length": r["length"],
+            "required": "yes" if r["required"] else "",
+            "values": ("(restricted) " if r["restricted"] else "") + ", ".join(r["values"])
+            if r["values"]
+            else "",
+        }
+        for r in rows
+    ]
+    _table(table, ["field", "type", "length", "required", "values"], out)
+    return EXIT_OK
+
+
+def _request_body(text: str | None) -> Any:
+    if text is None:
+        return None
+    if text.startswith("@"):
+        try:
+            text = Path(text[1:]).expanduser().read_text(encoding="utf-8")
+        except OSError as exc:
+            raise ValueError(f"cannot read {text[1:]}: {exc.strerror}") from None
+    try:
+        return json.loads(text)
+    except ValueError as exc:
+        raise ValueError(f"--json is not valid JSON: {exc}") from None
+
+
+def _cmd_request(args: argparse.Namespace, env: Mapping[str, str], out: TextIO) -> int:
+    params: dict[str, str] = {}
+    for item in args.param:
+        key, sep, value = item.partition("=")
+        if not sep or not key:
+            raise ValueError(f"--param needs KEY=VALUE, got {item!r}")
+        params[key] = value
+    body = _request_body(args.body)
+    with _client(env) as sf:
+        result = sf.request(args.method, args.path, params=params or None, json=body)
+    if result is None:
+        return EXIT_OK
+    if isinstance(result, bytes):
+        buffer = getattr(out, "buffer", None)
+        if buffer is None:  # pragma: no cover - a text-only stdout
+            raise ValueError("the response is binary and stdout can't take bytes")
+        out.flush()
+        buffer.write(result)
+        return EXIT_OK
+    if isinstance(result, str):
+        # Org text can hold escape sequences; a terminal gets them escaped, a pipe gets them raw.
+        out.write(_printable(result) + "\n" if out.isatty() else result)
+        return EXIT_OK
+    _json(result, out)
+    return EXIT_OK
+
+
 def _cmd_version(out: TextIO) -> int:
     import platform
 
@@ -281,6 +389,19 @@ def _cmd_version(out: TextIO) -> int:
     out.write(f"api version {DEFAULT_API_VERSION}, httpx {httpx.__version__}, ")
     out.write(f"python {platform.python_version()}\n")
     return EXIT_OK
+
+
+def _write_error(exc: SalesforceError, err: TextIO) -> None:
+    """One escaped error line, then the hint and the docs link on their own lines."""
+    hint, docs_url = exc.hint, exc.docs_url
+    plain = copy.copy(exc)
+    plain.hint = plain.docs_url = None  # str() without them; they are printed below
+    # The message comes from Salesforce and can hold terminal escape sequences.
+    err.write(f"esf: {type(exc).__name__}: {_printable(str(plain))}\n")
+    if hint:
+        err.write(f"  hint: {_printable(hint)}\n")
+    if docs_url:
+        err.write(f"  docs: {docs_url}\n")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -313,8 +434,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "version":
             return _cmd_version(out)
         if args.command == "generate":
-            err.write(f"esf: 'esf generate {args.what}' is not available until 0.2\n")
-            return EXIT_USAGE
+            return int(args.handler(args, env, out, err))
+        if args.command == "describe":
+            return _cmd_describe(args, env, out)
+        if args.command == "request":
+            return _cmd_request(args, env, out)
         if args.command == "whoami":
             return _cmd_whoami(args, env, out)
         if args.command == "limits":
@@ -325,8 +449,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         err.write(f"esf: configuration error: {exc}\n")
         return EXIT_USAGE
     except SalesforceError as exc:
-        # The message comes from Salesforce and can hold terminal escape sequences.
-        err.write(f"esf: {type(exc).__name__}: {_printable(str(exc))}\n")
+        _write_error(exc, err)
         return EXIT_API_ERROR
     except ValueError as exc:
         err.write(f"esf: error: {_printable(str(exc))}\n")

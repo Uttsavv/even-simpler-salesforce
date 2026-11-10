@@ -1,0 +1,10 @@
+{
+  "synthetic": true,
+  "source": "hand-written from Salesforce REST API Developer Guide, Status Codes and Error Responses (https://developer.salesforce.com/docs/platform/api-rest/guide/errorcodes.html) and Supported Editions and Required Permissions (https://developer.salesforce.com/docs/platform/api-rest/guide/intro-rest-compatible-editions.html)",
+  "body": [
+    {
+      "message": "The REST API is not enabled for this Organization.",
+      "errorCode": "API_DISABLED_FOR_ORG"
+    }
+  ]
+}
