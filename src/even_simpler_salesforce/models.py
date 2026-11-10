@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
+import copy
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, TypeVar, cast
 
 from .core.cursor import Cursor
 from .core.http import check_record_id
-from .errors import ErrorDetail, PartialFailure
+from .errors import ErrorDetail, PartialFailure, SalesforceError, UnexpectedResponse
 
 __all__ = [
     "ActionResult",
     "BatchResult",
+    "CompositeResult",
+    "GraphResult",
     "LeadConvert",
     "LeadConvertResult",
     "FileLink",
@@ -24,6 +27,7 @@ __all__ = [
     "QueryPlanNote",
     "QueryResult",
     "RecordResult",
+    "SubrequestResult",
     "UpsertResult",
     "UsageSnapshot",
 ]
@@ -356,3 +360,122 @@ class PublishResult:
     id: str | None = None
     uuid: str | None = None
     errors: tuple[ErrorDetail, ...] = ()
+
+
+# Error codes Salesforce gives subrequests that didn't fail themselves: they were rolled back or
+# skipped because another subrequest failed.
+_HALTED = frozenset({"PROCESSING_HALTED", "BATCH_PROCESSING_HALTED", "ALL_OR_NONE_OPERATION_ROLLED_BACK"})
+
+
+@dataclass(frozen=True, slots=True)
+class SubrequestResult:
+    """Outcome of one subrequest of a Composite, Composite Graph or Batch request.
+
+    Attributes:
+        reference_id: The subrequest's reference id (the client's name for it in a Batch).
+        status: HTTP status of the subrequest (``httpStatusCode`` or ``statusCode``).
+        body: Decoded body of the subrequest: the record for a get, the query page for a
+            query, ``{"id": ..., "success": true, ...}`` for a create, ``None`` for 204.
+        headers: Response headers of the subrequest, such as ``Location``.
+        error: The typed error for a failed subrequest (§8), else ``None``.
+    """
+
+    reference_id: str | None
+    status: int
+    body: Any = None
+    headers: Mapping[str, str] = field(default_factory=lambda: {})
+    error: SalesforceError | None = None
+
+    @property
+    def ok(self) -> bool:
+        """Whether the subrequest succeeded."""
+        return self.error is None
+
+    @property
+    def halted(self) -> bool:
+        """Whether Salesforce skipped or rolled back this subrequest because another one failed."""
+        return self.error is not None and self.error.error_code in _HALTED
+
+    @property
+    def errors(self) -> tuple[ErrorDetail, ...]:
+        """The error entries of a failed subrequest (empty when it succeeded)."""
+        return self.error.errors if self.error is not None else ()
+
+
+@dataclass(frozen=True, slots=True)
+class CompositeResult:
+    """Results of a Composite or Batch request, one per subrequest, in the order you added them.
+
+    Index it by position or by reference id: ``result[0]``, ``result["acc"]``. A failed
+    subrequest doesn't raise; call :meth:`raise_for_errors`.
+
+    Attributes:
+        results: One :class:`SubrequestResult` per subrequest.
+        operation: ``"composite.send"``, ``"composite.batch"`` or ``"composite.graph"``.
+    """
+
+    results: list[SubrequestResult]
+    operation: str | None = None
+
+    def __iter__(self) -> Iterator[SubrequestResult]:
+        return iter(self.results)
+
+    def __len__(self) -> int:
+        return len(self.results)
+
+    def __getitem__(self, key: int | str) -> SubrequestResult:
+        if isinstance(key, str):
+            for r in self.results:
+                if r.reference_id == key:
+                    return r
+            raise KeyError(key)
+        return self.results[key]
+
+    @property
+    def succeeded(self) -> list[SubrequestResult]:
+        """Subrequests that succeeded."""
+        return [r for r in self.results if r.ok]
+
+    @property
+    def failed(self) -> list[SubrequestResult]:
+        """Subrequests that failed, including the ones Salesforce halted or rolled back."""
+        return [r for r in self.results if not r.ok]
+
+    def raise_for_errors(self) -> None:
+        """Raise the typed error of the first subrequest that caused a failure.
+
+        Subrequests that Salesforce only halted or rolled back (``PROCESSING_HALTED``) don't
+        pick the class: the real cause does, for example :class:`ValidationRuleFailed`. The
+        exception's ``.errors`` holds the error entries of every failed subrequest.
+        """
+        failed = self.failed
+        if not failed:
+            return
+        primary = next((r for r in failed if not r.halted), failed[0])
+        exc = copy.copy(cast(SalesforceError, primary.error))
+        exc.errors = tuple(d for r in failed for d in r.errors)
+        raise exc
+
+
+@dataclass(frozen=True, slots=True)
+class GraphResult:
+    """Outcome of one graph of a Composite Graph request.
+
+    A graph is atomic: if one subrequest fails, Salesforce rolls back the whole graph, and
+    only that graph.
+
+    Attributes:
+        graph_id: The graph's id.
+        ok: ``isSuccessful`` from Salesforce.
+        results: The graph's subrequest results.
+    """
+
+    graph_id: str
+    ok: bool
+    results: CompositeResult
+
+    def raise_for_errors(self) -> None:
+        """Raise the typed error of the subrequest that made this graph fail."""
+        self.results.raise_for_errors()
+        if not self.ok:
+            raise UnexpectedResponse(f"graph {self.graph_id!r} failed without error details")

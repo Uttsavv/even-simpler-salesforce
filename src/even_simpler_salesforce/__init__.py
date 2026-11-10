@@ -30,6 +30,7 @@ from .cache import Cache, MemoryCache
 from .config import Budget, DescribeCacheConfig, RetryPolicy, Timeouts
 from .context import call_context
 from .core.actions import Action
+from .core.composite import Reference
 from .core.cursor import Cursor
 from .core.records import flatten
 from .core.soql import soql, soql_identifier, soql_like, sosl_term
@@ -83,7 +84,9 @@ from .errors import (
 from .models import (
     ActionResult,
     BatchResult,
+    CompositeResult,
     FileLink,
+    GraphResult,
     LeadConvert,
     LeadConvertResult,
     Limit,
@@ -93,6 +96,7 @@ from .models import (
     QueryPlanNote,
     QueryResult,
     RecordResult,
+    SubrequestResult,
     UpsertResult,
     UsageSnapshot,
 )
@@ -120,6 +124,7 @@ __all__ = [
     "BulkJobFailed",
     "Cache",
     "ClientCredentials",
+    "CompositeResult",
     "Conflict",
     "ConnectError",
     "Cursor",
@@ -135,6 +140,7 @@ __all__ = [
     "FlowFailed",
     "Forbidden",
     "Gone",
+    "GraphResult",
     "GraphQLError",
     "InMemoryTokenStore",
     "InvalidField",
@@ -162,6 +168,7 @@ __all__ = [
     "RecordError",
     "RecordResult",
     "RecordSaveBlocked",
+    "Reference",
     "RefreshFailed",
     "RequestError",
     "RequestLimitExceeded",
@@ -178,6 +185,7 @@ __all__ = [
     "StaticToken",
     "StorageLimitExceeded",
     "StringTooLong",
+    "SubrequestResult",
     "Timeouts",
     "Token",
     "TokenConflict",

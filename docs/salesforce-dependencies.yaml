@@ -132,6 +132,26 @@ rest_endpoints:
     used_by: collections.upsert()
     docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobjects_collections_upsert.htm
     checked: null
+  - path: composite
+    methods: [POST]
+    used_by: composite.builder().send()
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_composite_post.htm
+    checked: null
+  - path: composite/graph
+    methods: [POST]
+    used_by: composite.graph().send()
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_graph.htm
+    checked: null
+  - path: composite/batch
+    methods: [POST]
+    used_by: composite.batch().send()
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_batch.htm
+    checked: null
+  - path: "composite/tree/{}"
+    methods: [POST]
+    used_by: composite.tree()
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobject_tree.htm
+    checked: null
   - path: /services/oauth2/userinfo
     methods: [GET]
     used_by: sf.auth.userinfo()
@@ -301,6 +321,10 @@ error_codes:
 other_error_codes:
   - code: ALL_OR_NONE_OPERATION_ROLLED_BACK
     note: skipped when picking the primary error of an all_or_none batch
+  - code: PROCESSING_HALTED
+    note: Composite subrequest rolled back or skipped because another one failed; skipped by CompositeResult.raise_for_errors()
+  - code: BATCH_PROCESSING_HALTED
+    note: Batch subrequest skipped after an earlier failure with haltOnError; skipped by CompositeResult.raise_for_errors()
 
 http_statuses: [300, 304, 401, 403, 404, 409, 410, 412, 414, 420, 428, 429, 431, 500, 502, 503, 504]
 
@@ -310,3 +334,7 @@ limits:
   query_batch_size: [200, 2000]  # Sforce-Query-Options validation
   record_id_lengths: [15, 18]    # check_record_id
   gzip_threshold_bytes: 65536    # GZIP_THRESHOLD
+  composite_subrequests: 25      # COMPOSITE_MAX (at most 5 of them sObject Collections or query: COMPOSITE_MAX_HEAVY)
+  graph_subrequests: 500         # GRAPH_MAX, per graph
+  batch_subrequests: 25          # BATCH_MAX
+  tree_records: 200              # TREE_MAX_RECORDS (5 types, 5 levels)
