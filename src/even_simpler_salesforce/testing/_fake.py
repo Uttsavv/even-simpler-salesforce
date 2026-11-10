@@ -6,32 +6,46 @@ drift apart. The async facade simply awaits nothing: every method completes sync
 
 from __future__ import annotations
 
+import builtins
 import re
 from collections.abc import AsyncIterator, Callable, Iterable, Iterator, Mapping, Sequence
 from datetime import datetime
 from types import TracebackType
-from typing import Any
+from typing import Any, TypeVar
 
 from .._async.client import DEFAULT_API_VERSION
+from .._sync.api.apex import _apex_path  # pyright: ignore[reportPrivateUsage]
 from ..auth.flows import Auth, WebServerFlow
 from ..auth.token import Token
 from ..config import Budget, Priority
+from ..core.actions import (
+    Action,
+    action_inputs,
+    action_list_path,
+    action_path,
+    action_result_type,
+    build_action_result,
+)
 from ..core.cursor import Cursor
 from ..core.http import check_instance_url, check_sobject
 from ..core.limits import LimitInfo
 from ..core.records import apply_model
 from ..core.soql import soql_identifier, soql_values
 from ..errors import MultipleMatches, NotFound, SalesforceError
-from ..models import BatchResult, Limit, QueryPlan, QueryResult, RecordResult, UpsertResult
+from ..models import ActionResult, BatchResult, Limit, QueryPlan, QueryResult, RecordResult, UpsertResult
 from ..observability.events import Observer, ObserverHub
 from ..usage import UsageTracker
 from ._state import FakeCall, FakeRequest, FakeState, Match, QueryScript, RowsSpec, Who, _sobject_of
 
 __all__ = [
+    "AsyncFakeActions",
+    "AsyncFakeApex",
     "AsyncFakeAuthApi",
     "AsyncFakeCollections",
     "AsyncFakeSObject",
     "AsyncFakeSalesforce",
+    "FakeActions",
+    "FakeApex",
     "FakeAuthApi",
     "FakeCollections",
     "FakeSObject",
@@ -40,6 +54,8 @@ __all__ = [
 
 
 _DEFAULT_INSTANCE = "https://example.my.salesforce.com"
+_APEX = "/services/apexrest"
+R = TypeVar("R")
 
 
 def _instance_of(auth: Auth | None) -> str:
@@ -124,6 +140,64 @@ class _FakeControls:
             times: Match at most this many times (``None`` = unlimited).
         """
         self._state.add_handler(method, path, response, times)
+
+    def on_action(
+        self,
+        kind: str,
+        name: str,
+        outputs: Any = None,
+        *,
+        times: int | None = None,
+    ) -> None:
+        """Register a handler for an invocable action (``sf.actions.*`` and ``sf.run``).
+
+        The handler runs once per input, so bulk calls get one result per input.
+
+        Args:
+            kind: ``"standard"``, ``"flow"`` or ``"apex"``.
+            name: Action name, e.g. the Flow API name or the Apex class name.
+            outputs: Output values (deep-copied), a callable ``(inputs) -> outputs``, or a
+                ``SalesforceError`` instance. An error, raised or given, fails that invocation:
+                a single call raises it, a bulk call reports it in its ``ActionResult``.
+            times: Match at most this many calls (``None`` = unlimited).
+
+        Example:
+            fake.on_action("flow", "Assign_Lead", lambda inputs: {"assignedTo": "005..."})
+        """
+        action_path(kind, name)  # same validation as the client
+        self._state.add_action(kind, name, outputs, times)
+
+    def set_action_describe(self, kind: str, name: str, describe: Mapping[str, Any]) -> None:
+        """Set what ``actions.describe(kind, name)`` returns; the action also appears in ``list``."""
+        action_path(kind, name)
+        with self._state.lock:
+            self._state.action_describes[(kind, name)] = dict(describe)
+
+    def on_apex(
+        self,
+        method: str,
+        path: str | re.Pattern[str],
+        response: Any = None,
+        *,
+        times: int | None = None,
+    ) -> None:
+        """Register a handler for ``sf.apex.<method>(path, ...)``.
+
+        Args:
+            method: HTTP method, or ``"*"`` for any.
+            path: Path after ``/services/apexrest`` (``"/orders/submit"``), or a regex matched
+                against it with ``fullmatch``.
+            response: Value returned to the caller (deep-copied), a callable receiving a
+                :class:`FakeRequest` (its ``path`` is the full ``/services/apexrest/...``
+                path), or an exception instance to raise, such as ``esf.ApexError(...)``.
+            times: Match at most this many times (``None`` = unlimited).
+        """
+        if isinstance(path, str):
+            self._state.add_handler(method, _APEX + path, response, times)
+        else:
+            self._state.add_handler(
+                method, re.compile(re.escape(_APEX) + f"(?:{path.pattern})"), response, times
+            )
 
     def fail_next(
         self,
@@ -546,6 +620,169 @@ class FakeCollections:
         )
 
 
+class FakeActions:
+    """Fake of ``sf.actions``. Register actions with :meth:`FakeSalesforce.on_action`."""
+
+    def __init__(self, state: FakeState, who: Who) -> None:
+        self._state = state
+        self._who = who
+
+    def standard(self, name: str, inputs: Mapping[str, Any] | Sequence[Mapping[str, Any]]) -> Any:
+        """See ``Salesforce.actions.standard``."""
+        return self._invoke("standard", name, inputs)
+
+    def flow(self, api_name: str, inputs: Mapping[str, Any] | Sequence[Mapping[str, Any]]) -> Any:
+        """See ``Salesforce.actions.flow``."""
+        return self._invoke("flow", api_name, inputs)
+
+    def apex(self, class_name: str, inputs: Mapping[str, Any] | Sequence[Mapping[str, Any]]) -> Any:
+        """See ``Salesforce.actions.apex``."""
+        return self._invoke("apex", class_name, inputs)
+
+    def list(self, kind: str) -> builtins.list[dict[str, Any]]:
+        """Actions registered with ``on_action`` or ``set_action_describe`` for ``kind``."""
+        path = action_list_path(kind)
+        return self._state.run(
+            self._who,
+            "actions.list",
+            None,
+            {"kind": kind},
+            lambda: self._state.list_actions(kind),
+            method="GET",
+            path=path,
+        )
+
+    def describe(self, kind: str, name: str) -> dict[str, Any]:
+        """The describe set with ``set_action_describe`` (a minimal one for registered actions)."""
+        path = action_path(kind, name)
+        return self._state.run(
+            self._who,
+            "actions.describe",
+            None,
+            {"kind": kind, "name": name},
+            lambda: self._state.describe_action(kind, name),
+            method="GET",
+            path=path,
+        )
+
+    def _invoke(self, kind: str, name: str, inputs: Mapping[str, Any] | Sequence[Mapping[str, Any]]) -> Any:
+        path = action_path(kind, name)
+        single = isinstance(inputs, Mapping)
+        if single:
+            items = [dict(inputs)]
+        elif isinstance(inputs, (str, bytes)):
+            raise TypeError("inputs must be a dict or a list of dicts")
+        else:
+            items = [dict(i) for i in inputs]
+        operation = f"actions.{kind}"
+
+        def fn() -> Any:
+            if not items:
+                empty: BatchResult[ActionResult] = BatchResult([], operation=operation)
+                return empty
+            results, errors = self._state.invoke_action(kind, name, items)
+            if not single:
+                return BatchResult(results, operation=operation)
+            if errors[0] is not None:
+                raise errors[0]
+            return dict(results[0].outputs)
+
+        return self._state.run(
+            self._who,
+            operation,
+            None,
+            {"name": name, "inputs": items if not single else items[0]},
+            fn,
+            method="POST",
+            path=path,
+            records=len(items),
+        )
+
+
+class FakeApex:
+    """Fake of ``sf.apex``. Register handlers with :meth:`FakeSalesforce.on_apex`."""
+
+    def __init__(self, client: FakeSalesforce) -> None:
+        self._client = client
+
+    def get(
+        self,
+        path: str,
+        *,
+        params: Mapping[str, Any] | None = None,
+        headers: Mapping[str, str] | None = None,
+        idempotent: bool | None = None,
+    ) -> Any:
+        """See ``Salesforce.apex.get``."""
+        return self._call("GET", path, params, None, headers, idempotent)
+
+    def post(
+        self,
+        path: str,
+        json: Any = None,
+        *,
+        params: Mapping[str, Any] | None = None,
+        headers: Mapping[str, str] | None = None,
+        idempotent: bool | None = None,
+    ) -> Any:
+        """See ``Salesforce.apex.post``."""
+        return self._call("POST", path, params, json, headers, idempotent)
+
+    def put(
+        self,
+        path: str,
+        json: Any = None,
+        *,
+        params: Mapping[str, Any] | None = None,
+        headers: Mapping[str, str] | None = None,
+        idempotent: bool | None = None,
+    ) -> Any:
+        """See ``Salesforce.apex.put``."""
+        return self._call("PUT", path, params, json, headers, idempotent)
+
+    def patch(
+        self,
+        path: str,
+        json: Any = None,
+        *,
+        params: Mapping[str, Any] | None = None,
+        headers: Mapping[str, str] | None = None,
+        idempotent: bool | None = None,
+    ) -> Any:
+        """See ``Salesforce.apex.patch``."""
+        return self._call("PATCH", path, params, json, headers, idempotent)
+
+    def delete(
+        self,
+        path: str,
+        *,
+        params: Mapping[str, Any] | None = None,
+        headers: Mapping[str, str] | None = None,
+        idempotent: bool | None = None,
+    ) -> Any:
+        """See ``Salesforce.apex.delete``."""
+        return self._call("DELETE", path, params, None, headers, idempotent)
+
+    def _call(
+        self,
+        method: str,
+        path: str,
+        params: Mapping[str, Any] | None,
+        json: Any,
+        headers: Mapping[str, str] | None,
+        idempotent: bool | None,
+    ) -> Any:
+        return self._client.request(
+            method,
+            _apex_path(path),
+            params=params,
+            json=json,
+            headers=headers,
+            idempotent=idempotent,
+            operation=f"apex.{method.lower()}",
+        )
+
+
 class FakeAuthApi:
     """``fake.auth``: the real ``sf.auth`` surface, answered in memory (no OAuth server).
 
@@ -683,6 +920,8 @@ class FakeSalesforce(_FakeControls):
         self._instance_url = _instance_of(auth)
         self.collections = FakeCollections(self._state, self._who)
         self.auth = FakeAuthApi(self)
+        self.actions = FakeActions(self._state, self._who)
+        self.apex = FakeApex(self)
 
     @classmethod
     def _view(
@@ -696,6 +935,8 @@ class FakeSalesforce(_FakeControls):
         view._instance_url = instance_url or _instance_of(auth)
         view.collections = FakeCollections(state, who)
         view.auth = FakeAuthApi(view)
+        view.actions = FakeActions(state, who)
+        view.apex = FakeApex(view)
         return view
 
     def __repr__(self) -> str:
@@ -954,6 +1195,13 @@ class FakeSalesforce(_FakeControls):
             path=path,
         )
 
+    def run(self, action: Action[R]) -> R:
+        """Run a typed action stub against the handler registered with :meth:`on_action`."""
+        kind, name, inputs = action_inputs(action)
+        outputs = self.actions._invoke(kind, name, inputs)  # pyright: ignore[reportPrivateUsage]
+        result: R = build_action_result(action_result_type(type(action)), outputs)
+        return result
+
     def limits(self) -> dict[str, Limit]:
         """Limits set with :meth:`set_limits` (a small default set otherwise)."""
         return self._state.run(
@@ -1122,6 +1370,98 @@ class AsyncFakeCollections:
         return self._inner.retrieve(sobject, ids, fields, concurrency=concurrency)
 
 
+class AsyncFakeActions:
+    """Async twin of :class:`FakeActions`."""
+
+    def __init__(self, inner: FakeActions) -> None:
+        self._inner = inner
+
+    async def standard(self, name: str, inputs: Mapping[str, Any] | Sequence[Mapping[str, Any]]) -> Any:
+        """See :meth:`FakeActions.standard`."""
+        return self._inner.standard(name, inputs)
+
+    async def flow(self, api_name: str, inputs: Mapping[str, Any] | Sequence[Mapping[str, Any]]) -> Any:
+        """See :meth:`FakeActions.flow`."""
+        return self._inner.flow(api_name, inputs)
+
+    async def apex(self, class_name: str, inputs: Mapping[str, Any] | Sequence[Mapping[str, Any]]) -> Any:
+        """See :meth:`FakeActions.apex`."""
+        return self._inner.apex(class_name, inputs)
+
+    async def list(self, kind: str) -> builtins.list[dict[str, Any]]:
+        """See :meth:`FakeActions.list`."""
+        return self._inner.list(kind)
+
+    async def describe(self, kind: str, name: str) -> dict[str, Any]:
+        """See :meth:`FakeActions.describe`."""
+        return self._inner.describe(kind, name)
+
+
+class AsyncFakeApex:
+    """Async twin of :class:`FakeApex`."""
+
+    def __init__(self, inner: FakeApex) -> None:
+        self._inner = inner
+
+    async def get(
+        self,
+        path: str,
+        *,
+        params: Mapping[str, Any] | None = None,
+        headers: Mapping[str, str] | None = None,
+        idempotent: bool | None = None,
+    ) -> Any:
+        """See :meth:`FakeApex.get`."""
+        return self._inner.get(path, params=params, headers=headers, idempotent=idempotent)
+
+    async def post(
+        self,
+        path: str,
+        json: Any = None,
+        *,
+        params: Mapping[str, Any] | None = None,
+        headers: Mapping[str, str] | None = None,
+        idempotent: bool | None = None,
+    ) -> Any:
+        """See :meth:`FakeApex.post`."""
+        return self._inner.post(path, json, params=params, headers=headers, idempotent=idempotent)
+
+    async def put(
+        self,
+        path: str,
+        json: Any = None,
+        *,
+        params: Mapping[str, Any] | None = None,
+        headers: Mapping[str, str] | None = None,
+        idempotent: bool | None = None,
+    ) -> Any:
+        """See :meth:`FakeApex.put`."""
+        return self._inner.put(path, json, params=params, headers=headers, idempotent=idempotent)
+
+    async def patch(
+        self,
+        path: str,
+        json: Any = None,
+        *,
+        params: Mapping[str, Any] | None = None,
+        headers: Mapping[str, str] | None = None,
+        idempotent: bool | None = None,
+    ) -> Any:
+        """See :meth:`FakeApex.patch`."""
+        return self._inner.patch(path, json, params=params, headers=headers, idempotent=idempotent)
+
+    async def delete(
+        self,
+        path: str,
+        *,
+        params: Mapping[str, Any] | None = None,
+        headers: Mapping[str, str] | None = None,
+        idempotent: bool | None = None,
+    ) -> Any:
+        """See :meth:`FakeApex.delete`."""
+        return self._inner.delete(path, params=params, headers=headers, idempotent=idempotent)
+
+
 class AsyncFakeSalesforce(_FakeControls):
     """In-memory stand-in for :class:`even_simpler_salesforce.AsyncSalesforce`.
 
@@ -1174,6 +1514,8 @@ class AsyncFakeSalesforce(_FakeControls):
         self.auth_config = inner.auth_config
         self.collections = AsyncFakeCollections(inner.collections)
         self.auth = AsyncFakeAuthApi(inner.auth)
+        self.actions = AsyncFakeActions(inner.actions)
+        self.apex = AsyncFakeApex(inner.apex)
 
     @property
     def instance_url(self) -> str:
@@ -1330,6 +1672,10 @@ class AsyncFakeSalesforce(_FakeControls):
             idempotent=idempotent,
             operation=operation,
         )
+
+    async def run(self, action: Action[R]) -> R:
+        """See :meth:`FakeSalesforce.run`."""
+        return self._sync.run(action)
 
     async def limits(self) -> dict[str, Limit]:
         """See :meth:`FakeSalesforce.limits`."""

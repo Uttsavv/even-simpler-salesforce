@@ -1,0 +1,14 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Salesforce Actions Developer Guide, Invoking Actions and Flow Actions pages; no org recording yet",
+  "body": {
+    "actions": [
+      {
+        "label": "Assign Lead",
+        "name": "Assign_Lead",
+        "type": "FLOW",
+        "url": "/services/data/v68.0/actions/custom/flow/Assign_Lead"
+      }
+    ]
+  }
+}

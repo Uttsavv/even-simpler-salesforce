@@ -1,0 +1,144 @@
+"""Invocable actions: ``sf.actions`` (§9.7)."""
+
+from __future__ import annotations
+
+import builtins
+from collections.abc import Mapping, Sequence
+from typing import TYPE_CHECKING, Any, cast, overload
+
+from ...core.actions import action_error, action_list_path, action_path, parse_action_results
+from ...core.http import RequestSpec
+from ...errors import UnexpectedResponse
+from ...models import ActionResult, BatchResult
+
+if TYPE_CHECKING:
+    from ..client import AsyncSalesforce
+
+__all__ = ["AsyncActions"]
+
+Inputs = Mapping[str, Any]
+
+
+class AsyncActions:
+    """Call invocable actions: standard actions, Flows and Apex ``@InvocableMethod`` classes.
+
+    Each call takes one input (a dict) or many (a list of dicts):
+
+    - one input returns the output values as a ``dict``. If the invocation fails, the call
+      raises the typed error for its first error entry (for example ``ValidationRuleFailed``).
+    - a list returns a ``BatchResult`` of ``ActionResult``, one per input, in input order.
+      Failed invocations don't raise; call ``raise_for_errors()`` to raise ``PartialFailure``.
+
+    A call that runs an action is never resent after it may have reached Salesforce, because
+    the action could run twice.
+    """
+
+    def __init__(self, client: AsyncSalesforce) -> None:
+        self._sf = client
+
+    @overload
+    async def standard(self, name: str, inputs: Inputs) -> dict[str, Any]: ...
+    @overload
+    async def standard(self, name: str, inputs: Sequence[Inputs]) -> BatchResult[ActionResult]: ...
+    async def standard(self, name: str, inputs: Inputs | Sequence[Inputs]) -> Any:
+        """``POST actions/standard/{name}``, for example ``chatterPost`` or ``emailSimple``.
+
+        Args:
+            name: Standard action name.
+            inputs: One input dict, or a list of them for a bulk invocation.
+        """
+        return await self._invoke("standard", name, inputs)
+
+    @overload
+    async def flow(self, api_name: str, inputs: Inputs) -> dict[str, Any]: ...
+    @overload
+    async def flow(self, api_name: str, inputs: Sequence[Inputs]) -> BatchResult[ActionResult]: ...
+    async def flow(self, api_name: str, inputs: Inputs | Sequence[Inputs]) -> Any:
+        """``POST actions/custom/flow/{api_name}``: run an autolaunched Flow.
+
+        Args:
+            api_name: Flow API name (with the namespace prefix for packaged flows).
+            inputs: Flow input variables, or a list of them for a bulk invocation.
+        """
+        return await self._invoke("flow", api_name, inputs)
+
+    @overload
+    async def apex(self, class_name: str, inputs: Inputs) -> dict[str, Any]: ...
+    @overload
+    async def apex(self, class_name: str, inputs: Sequence[Inputs]) -> BatchResult[ActionResult]: ...
+    async def apex(self, class_name: str, inputs: Inputs | Sequence[Inputs]) -> Any:
+        """``POST actions/custom/apex/{class_name}``: run an ``@InvocableMethod``.
+
+        Args:
+            class_name: The Apex class name, not the method name.
+            inputs: Input fields, or a list of them for a bulk invocation.
+        """
+        return await self._invoke("apex", class_name, inputs)
+
+    async def list(self, kind: str) -> builtins.list[dict[str, Any]]:
+        """``GET actions/standard`` or ``GET actions/custom/{kind}``: the actions of one kind.
+
+        Args:
+            kind: ``"standard"``, ``"flow"``, ``"apex"`` or another custom action type
+                (``"emailAlert"``, ``"quickAction"``, ...).
+
+        Returns:
+            One dict per action (``name``, ``label``, ``type``, ``url``).
+        """
+        raw = await self._sf._send(
+            RequestSpec("GET", action_list_path(kind), idempotent=True, operation="actions.list")
+        )
+        body: Any = raw.json()
+        actions: Any = cast("dict[str, Any]", body).get("actions") if isinstance(body, dict) else None
+        if not isinstance(actions, list):
+            raise UnexpectedResponse("action list response has no 'actions' list", operation="actions.list")
+        return builtins.list(actions)  # pyright: ignore[reportUnknownArgumentType]
+
+    async def describe(self, kind: str, name: str) -> dict[str, Any]:
+        """``GET`` the action resource: its ``inputs`` and ``outputs`` with names and types.
+
+        Args:
+            kind: ``"standard"``, ``"flow"``, ``"apex"`` or another custom action type.
+            name: Action name.
+        """
+        raw = await self._sf._send(
+            RequestSpec("GET", action_path(kind, name), idempotent=True, operation="actions.describe")
+        )
+        body: Any = raw.json()
+        if not isinstance(body, dict):
+            raise UnexpectedResponse("unexpected action describe response", operation="actions.describe")
+        return body  # pyright: ignore[reportUnknownVariableType]
+
+    # --- internals ---------------------------------------------------------------------
+
+    async def _invoke(self, kind: str, name: str, inputs: Inputs | Sequence[Inputs]) -> Any:
+        operation = f"actions.{kind}"
+        single = isinstance(inputs, Mapping)
+        if single:
+            items = [dict(inputs)]
+        elif isinstance(inputs, (str, bytes)):
+            raise TypeError("inputs must be a dict or a list of dicts")
+        else:
+            items = [dict(i) for i in inputs]
+            if not items:
+                empty: BatchResult[ActionResult] = BatchResult([], operation=operation)
+                return empty
+        content, ctype = self._sf._transport.encode({"inputs": items})
+        spec = RequestSpec(
+            "POST",
+            action_path(kind, name),
+            content=content,
+            content_type=ctype,
+            operation=operation,
+            records=len(items),
+            compress=True,
+        )
+        raw = await self._sf._send(spec)
+        results = parse_action_results(raw.json(), len(items))
+        if not single:
+            return BatchResult(results, operation=operation)
+        if not results[0].ok:
+            raise action_error(
+                results[0], status=raw.status, spec=spec, error_tags=self._sf._transport.error_tags
+            )
+        return dict(results[0].outputs)

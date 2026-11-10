@@ -213,12 +213,70 @@ def _truncate(content: bytes) -> bytes:
     return content if len(content) <= _RAW_LIMIT else content[:_RAW_LIMIT]
 
 
+def _is_action_results(body: Any) -> bool:
+    """A non-empty list of invocable action results (each with ``isSuccess``)."""
+    if not isinstance(body, list) or not body:
+        return False
+    return all(isinstance(item, Mapping) and "isSuccess" in item for item in body)  # pyright: ignore[reportUnknownVariableType]
+
+
+def _as_apex_error(err: E.SalesforceError, body: Any) -> E.SalesforceError:
+    """Apex REST (§8.3): whatever the class returned is an :class:`ApexError` with ``.body``.
+
+    Kept as they are: auth errors (the transport refreshes on them), limits, gateway errors
+    without a Salesforce error code, and non-JSON pages (proxies, maintenance).
+    """
+    if isinstance(err, (E.AuthError, E.LimitError, E.ApexError, E.UnexpectedResponse)):
+        return err
+    if isinstance(err, E.ServerError) and (
+        err.error_code == "SERVER_UNAVAILABLE" or (err.error_code is None and not body)
+    ):
+        return err
+    return E.ApexError(
+        err.message,
+        body=body,
+        error_code=err.error_code,
+        fields=err.fields,
+        status=err.status,
+        operation=err.operation,
+        sobject=err.sobject,
+        method=err.method,
+        path=err.path,
+        request_id=err.request_id,
+        errors=err.errors,
+        raw=err.raw,
+        tag=err.tag,
+    )
+
+
 def classify(
     resp: RawResponse,
     spec: RequestSpec,
     error_tags: Mapping[str, type[E.SalesforceError]] | None = None,
 ) -> E.SalesforceError | None:
-    """Return ``None`` for success, else the typed error for this response."""
+    """Return ``None`` for success, else the typed error for this response.
+
+    Two areas differ from the REST rules:
+
+    - ``actions.*``: a 400 whose body is a list of per-invocation results is returned to the
+      area as success; it maps each ``isSuccess=false`` entry itself (§9.7).
+    - ``apex.*``: errors become :class:`ApexError` carrying the decoded body (§8.3).
+    """
+    err = _classify(resp, spec, error_tags)
+    if err is None or not spec.operation.startswith(("actions.", "apex.")):
+        return err
+    # _classify already turned a body that isn't JSON into UnexpectedResponse.
+    body: Any = None if isinstance(err, E.UnexpectedResponse) else resp.json()
+    if spec.operation.startswith("actions."):
+        return None if resp.status == 400 and _is_action_results(body) else err
+    return _as_apex_error(err, body)
+
+
+def _classify(
+    resp: RawResponse,
+    spec: RequestSpec,
+    error_tags: Mapping[str, type[E.SalesforceError]] | None = None,
+) -> E.SalesforceError | None:
     status = resp.status
     if 200 <= status < 300 or (status == 304 and spec.allow_not_modified):
         return None

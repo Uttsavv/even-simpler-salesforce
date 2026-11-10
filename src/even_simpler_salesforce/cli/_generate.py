@@ -12,12 +12,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from . import _models
+from . import _generate_actions, _models
 
 __all__ = ["TARGETS", "add_generate_parser"]
 
 #: ``register(targets)`` for each ``esf generate`` target, in ``--help`` order.
-TARGETS: list[Callable[[Any], None]] = [_models.register]
+TARGETS: list[Callable[[Any], None]] = [_models.register, _generate_actions.register]
 
 
 def add_generate_parser(sub: Any) -> None:

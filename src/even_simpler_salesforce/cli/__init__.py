@@ -8,6 +8,7 @@ Usage::
     esf describe Lead [--json]
     esf request GET sobjects/Lead/describe [--json BODY | --json @FILE] [--param KEY=VALUE]
     esf generate models Lead Account [--out models.py] [--pydantic]
+    esf generate actions --include flow:Assign_Lead --out sf_actions.py [--pydantic]
     esf version
 
 Login comes from the environment only (first complete set wins):

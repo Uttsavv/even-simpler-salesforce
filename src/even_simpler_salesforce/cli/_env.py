@@ -105,13 +105,13 @@ def auth_from_env(env: Mapping[str, str], prefix: str = "ESF_", *, read_key: boo
     )
 
 
-def client_from_env(env: Mapping[str, str]) -> Any:
-    """A sync ``Salesforce`` client for the CLI: login from ``env``, ``ESF_API_VERSION`` if set."""
+def client_from_env(env: Mapping[str, str], prefix: str = "ESF_") -> Any:
+    """A sync ``Salesforce`` client for the CLI: login from ``env``, ``{prefix}API_VERSION`` if set."""
     from .. import Salesforce
 
-    auth = auth_from_env(env)
+    auth = auth_from_env(env, prefix)
     kwargs: dict[str, Any] = {"user_agent": f"esf-cli/{__version__}"}
-    version = env.get("ESF_API_VERSION", "").strip()
+    version = env.get(f"{prefix}API_VERSION", "").strip()
     if version:
         kwargs["api_version"] = version.removeprefix("v")
     try:

@@ -18,9 +18,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from ._fake import (
+    AsyncFakeActions,
+    AsyncFakeApex,
     AsyncFakeCollections,
     AsyncFakeSalesforce,
     AsyncFakeSObject,
+    FakeActions,
+    FakeApex,
     FakeCollections,
     FakeSalesforce,
     FakeSObject,
@@ -34,10 +38,14 @@ if TYPE_CHECKING:
     from .token_store_contract import AsyncTokenStoreContract, TokenStoreContract
 
 __all__ = [
+    "AsyncFakeActions",
+    "AsyncFakeApex",
     "AsyncFakeCollections",
     "AsyncFakeSObject",
     "AsyncFakeSalesforce",
     "AsyncTokenStoreContract",
+    "FakeActions",
+    "FakeApex",
     "FakeCall",
     "FakeCollections",
     "FakeRequest",

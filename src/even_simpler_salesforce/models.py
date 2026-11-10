@@ -11,6 +11,7 @@ from .core.cursor import Cursor
 from .errors import ErrorDetail, PartialFailure
 
 __all__ = [
+    "ActionResult",
     "BatchResult",
     "Limit",
     "QueryPlan",
@@ -55,6 +56,23 @@ class RecordResult:
     id: str | None = None
     created: bool | None = None
     errors: tuple[ErrorDetail, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ActionResult:
+    """Outcome of one invocation of an invocable action (one entry per input).
+
+    Attributes:
+        ok: ``isSuccess`` from Salesforce.
+        outputs: ``outputValues`` (empty when the invocation failed).
+        errors: The error entries when it failed.
+        action_name: ``actionName`` as Salesforce reports it.
+    """
+
+    ok: bool
+    outputs: Mapping[str, Any] = field(default_factory=lambda: {})
+    errors: tuple[ErrorDetail, ...] = ()
+    action_name: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

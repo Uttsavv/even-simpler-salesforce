@@ -86,6 +86,12 @@ def test_generate_needs_a_known_target(capsys: pytest.CaptureFixture[str]) -> No
     assert "invalid choice" in capsys.readouterr().err
 
 
+def test_generate_needs_a_generator_and_options(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["generate"]) == EXIT_USAGE
+    assert main(["generate", "actions"]) == EXIT_USAGE
+    assert "--include" in capsys.readouterr().err
+
+
 def test_missing_login(capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:
     assert main(["limits"]) == EXIT_USAGE
     assert "no Salesforce login configured" in capsys.readouterr().err
