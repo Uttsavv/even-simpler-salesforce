@@ -29,7 +29,7 @@ from ..errors import MultipleMatches, NotFound, SalesforceError, UnexpectedRespo
 from ..models import Limit, QueryPlan, QueryResult
 from ..observability.debug import DebugPrinter, debug_level
 from ..observability.events import Observer, ObserverHub
-from ..usage import UsageTracker
+from ..usage import UsageTracker, org_key
 from . import _compat
 from .api.auth_api import AuthApi
 from .api.collections import Collections
@@ -260,8 +260,13 @@ class Salesforce:
 
     @property
     def usage(self) -> UsageTracker:
-        """API usage tracker; ``sf.usage.snapshot()`` returns a :class:`UsageSnapshot`."""
-        return self._transport.usage
+        """API usage tracker; ``sf.usage.snapshot()`` returns a :class:`UsageSnapshot`.
+
+        The call counters are shared by the client family. The ``Sforce-Limit-Info`` values
+        and the budget guard use the org of this client's token.
+        """
+        runtime = self._runtime
+        return self._transport.usage.bound(lambda: org_key(runtime.current()))
 
     @property
     def api_version(self) -> str:
@@ -703,7 +708,7 @@ class Salesforce:
         if daily is not None:
             from ..core.limits import LimitInfo
 
-            self._transport.usage.observe(LimitInfo(daily.used, daily.max))
+            self._transport.usage.observe(LimitInfo(daily.used, daily.max), org=org_key(self._runtime.current()))
         return out
 
     def start_limits_poller(self, interval: float = MIN_LIMITS_POLL_INTERVAL) -> None:

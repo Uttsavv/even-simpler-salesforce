@@ -45,7 +45,7 @@ from ..errors import (
 )
 from ..observability.events import ObserverHub
 from ..observability.summary import record_event
-from ..usage import UsageTracker
+from ..usage import UsageTracker, org_key
 from . import _compat
 
 if TYPE_CHECKING:
@@ -313,9 +313,10 @@ class AsyncTransport:
         pinned_key = runtime.key  # sf.auth may rebind runtime.key while this call runs
         self.refresh_outcomes.pin(pinned_key)
         try:
-            self.usage.check(priority, operation=spec.operation)
             async with self.gate if self.gate is not None else _compat.nullcontext():
                 token = await runtime.token()
+                # After the token: usage is kept per org, and a with_auth() child may use another.
+                self.usage.check(priority, operation=spec.operation, org=org_key(token))
                 retries_used = 0
                 while True:
                     attempts += 1
@@ -438,7 +439,7 @@ class AsyncTransport:
             ) from exc
         info = parse_limit_info(response.headers.get("sforce-limit-info"))
         if info is not None:
-            self.usage.observe(info)
+            self.usage.observe(info, org=org_key(token))
         if self.debug >= 2:
             self.emit(
                 "sf.debug.attempt",
@@ -487,7 +488,7 @@ class AsyncTransport:
         caller: str | None,
         priority: str,
     ) -> None:
-        used, mx = self.usage.latest()
+        used, mx = self.usage.latest(org=org_key(runtime.current()))
         error = failure if isinstance(failure, SalesforceError) else None
         records = spec.records
         records_failed: int | None = None
