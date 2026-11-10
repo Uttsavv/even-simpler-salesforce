@@ -540,11 +540,13 @@ class Transport:
             headers = merge_call_options(headers, self.call_options)
         sent_bytes = [0]
         body: Any = content
+        chunks: Any = None
         if spec.body_stream is not None:
             headers.setdefault("Content-Type", spec.content_type or "application/octet-stream")
             if spec.body_length is not None:
                 headers["Content-Length"] = str(spec.body_length)
-            body = _counted(spec.body_stream(), sent_bytes)
+            chunks = spec.body_stream()
+            body = _counted(chunks, sent_bytes)
         elif content is not None:
             headers.setdefault("Content-Type", spec.content_type or "application/json")
             if spec.compress and len(content) > GZIP_THRESHOLD:
@@ -583,6 +585,12 @@ class Transport:
                 TransportError(f"transport error: {exc!r}", operation=spec.operation, method=spec.method),
                 sent=True,
             ) from exc
+        finally:
+            # httpx doesn't close a request body it stopped reading (a failed send): close it
+            # here, so a file the upload opened is closed now, not when garbage is collected.
+            for gen in (body, chunks):
+                if chunks is not None and hasattr(gen, "close"):
+                    gen.close()
         info = parse_limit_info(response.headers.get("sforce-limit-info"))
         if info is not None:
             self.usage.observe(info)

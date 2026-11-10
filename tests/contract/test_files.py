@@ -417,6 +417,55 @@ def test_upload_from_path_keeps_memory_flat(h: Harness, tmp_path: Path) -> None:
     assert peak < 4 * 1024 * 1024, f"peak {peak} bytes for a {size}-byte file"
 
 
+class _AsyncBreaksMidBody(httpx.AsyncBaseTransport):
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        assert isinstance(request.stream, httpx.AsyncByteStream)
+        seen = 0
+        async for _ in request.stream:  # the head, then the first file chunk
+            seen += 1
+            if seen == 2:
+                raise httpx.WriteError("connection reset")
+        raise AssertionError("unreachable")
+
+
+class _SyncBreaksMidBody(httpx.BaseTransport):
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        assert isinstance(request.stream, httpx.SyncByteStream)
+        for seen, _ in enumerate(request.stream, 1):  # the head, then the first file chunk
+            if seen == 2:
+                raise httpx.WriteError("connection reset")
+        raise AssertionError("unreachable")
+
+
+def test_upload_from_path_closes_the_file_when_the_send_fails(
+    h: Harness, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """httpx leaves a half-read request body open; the client closes it (and the file) at once."""
+    import importlib
+
+    files_mod = importlib.import_module(
+        f"even_simpler_salesforce.{'_async' if h.is_async else '_sync'}.api.files"
+    )
+    opened: list[Any] = []
+    real_open = files_mod._open_binary
+
+    def tracking_open(path: str) -> Any:
+        f = real_open(path)
+        opened.append(f)
+        return f
+
+    monkeypatch.setattr(files_mod, "_open_binary", tracking_open)
+    path = tmp_path / "big.bin"
+    path.write_bytes(b"\x01" * (CHUNK * 4))
+    transport: Any = _AsyncBreaksMidBody() if h.is_async else _SyncBreaksMidBody()
+    http: Any = httpx.AsyncClient(transport=transport) if h.is_async else httpx.Client(transport=transport)
+    sf = h.client(http_client=http)
+    with pytest.raises(esf.TransportError):
+        h.run(sf.files.upload(path))
+    assert len(opened) == 1  # not resent: a write that may have reached Salesforce
+    assert opened[0].closed
+
+
 # --- download ---------------------------------------------------------------------------------
 
 
