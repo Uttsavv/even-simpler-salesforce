@@ -89,7 +89,8 @@ def test_event_publish_unavailable_is_503_not_422() -> None:
         "error_code": "PLATFORM_EVENT_PUBLISHING_UNAVAILABLE",
     }
     failed = http_error(esf.EventPublishFailed("over", error_code="LIMIT_EXCEEDED"))
-    assert failed is not None and failed.status == 422
+    assert failed is not None
+    assert failed.status == 422
 
 
 @pytest.mark.parametrize(

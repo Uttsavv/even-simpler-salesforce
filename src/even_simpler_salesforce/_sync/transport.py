@@ -38,8 +38,8 @@ from ..core.http import (
     path_template,
 )
 from ..core.limits import parse_limit_info
-from ..core.soap import is_soap_path
 from ..core.retry import backoff_delay, decide_retry, resend_after_401
+from ..core.soap import is_soap_path
 from ..core.soql import redact_soql, soql_hash
 from ..errors import (
     ConnectError,
