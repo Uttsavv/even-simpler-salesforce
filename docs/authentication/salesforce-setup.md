@@ -55,9 +55,10 @@ Then set up the app:
   permission set to the app. Without this, the token request fails with `invalid_grant` /
   `user hasn't approved this consumer`.
 
-`domain` can be `"login"`, `"test"` or the My Domain URL. The JWT `aud` claim is
-`https://login.salesforce.com`, or `https://test.salesforce.com` for `"test"` and
-`*.sandbox.my.salesforce.com` domains. Override it with `audience=`.
+`domain` can be `"login"`, `"test"`, the My Domain URL or an Experience Cloud site URL. The
+JWT `aud` claim is `https://login.salesforce.com`, or `https://test.salesforce.com` for
+`"test"` and `*.sandbox.my.salesforce.com` domains. For a site URL, it is the site URL.
+Override it with `audience=`.
 
 ## Web server flow
 

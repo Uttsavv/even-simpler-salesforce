@@ -34,7 +34,7 @@ from ..core.http import (
     path_template,
 )
 from ..core.limits import parse_limit_info
-from ..core.retry import backoff_delay, decide_retry
+from ..core.retry import backoff_delay, decide_retry, resend_after_401
 from ..core.soql import redact_soql, soql_hash
 from ..errors import (
     ConnectError,
@@ -45,7 +45,7 @@ from ..errors import (
 )
 from ..observability.events import ObserverHub
 from ..observability.summary import record_event
-from ..usage import UsageTracker
+from ..usage import UsageTracker, org_key
 from . import _compat
 
 if TYPE_CHECKING:
@@ -313,11 +313,17 @@ class AsyncTransport:
         pinned_key = runtime.key  # sf.auth may rebind runtime.key while this call runs
         self.refresh_outcomes.pin(pinned_key)
         try:
-            self.usage.check(priority, operation=spec.operation)
-            async with self.gate if self.gate is not None else _compat.nullcontext():
-                token = await runtime.token()
-                retries_used = 0
-                while True:
+            token: Token | None = None
+            retries_used = 0
+            while True:
+                # The gate is held for one attempt (and a refresh), never across a backoff
+                # sleep, so a retrying call doesn't block unrelated calls.
+                async with self.gate if self.gate is not None else _compat.nullcontext():
+                    if token is None:
+                        token = await runtime.token()
+                        # After the token: usage is kept per org, and a with_auth() child may
+                        # use another.
+                        self.usage.check(priority, operation=spec.operation, org=org_key(token))
                     attempts += 1
                     sent = True
                     generation = runtime.generation()
@@ -330,12 +336,12 @@ class AsyncTransport:
                         raw, err, sent = None, f.error, f.sent
                     if err is None:
                         assert raw is not None
-                        if spec.expect_json and raw.content and raw.status != 304:
+                        if raw.content and raw.status != 304 and (spec.expect_json or raw.is_json):
                             raw.json()  # raises InvalidJSONResponse inside the pipeline
                         return raw
 
                     if isinstance(err, SessionExpired) and err.status == 401:
-                        if refreshed or not runtime.can_refresh:
+                        if refreshed or not runtime.can_refresh or not resend_after_401(spec, err):
                             if refreshed:
                                 err.message = f"{err.message} (still rejected after one token refresh)"
                                 err.args = (err.message,)
@@ -366,7 +372,7 @@ class AsyncTransport:
                             "status": err.status,
                         },
                     )
-                    await self.sleep(delay)
+                await self.sleep(delay)
         except BaseException as exc:
             # Not only SalesforceError: a rejected path (ValueError), a cancelled task or a
             # bug must not be reported as outcome="ok".
@@ -438,7 +444,7 @@ class AsyncTransport:
             ) from exc
         info = parse_limit_info(response.headers.get("sforce-limit-info"))
         if info is not None:
-            self.usage.observe(info)
+            self.usage.observe(info, org=org_key(token))
         if self.debug >= 2:
             self.emit(
                 "sf.debug.attempt",
@@ -487,7 +493,7 @@ class AsyncTransport:
         caller: str | None,
         priority: str,
     ) -> None:
-        used, mx = self.usage.latest()
+        used, mx = self.usage.latest(org=org_key(runtime.current()))
         error = failure if isinstance(failure, SalesforceError) else None
         records = spec.records
         records_failed: int | None = None

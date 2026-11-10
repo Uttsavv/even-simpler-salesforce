@@ -46,6 +46,10 @@ The command flattens each row with [`esf.flatten`](guides/query.md#exporting-row
 
 The row count goes to stderr, so stdout stays clean for pipes.
 
+With `--all --json`, the command prints each page as it arrives. CSV and table output wait for the
+last page, because the columns depend on every row. If a later page fails, the command exits with
+`1` and stdout holds an incomplete JSON array.
+
 | Flag | What it does |
 |---|---|
 | `--json` | print a JSON array instead of a table |

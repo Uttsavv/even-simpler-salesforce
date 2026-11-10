@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, ClassVar, Literal
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlencode, urlsplit
 
 from ..core.http import check_instance_url
 from ..errors import ReauthorizationRequired
@@ -35,14 +35,57 @@ _HOSTS = {"login": "https://login.salesforce.com", "test": "https://test.salesfo
 Expiry = Literal["unknown", "introspect"]
 
 
+_SEGMENT_CHARS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~")
+
+
 def resolve_domain(domain: str) -> str:
-    """``"login"`` / ``"test"`` / ``https://<mydomain>.my.salesforce.com`` → base URL."""
+    """Resolve a login flow's ``domain`` to the base URL of its OAuth endpoints.
+
+    Accepted values:
+
+    - ``"login"`` or ``"test"``;
+    - an ``https://`` origin, such as ``https://acme.my.salesforce.com``;
+    - an ``https://`` Experience Cloud site URL with a path prefix, such as
+      ``https://acme.my.site.com/partners``. Salesforce serves the site's OAuth endpoints
+      under that prefix (``<site URL>/services/oauth2/token``).
+
+    A trailing ``/`` is dropped. Paths may hold only unreserved URL characters, with no
+    empty, ``.`` or ``..`` segments.
+
+    See https://help.salesforce.com/s/articleView?id=sf.remoteaccess_oauth_endpoints.htm&type=5
+    (OAuth endpoints on a My Domain or Experience Cloud site URL).
+
+    Raises:
+        ValueError: anything else, including ``http://`` URLs, bare host names, user info,
+            query strings and fragments.
+    """
     if domain in _HOSTS:
         return _HOSTS[domain]
-    parsed = urlparse(domain)
-    if parsed.scheme != "https" or not parsed.netloc or parsed.path not in ("", "/"):
-        raise ValueError(f"domain must be 'login', 'test' or an https:// origin, got {domain!r}")
-    return f"https://{parsed.netloc}"
+    error = (
+        f"domain must be 'login', 'test', an https:// origin or an Experience Cloud site URL, got {domain!r}"
+    )
+    parsed = urlsplit(domain)
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or "@" in parsed.netloc
+        or parsed.query
+        or parsed.fragment
+        or "?" in domain
+        or "#" in domain
+    ):
+        raise ValueError(error)
+    path = parsed.path.rstrip("/")
+    if path:
+        segments = path.split("/")[1:]
+        if any(seg in ("", ".", "..") or not set(seg) <= _SEGMENT_CHARS for seg in segments):
+            raise ValueError(error)
+    return f"https://{parsed.netloc}{path}"
+
+
+def _site_path(domain: str) -> str:
+    """The path prefix of an Experience Cloud site ``domain`` (``""`` for an origin)."""
+    return urlsplit(resolve_domain(domain)).path
 
 
 def _short_hash(value: str) -> str:
@@ -59,8 +102,9 @@ class AuthStart:
     in the user's session until the callback."""
 
     url: str
-    state: str
-    code_verifier: str | None
+    state: str = field(repr=False)
+    #: PKCE secret: ``repr()`` leaves it out, like ``state``.
+    code_verifier: str | None = field(repr=False)
 
 
 class Auth:
@@ -86,7 +130,7 @@ class Auth:
 
     @property
     def base_url(self) -> str:
-        """Login base URL resolved from ``domain``."""
+        """Base URL of the OAuth endpoints, resolved from ``domain`` (see :func:`resolve_domain`)."""
         return resolve_domain(self.domain)
 
     @property
@@ -267,7 +311,12 @@ class ClientCredentials(Auth):
                 "ClientCredentials needs the org's My Domain URL "
                 "(https://<mydomain>.my.salesforce.com); login/test aren't supported"
             )
-        resolve_domain(domain)
+        if _site_path(domain):
+            raise ValueError(
+                "ClientCredentials needs the org's My Domain URL "
+                "(https://<mydomain>.my.salesforce.com); Salesforce documents this flow on My "
+                "Domain only, not on an Experience Cloud site path"
+            )
         set_ = object.__setattr__
         set_(self, "domain", domain)
         set_(self, "client_id", client_id)
@@ -344,10 +393,26 @@ class JwtBearer(Auth):
 
     @property
     def aud(self) -> str:
-        """``aud`` claim: ``login``/``test``/a custom URL; inferred from ``domain`` when unset."""
+        """The ``aud`` claim. ``audience`` wins when set; otherwise it's inferred from ``domain``.
+
+        - An Experience Cloud site (a ``domain`` with a path prefix, or a ``*.my.site.com``
+          host): the site URL itself.
+        - ``test``, ``https://test.salesforce.com`` or a ``*.sandbox.my.salesforce.com`` host:
+          ``https://test.salesforce.com``.
+        - Anything else: ``https://login.salesforce.com``.
+
+        Salesforce's JWT bearer flow page names the Experience Cloud site URL (for example
+        ``https://site.force.com/customers``) as the ``aud`` for site users:
+        https://help.salesforce.com/s/articleView?id=sf.remoteaccess_oauth_jwt_flow.htm&type=5
+        """
         if self.audience is None:
-            host = (urlparse(self.domain).hostname or "").lower()
-            sandbox = self.domain == "test" or host.endswith(".sandbox.my.salesforce.com")
+            base = resolve_domain(self.domain)
+            parsed = urlsplit(base)
+            # Decide on the parsed host, so "test" and "https://test.salesforce.com" agree.
+            host = (parsed.hostname or "").lower()
+            if parsed.path or host.endswith(".my.site.com"):
+                return base
+            sandbox = host == "test.salesforce.com" or host.endswith(".sandbox.my.salesforce.com")
             return _HOSTS["test" if sandbox else "login"]
         return _HOSTS.get(self.audience, self.audience)
 

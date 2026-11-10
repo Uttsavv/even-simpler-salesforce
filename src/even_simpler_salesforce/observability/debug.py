@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
 from typing import TextIO
 
@@ -17,6 +18,14 @@ def debug_level() -> int:
         return int(os.environ.get("ESF_DEBUG", "0") or 0)
     except ValueError:
         return 1
+
+
+_CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+
+
+def _printable(text: str) -> str:
+    """Escape control characters, so a Salesforce message can't send escape codes to the terminal."""
+    return _CONTROL.sub(lambda m: repr(m.group(0))[1:-1], text)
 
 
 def _k(n: int) -> str:
@@ -48,7 +57,7 @@ class DebugPrinter:
             if f.get("outcome") == "error":
                 parts.append(str(f.get("error_code") or f.get("error_class")))
                 if f.get("error_message"):
-                    parts.append(f'"{f["error_message"]}"')
+                    parts.append(f'"{_printable(str(f["error_message"]))}"')
             elif f.get("records") is not None:
                 parts.append(f"{f['records']} rows")
             if f.get("attempts", 1) > 1:

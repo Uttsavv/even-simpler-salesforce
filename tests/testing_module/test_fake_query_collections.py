@@ -369,7 +369,7 @@ def test_async_query_collections_request() -> None:
         with pytest.raises(esf.ServerError):
             await fake.query(SOQL)
         await fake.aclose()
-        with pytest.raises(RuntimeError):
+        with pytest.raises(esf.TransportError):
             await fake.query(SOQL)
 
     asyncio.run(main())

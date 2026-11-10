@@ -71,6 +71,21 @@ def test_parse_token_response_minimal_and_bad() -> None:
         parse_token_response({"access_token": 1, "instance_url": INSTANCE})
 
 
+@pytest.mark.parametrize(
+    "instance_url",
+    ["http://attacker.example", "ftp://acme.my.salesforce.com", "acme.my.salesforce.com", "https://"],
+)
+def test_parse_token_response_rejects_unsafe_instance_url(instance_url: str) -> None:
+    """The bearer token goes to ``instance_url``: it must be https (http only for loopback)."""
+    with pytest.raises(esf.UnexpectedResponse, match="instance_url"):
+        parse_token_response({"access_token": "a", "instance_url": instance_url})
+
+
+def test_parse_token_response_allows_loopback_http() -> None:
+    t = parse_token_response({"access_token": "a", "instance_url": "http://localhost:8080/"})
+    assert t.instance_url == "http://localhost:8080"
+
+
 def test_merge_token() -> None:
     prev = make_token("old", "RT-old").replace(version=7, scope=frozenset({"api"}))
     new = esf.Token(access_token="new", instance_url=INSTANCE, issued_at=datetime.now(timezone.utc))
@@ -95,6 +110,10 @@ def test_merge_token() -> None:
         ("test", "https://test.salesforce.com"),
         ("https://acme.my.salesforce.com", "https://acme.my.salesforce.com"),
         ("https://acme.my.salesforce.com/", "https://acme.my.salesforce.com"),
+        ("https://acme.my.site.com/dms", "https://acme.my.site.com/dms"),
+        ("https://acme.my.site.com/dms/", "https://acme.my.site.com/dms"),
+        ("https://acme.my.site.com/a/b-c_d.e~f", "https://acme.my.site.com/a/b-c_d.e~f"),
+        ("https://portal.example.com:8443/partners", "https://portal.example.com:8443/partners"),
     ],
 )
 def test_resolve_domain(domain: str, expected: str) -> None:
@@ -103,7 +122,25 @@ def test_resolve_domain(domain: str, expected: str) -> None:
 
 @pytest.mark.parametrize(
     "domain",
-    ["http://acme.my.salesforce.com", "acme.my.salesforce.com", "https://", "https://a.com/path", "prod"],
+    [
+        "http://acme.my.salesforce.com",
+        "http://localhost/dms",
+        "acme.my.salesforce.com",
+        "https://",
+        "prod",
+        "https://acme.my.site.com/dms?x=1",
+        "https://acme.my.site.com/dms?",
+        "https://acme.my.site.com/dms#frag",
+        "https://acme.my.site.com/dms/../other",
+        "https://acme.my.site.com/./dms",
+        "https://acme.my.site.com//dms",
+        "https://acme.my.site.com/a//b",
+        "https://acme.my.site.com/%2e%2e",
+        "https://acme.my.site.com/dms;p=1",
+        "https://acme.my.site.com/d m s",
+        "https://user:pw@acme.my.site.com/dms",
+        "https://user@acme.my.salesforce.com",
+    ],
 )
 def test_resolve_domain_rejects(domain: str) -> None:
     with pytest.raises(ValueError):
@@ -117,6 +154,26 @@ def test_resolve_domain_rejects(domain: str) -> None:
 def test_client_credentials_rejects_login_test(domain: str) -> None:
     with pytest.raises(ValueError, match="My Domain"):
         esf.ClientCredentials(domain=domain, client_id="c", client_secret="s")
+
+
+def test_client_credentials_rejects_site_path() -> None:
+    with pytest.raises(ValueError, match="My Domain"):
+        esf.ClientCredentials(domain="https://acme.my.site.com/dms", client_id="c", client_secret="s")
+
+
+def test_site_domain_builds_every_endpoint_under_the_site() -> None:
+    """OAuth endpoints on an Experience Cloud site URL (authorize, token, revoke, introspect):
+    https://help.salesforce.com/s/articleView?id=sf.remoteaccess_oauth_endpoints.htm&type=5
+    """
+    flow = esf.WebServerFlow(
+        domain="https://acme.my.site.com/dms/",
+        client_id="c",
+        redirect_uri="https://app.example.com/cb",
+        token_key="user:1",
+    )
+    assert flow.base_url == "https://acme.my.site.com/dms"
+    assert flow.token_url == "https://acme.my.site.com/dms/services/oauth2/token"
+    assert flow.authorization_url().url.startswith("https://acme.my.site.com/dms/services/oauth2/authorize?")
 
 
 def test_client_credentials() -> None:
@@ -269,9 +326,21 @@ def test_jwt_assertion_decodes(rsa_keys: tuple[bytes, bytes]) -> None:
         ("login", None, "https://login.salesforce.com"),
         ("test", None, "https://test.salesforce.com"),
         ("https://acme--dev.sandbox.my.salesforce.com", None, "https://test.salesforce.com"),
+        ("https://test.salesforce.com", None, "https://test.salesforce.com"),
+        ("https://TEST.salesforce.com/", None, "https://test.salesforce.com"),
+        ("https://login.salesforce.com", None, "https://login.salesforce.com"),
+        ("https://test.salesforce.com.attacker.example", None, "https://login.salesforce.com"),
         (INSTANCE, "test", "https://test.salesforce.com"),
         (INSTANCE, "login", "https://login.salesforce.com"),
         (INSTANCE, "https://custom.example.com", "https://custom.example.com"),
+        ("https://acme.my.site.com/dms", None, "https://acme.my.site.com/dms"),
+        ("https://acme.my.site.com/dms/", None, "https://acme.my.site.com/dms"),
+        ("https://acme.my.site.com", None, "https://acme.my.site.com"),
+        ("https://acme--uat.sandbox.my.site.com/dms", None, "https://acme--uat.sandbox.my.site.com/dms"),
+        ("https://portal.example.com/partners", None, "https://portal.example.com/partners"),
+        ("https://test.salesforce.com/x", None, "https://test.salesforce.com/x"),
+        ("https://acme.my.site.com/dms", "login", "https://login.salesforce.com"),
+        ("https://my.site.com.attacker.example", None, "https://login.salesforce.com"),
     ],
 )
 def test_jwt_audience(domain: str, audience: str | None, aud: str) -> None:
@@ -312,3 +381,14 @@ def test_jwt_audience_uses_hostname_not_substring() -> None:
 
     assert aud("https://acme--dev.sandbox.my.salesforce.com") == "https://test.salesforce.com"
     assert aud("https://x.sandbox.my.salesforce.com.attacker.example") == "https://login.salesforce.com"
+
+
+def test_auth_start_repr_hides_pkce_verifier_and_state() -> None:
+    start = _flow().authorization_url(state="st-secret-1")
+    assert start.code_verifier
+    text = repr(start)
+    assert start.code_verifier not in text
+    # state is part of the URL anyway; it is not repeated as a field.
+    assert ", state=" not in text
+    assert "code_verifier" not in text
+    assert start.url.split("?")[0] in text

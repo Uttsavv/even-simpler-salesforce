@@ -23,6 +23,23 @@ def form(request: httpx.Request) -> dict[str, str]:
     return {k: v[0] for k, v in parse_qs(request.content.decode()).items()}
 
 
+def test_exchange_code_replaces_a_stored_token_with_an_unsafe_instance_url(
+    h: Harness, mock: respx.MockRouter
+) -> None:
+    """Logging in again is the way out of a bad store entry, so it must not be refused."""
+    mock.post(TOKEN_URL).respond(json=token_body("AT-new", "RT-new"))
+    store = h.new_store()
+    h.seed(store, "user:7", make_token(instance_url="http://attacker.example"))
+    base = h.client(store=store)
+    flow = web_auth(token_key="user:7")
+    start = flow.authorization_url(state="s")
+    saved = h.run(base.auth.exchange_code(flow, "the-code", code_verifier=start.code_verifier))
+    assert saved.access_token == "AT-new"
+    stored = h.load(store, "user:7")
+    assert stored is not None
+    assert stored.instance_url == INSTANCE
+
+
 def test_exchange_code_saves_to_store(h: Harness, mock: respx.MockRouter) -> None:
     tok = mock.post(TOKEN_URL).respond(json=token_body("AT-code", "RT-code"))
     store = h.new_store()

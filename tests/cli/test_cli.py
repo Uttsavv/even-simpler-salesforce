@@ -387,3 +387,61 @@ def test_table_escapes_control_characters(capsys: pytest.CaptureFixture[str], st
     out, _ = _assert_no_token(capsys)
     assert "\x1b" not in out
     assert "evil\\x1b[2J\\nname" in out
+
+
+@respx.mock
+def test_error_messages_cannot_drive_the_terminal(
+    capsys: pytest.CaptureFixture[str], static_env: None
+) -> None:
+    evil = "No such column\x1b]0;pwned\x07\x1b[2J"
+    respx.get(f"{API}/query").respond(400, json=[{"errorCode": "INVALID_FIELD", "message": evil}])
+    assert main(["query", "SELECT Nope FROM Lead"]) == EXIT_API_ERROR
+    err = capsys.readouterr().err
+    assert "\x1b" not in err
+    assert "\x07" not in err
+    assert "No such column\\x1b]0;pwned\\x07\\x1b[2J" in err
+
+
+def test_value_error_messages_are_escaped(
+    capsys: pytest.CaptureFixture[str], static_env: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from even_simpler_salesforce import cli
+
+    def boom(*args: object) -> int:
+        raise ValueError("bad\x1b[2J")
+
+    monkeypatch.setattr(cli, "_cmd_limits", boom)
+    assert main(["limits"]) == EXIT_USAGE
+    assert capsys.readouterr().err == "esf: error: bad\\x1b[2J\n"
+
+
+@respx.mock
+def test_query_all_json_streams_each_page(capsys: pytest.CaptureFixture[str], static_env: None) -> None:
+    first = {
+        "totalSize": 3,
+        "done": False,
+        "nextRecordsUrl": "/services/data/v68.0/query/01g000000000001AAA-2",
+        "records": _rows(0, 2),
+    }
+    respx.get(f"{API}/query").respond(json=first)
+
+    def second(request: httpx.Request) -> httpx.Response:
+        # The first page is already on stdout before the second page is fetched.
+        assert '"Lead 1"' in capsys.readouterr().out
+        return httpx.Response(200, json={"totalSize": 3, "done": True, "records": _rows(2, 1)})
+
+    respx.get(f"{API}/query/01g000000000001AAA-2").mock(side_effect=second)
+    assert main(["query", "SELECT Id FROM Lead", "--all", "--json"]) == EXIT_OK
+    capsys.readouterr()
+
+
+@pytest.mark.parametrize("n", [0, 1, 3])
+def test_json_stream_matches_json_dumps(n: int) -> None:
+    from even_simpler_salesforce import cli
+
+    rows = _rows(0, n)
+    rows[:1] = [{**r, "Note": "a\nb é", "Tags": [], "Empty": {}} for r in rows[:1]]
+    streamed, whole = io.StringIO(), io.StringIO()
+    assert cli._json_stream(iter(rows), streamed) == n
+    cli._json(cli._strip(rows), whole)
+    assert streamed.getvalue() == whole.getvalue()

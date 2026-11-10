@@ -13,7 +13,7 @@ from types import TracebackType
 from typing import Any
 
 from .._async.client import DEFAULT_API_VERSION
-from ..auth.flows import Auth, WebServerFlow
+from ..auth.flows import Auth, StaticToken, WebServerFlow
 from ..auth.token import Token
 from ..config import Budget, Priority
 from ..core.cursor import Cursor
@@ -21,7 +21,7 @@ from ..core.http import check_instance_url, check_sobject
 from ..core.limits import LimitInfo
 from ..core.records import apply_model
 from ..core.soql import soql_identifier, soql_values
-from ..errors import MultipleMatches, NotFound, SalesforceError
+from ..errors import MultipleMatches, NotFound, SalesforceError, SessionExpired
 from ..models import BatchResult, Limit, QueryPlan, QueryResult, RecordResult, UpsertResult
 from ..observability.events import Observer, ObserverHub
 from ..usage import UsageTracker
@@ -415,14 +415,14 @@ class FakeSObject:
             records=1,
         )
 
-    def delete(self, record_id: str, *, if_unmodified_since: datetime | None = None) -> None:
+    def delete(self, record_id: str) -> None:
         """Delete a stored record (a second delete raises ``NotFound(ENTITY_IS_DELETED)``)."""
         self._state.run(
             self._who,
             "sobject.delete",
             self.name,
-            {"id": record_id, "if_unmodified_since": if_unmodified_since},
-            lambda: self._state.delete(self.name, record_id, if_unmodified_since),
+            {"id": record_id},
+            lambda: self._state.delete(self.name, record_id),
             method="DELETE",
             path=self._path(record_id),
             records=1,
@@ -601,6 +601,23 @@ class FakeAuthApi:
         """A fake token (no call is recorded: the real method does no I/O when a token is cached)."""
         return self._token()
 
+    def refresh(self) -> Token:
+        """Records an ``oauth.refresh`` call and returns a fake token.
+
+        Like the real client, a fake built with :class:`StaticToken` raises
+        :class:`SessionExpired`. ``fail_next("oauth.refresh", ...)`` injects other failures.
+        """
+
+        def go() -> Token:
+            if isinstance(self._sf.auth_config, StaticToken):
+                raise SessionExpired(
+                    "StaticToken can't be refreshed; create a new client with a new token",
+                    error_code="INVALID_SESSION_ID",
+                )
+            return self._token()
+
+        return self._run("oauth.refresh", {}, go, "POST", "/services/oauth2/token")
+
 
 class AsyncFakeAuthApi:
     """Async ``fake.auth``; see :class:`FakeAuthApi`."""
@@ -629,6 +646,10 @@ class AsyncFakeAuthApi:
     async def token(self) -> Token:
         """See :meth:`FakeAuthApi.token`."""
         return self._inner.token()
+
+    async def refresh(self) -> Token:
+        """See :meth:`FakeAuthApi.refresh`."""
+        return self._inner.refresh()
 
 
 class FakeSalesforce(_FakeControls):
@@ -715,7 +736,7 @@ class FakeSalesforce(_FakeControls):
         self.close()
 
     def close(self) -> None:
-        """Close the fake family (later calls raise ``RuntimeError``). No-op on children."""
+        """Close the fake family (later calls raise ``TransportError``). No-op on children."""
         if self._root:
             self._state.closed = True
 
@@ -934,6 +955,8 @@ class FakeSalesforce(_FakeControls):
         """Dispatch to a handler registered with :meth:`on_request`."""
         if json is not None and content is not None:
             raise ValueError("pass json= or content=, not both")
+        if method.upper() in ("GET", "HEAD") and (json is not None or content is not None):
+            raise ValueError(f"{method.upper()} requests can't carry a body")
         req = FakeRequest(
             method.upper(),
             self._state.normalise_path(path),
@@ -1052,9 +1075,9 @@ class AsyncFakeSObject:
             field, value, data, assignment_rule_id=assignment_rule_id, allow_save=allow_save
         )
 
-    async def delete(self, record_id: str, *, if_unmodified_since: datetime | None = None) -> None:
+    async def delete(self, record_id: str) -> None:
         """See :meth:`FakeSObject.delete`."""
-        self._inner.delete(record_id, if_unmodified_since=if_unmodified_since)
+        self._inner.delete(record_id)
 
 
 class AsyncFakeCollections:
@@ -1204,7 +1227,7 @@ class AsyncFakeSalesforce(_FakeControls):
         await self.aclose()
 
     async def aclose(self) -> None:
-        """Close the fake family (later calls raise ``RuntimeError``). No-op on children."""
+        """Close the fake family (later calls raise ``TransportError``). No-op on children."""
         self._sync.close()
 
     @property

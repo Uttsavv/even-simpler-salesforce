@@ -131,12 +131,11 @@ For `COUNT(Id)` and other aggregates, use `query()` and read the aggregate row.
 
 ## Continue later with a cursor {#cursors}
 
-`page.cursor` points at the next page. It is safe to send to a browser and get back later, for
-example as a `?cursor=` query parameter. Pass it to `query_more()`.
+`page.cursor` points at the next page. Keep it and pass it to `query_more()` later.
 
 ```python
 first = await sf.query("SELECT Id, Name FROM Lead", page_size=200)
-second = await sf.query_more(first.cursor)  # or the string the browser sent back
+second = await sf.query_more(first.cursor)  # to round-trip through a browser, sign it (below)
 print(len(first), len(second), second.done)
 ```
 
@@ -146,6 +145,10 @@ Salesforce expires a query locator after about 15 minutes of inactivity. If the 
 expired, `query_more()` raises `MalformedQuery` with `error_code="INVALID_QUERY_LOCATOR"`.
 
 ### Signed cursors
+
+An unsigned cursor is the query locator path in base64. Anyone can decode it or write a new
+one. Send only signed cursors to a browser or another client, for example as a `?cursor=` query
+parameter.
 
 Pass `cursor_key=` to the client to sign cursors with HMAC-SHA256. Then `query_more()` raises
 `esf.MalformedQuery` with `error_code="INVALID_CURSOR"` for these cursors:
@@ -163,6 +166,10 @@ except esf.MalformedQuery as exc:
     print(exc.error_code)  # INVALID_CURSOR
 await signed.aclose()
 ```
+
+A signed cursor is not bound to a user. Anyone who has it can read the next page with your
+client's permissions. Check in your app that the user may see the query results before you call
+`query_more()`.
 
 ## Build a query in pieces
 

@@ -101,6 +101,23 @@ def test_fake_auth_api() -> None:
     assert ops == ["oauth.exchange_code", "oauth.revoke", "oauth.userinfo", "oauth.introspect"]
 
 
+def test_fake_auth_refresh() -> None:
+    fake = FakeSalesforce()
+    assert fake.auth.refresh().access_token == "fake-access-token"
+    fake.fail_next("oauth.refresh", esf.ReauthorizationRequired("log in again"))
+    with pytest.raises(esf.ReauthorizationRequired):
+        fake.auth.refresh()
+    with pytest.raises(esf.SessionExpired, match="StaticToken"):
+        FakeSalesforce(AUTH).auth.refresh()
+    assert [c.operation for c in fake.calls] == ["oauth.refresh", "oauth.refresh"]
+
+    async def main() -> None:
+        async with AsyncFakeSalesforce() as afake:
+            assert (await afake.auth.refresh()).access_token == "fake-access-token"
+
+    asyncio.run(main())
+
+
 def test_async_fake_query_helpers_and_auth() -> None:
     async def main() -> None:
         async with AsyncFakeSalesforce(AUTH) as fake:
@@ -152,3 +169,74 @@ def test_open_locators_are_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
     assert len(fake._state.locators) == 2
     with pytest.raises(esf.MalformedQuery):
         fake.query_more(first.cursor)  # type: ignore[arg-type]
+
+
+def test_subquery_and_literal_do_not_change_the_sobject() -> None:
+    fake = FakeSalesforce()
+    soql = "SELECT Id, (SELECT Id FROM Contacts) FROM Account WHERE Name = 'x FROM Lead'"
+    fake.on_query(soql, rows=[{"Id": fake.new_id("Account")}])
+    fake.fail_next("query", esf.ServerError("boom"), sobject="Account")
+    with pytest.raises(esf.ServerError):
+        fake.query(soql)
+    page = fake.query(soql)
+    assert page.records[0]["attributes"]["type"] == "Account"
+    assert [c.sobject for c in fake.calls] == ["Account", "Account"]
+
+
+def test_external_id_matches_are_record_urls() -> None:
+    fake = FakeSalesforce()
+    ids = [fake.add("Account", {"Ext__c": "DUP"}) for _ in range(2)]
+    with pytest.raises(esf.MultipleMatches) as ei:
+        fake.sobject("Account").get_by_external_id("Ext__c", "DUP")
+    assert ei.value.matches == tuple(f"/services/data/v{fake.api_version}/sobjects/Account/{i}" for i in ids)
+
+
+def test_closed_fake_raises_transport_error() -> None:
+    fake = FakeSalesforce()
+    fake.close()
+    with pytest.raises(esf.TransportError, match="client is closed") as ei:
+        fake.limits()
+    assert ei.value.retryable is False
+    assert ei.value.operation == "limits"
+
+
+@pytest.mark.parametrize("method", ["GET", "head"])
+def test_request_refuses_a_body_on_get_and_head(method: str) -> None:
+    fake = FakeSalesforce()
+    with pytest.raises(ValueError, match="can't carry a body"):
+        fake.request(method, "/services/apexrest/x", json={"a": 1})
+    with pytest.raises(ValueError, match="can't carry a body"):
+        fake.request(method, "/services/apexrest/x", content=b"x")
+    assert fake.calls == []
+
+
+def _request_events(debug: str | None, monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
+    if debug is None:
+        monkeypatch.delenv("ESF_DEBUG", raising=False)
+    else:
+        monkeypatch.setenv("ESF_DEBUG", debug)
+    seen: list[dict[str, Any]] = []
+
+    class Obs:
+        def on_event(self, event: Any) -> None:
+            if event.name == "sf.request":
+                seen.append(dict(event.fields))
+
+    fake = FakeSalesforce(observers=[Obs()])
+    fake.fail_next("query", esf.MalformedQuery("bad near 'secret'"))
+    with pytest.raises(esf.MalformedQuery):
+        fake.query("SELECT Id FROM Lead WHERE Name = 'secret'")
+    lead = fake.new_id("Lead")
+    fake.collections.update("Lead", [{"Id": lead, "LastName": "x"}])
+    return seen
+
+
+def test_request_events_match_the_real_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    error, coll = _request_events(None, monkeypatch)
+    assert error["outcome"] == "error"
+    assert error["error_message"] is None  # only with ESF_DEBUG
+    assert error["records_failed"] is None
+    assert coll["records_failed"] == 1  # unknown id: the row fails
+
+    error, _ = _request_events("1", monkeypatch)
+    assert error["error_message"] == "bad near ?"

@@ -1,0 +1,1 @@
+`esf migrate` confirms a client from a bare `Salesforce` or `AsyncSalesforce` only when that name comes from simple-salesforce, so code that already uses this library stays unchanged. `query(q, flag)` now becomes `include_deleted=flag` or gets a TODO, and calls with `*args` or `**kwargs` get a TODO instead of a wrong rewrite.

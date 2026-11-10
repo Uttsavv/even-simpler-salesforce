@@ -20,7 +20,9 @@ print(usage.calls_by_operation)  # {'query': 1, 'sobject.describe': 1}
 ```
 
 `api_used` and `api_max` count the calls of the whole org, from all integrations. The
-`calls_by_*` counters count only the calls of this client family in this process. Until the
+`calls_by_*` counters count only the calls of this client family in this process. A
+`with_auth()` child can log in to another org, so the client keeps the usage values per org.
+`sf.usage` shows the org of `sf`, and the budget guard checks the org that the call goes to. Until the
 first response arrives, the usage values are `None`. The [`UsageSnapshot`](#usagesnapshot)
 table lists every field.
 
@@ -50,6 +52,10 @@ print(sf.usage.snapshot().calls_by_caller)  # {'-': 2, 'job:backfill': 1, 'route
 - The tags appear in `sf.request` events as `caller` and `priority`.
 
 In `calls_by_caller`, `"-"` counts the calls without a caller tag.
+
+Use a small, fixed set of caller tags, such as one per job or route. Don't put user ids or
+record ids in a tag. The client counts at most 1,000 distinct tags. After that, calls with a
+new tag count under `"other"`.
 
 ## Name your integration
 
@@ -151,7 +157,7 @@ await sf.aclose()  # stops the poller
 
 | Field | Description |
 |---|---|
-| `api_used`, `api_max`, `api_fraction` | from the latest `Sforce-Limit-Info` header; org-wide, all integrations |
+| `api_used`, `api_max`, `api_fraction` | from the latest `Sforce-Limit-Info` header of this client's org; org-wide, all integrations |
 | `api_bursts_used`, `api_bursts_max` | `api-bursts` from the same header, when Salesforce sends it |
 | `as_of` | when the client saw that header (UTC) |
 | `calls_by_operation`, `calls_by_sobject`, `calls_by_caller` | calls made by this client family in this process (`"-"` = no caller tag) |

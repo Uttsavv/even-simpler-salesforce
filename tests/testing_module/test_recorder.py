@@ -332,3 +332,42 @@ def test_fixture_file_is_valid_json_after_each_exchange(tmp_path: Path) -> None:
             c.get(f"https://h/x{i}")
             assert len(load_fixture(path)) == i + 1
     assert [i["request"]["path"] for i in load_fixture(path)] == ["/x0", "/x1", "/x2"]
+
+
+def test_fixture_write_ignores_a_planted_tmp_symlink(tmp_path: Path) -> None:
+    victim = tmp_path / "victim.txt"
+    victim.write_text("keep me")
+    path = tmp_path / "fx.json"
+    (tmp_path / "fx.json.tmp").symlink_to(victim)  # the old fixed temporary name
+    t = record(path, httpx.MockTransport(lambda req: httpx.Response(200, json={"n": 1})))
+    with httpx.Client(transport=t) as c:
+        c.get("https://h/x")
+    assert victim.read_text() == "keep me"
+    assert not path.is_symlink()
+    assert len(load_fixture(path)) == 1
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["fx.json", "fx.json.tmp", "victim.txt"]
+
+
+def test_fixture_write_failure_leaves_no_temporary_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import os
+
+    def boom(src: str, dst: object) -> None:
+        raise OSError("disk full")
+
+    monkeypatch.setattr(os, "replace", boom)
+    with pytest.raises(OSError, match="disk full"):
+        record(tmp_path / "fx.json", httpx.MockTransport(lambda req: httpx.Response(200)))
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.skipif(not hasattr(__import__("os"), "getuid"), reason="POSIX file modes only")
+def test_rerecording_keeps_the_fixture_file_mode(tmp_path: Path) -> None:
+    path = tmp_path / "fx.json"
+    path.write_text("{}")
+    path.chmod(0o640)
+    t = record(path, httpx.MockTransport(lambda req: httpx.Response(200, json={"n": 1})))
+    with httpx.Client(transport=t) as c:
+        c.get("https://h/x")
+    assert path.stat().st_mode & 0o777 == 0o640

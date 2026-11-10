@@ -194,7 +194,7 @@ headers:
     checked: null
   - name: If-Unmodified-Since
     direction: request
-    used_for: "update/delete(if_unmodified_since=) → 412"
+    used_for: "update(if_unmodified_since=) → 412"
     docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/intro_rest_conditional_requests.htm
     checked: null
   - name: Content-Encoding

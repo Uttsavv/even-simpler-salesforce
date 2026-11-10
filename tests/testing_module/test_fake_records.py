@@ -150,8 +150,9 @@ def test_conditional_requests() -> None:
     with pytest.raises(esf.Conflict) as ei:
         lead.update(lid, {"LastName": "x"}, if_unmodified_since=now[0] - timedelta(minutes=5))
     assert ei.value.status == 412
-    with pytest.raises(esf.Conflict):
-        lead.delete(lid, if_unmodified_since=now[0] - timedelta(minutes=5))
+    # Salesforce ignores conditional headers on DELETE (ADR 0012), so delete takes none.
+    with pytest.raises(TypeError):
+        lead.delete(lid, if_unmodified_since=now[0])  # type: ignore[call-arg]
 
 
 def test_updated_and_deleted_windows() -> None:
@@ -285,7 +286,7 @@ def test_context_manager_and_close() -> None:
     with FakeSalesforce() as fake:
         fake.sobject("Lead").create({"LastName": "x"})
     assert fake.closed
-    with pytest.raises(RuntimeError):
+    with pytest.raises(esf.TransportError):
         fake.sobject("Lead").create({"LastName": "y"})
 
 

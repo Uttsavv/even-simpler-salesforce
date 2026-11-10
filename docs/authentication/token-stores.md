@@ -65,8 +65,8 @@ manager.
 | Method | Called when | Must |
 |---|---|---|
 | `load(key)` | the process has no token in memory, before every refresh, and after an ambiguous refresh | return the stored token with its `version`, or `None` |
-| `save(key, token, expected_version=...)` | after the client gets a token: initial, refreshed or exchanged | if `expected_version` is not `None`, compare-and-swap atomically; return the token with a new, strictly greater `version` |
-| `delete(key)` | `sf.auth.revoke()` | remove the whole record, both access and refresh token; deleting a missing key does nothing |
+| `save(key, token, expected_version=...)` | after the client gets a token: initial, refreshed or exchanged | if `expected_version` is not `None`, compare-and-swap atomically; return the token with a new, strictly greater `version`, also after a `delete` |
+| `delete(key)` | `sf.auth.revoke()` | remove both access and refresh token; deleting a missing key does nothing |
 | `lock(key)` | around each refresh; optional | serialise refreshes for `key` across processes; the default does nothing |
 
 ## Rules for durable stores
@@ -79,6 +79,9 @@ manager.
    `TokenConflict`, the client re-reads the store and uses the token the other process saved.
 3. Encrypt refresh tokens at rest. A refresh token is a long-lived credential.
 4. Make `delete` remove both tokens.
+5. Never reuse a version for a key, also after `delete`. Otherwise a stale compare-and-swap
+   from before the delete can overwrite the new token. The examples below keep the version in a
+   tombstone row when they delete the tokens.
 
 ## Serialise a token
 
@@ -153,8 +156,9 @@ class SqliteTokenStore:
         self._guard = threading.Lock()
         with contextlib.closing(self._connect()) as db:
             db.execute(
+                # data is NULL after delete(): the row keeps the version.
                 "CREATE TABLE IF NOT EXISTS esf_tokens ("
-                " key TEXT PRIMARY KEY, data TEXT NOT NULL, version INTEGER NOT NULL)"
+                " key TEXT PRIMARY KEY, data TEXT, version INTEGER NOT NULL)"
             )
 
     def _connect(self) -> sqlite3.Connection:
@@ -162,18 +166,22 @@ class SqliteTokenStore:
 
     def load(self, key: str) -> esf.Token | None:
         with contextlib.closing(self._connect()) as db:
-            row = db.execute("SELECT data, version FROM esf_tokens WHERE key = ?", (key,)).fetchone()
+            row = db.execute(
+                "SELECT data, version FROM esf_tokens WHERE key = ? AND data IS NOT NULL", (key,)
+            ).fetchone()
         return None if row is None else token_from_json(row[0], row[1])
 
     def save(self, key: str, token: esf.Token, *, expected_version: int | None) -> esf.Token:
         with contextlib.closing(self._connect()) as db:
             db.execute("BEGIN IMMEDIATE")  # take the write lock before reading the version
             try:
-                row = db.execute("SELECT version FROM esf_tokens WHERE key = ?", (key,)).fetchone()
-                current = row[0] if row else None
+                row = db.execute(
+                    "SELECT version, data IS NOT NULL FROM esf_tokens WHERE key = ?", (key,)
+                ).fetchone()
+                current = row[0] if row and row[1] else None
                 if expected_version is not None and current != expected_version:
                     raise esf.TokenConflict(f"expected version {expected_version}, found {current}")
-                version = (current or 0) + 1
+                version = (row[0] if row else 0) + 1
                 db.execute(
                     "INSERT INTO esf_tokens (key, data, version) VALUES (?, ?, ?)"
                     " ON CONFLICT(key) DO UPDATE SET data = excluded.data, version = excluded.version",
@@ -187,7 +195,7 @@ class SqliteTokenStore:
 
     def delete(self, key: str) -> None:
         with contextlib.closing(self._connect()) as db:
-            db.execute("DELETE FROM esf_tokens WHERE key = ?", (key,))
+            db.execute("UPDATE esf_tokens SET data = NULL WHERE key = ?", (key,))
 
     @contextlib.contextmanager
     def lock(self, key: str) -> Iterator[None]:
@@ -225,6 +233,7 @@ The docs tests run this example. The suite checks that:
 - versions strictly increase;
 - a stale `expected_version` raises `esf.TokenConflict` and leaves the stored token unchanged;
 - `delete` removes both tokens and you can call it twice;
+- a save after `delete` gets a version that no earlier save had;
 - keys are isolated;
 - `lock(key)`, if present, works as a context manager;
 - N concurrent compare-and-swap saves against the same version have exactly one winner.
@@ -266,7 +275,7 @@ esf_tokens = Table(
     "esf_tokens",
     metadata,
     Column("key", String(255), primary_key=True),
-    Column("data", Text, nullable=False),  # Fernet-encrypted token_to_json(...)
+    Column("data", Text, nullable=True),  # Fernet-encrypted token_to_json(...); NULL after delete
     Column("version", Integer, nullable=False),
 )
 
@@ -281,7 +290,7 @@ class SqlAlchemyTokenStore:
             row = conn.execute(
                 select(esf_tokens.c.data, esf_tokens.c.version).where(esf_tokens.c.key == key)
             ).first()
-        if row is None:
+        if row is None or row.data is None:
             return None
         return token_from_json(self.fernet.decrypt(row.data.encode()).decode(), row.version)
 
@@ -290,12 +299,14 @@ class SqlAlchemyTokenStore:
         try:
             with self.engine.begin() as conn:  # one transaction; row lock until commit
                 row = conn.execute(
-                    select(esf_tokens.c.version).where(esf_tokens.c.key == key).with_for_update()
+                    select(esf_tokens.c.version, esf_tokens.c.data)
+                    .where(esf_tokens.c.key == key)
+                    .with_for_update()
                 ).first()
-                current = row.version if row is not None else None
+                current = row.version if row is not None and row.data is not None else None
                 if expected_version is not None and current != expected_version:
                     raise esf.TokenConflict(f"expected version {expected_version}, found {current}")
-                version = (current or 0) + 1
+                version = (row.version if row is not None else 0) + 1
                 if row is None:
                     conn.execute(esf_tokens.insert().values(key=key, data=data, version=version))
                 else:
@@ -308,7 +319,7 @@ class SqlAlchemyTokenStore:
 
     def delete(self, key: str) -> None:
         with self.engine.begin() as conn:
-            conn.execute(esf_tokens.delete().where(esf_tokens.c.key == key))
+            conn.execute(esf_tokens.update().where(esf_tokens.c.key == key).values(data=None))
 
     @contextlib.contextmanager
     def lock(self, key: str) -> Iterator[None]:
@@ -348,11 +359,15 @@ from cryptography.fernet import Fernet
 import even_simpler_salesforce as esf
 
 CAS = """
-local current = redis.call('HGET', KEYS[1], 'version')
+local stored = redis.call('HGET', KEYS[1], 'version')
+local current = stored
+if redis.call('HEXISTS', KEYS[1], 'data') == 0 then
+  current = false
+end
 if ARGV[1] ~= '' and current ~= ARGV[1] then
   return -1
 end
-local version = (tonumber(current) or 0) + 1
+local version = (tonumber(stored) or 0) + 1
 redis.call('HSET', KEYS[1], 'data', ARGV[2], 'version', version)
 return version
 """
@@ -398,7 +413,7 @@ class RedisTokenStore:
         return token.replace(version=version)
 
     def delete(self, key: str) -> None:
-        self.r.delete(self.prefix + key)
+        self.r.hdel(self.prefix + key, "data")  # keep the version
 
     @contextlib.contextmanager
     def lock(self, key: str) -> Iterator[None]:
@@ -426,7 +441,11 @@ For `AsyncSalesforce`, use `redis.asyncio.Redis` with `async def` methods and an
 
 ## How it works
 
-The in-memory stores are a dict, a version counter and a lock for each key.
+The in-memory stores are a dict, a version counter and a lock for each key. They keep one
+record for each `token_key` until `delete`, and never drop a record by themselves. If you create
+a client for each user with `with_auth()`, the root client's store grows with the number of
+users. Use a durable store for that case. The store drops a lock when no caller holds it or
+waits for it.
 
 Inside one process, the client always runs one refresh at a time for each key, with or without
 a store lock. You need a store lock only if several processes share a store. Without it,

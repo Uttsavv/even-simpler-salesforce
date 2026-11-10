@@ -15,6 +15,7 @@ from ..auth.token import Token, merge_token, parse_token_response
 from ..core.http import RawResponse, check_instance_url
 from ..core.retry import backoff_delay
 from ..errors import (
+    AuthError,
     ConnectError,
     OAuthError,
     ReauthorizationRequired,
@@ -131,9 +132,46 @@ class AsyncAuthRuntime:
             self.transport.refresh_outcomes.unpin(key)
             self.transport.flush_deferred()
 
+    async def force_refresh(self) -> Token:
+        """Refresh now, even if the current token looks valid. Concurrent callers share one refresh.
+
+        A caller that waited on the per-key lock while another caller refreshed gets that
+        refresh's result (or a copy of its error) instead of starting a second refresh.
+
+        Raises:
+            SessionExpired: the flow is ``StaticToken``, which can't be refreshed.
+        """
+        if not self.can_refresh:
+            raise SessionExpired(
+                "StaticToken can't be refreshed; create a new client with a new token",
+                error_code="INVALID_SESSION_ID",
+                operation="oauth.refresh",
+            )
+        key = self.key
+        self.transport.refresh_outcomes.pin(key)
+        entered = self._generation()
+        try:
+            async with self.transport.single_flight(key):
+                if self._generation() != entered:  # a refresh finished while this call waited
+                    self._raise_shared_failure(entered)
+                    cur = self.transport.tokens.get(self.key)
+                    if cur is not None:
+                        return cur
+                # The token to replace: memory first, else the stored one, so the store's copy
+                # is not handed back as "newer" than itself.
+                stale = self.transport.tokens.get(self.key) or await self._load()
+                new = await self._refresh_recorded(stale, proactive=False)
+                self.transport.tokens[self.key] = new
+                return new
+        finally:
+            self.transport.refresh_outcomes.unpin(key)
+            self.transport.flush_deferred()
+
     async def set_token(self, token: Token) -> Token:
         """Save ``token`` to the store and memory (used by ``exchange_code``)."""
         async with self.transport.single_flight(self.key):
+            # The store's raw record: only its version is needed, and a stored entry with a bad
+            # instance_url must not stop a new login from replacing it.
             current = await self.store.load(self.key)
             saved = await self.store.save(
                 self.key, token, expected_version=current.version if current is not None else None
@@ -169,7 +207,7 @@ class AsyncAuthRuntime:
                 tok = self.transport.tokens.get(self.key)
                 if tok is not None:
                     return tok
-                tok = await self.store.load(self.key)
+                tok = await self._load()
                 if tok is None:
                     self._raise_shared_failure(entered)
                     tok = await self._refresh_recorded(None, proactive=False)
@@ -206,11 +244,25 @@ class AsyncAuthRuntime:
         self.transport.refresh_outcomes[self.key] = (generation, None)
         return new
 
+    async def _load(self) -> Token | None:
+        """Load this key's token from the store and check its instance URL.
+
+        The client sends the bearer token to ``instance_url``, so a token store that was
+        tampered with must not be able to point it at another host or at plain http.
+        """
+        tok = await self.store.load(self.key)
+        if tok is not None:
+            try:
+                check_instance_url(tok.instance_url, what="stored token instance_url")
+            except ValueError as exc:
+                raise AuthError(f"{exc} (token_key_hash={self.key_hash})") from None
+        return tok
+
     async def _post_form(self, url: str, form: dict[str, str]) -> RawResponse:
         return await self.transport.post_form(url, form)
 
     async def _reload_if_changed(self, base: Token | None) -> Token | None:
-        reloaded = await self.store.load(self.key)
+        reloaded = await self._load()
         if reloaded is not None and (base is None or reloaded.access_token != base.access_token):
             return reloaded
         return None
@@ -219,7 +271,7 @@ class AsyncAuthRuntime:
         started = time.perf_counter()
         policy = self.transport.retry
         async with store_lock_async(self.store, self.key):
-            current = await self.store.load(self.key)
+            current = await self._load()
             newer = current is not None and (stale is None or current.access_token != stale.access_token)
             if newer and current is not None and not self._due(current):
                 return current  # another process refreshed already
@@ -312,7 +364,7 @@ class AsyncAuthRuntime:
                     self.key, new, expected_version=current.version if current is not None else None
                 )
             except TokenConflict:
-                reloaded = await self.store.load(self.key)
+                reloaded = await self._load()
                 if reloaded is None:
                     raise
                 return reloaded
@@ -377,7 +429,7 @@ class AsyncAuthRuntime:
         try:
             return await self.store.save(self.key, updated, expected_version=saved.version)
         except TokenConflict:
-            return (await self.store.load(self.key)) or saved
+            return (await self._load()) or saved
 
     def _warn_introspect(self, msg: str) -> None:
         if not self._introspect_warned:

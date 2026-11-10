@@ -221,33 +221,52 @@ def _cmd_limits(args: argparse.Namespace, env: Mapping[str, str], out: TextIO) -
     return EXIT_OK
 
 
+def _json_stream(rows: Iterable[Any], out: TextIO) -> int:
+    """Write ``rows`` as one JSON array, row by row; the text equals :func:`_json` of the list."""
+    count = 0
+    for row in rows:
+        item = json.dumps(_strip(row), indent=2, default=str, ensure_ascii=False)
+        # JSON strings never hold a raw newline, so indenting every line is safe.
+        out.write(("[\n" if count == 0 else ",\n") + "\n".join("  " + line for line in item.split("\n")))
+        count += 1
+    out.write("\n]\n" if count else "[]\n")
+    return count
+
+
 def _cmd_query(args: argparse.Namespace, env: Mapping[str, str], out: TextIO, err: TextIO) -> int:
+    opts: dict[str, Any] = {"page_size": args.page_size, "include_deleted": args.include_deleted}
+    total: int | None = None
+    more = False
     with _client(env) as sf:
         if args.all:
-            records = list(
-                sf.query_iter(args.soql, page_size=args.page_size, include_deleted=args.include_deleted)
-            )
-            total, more = len(records), False
+            records: Iterable[Mapping[str, Any]] = sf.query_iter(args.soql, **opts)
         else:
-            page = sf.query(args.soql, page_size=args.page_size, include_deleted=args.include_deleted)
-            records, total, more = list(page.records), page.total_size, not page.done
-    if args.json:
-        _json(_strip(records), out)
-    elif args.csv:
-        rows = [flatten(r) for r in records]
-        writer = csv.DictWriter(out, fieldnames=_columns(rows), extrasaction="ignore", lineterminator="\n")
-        writer.writeheader()
-        for r in rows:
-            writer.writerow({k: _csv_cell(v) for k, v in r.items()})
-    else:
-        rows = [flatten(r) for r in records]
-        if rows:
-            _table(rows, _columns(rows), out)
+            page = sf.query(args.soql, **opts)
+            records, total, more = page.records, page.total_size, not page.done
+        if args.json:
+            # Printed while later pages are fetched, so a large export starts at once.
+            count = _json_stream(records, out)
+        else:
+            # CSV and table columns depend on every row, so they wait for the last page.
+            # Only the flattened copy of each row is kept.
+            rows = [flatten(r) for r in records]
+            count = len(rows)
+            if args.csv:
+                writer = csv.DictWriter(
+                    out, fieldnames=_columns(rows), extrasaction="ignore", lineterminator="\n"
+                )
+                writer.writeheader()
+                for r in rows:
+                    writer.writerow({k: _csv_cell(v) for k, v in r.items()})
+            elif rows:
+                _table(rows, _columns(rows), out)
+    if total is None:
+        total = count
     noun = "row" if total == 1 else "rows"
     if more:
-        err.write(f"{len(records)} of {total} {noun} (more available; use --all)\n")
+        err.write(f"{count} of {total} {noun} (more available; use --all)\n")
     else:
-        err.write(f"{len(records)} {noun}\n")
+        err.write(f"{count} {noun}\n")
     return EXIT_OK
 
 
@@ -306,10 +325,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         err.write(f"esf: configuration error: {exc}\n")
         return EXIT_USAGE
     except SalesforceError as exc:
-        err.write(f"esf: {type(exc).__name__}: {exc}\n")
+        # The message comes from Salesforce and can hold terminal escape sequences.
+        err.write(f"esf: {type(exc).__name__}: {_printable(str(exc))}\n")
         return EXIT_API_ERROR
     except ValueError as exc:
-        err.write(f"esf: error: {exc}\n")
+        err.write(f"esf: error: {_printable(str(exc))}\n")
         return EXIT_USAGE
     except KeyboardInterrupt:
         err.write("esf: interrupted\n")

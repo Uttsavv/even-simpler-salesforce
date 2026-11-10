@@ -161,6 +161,18 @@ def test_debug_printer_lines() -> None:
     assert "api 500/900" in buf.getvalue().splitlines()[-1]
 
 
+def test_debug_printer_escapes_control_characters_in_messages() -> None:
+    buf = io.StringIO()
+    DebugPrinter(1, stream=buf).on_event(
+        req(outcome="error", error_code="X", error_message="bad\x1b]0;pwned\x07\x1b[2J\nnext")
+    )
+    text = buf.getvalue()
+    assert "\x1b" not in text
+    assert "\x07" not in text
+    assert text.count("\n") == 1
+    assert '"bad\\x1b]0;pwned\\x07\\x1b[2J\\nnext"' in text
+
+
 def test_debug_printer_defaults_to_stderr(capsys: pytest.CaptureFixture[str]) -> None:
     DebugPrinter().on_event(req())
     assert capsys.readouterr().err.split()[:2] == ["esf", "GET"]
