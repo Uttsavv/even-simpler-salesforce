@@ -84,7 +84,8 @@ class Collections:
         concurrency: int | None = None,
     ) -> BatchResult[RecordResult]:
         """``POST composite/sobjects`` in chunks of 200. Rows need ``attributes.type`` or ``sobject=``."""
-        typed = [with_type(r, check_sobject(sobject) if sobject else None) for r in rows]
+        name = check_sobject(sobject) if sobject else None
+        typed = [with_type(r, name) for r in rows]
         return self._write(
             "POST", "composite/sobjects", typed, "collections.create", sobject, all_or_none, concurrency
         )
