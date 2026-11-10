@@ -1,0 +1,13 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Tooling API Developer Guide and the ExecuteAnonymousResult reference; no org recording yet (big-bang.md \u00a721 V17, V23, V45-V47)",
+  "body": {
+    "line": -1,
+    "column": -1,
+    "compiled": true,
+    "success": true,
+    "compileProblem": null,
+    "exceptionStackTrace": null,
+    "exceptionMessage": null
+  }
+}
