@@ -79,6 +79,19 @@ def test_transport_is_502_and_server_is_503() -> None:
     assert (server.status, server.body["code"]) == (503, "salesforce_unavailable")
 
 
+def test_event_publish_unavailable_is_503_not_422() -> None:
+    """Publishing down for a moment is an outage, not a bad record (it subclasses RecordError)."""
+    err = http_error(esf.EventPublishUnavailable("down", error_code="PLATFORM_EVENT_PUBLISHING_UNAVAILABLE"))
+    assert err is not None
+    assert err.status == 503
+    assert err.body == {
+        "code": "salesforce_unavailable",
+        "error_code": "PLATFORM_EVENT_PUBLISHING_UNAVAILABLE",
+    }
+    failed = http_error(esf.EventPublishFailed("over", error_code="LIMIT_EXCEEDED"))
+    assert failed is not None and failed.status == 422
+
+
 @pytest.mark.parametrize(
     "exc", [esf.InvalidField("x"), esf.SessionExpired("x"), esf.UnexpectedResponse("x"), ValueError("x")]
 )

@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ..errors import (
+    EventPublishUnavailable,
     LimitError,
     MalformedQuery,
     NotFound,
@@ -53,6 +54,9 @@ def http_error(exc: BaseException) -> HttpError | None:
     """
     if isinstance(exc, ReauthorizationRequired):
         return HttpError(401, {"code": "salesforce_reauth_required"})
+    if isinstance(exc, EventPublishUnavailable):
+        # A RecordError subclass, but a short outage rather than a bad record: like ServerError.
+        return HttpError(503, {"code": "salesforce_unavailable", "error_code": exc.error_code})
     if isinstance(exc, RecordError):
         return HttpError(
             422,

@@ -493,7 +493,11 @@ def test_download_gzip_has_no_content_length(h: Harness, mock: respx.MockRouter)
     mock.get(f"{CV_URL}/{CV_ID}/VersionData").respond(
         200,
         content=packed,
-        headers={"content-type": "text/plain", "content-encoding": "gzip", "content-length": str(len(packed))},
+        headers={
+            "content-type": "text/plain",
+            "content-encoding": "gzip",
+            "content-length": str(len(packed)),
+        },
     )
     got, stream = _read_all(h, h.client())
     assert got == data
