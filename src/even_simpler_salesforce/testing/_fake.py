@@ -33,7 +33,7 @@ from ..core.http import check_instance_url, check_record_id, check_sobject
 from ..core.limits import LimitInfo
 from ..core.records import apply_model
 from ..core.soql import soql_identifier, soql_values
-from ..errors import MultipleMatches, NotFound, SalesforceError
+from ..errors import MalformedQuery, MultipleMatches, NotFound, SalesforceError
 from ..models import (
     ActionResult,
     BatchResult,
@@ -1152,14 +1152,18 @@ class FakeSalesforce(_FakeControls):
             rows, total, done, nxt, _ = self._state.next_page(path, page_size)
             return self._state.to_result(rows, total, done, nxt, model)
 
+        try:  # a ``fake.tooling.query`` cursor is a Tooling call, as on the real client
+            kind = "tooling/query" if "/tooling/query/" in self._state.decode(cursor) else "query"
+        except MalformedQuery:
+            kind = "query"  # ``fn`` raises it again inside ``run``, so the call is recorded
         return self._state.run(
             self._who,
-            "query_more",
+            "tooling.query_more" if kind == "tooling/query" else "query_more",
             None,
             {"cursor": str(cursor), "page_size": page_size},
             fn,
             method="GET",
-            path=f"/services/data/v{self._state.api_version}/query/000000000000000-0",
+            path=f"/services/data/v{self._state.api_version}/{kind}/000000000000000-0",
         )
 
     def query_iter(
