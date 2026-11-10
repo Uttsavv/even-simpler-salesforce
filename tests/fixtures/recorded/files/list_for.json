@@ -1,0 +1,32 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic): SOQL on ContentDocumentLink filtered by LinkedEntityId; fields from the Object Reference, ContentDocumentLink: https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_contentdocumentlink.htm",
+  "body": {
+    "totalSize": 2,
+    "done": true,
+    "records": [
+      {
+        "attributes": {"type": "ContentDocumentLink", "url": "/services/data/v68.0/sobjects/ContentDocumentLink/06Axx0000000001AAA"},
+        "Id": "06Axx0000000001AAA",
+        "ContentDocumentId": "069xx0000000001AAA",
+        "ShareType": "V",
+        "Visibility": "AllUsers",
+        "ContentDocument": {
+          "attributes": {"type": "ContentDocument", "url": "/services/data/v68.0/sobjects/ContentDocument/069xx0000000001AAA"},
+          "Title": "Invoice",
+          "FileExtension": "pdf",
+          "ContentSize": 48213,
+          "LatestPublishedVersionId": "068xx0000000001AAA"
+        }
+      },
+      {
+        "attributes": {"type": "ContentDocumentLink", "url": "/services/data/v68.0/sobjects/ContentDocumentLink/06Axx0000000002AAA"},
+        "Id": "06Axx0000000002AAA",
+        "ContentDocumentId": "069xx0000000002AAA",
+        "ShareType": "I",
+        "Visibility": "InternalUsers",
+        "ContentDocument": null
+      }
+    ]
+  }
+}

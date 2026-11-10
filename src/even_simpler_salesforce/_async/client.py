@@ -31,6 +31,7 @@ from ..usage import UsageTracker
 from . import _compat
 from .api.auth_api import AsyncAuthApi
 from .api.collections import AsyncCollections
+from .api.files import AsyncFiles
 from .api.sobject import AsyncSObject
 from .auth_runtime import AsyncAuthRuntime
 from .token_store import AsyncInMemoryTokenStore
@@ -188,6 +189,7 @@ class AsyncSalesforce:
     def _init_areas(self) -> None:
         self.collections = AsyncCollections(self)
         self.auth = AsyncAuthApi(self)
+        self.files = AsyncFiles(self)
 
     @classmethod
     def _child(

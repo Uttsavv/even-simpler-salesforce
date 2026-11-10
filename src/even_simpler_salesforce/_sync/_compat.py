@@ -6,11 +6,11 @@ import contextlib
 import contextvars
 import threading
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, TypeVar
 
-__all__ = ["Lock", "Periodic", "Semaphore", "gather_settled", "nullcontext", "sleep"]
+__all__ = ["Lock", "Periodic", "Semaphore", "gather_settled", "iter_bytes", "nullcontext", "sleep", "to_thread"]
 
 T = TypeVar("T")
 
@@ -76,3 +76,13 @@ class Periodic:
         thread, self._thread = self._thread, None
         if thread is not None and thread is not threading.current_thread():
             thread.join(timeout=5)
+
+
+def iter_bytes(response: Any) -> Iterator[bytes]:
+    """Decoded body chunks of a streamed ``httpx.Response``."""
+    return response.iter_bytes()
+
+
+def to_thread(fn: Callable[..., T], *args: Any) -> T:
+    """Run ``fn`` in the calling thread (the sync twin of ``asyncio.to_thread``)."""
+    return fn(*args)

@@ -66,6 +66,15 @@ class RequestSpec:
         allow_not_modified: Treat 304 as success (conditional GETs).
         expect_json: A non-empty 2xx body must be JSON; otherwise the call fails inside the
             pipeline with ``UnexpectedResponse`` (so the ``sf.request`` event says ``error``).
+        body_stream: Streamed request body, used instead of ``content`` for uploads that must
+            not be held in memory. A zero-argument callable that returns a fresh iterator of
+            ``bytes`` chunks for each attempt (an async iterator for the async client).
+        body_length: Length of the streamed body in bytes, sent as ``Content-Length``.
+            ``None`` sends the body with chunked transfer encoding.
+        body_once: The streamed body can be read only once. The pipeline then never resends
+            the request after an attempt started (no retry, no refresh-and-resend).
+        stream_response: Don't read a 2xx body. ``RawResponse.stream`` holds the open body,
+            and the ``sf.request`` event is emitted when the caller closes it.
     """
 
     method: str
@@ -85,6 +94,10 @@ class RequestSpec:
     priority: str | None = None
     allow_not_modified: bool = False
     expect_json: bool = True
+    body_stream: Any = None
+    body_length: int | None = None
+    body_once: bool = False
+    stream_response: bool = False
 
     @property
     def is_idempotent(self) -> bool:
@@ -115,13 +128,18 @@ class InvalidJSONResponse(UnexpectedResponse, ValueError):
 
 @dataclass(frozen=True)
 class RawResponse:
-    """A fully read HTTP response, decoupled from httpx. ``json()`` is parsed once and cached."""
+    """A fully read HTTP response, decoupled from httpx. ``json()`` is parsed once and cached.
+
+    For a ``stream_response`` spec, a 2xx response has empty ``content`` and ``stream`` holds
+    the open body (the transport's file stream).
+    """
 
     status: int
     headers: Mapping[str, str]
     content: bytes
     url: str = ""
     loads: Any = field(default=None, repr=False, compare=False)
+    stream: Any = field(default=None, repr=False, compare=False)
     _parsed: Any = field(default=_UNPARSED, repr=False, compare=False)
 
     @property

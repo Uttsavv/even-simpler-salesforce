@@ -1,0 +1,9 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic): GET sobjects/ContentVersion/{id}?fields=ContentDocumentId",
+  "body": {
+    "attributes": {"type": "ContentVersion", "url": "/services/data/v68.0/sobjects/ContentVersion/068xx0000000001AAA"},
+    "ContentDocumentId": "069xx0000000001AAA",
+    "Id": "068xx0000000001AAA"
+  }
+}

@@ -10,8 +10,10 @@
 
 from ._async.client import AsyncSalesforce
 from ._async.token_store import AsyncInMemoryTokenStore
+from ._async.transport import AsyncFileStream
 from ._sync.client import Salesforce
 from ._sync.token_store import InMemoryTokenStore
+from ._sync.transport import FileStream
 from ._version import __version__
 from .auth import (
     AsyncTokenStore,
@@ -77,6 +79,7 @@ from .errors import (
 )
 from .models import (
     BatchResult,
+    FileLink,
     Limit,
     QueryPlan,
     QueryPlanNote,
@@ -94,6 +97,7 @@ class EsfDeprecationWarning(DeprecationWarning):
 
 __all__ = [
     "ApexError",
+    "AsyncFileStream",
     "AsyncInMemoryTokenStore",
     "AsyncSalesforce",
     "AsyncTokenStore",
@@ -114,6 +118,8 @@ __all__ = [
     "ErrorDetail",
     "EsfDeprecationWarning",
     "Event",
+    "FileLink",
+    "FileStream",
     "FlowFailed",
     "Forbidden",
     "Gone",

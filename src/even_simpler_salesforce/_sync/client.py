@@ -33,6 +33,7 @@ from ..usage import UsageTracker
 from . import _compat
 from .api.auth_api import AuthApi
 from .api.collections import Collections
+from .api.files import Files
 from .api.sobject import SObject
 from .auth_runtime import AuthRuntime
 from .token_store import InMemoryTokenStore
@@ -190,6 +191,7 @@ class Salesforce:
     def _init_areas(self) -> None:
         self.collections = Collections(self)
         self.auth = AuthApi(self)
+        self.files = Files(self)
 
     @classmethod
     def _child(
