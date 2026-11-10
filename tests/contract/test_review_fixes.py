@@ -67,14 +67,21 @@ def test_call_options_merged_with_callers(h: Harness, mock: respx.MockRouter) ->
     sf = h.client(client_name="acme")
     h.run(sf.request("GET", "x", headers={"sforce-call-options": "defaultNamespace=ns"}))
     headers = route.calls.last.request.headers
-    assert headers.get_list("Sforce-Call-Options") == ["client=acme, defaultNamespace=ns"]
+    assert headers.get_list("Sforce-Call-Options") == ["client=acme; defaultNamespace=ns"]
 
 
 def test_merge_call_options_unit() -> None:
     assert merge_call_options({}, "client=a") == {"Sforce-Call-Options": "client=a"}
     assert merge_call_options({"SFORCE-CALL-OPTIONS": "client=b, x=1", "A": "1"}, "client=a") == {
         "A": "1",
-        "Sforce-Call-Options": "client=b, x=1",  # caller's explicit client= wins for that call
+        "Sforce-Call-Options": "client=b; x=1",  # caller's explicit client= wins for that call
+    }
+    # ADR 0012: the caller's value is split on ";" and ","; options are joined with "; ".
+    assert merge_call_options(
+        {"Sforce-Call-Options": "defaultNamespace=ns; x=1,y=2"}, "client=a"
+    ) == {"Sforce-Call-Options": "client=a; defaultNamespace=ns; x=1; y=2"}
+    assert merge_call_options({"sforce-call-options": " ; ,"}, "client=a") == {
+        "Sforce-Call-Options": "client=a"
     }
 
 

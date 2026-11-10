@@ -165,21 +165,28 @@ class RawResponse:
 def merge_call_options(headers: Mapping[str, str], ours: str) -> dict[str, str]:
     """Merge ``ours`` (e.g. ``client=acme``) into any ``Sforce-Call-Options`` the caller set.
 
-    The header name is matched case-insensitively; options are comma-separated, ours first. A
-    ``client=`` option the caller set explicitly for one call wins over the client-wide one.
+    The header name is matched case-insensitively. Options are joined with ``; `` as in the
+    Salesforce *Call Options Header* example, ours first; the caller's value is split on both
+    ``;`` and ``,``. A ``client=`` option the caller set explicitly for one call wins over the
+    client-wide one.
     """
     out: dict[str, str] = {}
     caller: list[str] = []
     for k, v in headers.items():
         if k.lower() == "sforce-call-options":
-            caller.extend(p.strip() for p in v.split(",") if p.strip())
+            caller.extend(_split_options(v))
         else:
             out[k] = v
-    our_parts = [p.strip() for p in ours.split(",") if p.strip()]
     caller_keys = {p.split("=", 1)[0].strip().lower() for p in caller}
-    merged = [p for p in our_parts if p.split("=", 1)[0].strip().lower() not in caller_keys] + caller
-    out["Sforce-Call-Options"] = ", ".join(merged)
+    merged = [
+        p for p in _split_options(ours) if p.split("=", 1)[0].strip().lower() not in caller_keys
+    ] + caller
+    out["Sforce-Call-Options"] = "; ".join(merged)
     return out
+
+
+def _split_options(value: str) -> list[str]:
+    return [p.strip() for p in value.replace(",", ";").split(";") if p.strip()]
 
 
 def json_body(obj: Any) -> tuple[bytes, str]:
