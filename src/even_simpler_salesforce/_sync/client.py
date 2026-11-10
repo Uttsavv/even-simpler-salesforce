@@ -34,6 +34,7 @@ from . import _compat
 from .api.actions import Actions
 from .api.apex import Apex
 from .api.auth_api import AuthApi
+from .api.bulk import Bulk
 from .api.collections import Collections
 from .api.files import Files
 from .api.leads import Leads
@@ -202,6 +203,7 @@ class Salesforce:
         self.leads = Leads(self)
         self.platform_events = PlatformEvents(self)
         self.files = Files(self)
+        self.bulk = Bulk(self)
 
     @classmethod
     def _child(

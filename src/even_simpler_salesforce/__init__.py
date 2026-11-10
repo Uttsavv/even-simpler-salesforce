@@ -8,9 +8,11 @@
 ``__all__`` is the SemVer-covered public surface. Everything else is private.
 """
 
+from ._async.api.bulk import AsyncIngestJob
 from ._async.client import AsyncSalesforce
 from ._async.token_store import AsyncInMemoryTokenStore
 from ._async.transport import AsyncFileStream
+from ._sync.api.bulk import IngestJob
 from ._sync.client import Salesforce
 from ._sync.token_store import InMemoryTokenStore
 from ._sync.transport import FileStream
@@ -27,7 +29,7 @@ from .auth import (
     WebServerFlow,
 )
 from .cache import Cache, MemoryCache
-from .config import Budget, DescribeCacheConfig, RetryPolicy, Timeouts
+from .config import Backoff, Budget, DescribeCacheConfig, RetryPolicy, Timeouts
 from .context import call_context
 from .core.actions import Action
 from .core.cursor import Cursor
@@ -38,6 +40,7 @@ from .errors import (
     AuthError,
     BudgetExceeded,
     BulkJobFailed,
+    BulkJobTimeout,
     Conflict,
     ConnectError,
     DuplicateDetected,
@@ -83,6 +86,9 @@ from .errors import (
 from .models import (
     ActionResult,
     BatchResult,
+    BulkFailure,
+    BulkJobInfo,
+    BulkJobState,
     FileLink,
     LeadConvert,
     LeadConvertResult,
@@ -109,15 +115,21 @@ __all__ = [
     "ApexError",
     "AsyncFileStream",
     "AsyncInMemoryTokenStore",
+    "AsyncIngestJob",
     "AsyncSalesforce",
     "AsyncTokenStore",
     "Auth",
     "AuthError",
     "AuthStart",
+    "Backoff",
     "BatchResult",
     "Budget",
     "BudgetExceeded",
+    "BulkFailure",
     "BulkJobFailed",
+    "BulkJobInfo",
+    "BulkJobState",
+    "BulkJobTimeout",
     "Cache",
     "ClientCredentials",
     "Conflict",
@@ -137,6 +149,7 @@ __all__ = [
     "Gone",
     "GraphQLError",
     "InMemoryTokenStore",
+    "IngestJob",
     "InvalidField",
     "InvalidPicklistValue",
     "InvalidReference",
