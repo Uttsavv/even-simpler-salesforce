@@ -677,7 +677,7 @@ class Salesforce:
 
         Example:
             for lead in sf.graphql_iter(query, path="uiapi.query.Lead"):
-                print(lead["Name"]["value"])
+                print(lead["Id"])
 
         The query must declare an ``$after`` variable and pass it to the connection, and must
         select ``pageInfo { hasNextPage endCursor }``. The client sets ``after`` to

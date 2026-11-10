@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any
 
 from ...core.graphql import (
     CURSOR_VARIABLE,
-    GRAPHQL_PATH,
     check_cursor_query,
     connection_page,
     graphql_body,
@@ -41,7 +40,7 @@ async def graphql(
     raw = await sf._send(  # pyright: ignore[reportPrivateUsage]
         RequestSpec(
             "POST",
-            GRAPHQL_PATH,
+            "graphql",
             content=content,
             content_type=ctype,
             idempotent=not has_mutation(query),

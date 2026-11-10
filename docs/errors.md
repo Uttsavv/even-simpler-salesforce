@@ -258,13 +258,12 @@ SalesforceError
 ├── PartialFailure                 some records or chunks failed; .results
 ├── BulkJobFailed                  Bulk 2.0 job failed; .job_id, .state, .error_message   (used from 0.3)
 ├── ApexError                      APEX_ERROR, or an error from an Apex REST class; .body
-├── GraphQLError                   GraphQL errors array; .graphql_errors                 (used from 0.3)
+├── GraphQLError                   GraphQL errors array; .graphql_errors, .data
 ├── SoapFault                      unmapped SOAP fault (lead convert, merge); .fault_code
 └── UnexpectedResponse             HTML pages (proxies, maintenance), non-JSON bodies, unexpected shapes
 ```
 
-`BulkJobFailed` and `GraphQLError` exist now to keep the hierarchy stable. Nothing raises them
-yet.
+`BulkJobFailed` exists now to keep the hierarchy stable. Nothing raises it yet.
 
 ## Troubleshooting
 
@@ -473,7 +472,11 @@ response body.
 
 ### GraphQLError
 
-The GraphQL response has an `errors` array. `exc.graphql_errors` holds it.
+The GraphQL response has an `errors` array. Salesforce can send it with `200 OK`. Read
+`exc.graphql_errors`: each entry has a `message`, and often `locations` in the query and
+`extensions.ErrorType`. `exc.error_code` holds the `ErrorType` of the first entry, for example
+`ValidationError` for an unknown field. `exc.data` holds the partial data, if any. See
+[GraphQL](guides/graphql.md#handle-errors).
 
 ### SoapFault
 
