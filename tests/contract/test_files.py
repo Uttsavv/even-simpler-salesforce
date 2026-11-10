@@ -136,6 +136,35 @@ def test_upload_file_object_and_quoting(h: Harness, mock: respx.MockRouter) -> N
     assert headers["Content-Disposition"].endswith('filename="we\\"ird.txt"')
 
 
+class _Pipe:
+    """A file-like object that can't seek (a pipe or socket)."""
+
+    def __init__(self, data: bytes) -> None:
+        self._buf = io.BytesIO(data)
+        self.name = 3  # file descriptors have int names; not used as the filename
+
+    def read(self, n: int = -1) -> bytes:
+        return self._buf.read(n)
+
+    def seekable(self) -> bool:
+        return False
+
+
+def test_upload_non_seekable_file_is_sent_once(h: Harness, mock: respx.MockRouter) -> None:
+    route = mock.post(CV_URL)
+    route.side_effect = [httpx.ConnectError("refused"), created()]
+    sf = h.client()
+    with pytest.raises(ValueError, match="filename"):
+        h.run(sf.files.upload(_Pipe(b"x")))  # type: ignore[arg-type]
+    with pytest.raises(esf.ConnectError):
+        h.run(sf.files.upload(_Pipe(b"piped"), filename="p.bin"))  # type: ignore[arg-type]
+    assert route.call_count == 1
+    assert h.run(sf.files.upload(_Pipe(b"piped"), filename="p.bin")) == CV_ID  # type: ignore[arg-type]
+    req = route.calls.last.request
+    assert parts(req)[2] == b"piped"
+    assert req.headers["transfer-encoding"] == "chunked"
+
+
 def test_upload_stream_uses_chunked_encoding(h: Harness, mock: respx.MockRouter) -> None:
     route = mock.post(CV_URL).mock(return_value=created())
     sf = h.client()
@@ -497,6 +526,32 @@ def test_download_error_mid_stream_is_typed(h: Harness, mock: respx.MockRouter, 
         _read_all(h, sf)
     assert [e.fields["outcome"] for e in rec.requests] == ["error", "error"]
     assert [e.fields["error_class"] for e in rec.requests] == ["TransportError", "RequestTimeout"]
+
+
+def test_download_twice_in_one_block_fails(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:
+    mock.get(f"{CV_URL}/{CV_ID}/VersionData").mock(return_value=_chunks_response(h, b"x" * 10))
+    sf = h.client(recorder=rec)
+
+    if h.is_async:
+
+        async def go() -> None:
+            async with sf.files.download(CV_ID) as stream:
+                [c async for c in stream]
+                [c async for c in stream]
+
+        with pytest.raises(RuntimeError):
+            h.run(go())
+    else:
+
+        def go_sync() -> None:
+            with sf.files.download(CV_ID) as stream:
+                list(stream)
+                list(stream)
+
+        with pytest.raises(RuntimeError):
+            go_sync()
+    (event,) = rec.requests
+    assert event.fields["outcome"] == "error"
 
 
 def test_download_user_error_inside_block(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:

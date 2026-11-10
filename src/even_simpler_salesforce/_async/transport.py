@@ -155,7 +155,8 @@ class AsyncFileStream:
     def __init__(self, response: httpx.Response, spec: RequestSpec) -> None:
         self._response = response
         self._spec = spec
-        self._finish: Callable[[BaseException | None, int], None] | None = None
+        # Bound by AsyncTransport.send to emit the sf.request event; a no-op until then.
+        self._finish: Callable[[BaseException | None, int], None] = lambda error, n: None
         self._error: BaseException | None = None
         self._closed = False
         self.content_type: str | None = response.headers.get("content-type")
@@ -198,8 +199,7 @@ class AsyncFileStream:
         try:
             await self._response.aclose()
         finally:
-            if self._finish is not None:
-                self._finish(self._error, self._response.num_bytes_downloaded)
+            self._finish(self._error, self._response.num_bytes_downloaded)
 
 
 async def _counted(chunks: AsyncIterator[bytes], total: list[int]) -> AsyncIterator[bytes]:
@@ -469,8 +469,6 @@ class AsyncTransport:
                     priority,
                 )
             else:
-                if raw is not None and isinstance(raw.stream, AsyncFileStream):
-                    await raw.stream.aclose()  # e.g. cancelled before the caller got it
                 self._finish(
                     spec,
                     runtime,

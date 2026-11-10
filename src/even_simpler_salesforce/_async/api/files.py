@@ -92,12 +92,7 @@ def _file_source(f: IO[bytes]) -> _Source:
 
 
 def _stream_source(stream: AsyncIterable[bytes]) -> _Source:
-    used = [False]
-
-    async def chunks() -> AsyncIterator[bytes]:
-        if used[0]:
-            raise RuntimeError("the upload stream was already read")
-        used[0] = True
+    async def chunks() -> AsyncIterator[bytes]:  # called once: body_once stops any resend
         async for chunk in stream:
             if not isinstance(chunk, (bytes, bytearray, memoryview)):  # pyright: ignore[reportUnnecessaryIsInstance]
                 raise TypeError(f"upload streams must yield bytes, got {type(chunk).__name__}")

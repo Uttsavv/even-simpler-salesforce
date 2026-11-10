@@ -94,12 +94,7 @@ def _file_source(f: IO[bytes]) -> _Source:
 
 
 def _stream_source(stream: Iterable[bytes]) -> _Source:
-    used = [False]
-
-    def chunks() -> Iterator[bytes]:
-        if used[0]:
-            raise RuntimeError("the upload stream was already read")
-        used[0] = True
+    def chunks() -> Iterator[bytes]:  # called once: body_once stops any resend
         for chunk in stream:
             if not isinstance(chunk, (bytes, bytearray, memoryview)):  # pyright: ignore[reportUnnecessaryIsInstance]
                 raise TypeError(f"upload streams must yield bytes, got {type(chunk).__name__}")

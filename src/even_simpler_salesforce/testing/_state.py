@@ -262,6 +262,7 @@ class FakeState:
         self.modified: dict[str, dict[str, datetime]] = {}
         self.deleted: dict[str, dict[str, datetime]] = {}
         self.describes: dict[str, dict[str, Any]] = {}
+        self.blobs: dict[str, bytes] = {}  # file content by 15-character ContentVersion id
         self.limits: dict[str, Limit] = {
             "DailyApiRequests": Limit(15000, 15000),
             "DataStorageMB": Limit(1024, 1024),
