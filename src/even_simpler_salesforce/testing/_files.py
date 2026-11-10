@@ -135,7 +135,8 @@ class FakeFiles:
                 "PathOnClient": name,
                 "IsLatest": True,
                 "VersionNumber": "1",
-                **({"FirstPublishLocationId": link_to} if link_to else {}),
+                # The real client sets it only when no share_type/visibility is given.
+                **({"FirstPublishLocationId": link_to} if link_to and not (share_type or visibility) else {}),
                 **common,
             },
         )
@@ -347,6 +348,15 @@ class AsyncFakeFiles:
         data: Any = source
         if isinstance(source, AsyncIterable):
             data = [chunk async for chunk in source]
+        elif not isinstance(source, (bytes, bytearray, memoryview, str, os.PathLike)) and not hasattr(
+            source, "read"
+        ):
+            # Like AsyncSalesforce: a stream must be an async iterator (a list or a sync generator
+            # is rejected there, so the fake rejects it too).
+            raise TypeError(
+                "upload() takes bytes, a path, a binary file object or an iterator of bytes, "
+                f"got {type(source).__name__}"
+            )
         return self._inner.upload(
             data,
             filename=filename,

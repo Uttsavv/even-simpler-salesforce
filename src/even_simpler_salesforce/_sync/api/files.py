@@ -48,7 +48,7 @@ class _Source:
 
 
 def _bytes_source(data: bytes | bytearray | memoryview) -> _Source:
-    view = memoryview(data)
+    view = memoryview(data).cast("B")  # length in bytes, also for arrays of wider items
 
     def chunks() -> Iterator[bytes]:
         for i in range(0, len(view), CHUNK_SIZE):

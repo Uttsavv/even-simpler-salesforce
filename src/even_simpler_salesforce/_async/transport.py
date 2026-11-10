@@ -164,7 +164,9 @@ class AsyncFileStream:
         self._closed = False
         self.content_type: str | None = response.headers.get("content-type")
         length = response.headers.get("content-length")
-        self.content_length: int | None = int(length) if length and length.isdigit() else None
+        # With Content-Encoding (gzip), Content-Length counts the compressed bytes, not the file.
+        encoded = response.headers.get("content-encoding", "identity").lower() != "identity"
+        self.content_length: int | None = int(length) if length and length.isdigit() and not encoded else None
 
     def __repr__(self) -> str:
         return f"<{type(self).__name__} {self.content_type or 'unknown type'}, {self.content_length} bytes>"
@@ -644,7 +646,13 @@ class AsyncTransport:
         error = failure if isinstance(failure, SalesforceError) else None
         records = spec.records
         records_failed: int | None = None
-        if failure is None and raw is not None and raw.is_json:
+        # A downloaded file is not an API response: never parse it here, whatever its type.
+        if (
+            failure is None
+            and raw is not None
+            and raw.is_json
+            and not spec.operation.startswith("files.download")
+        ):
             try:
                 body = raw.json()
             except ValueError:
