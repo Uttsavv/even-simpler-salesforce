@@ -93,3 +93,24 @@ def test_fast_path_still_reports_parse_errors() -> None:
 
     with pytest.raises(libcst.ParserSyntaxError):
         transform_source("def broken(:\n", Options())
+
+
+@pytest.mark.parametrize(
+    ("annotation", "confirmed"),
+    [
+        ('"Salesforce"', True),
+        ('"ss.Salesforce"', True),
+        ("ss.aio.AsyncSalesforce", True),
+        ("esf.Salesforce", False),
+        ('"esf.Salesforce"', False),
+        ('"not an expression ("', False),
+    ],
+)
+def test_client_types_come_from_simple_salesforce(annotation: str, confirmed: bool) -> None:
+    header = (
+        "import even_simpler_salesforce as esf\nimport simple_salesforce as ss\n"
+        "from simple_salesforce import Salesforce\n\n\n"
+    )
+    _, found = migrate(f"def f(sf: {annotation}):\n    return sf.session_id\n", header=header)
+    # session_id is a generic name: only a confirmed client gets the TODO
+    assert (("client-internals", "todo") in found) is confirmed

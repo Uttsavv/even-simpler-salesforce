@@ -165,8 +165,7 @@ REF_REVIEW = {
     "create": ("create-return", "create() now returns the id (str), not a dict; check the callers"),
     "upsert": (
         "upsert-path",
-        'upsert() now takes the field and value separately: upsert("Ext__c", value, data); '
-        "check the callers",
+        'upsert() now takes the field and value separately: upsert("Ext__c", value, data); check the callers',
     ),
 }
 #: Keywords of simple-salesforce per-object calls with no equivalent here.
@@ -256,6 +255,16 @@ def _annotation_names(node: cst.BaseExpression) -> set[str]:
         if v:
             names.update(re.findall(r"[A-Za-z_][A-Za-z0-9_]*", v))
     return names
+
+
+def _parse_annotation(text: str | None) -> cst.BaseExpression | None:
+    """A string annotation as an expression, or ``None`` if it isn't one."""
+    if not text or not text.strip():
+        return None
+    try:
+        return cst.parse_expression(text.strip())
+    except cst.ParserSyntaxError:
+        return None
 
 
 class _Collector(cst.CSTVisitor):
@@ -363,14 +372,12 @@ class _Collector(cst.CSTVisitor):
             elif isinstance(n, cst.Name) and id(n) not in attrs and n.value in self.client_types:
                 return True
         for s in m.findall(node, m.SimpleString()):  # "AsyncSalesforce" / "ss.Salesforce"
-            v = _string_value(cast(cst.SimpleString, s))
-            if not v:
-                continue
-            try:
-                parsed = cst.parse_expression(v.strip())
-            except Exception:  # not an expression: not a type
-                continue
-            if not m.findall(parsed, m.SimpleString()) and self._is_client_type(parsed):
+            parsed = _parse_annotation(_string_value(cast(cst.SimpleString, s)))
+            if (
+                parsed is not None
+                and not m.findall(parsed, m.SimpleString())
+                and self._is_client_type(parsed)
+            ):
                 return True
         return False
 
@@ -620,8 +627,7 @@ class _Transformer(cst.CSTTransformer):
                         self.record(
                             "unsupported",
                             "todo",
-                            "import * from simple-salesforce; import the names you still use, "
-                            "then remove it",
+                            "import * from simple-salesforce; import the names you still use, then remove it",
                             small,
                         )
                     continue
@@ -1161,7 +1167,9 @@ class _Transformer(cst.CSTTransformer):
                 "todo",
                 "quick_search(term) → parameterized_search(term), which returns the list of records",
                 original,
-                suggestion=_code(updated.with_changes(func=func.with_changes(attr=cst.Name("parameterized_search")))),
+                suggestion=_code(
+                    updated.with_changes(func=func.with_changes(attr=cst.Name("parameterized_search")))
+                ),
             )
         elif method == "is_sandbox":
             self.record(
