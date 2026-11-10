@@ -90,6 +90,7 @@ EXTRA_SAMPLES: dict[str, Any] = {
     "error_message": "InvalidBatch",
     "body": {"message": "apex said no"},
     "graphql_errors": ({"message": "bad field", "path": ["uiapi"]},),
+    "data": {"uiapi": {"query": {"Lead": None}}},
     "fault_code": "sf:INVALID_ID",
 }
 
@@ -146,7 +147,7 @@ def test_classes_with_extras_are_the_expected_ones() -> None:
         "BudgetExceeded": ["usage"],
         "BulkJobFailed": ["job_id", "state", "error_message"],
         "DuplicateDetected": ["duplicates"],
-        "GraphQLError": ["graphql_errors"],
+        "GraphQLError": ["graphql_errors", "data"],
         "MultipleMatches": ["matches"],
         "OAuthError": ["error", "error_description"],
         "PartialFailure": ["results"],

@@ -51,6 +51,12 @@ rest_endpoints:
     used_by: sf.parameterized_search
     docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_search_parameterized.htm
     checked: null
+  - path: graphql
+    methods: [POST]
+    used_by: "sf.graphql, sf.graphql_iter (body {query, variables}; errors[] on 200 OK)"
+    docs: https://developer.salesforce.com/docs/platform/graphql/guide/requests-and-responses.html
+    checked: null
+    # Read 2026-11-10 from search excerpts only (the page returns 403 to non-browser clients) (V50, V51)
   - path: limits
     methods: [GET]
     used_by: sf.limits
@@ -257,6 +263,8 @@ response_shapes:
     fields: [id, created, "201 = created, 204/200 = updated", "300 = list of matching URLs"]
   - resource: Limits
     fields: ["{name: {Max, Remaining, ...}}"]
+  - resource: GraphQL
+    fields: [data, "errors[]: message, locations, path, extensions.ErrorType", "connections: edges[].node, pageInfo {hasNextPage, endCursor}"]
   - resource: REST error body
     fields: ["list of {message, errorCode or statusCode, fields}", "extras such as duplicateResult"]
   - resource: OAuth error body

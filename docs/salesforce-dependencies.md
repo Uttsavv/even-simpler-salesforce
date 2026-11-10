@@ -31,6 +31,7 @@ Paths are relative to `/services/data/vXX.X/` unless they start with `/services/
 | `query/{}` | GET | sf.query_more, sf.query_iter (nextRecordsUrl, absolute path) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_query.htm) |  |
 | `search` | GET | sf.search (?q= SOSL) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_search.htm) |  |
 | `parameterizedSearch` | POST | sf.parameterized_search | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_search_parameterized.htm) |  |
+| `graphql` | POST | sf.graphql, sf.graphql_iter (body {query, variables}; errors[] on 200 OK) | [docs](https://developer.salesforce.com/docs/platform/graphql/guide/requests-and-responses.html) |  |
 | `limits` | GET | sf.limits | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_limits.htm) |  |
 | `sobjects` | GET | sf.describe_global() (If-Modified-Since → 304) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_describeGlobal.htm) |  |
 | `sobjects/{}` | GET | sobject.metadata() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_sobject_basic_info.htm) |  |
@@ -100,6 +101,7 @@ Behaviour relied on:
 | sObject Collections retrieve | `list, one per id in order`, `null when not found` |
 | Upsert by external id | `id`, `created`, `201 = created, 204/200 = updated`, `300 = list of matching URLs` |
 | Limits | `{name: {Max, Remaining, ...}}` |
+| GraphQL | `data`, `errors[]: message, locations, path, extensions.ErrorType`, `connections: edges[].node, pageInfo {hasNextPage, endCursor}` |
 | REST error body | `list of {message, errorCode or statusCode, fields}`, `extras such as duplicateResult` |
 | OAuth error body | `error`, `error_description` |
 

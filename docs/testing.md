@@ -45,6 +45,7 @@ implementation. They have the methods of the real clients for these areas:
 - Collections
 - lead convert, merge and platform events
 - [Files](guides/files.md)
+- [GraphQL](guides/graphql.md), with scripted answers
 - `request`, `limits` and `usage`
 - `with_auth` and `tagged`
 
@@ -149,6 +150,52 @@ Pages follow `page_size`, which defaults to 2,000. Cursors work, and so does sig
 `FakeSalesforce(cursor_key=...)`. `query_iter(..., expand_children=True)` is accepted but does
 nothing, because scripted child records are already complete.
 
+## Script GraphQL
+
+The fake doesn't run GraphQL either. `on_graphql(match, data)` sets the `data` that
+`graphql()` returns for a document. With `nodes=` and `path=`, the fake builds the connection
+and pages it by the `after` variable, so `graphql_iter()` works unchanged.
+
+```python
+LEADS = """
+    query Leads($after: String) {
+      uiapi { query { Lead(first: 200, after: $after) {
+        edges { node { Id } } pageInfo { hasNextPage endCursor }
+      } } }
+    }
+"""
+
+
+def test_graphql_paging(esf_fake: FakeSalesforce) -> None:
+    nodes = [{"Id": esf_fake.new_id("Lead")} for _ in range(5)]
+    esf_fake.on_graphql(re.compile(r"\bLead\b"), nodes=nodes, path="uiapi.query.Lead", page_size=2)
+
+    assert list(esf_fake.graphql_iter(LEADS, path="uiapi.query.Lead")) == nodes
+    assert len(esf_fake.calls_for("graphql")) == 3
+
+
+def test_graphql_error(esf_fake: FakeSalesforce) -> None:
+    esf_fake.on_graphql("{ uiapi { a } }", esf.GraphQLError("bad field", error_code="ValidationError"))
+
+    try:
+        esf_fake.graphql("{ uiapi { a } }")
+    except esf.GraphQLError as exc:
+        assert exc.error_code == "ValidationError"
+```
+
+`on_graphql(match, data=None, *, nodes=None, path=None, page_size=10, times=None)` takes these
+arguments:
+
+- `match` is the document, a compiled regex or a predicate `(query) -> bool`, as for
+  `on_query()`.
+- `data` is the `data` dict, a callable `(query, variables) -> data`, or an exception to
+  raise.
+- `nodes` and `path` build a connection with `edges`, `pageInfo` and `totalCount`. The
+  cursors are `fake-cursor-<offset>`.
+
+The fake checks the query and `path` of `graphql_iter()` like the real client. Each page is
+one `"graphql"` call in `calls`.
+
 ## Inject errors
 
 `fail_next()` makes the next call of an operation raise. `reject()` rejects record writes row by
@@ -189,6 +236,7 @@ def test_partial_failure(esf_fake: FakeSalesforce) -> None:
 - `"actions.flow"`, `"actions.apex"` and `"actions.standard"`
 - `"apex.get"`, `"apex.post"` and the other Apex REST methods
 - `"limits"`
+- `"graphql"`
 - `"raw"`, or the name you pass as `operation=`
 - `"*"` for any operation
 

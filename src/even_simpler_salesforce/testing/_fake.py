@@ -29,6 +29,7 @@ from ..core.actions import (
 )
 from ..core.cursor import Cursor
 from ..core.files import safe_filename
+from ..core.graphql import parse_path
 from ..core.http import check_instance_url, check_record_id, check_sobject
 from ..core.limits import LimitInfo
 from ..core.records import apply_model
@@ -48,6 +49,7 @@ from ..observability.events import Observer, ObserverHub
 from ..usage import UsageTracker
 from ._fake_org import AsyncFakeLeads, AsyncFakePlatformEvents, FakeLeads, FakePlatformEvents, fake_merge
 from ._files import AsyncFakeFiles, FakeFiles
+from ._graphql import GraphQLMatch, GraphQLScript, add_graphql_script, fake_graphql, fake_graphql_iter
 from ._state import FakeCall, FakeRequest, FakeState, Match, QueryScript, RowsSpec, Who, _sobject_of
 
 __all__ = [
@@ -132,6 +134,43 @@ class _FakeControls:
             The script.
         """
         return self._state.add_script(QueryScript(match, rows, None, times, "search"))
+
+    def on_graphql(
+        self,
+        match: GraphQLMatch,
+        data: Any = None,
+        *,
+        nodes: Sequence[Any] | None = None,
+        path: str | None = None,
+        page_size: int = 10,
+        times: int | None = None,
+    ) -> GraphQLScript:
+        """Script the answer to a GraphQL document (used by ``graphql`` and ``graphql_iter``).
+
+        Documents are never executed. The newest matching script wins.
+
+        Args:
+            match: The document (compared with whitespace collapsed), a compiled regex
+                (``re.search``), or a predicate ``(query) -> bool``.
+            data: The ``data`` member to return (deep-copied), a callable
+                ``(query, variables) -> data``, or an exception to raise, such as
+                ``esf.GraphQLError(...)``.
+            nodes: Instead of ``data``: the nodes of a connection. The fake builds the
+                connection at ``path`` with ``edges``, ``pageInfo`` and ``totalCount``, and
+                pages it by the ``after`` variable.
+            path: Dotted path to the connection when ``nodes`` is given (``"uiapi.query.Lead"``).
+            page_size: Nodes per page when ``nodes`` is given.
+            times: Match at most this many calls (``None`` = unlimited).
+
+        Returns:
+            The script; its ``hits`` attribute counts how often it matched.
+
+        Example:
+            fake.on_graphql(re.compile(r"\bLead\b"), nodes=[{"Id": lead_id}], path="uiapi.query.Lead")
+        """
+        keys = parse_path(path) if path is not None else ()
+        script = GraphQLScript(match, data, None if nodes is None else list(nodes), keys, page_size, times)
+        return add_graphql_script(self._state, script)
 
     def on_request(
         self,
@@ -1203,6 +1242,21 @@ class FakeSalesforce(_FakeControls):
             path="parameterizedSearch",
         )
 
+    # --- graphql ----------------------------------------------------------------------
+
+    def graphql(self, query: str, variables: Mapping[str, Any] | None = None) -> dict[str, Any]:
+        """The ``data`` scripted with :meth:`on_graphql` for ``query``."""
+        return fake_graphql(self._state, self._who, query, variables)
+
+    def graphql_iter(
+        self, query: str, variables: Mapping[str, Any] | None = None, *, path: str
+    ) -> Iterator[Any]:
+        """Yield the nodes of the scripted connection, one ``graphql`` call per page.
+
+        Validates the query and ``path`` like the real client.
+        """
+        return fake_graphql_iter(self._state, self._who, query, variables, path)
+
     # --- raw & limits -----------------------------------------------------------------
 
     def request(
@@ -1700,6 +1754,17 @@ class AsyncFakeSalesforce(_FakeControls):
     ) -> list[dict[str, Any]]:
         """See :meth:`FakeSalesforce.parameterized_search`."""
         return self._sync.parameterized_search(q, sobjects=sobjects, fields=fields, limit=limit, **extra)
+
+    async def graphql(self, query: str, variables: Mapping[str, Any] | None = None) -> dict[str, Any]:
+        """See :meth:`FakeSalesforce.graphql`."""
+        return self._sync.graphql(query, variables)
+
+    async def graphql_iter(
+        self, query: str, variables: Mapping[str, Any] | None = None, *, path: str
+    ) -> AsyncIterator[Any]:
+        """See :meth:`FakeSalesforce.graphql_iter`."""
+        for node in self._sync.graphql_iter(query, variables, path=path):
+            yield node
 
     async def request(
         self,

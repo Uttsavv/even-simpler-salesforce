@@ -9,6 +9,7 @@ from email.utils import parsedate_to_datetime
 from typing import Any
 
 from .. import errors as E
+from .graphql import graphql_error
 from .http import RawResponse, RequestSpec, path_template
 from .soap import is_soap_path, parse_fault
 
@@ -289,7 +290,13 @@ def classify(
     - ``actions.*``: a 400 whose body is a list of per-invocation results is returned to the
       area as success; it maps each ``isSuccess=false`` entry itself (§9.7).
     - ``apex.*``: errors become :class:`ApexError` carrying the decoded body (§8.3).
+    - ``graphql``: a body with an ``errors`` array is a :class:`GraphQLError`, even with
+      ``200 OK`` (§9.6).
     """
+    if spec.operation == "graphql":
+        gql = graphql_error(resp, spec)
+        if gql is not None:
+            return gql
     err = _classify(resp, spec, error_tags)
     if err is None or not spec.operation.startswith(("actions.", "apex.")):
         return err

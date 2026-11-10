@@ -15,7 +15,10 @@ The org enforces a few rules so error examples have something to hit:
 - objects other than Lead, Account, Contact, Opportunity, User and the Files objects
   (ContentVersion, ContentDocument, ContentDocumentLink, Attachment) don't exist (``INVALID_TYPE``);
 - platform events (``*__e``) are accepted and kept in :attr:`FakeOrg.events`;
-- the Partner SOAP endpoint answers ``convertLead`` and ``merge``.
+- the Partner SOAP endpoint answers ``convertLead`` and ``merge``;
+- ``POST graphql`` answers ``uiapi { query { <Object>(first:, after:) { edges { node { ... } }
+  pageInfo { ... } } } }`` over the stored records (no filters), with ``{value}`` fields and
+  cursors ``v1:<offset>``. An unknown field gets ``200 OK`` with a ``ValidationError``.
 
 Files: a multipart ``POST sobjects/ContentVersion`` stores the bytes and creates the
 ContentDocument (plus a ContentDocumentLink for ``FirstPublishLocationId``);
@@ -68,6 +71,9 @@ _FIELD_LIST = re.compile(r"^\s*SELECT\s+(?P<fields>.+?)\s+FROM\s+(?P<obj>\w+)(?P
 _EQ = re.compile(r"(\w+)\s*=\s*('(?:[^'\\]|\\.)*'|true|false|null|-?\d+(?:\.\d+)?)", re.I)
 _IN = re.compile(r"(\w+)\s+IN\s*\(([^)]*)\)", re.I)
 _LIMIT = re.compile(r"\bLIMIT\s+(\d+)", re.I)
+_GQL_CONN = re.compile(r"\buiapi\s*\{\s*query\s*\{\s*(?P<obj>\w+)\s*(?:\((?P<args>[^)]*)\))?\s*\{", re.S)
+_GQL_FIRST = re.compile(r"\bfirst\s*:\s*(?:(\d+)|\$(\w+))")
+GQL_FIELDS = {"Name", "FirstName", "LastName", "Company", "Email", "Status", "Phone", "Country", "Street"}
 _SUBQUERY = re.compile(r"\(\s*SELECT\s+(?P<fields>[^()]+?)\s+FROM\s+(?P<rel>\w+)\s*\)", re.I)
 
 
@@ -581,6 +587,8 @@ class FakeOrg:
             )
         if parts[0] == "actions":
             return self._actions(request, parts[1:])
+        if rest == "graphql" and method == "POST":
+            return self._json(self._graphql(self._body(request) or {}))
         if parts[0] == "sobjects" and len(parts) == 2 and parts[1].endswith("__e") and method == "POST":
             return self._json(self._publish(parts[1], self._body(request) or {}), 201)
         if parts[0] == "composite" and len(parts) >= 2 and parts[1] == "sobjects":
@@ -588,6 +596,82 @@ class FakeOrg:
         if parts[0] == "sobjects":
             return self._sobjects(request, method, parts[1:], params, version)
         raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+
+    @staticmethod
+    def _gql_block(text: str, start: int) -> tuple[str, int]:
+        """The text inside the ``{`` at ``start`` and the index after its ``}``."""
+        depth, i = 0, start
+        while i < len(text):
+            depth += {"{": 1, "}": -1}.get(text[i], 0)
+            if depth == 0:
+                return text[start + 1 : i], i + 1
+            i += 1
+        raise Rejected("BAD_REQUEST", "unbalanced braces", status=400)
+
+    def _graphql(self, body: dict[str, Any]) -> dict[str, Any]:
+        query, variables = str(body.get("query", "")), dict(body.get("variables") or {})
+        m = _GQL_CONN.search(query)
+        if not m or m.group("obj") not in PREFIXES:
+            return {
+                "data": None,
+                "errors": [{"message": "Invalid Syntax", "extensions": {"ErrorType": "InvalidSyntax"}}],
+            }
+        obj, args = m.group("obj"), m.group("args") or ""
+        conn, _ = self._gql_block(query, m.end() - 1)
+        node_at = re.search(r"\bnode\s*\{", conn)
+        fields: list[str] = []
+        if node_at:
+            inner, _ = self._gql_block(conn, node_at.end() - 1)
+            flat = re.sub(r"\{[^{}]*\}", " ", inner)
+            fields = re.findall(r"\w+", flat)
+        for f in fields:
+            if f != "Id" and f not in GQL_FIELDS | CUSTOM_FIELDS:
+                return {
+                    "data": None,
+                    "errors": [
+                        {
+                            "message": (
+                                "Validation error of type FieldUndefined: "
+                                f"Field '{f}' in type '{obj}' is undefined"
+                            ),
+                            "locations": [{"line": 1, "column": query.find(f) + 1}],
+                            "path": None,
+                            "extensions": {"ErrorType": "ValidationError"},
+                        }
+                    ],
+                }
+        fm = _GQL_FIRST.search(args)
+        first = 10
+        if fm:
+            first = int(fm.group(1)) if fm.group(1) else int(variables.get(fm.group(2)) or 10)
+        after = variables.get("after") if "$after" in args else None
+        start = int(str(after).split(":", 1)[1]) if after else 0
+        rows = list(self.records[obj].values())
+        page = rows[start : start + first]
+        end = start + len(page)
+
+        def node(rec: dict[str, Any]) -> dict[str, Any]:
+            return {f: rec["Id"] if f == "Id" else {"value": _value(obj, rec, f)} for f in fields}
+
+        return {
+            "data": {
+                "uiapi": {
+                    "query": {
+                        obj: {
+                            "edges": [{"node": node(r)} for r in page],
+                            "pageInfo": {
+                                "hasNextPage": end < len(rows),
+                                "endCursor": f"v1:{end}",
+                                "hasPreviousPage": start > 0,
+                                "startCursor": f"v1:{start}",
+                            },
+                            "totalCount": len(rows),
+                        }
+                    }
+                }
+            },
+            "errors": [],
+        }
 
     def _sobjects(
         self, request: httpx.Request, method: str, parts: list[str], params: dict[str, str], version: str

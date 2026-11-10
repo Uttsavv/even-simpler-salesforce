@@ -31,6 +31,7 @@ from ._fake import (
 )
 from ._fake_org import AsyncFakeLeads, AsyncFakePlatformEvents, FakeLeads, FakePlatformEvents
 from ._files import AsyncFakeFiles, AsyncFakeFileStream, FakeFiles, FakeFileStream
+from ._graphql import GraphQLScript
 from ._ids import key_prefix
 from ._state import FakeCall, FakeRequest, QueryScript, UnscriptedCall
 from .recorder import RecordingTransport, Redactor, ReplayMismatch, record, replay
@@ -61,6 +62,7 @@ __all__ = [
     "FakeRequest",
     "FakeSObject",
     "FakeSalesforce",
+    "GraphQLScript",
     "QueryScript",
     "RecordingTransport",
     "Redactor",

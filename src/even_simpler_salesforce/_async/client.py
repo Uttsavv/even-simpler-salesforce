@@ -34,6 +34,8 @@ from .api.apex import AsyncApex
 from .api.auth_api import AsyncAuthApi
 from .api.collections import AsyncCollections
 from .api.files import AsyncFiles
+from .api.graphql import graphql as _graphql
+from .api.graphql import graphql_iter as _graphql_iter
 from .api.leads import AsyncLeads
 from .api.platform_events import AsyncPlatformEvents
 from .api.soap import merge as _merge
@@ -640,6 +642,57 @@ class AsyncSalesforce:
         if isinstance(body, dict):
             return list(body.get("searchRecords") or [])  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]
         return list(body or [])  # pyright: ignore[reportUnknownArgumentType]
+
+    # --- graphql -----------------------------------------------------------------------
+
+    async def graphql(self, query: str, variables: Mapping[str, Any] | None = None) -> dict[str, Any]:
+        """``POST graphql``: run a GraphQL query and return its ``data`` member.
+
+        Example:
+            data = await sf.graphql(
+                "query Lead($id: ID) { uiapi { query { Lead(where: {Id: {eq: $id}}) "
+                "{ edges { node { Id Name { value } } } } } } }",
+                {"id": lead_id},
+            )
+
+        Queries are reads, so the client resends them after a timeout or a 5xx. A document
+        with a ``mutation`` is never resent after it may have reached Salesforce.
+
+        Args:
+            query: The GraphQL document.
+            variables: Values for the variables the document declares.
+
+        Raises:
+            GraphQLError: the response has an ``errors`` array, even with ``200 OK``.
+                ``.data`` holds any partial data that came with the errors.
+        """
+        return await _graphql(self, query, variables)
+
+    async def graphql_iter(
+        self, query: str, variables: Mapping[str, Any] | None = None, *, path: str
+    ) -> AsyncIterator[Any]:
+        """Yield every node of a GraphQL connection, fetching pages lazily.
+
+        Example:
+            async for lead in sf.graphql_iter(query, path="uiapi.query.Lead"):
+                print(lead["Id"])
+
+        The query must declare an ``$after`` variable and pass it to the connection, and must
+        select ``pageInfo { hasNextPage endCursor }``. The client sets ``after`` to
+        ``endCursor`` for each next page and yields each ``edges[].node``.
+
+        Args:
+            query: A GraphQL document with exactly one query that declares ``$after``.
+            variables: Values for the other variables (an ``after`` here sets the first cursor).
+            path: Dotted path from ``data`` to the connection, e.g. ``"uiapi.query.Lead"``.
+
+        Raises:
+            ValueError: the query doesn't declare ``$after``, or ``path`` is malformed.
+            GraphQLError: a page has an ``errors`` array.
+            UnexpectedResponse: ``path`` isn't in the response or lacks ``edges``/``pageInfo``.
+        """
+        async for node in _graphql_iter(self, query, variables, path):
+            yield node
 
     # --- org automation --------------------------------------------------------------
 
