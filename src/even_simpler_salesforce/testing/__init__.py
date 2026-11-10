@@ -25,6 +25,7 @@ from ._fake import (
     FakeSalesforce,
     FakeSObject,
 )
+from ._fake_org import AsyncFakeLeads, AsyncFakePlatformEvents, FakeLeads, FakePlatformEvents
 from ._ids import key_prefix
 from ._state import FakeCall, FakeRequest, QueryScript, UnscriptedCall
 from .recorder import RecordingTransport, Redactor, ReplayMismatch, record, replay
@@ -35,11 +36,15 @@ if TYPE_CHECKING:
 
 __all__ = [
     "AsyncFakeCollections",
+    "AsyncFakeLeads",
+    "AsyncFakePlatformEvents",
     "AsyncFakeSObject",
     "AsyncFakeSalesforce",
     "AsyncTokenStoreContract",
     "FakeCall",
     "FakeCollections",
+    "FakeLeads",
+    "FakePlatformEvents",
     "FakeRequest",
     "FakeSObject",
     "FakeSalesforce",

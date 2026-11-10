@@ -275,6 +275,7 @@ class FakeState:
         self.locators: dict[str, _Locator] = {}
         self._locator_seq = 0
         self.explain_plans: list[QueryPlan] = []
+        self.events: dict[str, list[dict[str, Any]]] = {}  # published platform events
         self.counter = 0
         self.closed = False
         self.debug = debug_level()
