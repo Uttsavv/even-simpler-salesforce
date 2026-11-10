@@ -146,7 +146,7 @@ filterwarnings = ["error::DeprecationWarning:even_simpler_salesforce"]
 branch = true
 relative_files = true
 source = ["even_simpler_salesforce"]
-omit = ["*/_sync/*", "*/contrib/*"]
+omit = ["*/_sync/*"]
 
 [tool.coverage.report]
 show_missing = true
