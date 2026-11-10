@@ -24,7 +24,8 @@ number of concurrent writers in the race tests (default 16).
 
 Checks: round-trip, versions increase, compare-and-swap conflicts raise
 ``esf.TokenConflict`` and leave the stored token untouched, ``delete`` removes both tokens
-(and is idempotent), keys are isolated, and concurrent CAS saves have exactly one winner.
+(and is idempotent), a save after ``delete`` never reuses an earlier version, keys are
+isolated, and concurrent CAS saves have exactly one winner.
 """
 
 from __future__ import annotations
@@ -137,6 +138,18 @@ class TokenStoreContract:
         assert loaded is not None
         assert loaded.refresh_token is None
         assert fresh.version >= 1
+
+    def test_version_not_reused_after_delete(self, store: TokenStore) -> None:
+        """A save after ``delete`` gets a version no earlier save had, so a stale CAS conflicts."""
+        old = store.save(_KEY, sample_token(1), expected_version=None)
+        store.delete(_KEY)
+        new = store.save(_KEY, sample_token(2), expected_version=None)
+        assert new.version > old.version
+        with pytest.raises(TokenConflict):
+            store.save(_KEY, sample_token(3), expected_version=old.version)
+        loaded = store.load(_KEY)
+        assert loaded is not None
+        assert _same(loaded, sample_token(2))
 
     def test_keys_are_isolated(self, store: TokenStore) -> None:
         """Writes to one key never affect another."""
@@ -307,6 +320,22 @@ class AsyncTokenStoreContract:
             loaded = await store.load(_KEY)
             assert loaded is not None
             assert loaded.refresh_token is None
+
+        self._run(make_store, body)
+
+    def test_version_not_reused_after_delete(self, make_store: Callable[[], Any]) -> None:
+        """A save after ``delete`` gets a version no earlier save had, so a stale CAS conflicts."""
+
+        async def body(store: AsyncTokenStore) -> None:
+            old = await store.save(_KEY, sample_token(1), expected_version=None)
+            await store.delete(_KEY)
+            new = await store.save(_KEY, sample_token(2), expected_version=None)
+            assert new.version > old.version
+            with pytest.raises(TokenConflict):
+                await store.save(_KEY, sample_token(3), expected_version=old.version)
+            loaded = await store.load(_KEY)
+            assert loaded is not None
+            assert _same(loaded, sample_token(2))
 
         self._run(make_store, body)
 

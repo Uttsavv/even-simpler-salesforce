@@ -70,7 +70,7 @@ class TestBroken(TokenStoreContract):
 """
     )
     result = pytester.runpytest_inprocess("-q", "-p", "no:cacheprovider")
-    result.assert_outcomes(passed=5, failed=3, skipped=2)
+    result.assert_outcomes(passed=5, failed=4, skipped=2)
     result.stdout.fnmatch_lines(["*test_cas_conflict*", "*test_concurrent_cas_has_one_winner*"])
 
 
@@ -87,4 +87,4 @@ class TestB(AsyncTokenStoreContract):
 """
     )
     result = pytester.runpytest_inprocess("-q", "-p", "no:cacheprovider")
-    result.assert_outcomes(skipped=20)
+    result.assert_outcomes(skipped=22)

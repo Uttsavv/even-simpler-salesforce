@@ -1,0 +1,1 @@
+The in-memory token stores no longer reuse a version after `delete()`, so a stale compare-and-swap can't overwrite a newer token, and they drop idle per-key locks. `TokenStoreContract` checks the version rule too.

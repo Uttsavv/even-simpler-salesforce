@@ -18,12 +18,21 @@ class AsyncInMemoryTokenStore:
     """Dict + version counter + per-key lock. Lost on restart, which is fine for
     ``ClientCredentials`` and ``JwtBearer``. Use a durable store for ``WebServerFlow`` refresh
     tokens. The lock is in-process only; share one instance between client families of the same
-    event loop (async) or process (sync)."""
+    event loop (async) or process (sync).
+
+    The store keeps one record per ``token_key`` until :meth:`delete`; it never drops a record by
+    itself, because a dropped refresh token means the user must log in again. A new record starts
+    above the highest version that :meth:`delete` removed, so a save after a delete never reuses
+    a version that a stale compare-and-swap could still expect. Idle per-key locks are dropped.
+    """
 
     def __init__(self) -> None:
         self._data: dict[str, Token] = {}
         self._guard = threading.Lock()
-        self._locks: dict[str, Any] = {}
+        # Highest version removed by delete(); new records start above it.
+        self._deleted_version = 0
+        # key -> [lock, holders + waiters]; dropped when the count reaches 0.
+        self._locks: dict[str, list[Any]] = {}
 
     async def load(self, key: str) -> Token | None:
         """Return the stored token for ``key``, or ``None``."""
@@ -45,22 +54,32 @@ class AsyncInMemoryTokenStore:
                         f"token for key changed (expected version {expected_version}, found {actual})",
                         error_code="TOKEN_CONFLICT",
                     )
-            stored = token.replace(version=(current.version if current is not None else 0) + 1)
+            base = current.version if current is not None else self._deleted_version
+            stored = token.replace(version=base + 1)
             self._data[key] = stored
             return stored
 
     async def delete(self, key: str) -> None:
         """Remove the token record for ``key`` (no-op if missing)."""
         with self._guard:
-            self._data.pop(key, None)
+            removed = self._data.pop(key, None)
+            if removed is not None:
+                self._deleted_version = max(self._deleted_version, removed.version)
 
     @contextlib.asynccontextmanager
     async def lock(self, key: str) -> AsyncIterator[None]:
         """Per-key lock, so client families that share this store instance refresh one at a
         time (a rotated refresh token must never be sent twice)."""
         with self._guard:
-            lock = self._locks.get(key)
-            if lock is None:
-                lock = self._locks[key] = _compat.Lock()
-        async with lock:
-            yield
+            entry = self._locks.get(key)
+            if entry is None:
+                entry = self._locks[key] = [_compat.Lock(), 0]
+            entry[1] += 1
+        try:
+            async with entry[0]:
+                yield
+        finally:
+            with self._guard:
+                entry[1] -= 1
+                if entry[1] == 0 and self._locks.get(key) is entry:
+                    del self._locks[key]
