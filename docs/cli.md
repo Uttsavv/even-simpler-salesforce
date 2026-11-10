@@ -77,8 +77,28 @@ esf limits
 | `esf version` | prints the library, default API version, httpx and Python versions | none |
 | `esf migrate PATH...` | rewrites simple-salesforce code; needs the `[migrate]` extra; see [`esf migrate`](migrate.md) | none, and no login |
 
-`esf generate` is reserved for code generation (`esf generate actions`), which is planned for 0.2.
-In 0.1 it exits with code 2.
+| `esf generate actions` | writes typed stubs for invocable actions; see [below](#generate-action-stubs) | one `GET` per action, plus one per kind for a pattern |
+
+## Generate action stubs
+
+`esf generate actions` reads the describe of each action and writes a Python file with one class
+per action and one per result. You run the classes with
+[`sf.run()`](guides/actions.md#use-typed-stubs).
+
+```sh
+esf generate actions --include flow:Assign_Lead --include apex:* --out myapp/sf_actions.py
+```
+
+| Option | Description |
+|---|---|
+| `--include KIND:NAME` | an action to include; repeat it for more; `KIND` is `standard`, `flow` or `apex`; `NAME` may be a pattern such as `*` or `Lead_*` |
+| `--out FILE` | the file to write; the command replaces it |
+| `--pydantic` | write Pydantic models instead of dataclasses; needs the `[pydantic]` extra |
+| `--org NAME` | read the login from `ESF_<NAME>_*` variables instead of `ESF_*`, for example `ESF_SANDBOX_ACCESS_TOKEN` |
+
+The file header names the org, the API version and the time. Field names are snake case, and
+each field keeps its API name: in `metadata["api_name"]` for a dataclass, as the alias for a
+Pydantic model. Run the command again when an action changes. Don't edit the file by hand.
 
 ## Exit codes
 

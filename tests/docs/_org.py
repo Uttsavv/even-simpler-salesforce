@@ -363,7 +363,7 @@ class FakeOrg:
                 raise Rejected("INVALID_SESSION_ID", "Session expired or invalid", status=401)
             self.api_used += 1
             if path.startswith("/services/apexrest/"):
-                return self._json({"ok": True, "path": path.removeprefix("/services/apexrest")})
+                return self._apexrest(request, path.removeprefix("/services/apexrest"))
             m = _DATA.match(path)
             if not m:
                 raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
@@ -476,6 +476,8 @@ class FakeOrg:
             return self._json(
                 {"sObjects": [{"name": n, "count": len(self.records.get(n, {}))} for n in names if n]}
             )
+        if parts[0] == "actions":
+            return self._actions(request, parts[1:])
         if parts[0] == "composite" and len(parts) >= 2 and parts[1] == "sobjects":
             return self._collections(request, method, parts[2:], params)
         if parts[0] == "sobjects":
@@ -656,3 +658,78 @@ class FakeOrg:
                         ],
                     )
         return results
+
+    # --- org automation (synthetic) -------------------------------------------------
+
+    def _apexrest(self, request: httpx.Request, path: str) -> httpx.Response:
+        """``/orders/{id}`` answers like an order service; a closed order returns 422."""
+        if path.startswith("/orders/closed"):
+            return self._json({"error": "ORDER_CLOSED", "message": "Order is closed"}, 422)
+        if path.startswith("/orders/"):
+            body = self._body(request) if request.method in ("POST", "PUT", "PATCH") else None
+            if request.method == "DELETE":
+                return self._json(None, 204)
+            return self._json({"id": path.rsplit("/", 1)[1], "status": "Submitted", **(body or {})})
+        return self._json({"ok": True, "path": path})
+
+    def _actions(self, request: httpx.Request, parts: list[str]) -> httpx.Response:
+        """Flow ``Assign_Lead``, Apex ``LeadScoring`` and standard ``chatterPost``."""
+        known = {
+            ("custom", "flow", "Assign_Lead"): self._assign_lead,
+            ("custom", "apex", "LeadScoring"): lambda i: {"score": 42 if i.get("leadId") else 0},
+            ("standard", "chatterPost"): lambda i: {"feedItemId": "0D5xx0000000001AAA"},
+        }
+        key = tuple(parts)
+        if request.method == "GET":
+            listed = [k for k in known if k[:-1] == key]
+            if listed:
+                return self._json({"actions": [self._action_summary(k) for k in listed]})
+            if key in known:
+                return self._json(self._action_describe(key))
+            raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+        if key not in known:
+            raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+        results = []
+        for item in (self._body(request) or {}).get("inputs", []):
+            try:
+                out = known[key](item)
+                results.append(
+                    {"actionName": key[-1], "errors": None, "isSuccess": True, "outputValues": out}
+                )
+            except Rejected as exc:
+                errors = [{"statusCode": exc.code, "message": exc.message, "fields": exc.fields}]
+                results.append(
+                    {"actionName": key[-1], "errors": errors, "isSuccess": False, "outputValues": None}
+                )
+        failed = all(not r["isSuccess"] for r in results)
+        return self._json(results, 400 if results and failed else 200)
+
+    def _assign_lead(self, inputs: dict[str, Any]) -> dict[str, Any]:
+        if not inputs.get("leadId"):
+            raise Rejected("REQUIRED_FIELD_MISSING", "Required fields are missing: [leadId]", ["leadId"])
+        if inputs.get("region") == "Mars":
+            raise Rejected("FIELD_CUSTOM_VALIDATION_EXCEPTION", "[REGION_UNKNOWN] Region Mars does not exist")
+        return {"assignedTo": USER_ID, "Flow__InterviewStatus": "Finished"}
+
+    @staticmethod
+    def _action_summary(key: tuple[str, ...]) -> dict[str, Any]:
+        return {"name": key[-1], "label": key[-1].replace("_", " "), "type": key[-2].upper(), "url": ""}
+
+    def _action_describe(self, key: tuple[str, ...]) -> dict[str, Any]:
+        params = {
+            "Assign_Lead": (
+                [("leadId", "STRING", True), ("region", "STRING", False)],
+                [("assignedTo", "STRING"), ("Flow__InterviewStatus", "PICKLIST")],
+            ),
+            "LeadScoring": ([("leadId", "ID", True)], [("score", "INTEGER")]),
+            "chatterPost": (
+                [("text", "TEXTAREA", True), ("subjectNameOrId", "STRING", True)],
+                [("feedItemId", "ID")],
+            ),
+        }[key[-1]]
+        return {
+            **self._action_summary(key),
+            "description": f"{key[-1].replace('_', ' ')} (synthetic docs org)",
+            "inputs": [{"name": n, "type": t, "required": r, "maxOccurs": 1} for n, t, r in params[0]],
+            "outputs": [{"name": n, "type": t, "required": False, "maxOccurs": 1} for n, t in params[1]],
+        }

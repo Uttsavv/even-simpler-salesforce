@@ -161,6 +161,8 @@ def test_partial_failure(esf_fake: FakeSalesforce) -> None:
 - `"sobject.update"`
 - `"query"` and `"query_more"`
 - `"collections.create"`
+- `"actions.flow"`, `"actions.apex"` and `"actions.standard"`
+- `"apex.get"`, `"apex.post"` and the other Apex REST methods
 - `"limits"`
 - `"raw"`, or the name you pass as `operation=`
 - `"*"` for any operation
@@ -168,6 +170,45 @@ def test_partial_failure(esf_fake: FakeSalesforce) -> None:
 `reject(sobject, error, *, when=None)` applies to record writes. A single write raises the error.
 A Collections call returns `RecordResult(ok=False, ...)` for each rejected row. With
 `all_or_none=True`, the fake rolls back the chunk, as the real API does.
+
+## Fake actions and Apex REST
+
+`on_action(kind, name, outputs)` answers `sf.actions.*` and `sf.run()`. The fake runs the
+handler once per input. `on_apex(method, path, response)` answers `sf.apex.*`.
+
+```python
+def assign(sf, lead_id: str) -> str:  # code under test
+    return sf.actions.flow("Assign_Lead", {"leadId": lead_id})["assignedTo"]
+
+
+def test_assign(esf_fake: FakeSalesforce) -> None:
+    def handler(inputs: dict) -> dict:
+        if not inputs.get("leadId"):
+            raise esf.RequiredFieldMissing("leadId is required", error_code="REQUIRED_FIELD_MISSING")
+        return {"assignedTo": "005000000000001AAA"}
+
+    esf_fake.on_action("flow", "Assign_Lead", handler)
+    assert assign(esf_fake, "00Q000000000001AAA") == "005000000000001AAA"
+
+    results = esf_fake.actions.flow("Assign_Lead", [{"leadId": "00Q000000000001AAA"}, {}])
+    assert [r.ok for r in results] == [True, False]
+
+
+def test_closed_order(esf_fake: FakeSalesforce) -> None:
+    esf_fake.on_apex("POST", "/orders/submit", esf.ApexError("closed", status=422, body={"error": "CLOSED"}))
+    try:
+        esf_fake.apex.post("/orders/submit", {"orderId": "801"})
+    except esf.ApexError as exc:
+        assert exc.body == {"error": "CLOSED"}
+    else:
+        raise AssertionError("expected ApexError")
+```
+
+`outputs` is a dict, a callable that gets the inputs, or a `SalesforceError`. If the handler
+raises or returns a `SalesforceError`, that input fails: a single call raises it, and a list call
+reports it in its `ActionResult`. `set_action_describe(kind, name, describe)` sets what
+`actions.describe()` returns. `on_apex` takes the same `response` values as `on_request`, and
+its path is the part after `/services/apexrest`. A call with no handler raises `UnscriptedCall`.
 
 ## Assert on calls
 
