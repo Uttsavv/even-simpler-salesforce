@@ -1845,6 +1845,14 @@ def _run(
     return MetadataWrapper(module, unsafe_skip_copy=True).visit(tf), tf
 
 
+def _compiles(source: str) -> bool:
+    try:
+        compile(source, "<esf-migrate>", "exec", dont_inherit=True)
+    except (SyntaxError, ValueError):
+        return False
+    return True
+
+
 def transform_source(source: str, opts: Options) -> tuple[str, list[Finding]]:
     """Migrate one module's source.
 
@@ -1876,7 +1884,7 @@ def transform_source(source: str, opts: Options) -> tuple[str, list[Finding]]:
     if drop or add_import:
         new_module = new_module.visit(_ImportFixer(drop, add_import))
     code = new_module.code
-    if code != source:
+    if code != source and _compiles(source):  # the original may use syntax newer than this Python
         try:
             compile(code, "<esf-migrate>", "exec", dont_inherit=True)
         except SyntaxError as exc:  # safety net: never write code that doesn't compile

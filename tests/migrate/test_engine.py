@@ -24,3 +24,24 @@ def test_partial_rules_run_the_sobject_group_together(rule: str) -> None:
     assert 'sf.sobject("Account").get_by_external_id("Ext__c", "1")' in out
     assert ("upsert-path", "rewritten") in found
     assert ("get-by-custom-id", "rewritten") in found
+
+
+def test_source_that_this_python_rejects_still_migrates() -> None:
+    """The compile() safety net runs only when the original compiles here: a module-level
+    ``return`` parses with libcst but not with compile(), like syntax newer than this Python."""
+    out, found = migrate(
+        '    pass\n\n\nsf.Lead.get("x")\nreturn 1\n',
+        header="from simple_salesforce import Salesforce\n\nsf: Salesforce\n\n\ndef f():\n",
+    )
+    assert 'sf.sobject("Lead").get("x")' in out
+    assert ("sobject-attr", "rewritten") in found
+
+
+def test_except_star_handler_holds_its_marker() -> None:
+    """``except*`` parses with libcst on every Python; the marker goes above the handler."""
+    body = "    try:\n        pass\n    except* SalesforceGeneralError:\n        pass\n"
+    out, found = migrate(body, header="from simple_salesforce import SalesforceGeneralError\n\n\ndef f():\n")
+    lines = out.splitlines()
+    i = lines.index("    except* SalesforceGeneralError:")
+    assert lines[i - 1].lstrip().startswith("# esf-migrate: TODO[exceptions]")
+    assert ("exceptions", "todo") in found
