@@ -1,0 +1,10 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Apex Developer Guide, Exposing Apex Classes as REST Web Services; no org recording yet",
+  "body": [
+    {
+      "errorCode": "NOT_FOUND",
+      "message": "Could not find a match for URL"
+    }
+  ]
+}

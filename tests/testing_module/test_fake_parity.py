@@ -42,6 +42,8 @@ def test_fake_matches_real_surface(real_cls: Any, fake_cls: Any) -> None:
     assert _compare(real.sobject("Lead"), fake.sobject("Lead")) == []
     assert _compare(real.collections, fake.collections) == []
     assert _compare(real.auth, fake.auth) == []
+    assert _compare(real.actions, fake.actions) == []
+    assert _compare(real.apex, fake.apex) == []
 
 
 def test_positional_values_and_single_row_helpers() -> None:

@@ -19,6 +19,7 @@ from ..auth.store import AsyncTokenStore
 from ..cache import Cache, MemoryCache
 from ..config import Budget, DescribeCacheConfig, Priority, RetryPolicy, Timeouts
 from ..context import current_call_context
+from ..core.actions import Action, action_inputs, action_result_type, build_action_result
 from ..core.cursor import Cursor, decode_cursor, encode_cursor
 from ..core.http import RawResponse, RequestSpec, check_sobject
 from ..core.records import apply_model, parse_query_plans
@@ -29,6 +30,8 @@ from ..observability.debug import DebugPrinter, debug_level
 from ..observability.events import Observer, ObserverHub
 from ..usage import UsageTracker
 from . import _compat
+from .api.actions import AsyncActions
+from .api.apex import AsyncApex
 from .api.auth_api import AsyncAuthApi
 from .api.collections import AsyncCollections
 from .api.sobject import AsyncSObject
@@ -43,6 +46,7 @@ MIN_API_VERSION = (59, 0)
 MIN_LIMITS_POLL_INTERVAL = 300.0
 
 M = TypeVar("M")
+R = TypeVar("R")
 _FROM = re.compile(r"\bFROM\s+([A-Za-z][A-Za-z0-9_]*)", re.IGNORECASE)
 _STRING_LIT = re.compile(r"'(?:\\.|[^'\\])*'")
 _PARENS = re.compile(r"\([^()]*\)")
@@ -188,6 +192,8 @@ class AsyncSalesforce:
     def _init_areas(self) -> None:
         self.collections = AsyncCollections(self)
         self.auth = AsyncAuthApi(self)
+        self.actions = AsyncActions(self)
+        self.apex = AsyncApex(self)
 
     @classmethod
     def _child(
@@ -610,6 +616,26 @@ class AsyncSalesforce:
         if isinstance(body, dict):
             return list(body.get("searchRecords") or [])  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]
         return list(body or [])  # pyright: ignore[reportUnknownArgumentType]
+
+    # --- org automation --------------------------------------------------------------
+
+    async def run(self, action: Action[R]) -> R:
+        """Run a typed action stub (written by ``esf generate actions``) and return its result.
+
+        Example:
+            result = await sf.run(AssignLead(lead_id="00Q..."))
+
+        The inputs are the stub's fields; fields set to ``None`` are not sent. The output values
+        become the stub's result type (a dataclass or a Pydantic model).
+
+        Raises:
+            SalesforceError: the typed error of the failed invocation, as for
+                ``sf.actions.flow(name, {...})``.
+        """
+        kind, name, inputs = action_inputs(action)
+        outputs = await self.actions._invoke(kind, name, inputs)
+        result: R = build_action_result(action_result_type(type(action)), outputs)
+        return result
 
     # --- raw & limits ------------------------------------------------------------------
 

@@ -32,7 +32,7 @@ from ..errors import (
     SalesforceError,
     TransportError,
 )
-from ..models import BatchResult, Limit, QueryPlan, QueryResult, RecordResult, UpsertResult
+from ..models import ActionResult, BatchResult, Limit, QueryPlan, QueryResult, RecordResult, UpsertResult
 from ..observability.debug import debug_level
 from ..observability.events import Observer, ObserverHub
 from ..observability.summary import record_event
@@ -170,6 +170,15 @@ class _Handler:
 
 
 @dataclass(slots=True)
+class _ActionHandler:
+    kind: str
+    name: str
+    response: Any
+    times: int | None = None
+    hits: int = 0
+
+
+@dataclass(slots=True)
 class _Failure:
     operation: str
     error: BaseException
@@ -269,6 +278,8 @@ class FakeState:
         }
         self.scripts: list[QueryScript] = []
         self.handlers: list[_Handler] = []
+        self.action_handlers: list[_ActionHandler] = []
+        self.action_describes: dict[tuple[str, str], dict[str, Any]] = {}
         self.failures: list[_Failure] = []
         self.rejections: list[_Rejection] = []
         self.calls: list[FakeCall] = []
@@ -948,3 +959,65 @@ class FakeState:
         if daily is not None:
             self.usage.observe(LimitInfo(daily.used, daily.max))
         return out
+
+    # --- actions ----------------------------------------------------------------------
+
+    def add_action(self, kind: str, name: str, response: Any, times: int | None) -> None:
+        with self.lock:
+            self.action_handlers.insert(0, _ActionHandler(kind, name, response, times))
+
+    def _action_handler(self, kind: str, name: str) -> _ActionHandler:
+        for h in self.action_handlers:
+            if h.kind == kind and h.name == name and (h.times is None or h.hits < h.times):
+                return h
+        raise UnscriptedCall(
+            f"no handler for action {kind}:{name}. Register one with fake.on_action({kind!r}, {name!r}, ...)"
+        )
+
+    def invoke_action(
+        self, kind: str, name: str, inputs: list[dict[str, Any]]
+    ) -> tuple[list[ActionResult], list[SalesforceError | None]]:
+        """Run the handler once per input; a ``SalesforceError`` fails that invocation."""
+        h = self._action_handler(kind, name)
+        h.hits += 1
+        results: list[ActionResult] = []
+        errors: list[SalesforceError | None] = []
+        for item in inputs:
+            resp: Any = h.response
+            try:
+                if isinstance(resp, BaseException):
+                    raise copy.copy(resp)
+                out: Any = resp(copy.deepcopy(item)) if callable(resp) else resp
+            except SalesforceError as exc:
+                results.append(ActionResult(ok=False, errors=(_detail(exc),), action_name=name))
+                errors.append(exc)
+                continue
+            outputs: dict[str, Any] = copy.deepcopy(dict(out or {}))
+            results.append(ActionResult(ok=True, outputs=outputs, action_name=name))
+            errors.append(None)
+        return results, errors
+
+    def list_actions(self, kind: str) -> list[dict[str, Any]]:
+        names = dict.fromkeys(
+            [n for (k, n) in self.action_describes if k == kind]
+            + [h.name for h in reversed(self.action_handlers) if h.kind == kind]
+        )
+        return [self._action_summary(kind, n) for n in names]
+
+    def _action_summary(self, kind: str, name: str) -> dict[str, Any]:
+        d = self.action_describes.get((kind, name), {})
+        base = "actions/standard" if kind == "standard" else f"actions/custom/{kind}"
+        return {
+            "name": name,
+            "label": d.get("label", name),
+            "type": d.get("type", kind.upper()),
+            "url": f"/services/data/v{self.api_version}/{base}/{name}",
+        }
+
+    def describe_action(self, kind: str, name: str) -> dict[str, Any]:
+        d = self.action_describes.get((kind, name))
+        if d is not None:
+            return copy.deepcopy(d)
+        if any(h.kind == kind and h.name == name for h in self.action_handlers):
+            return {**self._action_summary(kind, name), "inputs": [], "outputs": []}
+        raise NotFound(f"action {kind}:{name} not found", error_code="NOT_FOUND", status=404)

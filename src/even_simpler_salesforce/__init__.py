@@ -27,6 +27,7 @@ from .auth import (
 from .cache import Cache, MemoryCache
 from .config import Budget, DescribeCacheConfig, RetryPolicy, Timeouts
 from .context import call_context
+from .core.actions import Action
 from .core.cursor import Cursor
 from .core.records import flatten
 from .core.soql import soql, soql_identifier, soql_like, sosl_term
@@ -76,6 +77,7 @@ from .errors import (
     ValidationRuleFailed,
 )
 from .models import (
+    ActionResult,
     BatchResult,
     Limit,
     QueryPlan,
@@ -93,6 +95,8 @@ class EsfDeprecationWarning(DeprecationWarning):
 
 
 __all__ = [
+    "Action",
+    "ActionResult",
     "ApexError",
     "AsyncInMemoryTokenStore",
     "AsyncSalesforce",

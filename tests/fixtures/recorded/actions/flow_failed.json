@@ -1,0 +1,19 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Salesforce Actions Developer Guide, Invoking Actions and Flow Actions pages; no org recording yet",
+  "body": [
+    {
+      "actionName": "Assign_Lead",
+      "errors": [
+        {
+          "statusCode": "FIELD_CUSTOM_VALIDATION_EXCEPTION",
+          "message": "[REGION_REQUIRED] Region is required",
+          "fields": []
+        }
+      ],
+      "isSuccess": false,
+      "outputValues": null,
+      "version": 1
+    }
+  ]
+}
