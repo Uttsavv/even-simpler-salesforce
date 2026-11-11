@@ -486,6 +486,7 @@ Flow* help page, 2026-11-09; see Appendix A):
 
 - The token response has `issued_at` but **no `expires_in`**. Access-token lifetime is the app's session timeout, which the client is not told.
 - With **refresh-token rotation** on, each refresh returns a new refresh token and invalidates the previous one. **Reusing a rotated-out token invalidates the current refresh token and its access tokens**; the user must log in again.
+- **Org-observed** (Developer Edition, API v68.0, 2026-11-12; the help page and the rotation article https://help.salesforce.com/s/articleView?id=005316711&language=en_US&type=1 are silent): with rotation on, **every refresh revokes all earlier access tokens** of the grant (11 sequential refreshes: access tokens 1–10 → 401, 11 → 200). So a token one process has just refreshed can be revoked by another process's refresh before it is used. Same org: reusing a rotated-out refresh token was accepted 8 times before the whole chain (and its access tokens) was revoked; the article says the revocation is immediate. The client never reuses one, so this does not change the design.
 - Simultaneous refreshes with the same refresh token fail intermittently with **"Token request is already being processed"**. Salesforce advises caching and reusing tokens, and retrying when this happens.
 
 Algorithm for a call on a client with `token_key = K`:
@@ -496,7 +497,17 @@ Algorithm for a call on a client with `token_key = K`:
    If expiry == "introspect" and tok.expires_at known and <= now + skew → go to REFRESH(tok)
 3. Send request with tok.access_token.
 4. If response is 401 with errorCode INVALID_SESSION_ID (or OAuth `invalid_token`):
-       new = REFRESH(tok); resend once with new. A second 401 raises SessionExpired.
+       new = REFRESH(tok); resend once with new.
+5. If that resend gets a 401 too (and step 4 allowed the resend, ADR 0001):
+       under store.lock(K) re-load the store; if it holds a token other than the rejected one
+       (another process refreshed after us, superseding ours), adopt it and resend. At most
+       MAX_ADOPTS = 2 adopts per call, never a second token POST. The last adopted resend is
+       sent while holding store.lock(K) (taken inside the concurrency gate, without the
+       in-process single-flight lock, so the lock order stays gate → single-flight → store),
+       so no other refresh can revoke its token in flight. Each adopt emits `sf.retry`
+       with reason `token_superseded`. Otherwise raise SessionExpired; if the store was still
+       moving on, its message and hint say the token was superseded by another refresh
+       (not a scope / IP / session-policy problem).
 
 REFRESH(stale):
   a. In-process single-flight on K: if a refresh for K is already running, await its result.
