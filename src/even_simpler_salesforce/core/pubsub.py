@@ -311,6 +311,7 @@ def classify_failure(failure: RpcFailure, topic: str, *, idle: bool = False) -> 
     retryable = action in ("reconnect", "refresh")
     if (
         idle
+        and reason == "error"  # never shortens the org.migrated wait or skips an auth refresh
         and action in ("reconnect", "raise")
         and failure.status in _IDLE_STATUSES
         and (action == "reconnect" or code is None)

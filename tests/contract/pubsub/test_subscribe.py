@@ -169,6 +169,14 @@ def test_undecodable_payload_raises_unexpected_response(ps: PubSubHarness, rec: 
     assert rec.named("sf.pubsub.closed")[0]["outcome"] == "error"
 
 
+def test_unknown_schema_raises_not_found(ps: PubSubHarness) -> None:
+    ps.server.schemas.clear()
+    ps.server.script(sends(batch(order(1))))
+    with pytest.raises(esf.NotFound) as ei:
+        ps.consume(n=1)
+    assert ei.value.error_code == "sfdc.platform.eventbus.grpc.schema.not.found"
+
+
 def test_static_token_without_org_id_calls_userinfo_once(ps: PubSubHarness, mock: respx.MockRouter) -> None:
     route = mock.get(f"{INSTANCE}/services/oauth2/userinfo").respond(200, json={"organization_id": ORG_ID})
     sf = ps.client(auth=esf.StaticToken(access_token="AT-static-1", instance_url=INSTANCE))

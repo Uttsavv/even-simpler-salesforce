@@ -207,6 +207,8 @@ def test_fail_next(d: Driver) -> None:
 
     d.fake.pubsub.fail_next(RuntimeError, topic="/event/Other__e")
     assert len(d.consume()) == 1
+    with pytest.raises(RuntimeError):
+        d.consume("/event/Other__e")
     d.fake.fail_next("pubsub.subscribe", esf.ReplayUnavailable)
     with pytest.raises(esf.ReplayUnavailable):
         d.consume()
