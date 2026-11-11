@@ -287,9 +287,59 @@ class ClientCredentials(Auth):
         return {"grant_type": "client_credentials", **self.client_auth_form()}
 
 
+def _is_encrypted_pem(key: str | bytes) -> bool:
+    text = key if isinstance(key, bytes) else key.encode("utf-8", "replace")
+    # PKCS#8 "BEGIN ENCRYPTED PRIVATE KEY", or a traditional key with "Proc-Type: 4,ENCRYPTED".
+    return b"-----BEGIN ENCRYPTED PRIVATE KEY-----" in text or b"Proc-Type: 4,ENCRYPTED" in text
+
+
+def _signing_key(key: str | bytes, passphrase: str | bytes | None) -> Any:
+    """The key to sign with: the PEM unchanged, or the decrypted key object.
+
+    Errors never contain the key or the passphrase.
+    """
+    if passphrase is None:
+        if _is_encrypted_pem(key):
+            raise ValueError("private_key is an encrypted PEM key; pass private_key_passphrase")
+        return key
+    from cryptography.hazmat.primitives.serialization import load_pem_private_key
+
+    data = key.encode() if isinstance(key, str) else key
+    secret = passphrase.encode() if isinstance(passphrase, str) else passphrase
+    try:
+        return load_pem_private_key(data, password=secret)
+    except TypeError:  # cryptography: a password was given but the key isn't encrypted
+        raise ValueError(
+            "private_key_passphrase was given, but private_key isn't an encrypted PEM key"
+        ) from None
+    except ValueError:  # wrong passphrase, or not a PEM private key
+        raise ValueError(
+            "could not decrypt private_key: wrong private_key_passphrase or not a PEM private key"
+        ) from None
+
+
 @dataclass(frozen=True, slots=True)
 class JwtBearer(Auth):
-    """JWT bearer flow: server-to-server with a certificate. Needs the ``[jwt]`` extra."""
+    """JWT bearer flow: server-to-server with a certificate. Needs the ``[jwt]`` extra.
+
+    Args:
+        domain: Token endpoint host: ``"login"``, ``"test"`` or a My Domain URL.
+        client_id: Consumer key, sent as the ``iss`` claim.
+        username: The user to act as, sent as the ``sub`` claim.
+        private_key: RSA private key in PEM format.
+        private_key_passphrase: Passphrase of an encrypted PEM key. The client decrypts the key
+            locally once, when you create the object; the passphrase is never sent, logged or
+            shown by ``repr()``.
+        audience: The ``aud`` claim; inferred from ``domain`` when unset.
+        token_key: Token store key.
+        refresh_ahead: Refresh proactively after this ``timedelta``.
+        expiry: ``"introspect"`` reads the expiry from the introspection endpoint.
+
+    Raises:
+        ImportError: The ``[jwt]`` extra isn't installed.
+        ValueError: The key is encrypted and ``private_key_passphrase`` is missing or wrong,
+            or a passphrase was given for a key that isn't encrypted.
+    """
 
     kind: ClassVar[str] = "jwt_bearer"
 
@@ -297,12 +347,14 @@ class JwtBearer(Auth):
     client_id: str
     username: str
     private_key: str | bytes = field(repr=False)
+    private_key_passphrase: str | bytes | None = field(default=None, repr=False)
     audience: str | None = None
     key: str | None = None
     refresh_ahead: timedelta | None = None
     expiry: Expiry = "unknown"
     client_secret: str | None = field(default=None, repr=False)
     assertion_lifetime: int = 180
+    _signing_key: Any = field(default=None, repr=False, compare=False)
 
     def __init__(
         self,
@@ -311,6 +363,7 @@ class JwtBearer(Auth):
         client_id: str,
         username: str,
         private_key: str | bytes,
+        private_key_passphrase: str | bytes | None = None,
         audience: str | None = None,
         token_key: str | None = None,
         refresh_ahead: timedelta | None = None,
@@ -322,6 +375,7 @@ class JwtBearer(Auth):
         set_(self, "client_id", client_id)
         set_(self, "username", username)
         set_(self, "private_key", private_key)
+        set_(self, "private_key_passphrase", private_key_passphrase)
         set_(self, "audience", audience)
         set_(self, "key", token_key)
         set_(self, "refresh_ahead", refresh_ahead)
@@ -334,6 +388,7 @@ class JwtBearer(Auth):
             raise ImportError(
                 "JwtBearer needs the [jwt] extra: pip install 'even-simpler-salesforce[jwt]'"
             ) from exc
+        set_(self, "_signing_key", _signing_key(private_key, private_key_passphrase))
 
     @property
     def token_key(self) -> str:
@@ -368,7 +423,7 @@ class JwtBearer(Auth):
             "aud": self.aud,
             "exp": issued + self.assertion_lifetime,
         }
-        token: Any = jwt.encode(claims, self.private_key, algorithm="RS256")  # pyright: ignore
+        token: Any = jwt.encode(claims, self._signing_key, algorithm="RS256")  # pyright: ignore
         return token if isinstance(token, str) else token.decode()
 
     def token_form(self, current: Token | None) -> dict[str, str]:

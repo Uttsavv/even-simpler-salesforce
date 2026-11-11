@@ -91,6 +91,19 @@ class Tooling:
         """
         return SObject(self._sf, name, base=_BASE)
 
+    def describe_global(self, *, cached: bool = True) -> dict[str, Any]:
+        """``GET tooling/sobjects``: every Tooling API object, from the describe cache when fresh.
+
+        It uses the same cache and settings as ``sf.describe_global()``, with its own entry.
+
+        Example:
+            names = [o["name"] for o in (sf.tooling.describe_global())["sobjects"]]
+
+        Args:
+            cached: ``False`` skips the cache and asks Salesforce.
+        """
+        return self._sf._describe("sobjects", "global", cached, None, base=_BASE)
+
     # --- anonymous Apex ---------------------------------------------------------------
 
     def execute_anonymous(self, code: str, *, capture_log: bool = False) -> AnonymousResult:

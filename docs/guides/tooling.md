@@ -55,6 +55,17 @@ await sf.tooling.sobject("DebugLevel").delete(level_id)
 Event names and `sf.usage` show these calls as `tooling.sobject.get`, `tooling.sobject.create`
 and so on.
 
+## List Tooling objects
+
+`describe_global()` lists every Tooling object. The client caches the result like
+`sf.describe_global()`, in its own cache entry. To skip the cache, pass `cached=False`.
+
+```python
+objects = await sf.tooling.describe_global()
+names = [o["name"] for o in objects["sobjects"]]
+print(len(names))
+```
+
 ## Run anonymous Apex
 
 `execute_anonymous(code)` compiles and runs Apex in one call. It returns an
@@ -160,6 +171,7 @@ print("Math" in symbols["publicDeclarations"]["System"])  # True
 | `query(soql, *values, model=)` | `QueryResult` | `GET tooling/query?q=` |
 | `query_iter(soql, *values, model=)` | async iterator of rows | same, then `nextRecordsUrl` |
 | `sobject(name)` | the `sf.sobject(name)` methods | `tooling/sobjects/{name}/...` |
+| `describe_global(*, cached=True)` | `dict` | `GET tooling/sobjects` |
 | `execute_anonymous(code, *, capture_log=False)` | `AnonymousResult` | `GET tooling/executeAnonymous/?anonymousBody=` |
 | `run_tests_async(class_ids)` | `AsyncApexJob` id | `POST tooling/runTestsAsynchronous/` |
 | `completions(type)` | `dict` | `GET tooling/completions?type=` |

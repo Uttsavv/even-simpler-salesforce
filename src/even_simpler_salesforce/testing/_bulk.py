@@ -26,6 +26,7 @@ from ..core.bulk import (
     IngestOperation,
     LineEnding,
     RowEncoder,
+    check_bulk_query,
     check_ingest,
     check_line_ending,
     expand_compound_fields,
@@ -253,6 +254,7 @@ class FakeBulk:
         if not timeout > 0:
             raise ValueError("timeout must be > 0 seconds")
         soql = soql_values(soql, values)
+        check_bulk_query(soql)
 
         def fn() -> list[dict[str, str | None]]:
             rows, _ = self._state.query_rows(soql)

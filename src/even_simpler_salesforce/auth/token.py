@@ -10,9 +10,9 @@ from typing import Any
 from urllib.parse import urlparse
 
 from ..core.http import check_instance_url
-from ..errors import UnexpectedResponse
+from ..errors import TokenIdentityChanged, UnexpectedResponse
 
-__all__ = ["Token", "merge_token", "parse_token_response"]
+__all__ = ["Token", "check_same_identity", "merge_token", "parse_token_response"]
 
 
 def _redact(value: str | None) -> str | None:
@@ -107,10 +107,47 @@ def parse_token_response(data: Mapping[str, Any], *, now: datetime | None = None
     )
 
 
+def _same_id(a: str | None, b: str | None) -> bool:
+    # Unknown on either side: nothing to compare. A 15-character id is the case-sensitive
+    # prefix of its 18-character form, so compare the first 15 characters.
+    return a is None or b is None or a[:15] == b[:15]
+
+
+def check_same_identity(new: Token, previous: Token | None, *, what: str = "new token") -> None:
+    """Raise if ``new`` belongs to another org or user than ``previous``.
+
+    Ids that either token lacks are not compared.
+
+    Args:
+        new: The token the client is about to use.
+        previous: The token it replaces, or ``None``.
+        what: Where ``new`` came from, for the message (for example ``"refreshed token"``).
+
+    Raises:
+        TokenIdentityChanged: The org id or user id differs.
+    """
+    if previous is None:
+        return
+    changed = [
+        name
+        for name, a, b in (("org", new.org_id, previous.org_id), ("user", new.user_id, previous.user_id))
+        if not _same_id(a, b)
+    ]
+    if changed:
+        raise TokenIdentityChanged(
+            f"{what} belongs to another {' and '.join(changed)} than the token it replaces; not using it"
+        )
+
+
 def merge_token(new: Token, previous: Token | None) -> Token:
-    """Keep the previous refresh token (and identity) when the response carries none."""
+    """Keep the previous refresh token (and identity) when the response carries none.
+
+    Raises:
+        TokenIdentityChanged: ``new`` belongs to another org or user than ``previous``.
+    """
     if previous is None:
         return new
+    check_same_identity(new, previous, what="refreshed token")
     return new.replace(
         refresh_token=new.refresh_token or previous.refresh_token,
         id_url=new.id_url or previous.id_url,

@@ -34,9 +34,9 @@ ContentDocument (plus a ContentDocumentLink for ``FirstPublishLocationId``);
 ``GET .../VersionData`` and ``GET sobjects/Attachment/{id}/Body`` return the bytes.
 
 Tooling API (``tooling/...``): ``ApexClass``, ``TraceFlag``, ``DebugLevel`` and ``ApexLog``
-records; ``executeAnonymous`` fails to compile code containing ``System debug``, throws for
-``1 / 0`` and, while a ``USER_DEBUG`` trace flag exists, writes an ``ApexLog`` with one
-``USER_DEBUG`` line per ``System.debug('...')``.
+records, listed by ``GET tooling/sobjects``; ``executeAnonymous`` fails to compile code
+containing ``System debug``, throws for ``1 / 0`` and, while a ``USER_DEBUG`` trace flag
+exists, writes an ``ApexLog`` with one ``USER_DEBUG`` line per ``System.debug('...')``.
 Bulk API 2.0: an ingest job is processed when the client closes it (``PATCH state=UploadComplete``)
 and is ``JobComplete`` from then on; its rows go through the same create, update, upsert and
 delete rules as REST. A query job runs the SOQL above and serves the rows as CSV pages of
@@ -112,6 +112,7 @@ _FIELD_LIST = re.compile(r"^\s*SELECT\s+(?P<fields>.+?)\s+FROM\s+(?P<obj>\w+)(?P
 _EQ = re.compile(r"(\w+)\s*=\s*('(?:[^'\\]|\\.)*'|true|false|null|-?\d+(?:\.\d+)?)", re.I)
 _IN = re.compile(r"(\w+)\s+IN\s*\(([^)]*)\)", re.I)
 _LIMIT = re.compile(r"\bLIMIT\s+(\d+)", re.I)
+_FIELDS_FN = re.compile(r"FIELDS\(\s*(STANDARD|CUSTOM|ALL)\s*\)", re.I)
 _GQL_CONN = re.compile(r"\buiapi\s*\{\s*query\s*\{\s*(?P<obj>\w+)\s*(?:\((?P<args>[^)]*)\))?\s*\{", re.S)
 _GQL_FIRST = re.compile(r"\bfirst\s*:\s*(?:(\d+)|\$(\w+))")
 GQL_FIELDS = {"Name", "FirstName", "LastName", "Company", "Email", "Status", "Phone", "Country", "Street"}
@@ -593,6 +594,7 @@ class FakeOrg:
             rows = rows[: int(lim.group(1))]
         it = iter(_SUBQUERY.finditer(soql))
         fields = [next(it).group(0) if f == "__SUBQUERY__" else f for f in _split_top(m.group("fields"))]
+        fields = self._expand_fields_fn(sobject, fields, lim)
         if [f.upper() for f in fields] == ["COUNT()"]:
             return {"totalSize": len(rows), "done": True, "records": []}
         for f in fields:
@@ -600,6 +602,28 @@ class FakeOrg:
                 raise Rejected("INVALID_FIELD", f"No such column '{f}' on entity '{sobject}'.")
         projected = [self._project(sobject, r, fields, version) for r in rows]
         return self._page(projected, batch, version)
+
+    def _expand_fields_fn(self, sobject: str, fields: list[str], lim: re.Match[str] | None) -> list[str]:
+        """``FIELDS(STANDARD|CUSTOM|ALL)``: ALL and CUSTOM need ``LIMIT`` 200 or less (the
+        ``WHERE Id IN`` form isn't modelled). Field names come from the stored records.
+        https://developer.salesforce.com/docs/atlas.en-us.soql_sosl.meta/soql_sosl/sforce_api_calls_soql_select_fields.htm
+        """
+        known = sorted({k for r in self.records[sobject].values() for k in r})
+        out: list[str] = []
+        for f in fields:
+            fm = _FIELDS_FN.fullmatch(f.strip())
+            if not fm:
+                out.append(f)
+                continue
+            kind = fm.group(1).upper()
+            if kind != "STANDARD" and (lim is None or int(lim.group(1)) > 200):
+                raise Rejected("MALFORMED_QUERY", "The SOQL FIELDS function must have a LIMIT of at most 200")
+            out += [
+                k
+                for k in known
+                if k not in out and (kind == "ALL" or k.endswith("__c") == (kind == "CUSTOM"))
+            ]
+        return out
 
     def explain(self, soql: str) -> dict[str, Any]:
         """Synthetic ``query?explain=`` (shape from the REST API Developer Guide, v264)."""
@@ -1316,6 +1340,9 @@ class FakeOrg:
             return self._json(self._anonymous(params["anonymousBody"]))
         if parts == ["runTestsAsynchronous"] and method == "POST":
             return self._json(f"7078d{next(self.ids):010d}")
+        if parts == ["sobjects"] and method == "GET":  # describe global, synthetic shape
+            objs = [{"name": n, "label": n, "keyPrefix": TOOLING_PREFIXES[n]} for n in sorted(self.tooling)]
+            return self._json({"encoding": "UTF-8", "maxBatchSize": 200, "sobjects": objs})
         if parts == ["completions"]:
             return self._json({"publicDeclarations": {"System": {"Math": [{"name": "abs"}], "String": []}}})
         if len(parts) == 4 and parts[1] == "ApexLog" and parts[3] == "Body":

@@ -467,6 +467,46 @@ def test_initial_acquisition_jwt_bearer(h: Harness, mock: respx.MockRouter) -> N
     assert claims["sub"] == "u@x.com"
 
 
+def test_jwt_bearer_encrypted_key(
+    h: Harness, mock: respx.MockRouter, rec: Recorder, caplog: pytest.LogCaptureFixture
+) -> None:
+    """An encrypted PEM key is decrypted locally; the passphrase never reaches a request,
+    an event or a log line."""
+    jwt = pytest.importorskip("jwt")
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    passphrase = "p4ss-phrase-never-shown"
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    pem = key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.BestAvailableEncryption(passphrase.encode()),
+    )
+    tok = mock.post(TOKEN_URL).respond(json=token_body("AT-jwt"))
+    mock.get(GET_URL).respond(json={"Id": LEAD_ID})
+    auth = esf.JwtBearer(
+        domain=INSTANCE,
+        client_id="cid",
+        username="u@x.com",
+        private_key=pem,
+        private_key_passphrase=passphrase,
+    )
+    caplog.set_level(logging.DEBUG, logger="esf")
+    sf = h.client(auth, token=False, recorder=rec)
+    get(h, sf)
+    body = tok.calls.last.request.content.decode()
+    claims = jwt.decode(
+        form(tok.calls.last.request)["assertion"],
+        key.public_key(),
+        algorithms=["RS256"],
+        audience="https://login.salesforce.com",
+    )
+    assert claims["sub"] == "u@x.com"
+    for text in (body, caplog.text, repr(sf), repr(auth), str([e.fields for e in rec.events])):
+        assert passphrase not in text
+
+
 def test_token_loaded_from_store_without_post(h: Harness, mock: respx.MockRouter) -> None:
     tok = mock.post(TOKEN_URL)
     api = mock.get(GET_URL).respond(json={"Id": LEAD_ID})

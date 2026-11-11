@@ -107,6 +107,8 @@ def test_query_returns_scripted_rows_as_csv_strings() -> None:
         list(fake.bulk.query("SELECT Id FROM Lead", parallel_downloads=0))
     with pytest.raises(ValueError, match="timeout"):
         list(fake.bulk.query("SELECT Id FROM Lead", timeout=0))
+    with pytest.raises(ValueError, match=r"FIELDS\(ALL\)"):
+        list(fake.bulk.query("SELECT FIELDS(ALL) FROM Lead LIMIT 200"))
 
 
 def test_fail_next_and_expand_compound_fields() -> None:

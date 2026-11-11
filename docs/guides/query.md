@@ -129,6 +129,35 @@ print(n)
 
 For `COUNT(Id)` and other aggregates, use `query()` and read the aggregate row.
 
+## Select all fields
+
+SOQL has no `SELECT *`. Use `FIELDS(STANDARD)`, `FIELDS(CUSTOM)` or `FIELDS(ALL)` in the field
+list instead.
+
+```python
+page = await sf.query("SELECT FIELDS(STANDARD) FROM Lead WHERE Status = {}", "Open")
+everything = await sf.query("SELECT FIELDS(ALL) FROM Lead ORDER BY CreatedDate LIMIT 200")
+print(len(page), len(everything))
+```
+
+`FIELDS(STANDARD)` works in every query. `FIELDS(ALL)` and `FIELDS(CUSTOM)` need `LIMIT` 200 or
+less, or `WHERE Id IN` with at most 200 ids. See
+[FIELDS()](https://developer.salesforce.com/docs/atlas.en-us.soql_sosl.meta/soql_sosl/sforce_api_calls_soql_select_fields.htm).
+Bulk query jobs don't accept `FIELDS(ALL)` or `FIELDS(CUSTOM)`. See
+[Bulk API 2.0](bulk.md#all-fields).
+
+To read every field of more than 200 rows, build the field list from `describe()`:
+
+```python
+describe = await sf.sobject("Lead").describe()
+names = ", ".join(f["name"] for f in describe["fields"])
+async for lead in sf.query_iter(f"SELECT {names} FROM Lead"):
+    pass  # every field the user can read
+```
+
+`describe()` returns only the fields that the user can see. The client caches it, so this costs
+no request most of the time.
+
 ## Continue later with a cursor {#cursors}
 
 `page.cursor` points at the next page. Keep it and pass it to `query_more()` later.

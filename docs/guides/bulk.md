@@ -84,6 +84,10 @@ again.
 `job.info` holds the status from the latest call. Call `refresh()` to get it again without
 waiting.
 
+To show progress, add an [observer](../logging.md#write-your-own-observer) for the `sf.bulk.job` event. The
+client emits it when the job state changes, and on each poll where `records_processed` or
+`records_failed` changed.
+
 ## Read the results
 
 A job that ends `JobComplete` can still have rows that failed. Read them after `wait()`.
@@ -138,6 +142,21 @@ print(fields)  # ['Id', 'Name', 'BillingStreet', 'BillingCity', ...]
 It reads the describe of the object, from the describe cache when it is fresh. If a query job
 fails because of a compound field, `BulkJobFailed.hint` names the component fields.
 
+## All fields
+
+Query jobs don't accept `FIELDS(ALL)` or `FIELDS(CUSTOM)`. If the query uses one of them,
+`sf.bulk.query()` raises `ValueError` before it creates a job. Build the field list from the
+describe instead:
+
+```python
+describe = await sf.sobject("Account").describe()
+names = await sf.bulk.expand_compound_fields("Account", [f["name"] for f in describe["fields"]])
+async for row in sf.bulk.query(f"SELECT {', '.join(names)} FROM Account"):
+    pass  # every field the user can read, compound fields as components
+```
+
+See [Create a Query Job](https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/query_create_job.htm).
+
 ## Methods
 
 | Method | Returns | Description |
@@ -190,4 +209,4 @@ def test_import(esf_fake: FakeSalesforce) -> None:
   whatever charset the response names.
 - Parallel downloads use the `resultPages` resource, which gives up to five page URLs at a time.
   Values of `parallel_downloads` above 5 don't download more.
-- Every change of job state emits an `sf.bulk.job` [event](../logging.md#events).
+- Every change of job state or progress emits an `sf.bulk.job` [event](../logging.md#events).

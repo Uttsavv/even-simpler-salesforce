@@ -10,7 +10,8 @@ Rules for writers of documentation pages:
 - Every HTTP request goes to a synthetic org (:mod:`tests.docs._org`) through respx, whatever
   the host. The environment has ``SF_DOMAIN``, ``SF_CLIENT_ID``, ``SF_CLIENT_SECRET``,
   ``SF_USERNAME``, ``SF_ACCESS_TOKEN`` and ``SF_INSTANCE_URL`` set, and the working directory
-  contains ``server.key`` (an RSA private key) for JWT examples.
+  contains ``server.key`` (an RSA private key) and ``server-encrypted.key`` (the same key,
+  encrypted with ``SF_KEY_PASSPHRASE``) for JWT examples.
 - Functions named ``test_*`` defined by a block are called afterwards with pytest-style fixture
   arguments (``esf_fake`` / ``esf_async_fake`` get fresh fakes, ``esf_replay`` resolves paths
   against the working directory; other names are resolved with
@@ -114,6 +115,13 @@ def org(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Any:
             serialization.NoEncryption(),
         )
     )
+    (tmp_path / "server-encrypted.key").write_bytes(
+        key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.BestAvailableEncryption(b"docs-key-passphrase"),
+        )
+    )
     monkeypatch.chdir(tmp_path)
     for name, value in {
         "SF_DOMAIN": INSTANCE,
@@ -122,6 +130,7 @@ def org(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Any:
         "SF_USERNAME": "integration@acme.example",
         "SF_ACCESS_TOKEN": "AT-docs-static",
         "SF_INSTANCE_URL": INSTANCE,
+        "SF_KEY_PASSPHRASE": "docs-key-passphrase",
         "ESF_SANDBOX_ACCESS_TOKEN": "AT-docs-sandbox",  # esf_sandbox examples hit the fake org
         "ESF_SANDBOX_INSTANCE_URL": INSTANCE,
     }.items():

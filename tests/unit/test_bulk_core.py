@@ -605,3 +605,36 @@ def test_backoff_delays() -> None:
 def test_backoff_rejects(kw: dict[str, float], message: str) -> None:
     with pytest.raises(ValueError, match=message):
         esf.Backoff(**kw)
+
+
+@pytest.mark.parametrize(
+    "soql",
+    [
+        "SELECT FIELDS(ALL) FROM Lead LIMIT 200",
+        "select fields( custom ) from Lead",
+        "SELECT Id, FIELDS(Custom) FROM Account",
+    ],
+)
+def test_check_bulk_query_rejects_unbounded_fields(soql: str) -> None:
+    """*Create a Query Job* and the SOQL *SELECT* page agree that Bulk API 2.0 query jobs don't
+    run ``FIELDS(ALL)`` or ``FIELDS(CUSTOM)``:
+    https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/query_create_job.htm
+    https://developer.salesforce.com/docs/atlas.en-us.soql_sosl.meta/soql_sosl/sforce_api_calls_soql_select_fields.htm
+    """
+    with pytest.raises(ValueError, match="expand_compound_fields") as ei:
+        B.check_bulk_query(soql)
+    assert "don't support FIELDS(" in str(ei.value)
+
+
+@pytest.mark.parametrize(
+    "soql",
+    [
+        "SELECT Id, Name FROM Lead",
+        "SELECT FIELDS(STANDARD) FROM Lead",  # the two pages disagree (V81): Salesforce decides
+        "SELECT Id FROM Lead WHERE Name = 'FIELDS(ALL)'",
+        "SELECT Id FROM Lead WHERE Name = 'it\\'s FIELDS(ALL)'",
+        "SELECT MyFIELDS(ALL)__c FROM Lead",
+    ],
+)
+def test_check_bulk_query_accepts(soql: str) -> None:
+    B.check_bulk_query(soql)

@@ -414,7 +414,7 @@ All are frozen config objects implementing the `Auth` protocol. They hold no tok
 |---|---|---|---|
 | `WebServerFlow` | A human user logged in via the browser; app holds their refresh token | `domain`, `client_id`, `client_secret` (optional for PKCE public clients), `redirect_uri`, `scopes`, `token_key` (**required**: one per Salesforce identity), `refresh_ahead=None`, `expiry="unknown"\|"introspect"` | Refresh token grant |
 | `ClientCredentials` | The app acting as its integration user | `domain` (**must be My Domain**), `client_id`, `client_secret` | Re-request a token (no refresh token issued) |
-| `JwtBearer` | Server-to-server with a certificate | `domain`, `client_id`, `username`, `private_key`, `audience` (`login`/`test`/custom) | Re-sign and re-request |
+| `JwtBearer` | Server-to-server with a certificate | `domain`, `client_id`, `username`, `private_key`, `private_key_passphrase=None` (encrypted PEM; decrypted locally, never logged), `audience` (`login`/`test`/custom) | Re-sign and re-request |
 | `StaticToken` | Tests, scripts, tokens obtained elsewhere | `access_token`, `instance_url` | None: a 401 raises `SessionExpired` |
 | `TokenExchange` *(later)* | RFC 8693 exchange | | |
 | `DeviceFlow` *(later)* | CLIs and devices | | |
@@ -513,7 +513,8 @@ REFRESH(stale):
          - 400 invalid_grant (expired/revoked/rotated-out) → raise ReauthorizationRequired,
                                                          emit `sf.auth.reauth_required`
          - other 4xx/5xx → typed AuthError
-       new = merge(resp, stale)   # keep old refresh_token if the response has none
+       new = merge(resp, stale)   # keep old refresh_token if the response has none;
+                                  # TokenIdentityChanged if org id or user id differs
        saved = await store.save(K, new, expected_version=current.version if current else None)
          - TokenConflict → re-load and use the stored token (another process won)
        memory[K] = saved; emit `sf.auth.refreshed`; return saved
@@ -524,6 +525,7 @@ Rules:
 - The refresh POST itself is never retried blindly. This is a deliberate exception to the general retry policy.
 - `ClientCredentials` / `JwtBearer` have no refresh token; "refresh" is a fresh token request, and blind retries are safe.
 - Default skew for `expires_at` checks: 60 s.
+- Identity check: every token the client adopts in place of a previous one (the refresh response, a store re-read after a concurrent refresh, a timeout, a busy answer or a `TokenConflict`) MUST have the same org id and user id as the previous token. Otherwise raise `TokenIdentityChanged` (an `AuthError`; no token in the message) and don't use it. Ids missing on either side aren't compared; 15-character ids compare with the first 15 characters of an 18-character id. The refresh-token, JWT bearer and client-credentials responses all carry `id` (help pages in Appendix A).
 
 ### 6.5 Proactive refresh
 
@@ -638,6 +640,7 @@ SalesforceError
 │   ├── ReauthorizationRequired          (invalid_grant: refresh token expired/revoked/rotated out)
 │   ├── RefreshFailed                    (.ambiguous=True when the outcome is unknown)
 │   ├── TokenConflict                    (store CAS failure; normally handled internally)
+│   ├── TokenIdentityChanged             (new or re-read token has another org id or user id)
 │   └── OAuthError                       (other OAuth endpoint errors; .error, .error_description)
 ├── RequestError                         (4xx caused by the request)
 │   ├── MalformedQuery                   MALFORMED_QUERY, INVALID_QUERY_LOCATOR
@@ -1018,6 +1021,7 @@ async for row in sf.bulk.query("SELECT Id, Name FROM Lead", parallel_downloads=4
 - **Compound fields** (#182): Bulk query rejects address and geolocation compound fields. The
   client maps that job failure to `BulkJobFailed` with a hint naming the component fields, and
   offers `sf.bulk.expand_compound_fields(sobject, fields)` (describe-based) to rewrite a field list.
+- **`FIELDS()`**: `sf.bulk.query` raises `ValueError` before creating a job when the SOQL selects `FIELDS(ALL)` or `FIELDS(CUSTOM)` (string literals ignored). *Create a Query Job* says Bulk 2.0 doesn't support `FIELDS()` at all, while the SOQL *SELECT* page lists `FIELDS(STANDARD)` as supported; both agree on ALL and CUSTOM, so `FIELDS(STANDARD)` is passed to Salesforce (V81).
 - Ingest uploads: one request may carry at most 150 MB **after** Salesforce's base64 conversion, so the client splits raw CSV at **100 MB** per job, as the docs advise. Gzip request compression is still applied on the wire.
 - Results are fetched with `?locator=&maxRecords=` using the **same API version that created the job**; a different version returns 409, so the job object pins its version.
 - Query results use `Sforce-Locator` pagination; with `parallel_downloads>1`, locators are fetched ahead with bounded concurrency while preserving order.
@@ -1025,7 +1029,8 @@ async for row in sf.bulk.query("SELECT Id, Name FROM Lead", parallel_downloads=4
 
 ### 9.12 Tooling — `sf.tooling` (0.3)
 
-`query`, `query_iter`, `sobject(name)` (same interface as §9.1), `execute_anonymous`,
+`query`, `query_iter`, `sobject(name)` (same interface as §9.1), `describe_global(cached=True)`
+(`GET tooling/sobjects`, cached like `sf.describe_global()` under its own key), `execute_anonymous`,
 `run_tests_async(class_ids)`, `completions(type)`. Uses `/services/data/vXX/tooling/`.
 
 ### 9.13 UI API — `sf.ui` (0.4)
@@ -1516,7 +1521,7 @@ usage so jobs can sleep and resume.
 | `sf.auth.refreshed` | token refreshed | token_key_hash, flow, duration_ms, rotated: bool, proactive: bool |
 | `sf.auth.reauth_required` | invalid_grant | token_key_hash |
 | `sf.usage.threshold` | budget threshold crossed | fraction, used, max |
-| `sf.bulk.job` | bulk job state changes | job_id, state, records_processed, records_failed |
+| `sf.bulk.job` | bulk job created, state changes, or a `wait()` poll sees `numberRecordsProcessed`/`numberRecordsFailed` change | job_id, operation, sobject, state, records_processed, records_failed (`None` for query jobs: their job info has no `numberRecordsFailed`) |
 | `sf.pubsub.subscribed` | a stream opens (first and every reconnect) | topic, replay_preset, resumed_from (`store`/`memory`/`none`), stream_no |
 | `sf.pubsub.batch` | a non-empty `FetchResponse` is received | topic, events, pending, lag_ms (newest event's commit/created time vs now, when the payload has one) |
 | `sf.pubsub.reconnect` | before each resubscribe | topic, attempt, reason (`idle`/`error`/`auth`/`invalid_replay`/`org_migrated`), error_code, rpc_id, delay_ms |
@@ -1936,8 +1941,11 @@ before the release named.
 | V72 | SOAP Metadata API with an OAuth access token: `/services/Soap/m/{v}` accepts it in `SessionHeader`; envelope shapes of `retrieve` (`retrieveRequest` with `apiVersion`, `singlePackage`, `unpackaged`), `listMetadata` (`queries`, `asOfVersion`) and `describeMetadata`; an expired token is a `INVALID_SESSION_ID` fault (HTTP 500), not a 401 | 0.4 | **Open**: element order and fault bodies are from memory of the Metadata WSDL. Check the WSDL of a sandbox and record each call plus an expired-session fault |
 | V73 | `checkRetrieveStatus(id, includeZip)`: `includeZip=false` returns the state without the zip (API 34.0+); the zip is deleted from the server once returned, so a second call with `includeZip=true` fails; `status` values `Pending`, `InProgress`, `Succeeded`, `Failed`; `messages` for missing members | 0.4 | **Partly done**: *checkRetrieveStatus()* (search excerpts, 2026-11-11) states the zip deletion and `includeZip`. Record a retrieve with a missing member and a second zip call in a sandbox |
 | V74 | Retrieve zip contents: entry names are relative with `/` separators and `package.xml` at the root with `singlePackage=true`; no directory entries or symlink attributes; the size at which a retrieve fails (39 MB compressed and 400 MB uncompressed from memory of *Metadata API Limits*, not re-read) | 0.4 | **Open**: sandbox. The client refuses absolute paths, `..`, backslashes, drive letters and symlink entries either way |
+| V80 | A JSON `null` value in `PATCH sobjects/{o}/{id}` (and Collections update) clears the field; a key left out of the body keeps its value. The records guide relies on it to teach `model_dump(by_alias=True, exclude_unset=True)` | 0.4 | **Open**: no REST API page found that states it; sandbox: update a Lead with `{"Rating": null}` and read the field back |
+| V81 | Bulk API 2.0 query jobs and `FIELDS(STANDARD)`: *Create a Query Job* (api_asynch, `query_create_job.htm`) says `FIELDS()` isn't supported; the SOQL *SELECT* page (`sforce_api_calls_soql_select_fields.htm`) lists Bulk API 2.0 as supporting `FIELDS(STANDARD)` only. The client rejects only `FIELDS(ALL)`/`FIELDS(CUSTOM)` | 0.4 | **Open**: sandbox: create a query job with `SELECT FIELDS(STANDARD) FROM Account` and record the response; if it fails, reject `FIELDS(STANDARD)` too |
+| V82 | Bulk API 2.0 query job info (`GET jobs/query/{id}`) has `numberRecordsProcessed`, updated while the job is `InProgress`, and no `numberRecordsFailed`. `sf.bulk.job` events report `records_failed=None` for query jobs | 0.4 | **Partly done**: field list from the *Get Information About a Query Job* example (no `numberRecordsFailed`). Sandbox: poll a long query job and record job info at `InProgress` |
 
-Remaining open: V4, V5b, V11 (sandbox half), V17, V18, V19, V20, V21, V24, V25, V26, V29, V30 — all need a sandbox (V18/V26 also a docs check). V27 and V28 (0.5) need a sandbox too. V31–V34 (0.2, actions and Apex REST) need a sandbox and a full read of the Actions Developer Guide. V35 and V36 (0.2, SOAP convert/merge and platform event publish) need a sandbox. V37–V39 (0.2, Files) need a sandbox. V50–V53 (0.3, GraphQL) need a sandbox and a browser read of the GraphQL API Developer Guide. V40–V44 (0.3, Bulk), V23 (sandbox half) and V45–V47 (0.3, Tooling) and V55–V59 (0.3, Composite) need a sandbox. V60–V64 (0.4, UI API), V65–V69 (0.4, Reports) and V70–V74 (0.4, Metadata) need a sandbox.
+Remaining open: V4, V5b, V11 (sandbox half), V17, V18, V19, V20, V21, V24, V25, V26, V29, V30 — all need a sandbox (V18/V26 also a docs check). V27 and V28 (0.5) need a sandbox too. V31–V34 (0.2, actions and Apex REST) need a sandbox and a full read of the Actions Developer Guide. V35 and V36 (0.2, SOAP convert/merge and platform event publish) need a sandbox. V37–V39 (0.2, Files) need a sandbox. V50–V53 (0.3, GraphQL) need a sandbox and a browser read of the GraphQL API Developer Guide. V40–V44 (0.3, Bulk), V23 (sandbox half) and V45–V47 (0.3, Tooling) and V55–V59 (0.3, Composite) need a sandbox. V60–V64 (0.4, UI API), V65–V69 (0.4, Reports) and V70–V74 (0.4, Metadata) need a sandbox. V80–V82 (records null semantics, Bulk `FIELDS(STANDARD)` and query job counters) need a sandbox.
 
 Note: developer.salesforce.com blocks non-browser clients (403). In a real browser, each docs page
 has a Markdown version at the same path with `.md` instead of `.html` (fetch it from the page's

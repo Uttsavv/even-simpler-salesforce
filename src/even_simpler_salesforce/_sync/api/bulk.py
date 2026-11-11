@@ -27,6 +27,7 @@ from ...core.bulk import (
     IngestOperation,
     LineEnding,
     RowEncoder,
+    check_bulk_query,
     check_ingest,
     check_line_ending,
     combine_infos,
@@ -96,6 +97,10 @@ def _job_path(version: str, kind: str, job_id: str, rest: str = "") -> str:
     return f"/services/data/v{version}/jobs/{kind}/{check_record_id(job_id)}{rest}"
 
 
+def _is_query(info: BulkJobInfo) -> bool:
+    return info.operation in ("query", "queryAll")
+
+
 def _event(info: BulkJobInfo) -> dict[str, Any]:
     return {
         "job_id": info.id,
@@ -103,7 +108,8 @@ def _event(info: BulkJobInfo) -> dict[str, Any]:
         "sobject": info.sobject,
         "state": info.state.value,
         "records_processed": info.records_processed,
-        "records_failed": info.records_failed,
+        # Query job info has no numberRecordsFailed: report None, not 0.
+        "records_failed": None if _is_query(info) else info.records_failed,
     }
 
 
@@ -114,7 +120,7 @@ def _failed(info: BulkJobInfo, hint: str | None = None) -> BulkJobFailed:
         job_id=info.id,
         state=info.state.value,
         error_message=info.error_message,
-        operation=f"bulk.{'query' if info.operation in ('query', 'queryAll') else 'ingest'}",
+        operation=f"bulk.{'query' if _is_query(info) else 'ingest'}",
         sobject=info.sobject,
         hint=hint,
     )
@@ -151,7 +157,11 @@ class _Jobs:
             )
         )
         new = parse_job_info(raw.json(), info.api_version)
-        if new.state is not info.state or new.records_processed != info.records_processed:
+        if (new.state, new.records_processed, new.records_failed) != (
+            info.state,
+            info.records_processed,
+            info.records_failed,
+        ):  # a state change or progress: long jobs report as they go
             self._sf._transport.emit("sf.bulk.job", _event(new))
         return new
 
@@ -552,6 +562,8 @@ class Bulk:
             timeout: Seconds to wait for the job to finish.
 
         Raises:
+            ValueError: the query selects ``FIELDS(ALL)`` or ``FIELDS(CUSTOM)``, which query
+                jobs don't support. The client raises it before it creates a job.
             BulkJobFailed: the job failed or was aborted. If the query selects compound
                 address or geolocation fields, ``hint`` names their components.
             BulkJobTimeout: the job didn't finish in time.
@@ -565,6 +577,7 @@ class Bulk:
         from ..client import _sobject_of  # pyright: ignore[reportPrivateUsage]
 
         soql = soql_values(soql, values)
+        check_bulk_query(soql)
         sobject = _sobject_of(soql)
 
         def hint(message: str | None) -> str | None:
