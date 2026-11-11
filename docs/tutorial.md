@@ -365,9 +365,7 @@ async def update_leads(changes: list[LeadChange], sf: SF) -> dict[str, Any]:
     return {
         "updated": [r.id for r in results.succeeded],
         "failed": [
-            {"id": row["Id"], "error": r.errors[0].message}
-            for row, r in zip(rows, results)
-            if not r.ok
+            {"id": row["Id"], "error": r.errors[0].message} for row, r in zip(rows, results) if not r.ok
         ],
     }
 ```
