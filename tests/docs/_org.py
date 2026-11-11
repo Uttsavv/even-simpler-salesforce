@@ -20,6 +20,11 @@ The org enforces a few rules so error examples have something to hit:
   pageInfo { ... } } } }`` over the stored records (no filters), with ``{value}`` fields and
   cursors ``v1:<offset>``. An unknown field gets ``200 OK`` with a ``ValidationError``.
 
+Metadata API: a multipart ``POST metadata/deployRequest`` stores the zip; the first
+``GET metadata/deployRequest/{id}`` reports it done (``Failed`` when an Apex class in it contains
+``Broken``). The SOAP endpoint ``/services/Soap/m/{v}`` answers ``retrieve`` (done at once),
+``checkRetrieveStatus``, ``listMetadata`` and ``describeMetadata`` over :data:`APEX_CLASSES`.
+
 Files: a multipart ``POST sobjects/ContentVersion`` stores the bytes and creates the
 ContentDocument (plus a ContentDocumentLink for ``FirstPublishLocationId``);
 ``GET .../VersionData`` and ``GET sobjects/Attachment/{id}/Body`` return the bytes.
@@ -27,12 +32,15 @@ ContentDocument (plus a ContentDocumentLink for ``FirstPublishLocationId``);
 
 from __future__ import annotations
 
+import base64
 import gzip
+import io
 import itertools
 import json
 import re
 import uuid
 import xml.etree.ElementTree as ET
+import zipfile
 from datetime import datetime, timedelta, timezone
 from email.utils import format_datetime
 from typing import Any
@@ -63,6 +71,18 @@ PARENT_RELATIONSHIPS = {"ContentDocument": ("ContentDocument", "ContentDocumentI
 CHILD_PAGE = 2  # tiny on purpose, so ``expand_children`` has something to follow
 
 _SOAP = re.compile(r"^/services/Soap/u/\d+\.\d$")
+_MSOAP = re.compile(r"^/services/Soap/m/\d+\.\d$")
+_M = "{http://soap.sforce.com/2006/04/metadata}"
+#: Apex classes of the org's metadata: name -> source.
+APEX_CLASSES = {
+    "InvoiceService": "public with sharing class InvoiceService {\n    public static void send() {}\n}\n",
+    "LeadScoring": "public with sharing class LeadScoring {\n    public static void score() {}\n}\n",
+}
+_CLASS_META = (
+    '<?xml version="1.0" encoding="UTF-8"?>'
+    '<ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">'
+    "<apiVersion>68.0</apiVersion><status>Active</status></ApexClass>"
+)
 _P = "{urn:partner.soap.sforce.com}"
 _O = "{urn:sobject.partner.soap.sforce.com}"
 _ENV = "{http://schemas.xmlsoap.org/soap/envelope/}"
@@ -145,6 +165,8 @@ class FakeOrg:
         self.describe_modified = _now() - timedelta(days=3)
         self.events: list[tuple[str, dict[str, Any]]] = []
         self.blobs: dict[str, bytes] = {}
+        self.deploys: dict[str, tuple[bytes, dict[str, Any]]] = {}  # id -> (zip, deployOptions)
+        self.retrieves: dict[str, list[tuple[str, list[str]]]] = {}  # id -> package types
         self._seed()
 
     # --- data ------------------------------------------------------------------------
@@ -467,6 +489,8 @@ class FakeOrg:
                 return self._oauth(request, path.rsplit("/", 1)[1])
             if _SOAP.match(path):
                 return self._soap(request)
+            if _MSOAP.match(path):
+                return self._metadata_soap(request)
             auth = request.headers.get("authorization", "")
             if not auth.startswith("Bearer ") or auth[7:] in self.revoked:
                 raise Rejected("INVALID_SESSION_ID", "Session expired or invalid", status=401)
@@ -587,6 +611,11 @@ class FakeOrg:
             )
         if parts[0] == "actions":
             return self._actions(request, parts[1:])
+        if parts[0] == "metadata" and len(parts) >= 2 and parts[1] == "deployRequest":
+            if len(parts) == 2 and method == "POST":
+                return self._deploy(request)
+            if len(parts) == 3 and method == "GET":
+                return self._json(self._deploy_status(parts[2]))
         if rest == "graphql" and method == "POST":
             return self._json(self._graphql(self._body(request) or {}))
         if parts[0] == "sobjects" and len(parts) == 2 and parts[1].endswith("__e") and method == "POST":
@@ -1042,3 +1071,181 @@ class FakeOrg:
         merged = "".join(f"<mergedRecordIds>{d}</mergedRecordIds>" for d in dups)
         moved = "".join(f"<updatedRelatedIds>{i}</updatedRelatedIds>" for i in related)
         return f"<result><id>{master}</id>{merged}<success>true</success>{moved}</result>"
+
+    # --- Metadata API (deploy over REST, retrieve/list/describe over SOAP) ---------------
+
+    def _deploy(self, request: httpx.Request) -> httpx.Response:
+        m = re.search(r'boundary="?([^";]+)"?', request.headers.get("content-type", ""))
+        if not m:
+            raise Rejected("INVALID_MULTIPART_REQUEST", "multipart body expected")
+        options: dict[str, Any] = {}
+        data = b""
+        for part in request.content.split(b"--" + m.group(1).encode())[1:-1]:
+            head, _, body = part.removeprefix(b"\r\n").partition(b"\r\n\r\n")
+            body = body.removesuffix(b"\r\n")
+            if b'name="json"' in head:
+                options = json.loads(body).get("deployOptions", {})
+            elif b'name="file"' in head:
+                data = body
+        try:
+            zipfile.ZipFile(io.BytesIO(data)).close()
+        except zipfile.BadZipFile:
+            raise Rejected("INVALID_ZIP", "the file part is not a valid zip file") from None
+        rid = f"0Afxx{next(self.ids):010d}AAA"
+        self.deploys[rid] = (data, options)
+        result = {"id": rid, "status": "Pending", "done": False, "checkOnly": bool(options.get("checkOnly"))}
+        return self._json({"id": rid, "deployOptions": options, "deployResult": result}, 201)
+
+    def _deploy_status(self, rid: str) -> dict[str, Any]:
+        if rid not in self.deploys:
+            raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+        data, options = self.deploys[rid]
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            classes = {
+                n: zf.read(n).decode()
+                for n in zf.namelist()
+                if n.startswith("classes/") and n.endswith(".cls")
+            }
+        failures = [
+            {
+                "componentType": "ApexClass",
+                "fullName": n.removeprefix("classes/").removesuffix(".cls"),
+                "fileName": n,
+                "problem": "Unexpected token 'Broken'.",
+                "problemType": "Error",
+                "lineNumber": 1,
+                "columnNumber": 1,
+                "success": False,
+            }
+            for n, src in sorted(classes.items())
+            if "Broken" in src
+        ]
+        ok = not failures
+        result = {
+            "id": rid,
+            "status": "Succeeded" if ok else "Failed",
+            "done": True,
+            "success": ok,
+            "checkOnly": bool(options.get("checkOnly")),
+            "numberComponentsTotal": len(classes),
+            "numberComponentsDeployed": len(classes) - len(failures),
+            "numberComponentErrors": len(failures),
+            "numberTestsTotal": 0,
+            "numberTestsCompleted": 0,
+            "numberTestErrors": 0,
+            "details": {"componentFailures": failures, "componentSuccesses": []},
+        }
+        if not ok and options.get("rollbackOnError", True):
+            result["numberComponentsDeployed"] = 0
+        return {"id": rid, "deployOptions": options, "deployResult": result}
+
+    def _metadata_reply(self, inner: str) -> httpx.Response:
+        body = (
+            '<?xml version="1.0" encoding="UTF-8"?><soapenv:Envelope '
+            'xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" '
+            'xmlns="http://soap.sforce.com/2006/04/metadata">'
+            f"<soapenv:Body>{inner}</soapenv:Body></soapenv:Envelope>"
+        )
+        return httpx.Response(200, headers={"content-type": "text/xml; charset=utf-8"}, content=body.encode())
+
+    def _retrieve_zip(self, types: list[tuple[str, list[str]]]) -> tuple[bytes, list[str]]:
+        buf = io.BytesIO()
+        names: list[str] = []
+        package = "".join(
+            "<types>" + "".join(f"<members>{m}</members>" for m in members) + f"<name>{t}</name></types>"
+            for t, members in types
+        )
+        with zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr(
+                "package.xml",
+                '<?xml version="1.0" encoding="UTF-8"?>'
+                f'<Package xmlns="http://soap.sforce.com/2006/04/metadata">{package}'
+                "<version>68.0</version></Package>",
+            )
+            for t, members in types:
+                if t != "ApexClass":
+                    continue
+                for name, src in APEX_CLASSES.items():
+                    if "*" in members or name in members:
+                        zf.writestr(f"classes/{name}.cls", src)
+                        zf.writestr(f"classes/{name}.cls-meta.xml", _CLASS_META)
+                        names.append(name)
+        return buf.getvalue(), names
+
+    @staticmethod
+    def _class_props(name: str) -> str:
+        return (
+            f"<createdById>005xx0000000001AAA</createdById><createdByName>Ada Admin</createdByName>"
+            f"<createdDate>2026-11-01T10:00:00.000Z</createdDate><fileName>classes/{name}.cls</fileName>"
+            f"<fullName>{name}</fullName><id>01pxx00000000{len(name):02d}AAA</id>"
+            "<lastModifiedById>005xx0000000001AAA</lastModifiedById><lastModifiedByName>Ada Admin"
+            "</lastModifiedByName><lastModifiedDate>2026-11-02T10:00:00.000Z</lastModifiedDate>"
+            "<manageableState>unmanaged</manageableState><type>ApexClass</type>"
+        )
+
+    def _metadata_soap(self, request: httpx.Request) -> httpx.Response:
+        root = ET.fromstring(request.content)
+        session = root.findtext(f"{_ENV}Header/{_M}SessionHeader/{_M}sessionId") or ""
+        if not session or session in self.revoked:
+            return self._soap_fault(
+                "INVALID_SESSION_ID", "Invalid Session ID found in SessionHeader: Illegal Session"
+            )
+        self.api_used += 1
+        body = root.find(f"{_ENV}Body")
+        call = body[0] if body is not None and len(body) else None
+        tag = call.tag.removeprefix(_M) if call is not None else ""
+        if call is not None and tag == "retrieve":
+            types = [
+                (t.findtext(f"{_M}name") or "", [m.text or "" for m in t.findall(f"{_M}members")])
+                for t in call.iter(f"{_M}types")
+            ]
+            rid = f"09Sxx{next(self.ids):010d}AAA"
+            self.retrieves[rid] = types
+            return self._metadata_reply(
+                f"<retrieveResponse><result><done>false</done><id>{rid}</id><state>Queued</state>"
+                "</result></retrieveResponse>"
+            )
+        if call is not None and tag == "checkRetrieveStatus":
+            rid = call.findtext(f"{_M}asyncProcessId") or ""
+            data, names = self._retrieve_zip(self.retrieves.get(rid, []))
+            zip_el = ""
+            if call.findtext(f"{_M}includeZip") == "true":
+                zip_el = f"<zipFile>{base64.b64encode(data).decode()}</zipFile>"
+            props = "".join(f"<fileProperties>{self._class_props(n)}</fileProperties>" for n in names)
+            return self._metadata_reply(
+                f"<checkRetrieveStatusResponse><result><done>true</done>{props}<id>{rid}</id>"
+                f"<status>Succeeded</status><success>true</success>{zip_el}</result>"
+                "</checkRetrieveStatusResponse>"
+            )
+        if call is not None and tag == "listMetadata":
+            mtype = call.findtext(f"{_M}queries/{_M}type")
+            results = (
+                "".join(f"<result>{self._class_props(n)}</result>" for n in APEX_CLASSES)
+                if mtype == "ApexClass"
+                else ""
+            )
+            return self._metadata_reply(f"<listMetadataResponse>{results}</listMetadataResponse>")
+        if call is not None and tag == "describeMetadata":
+            objects = "".join(
+                f"<metadataObjects>{children}<directoryName>{d}</directoryName><inFolder>{f}</inFolder>"
+                f"<metaFile>{mf}</metaFile>{suffix}<xmlName>{x}</xmlName></metadataObjects>"
+                for x, d, f, mf, suffix, children in (
+                    ("ApexClass", "classes", "false", "true", "<suffix>cls</suffix>", ""),
+                    ("ApexTrigger", "triggers", "false", "true", "<suffix>trigger</suffix>", ""),
+                    (
+                        "CustomObject",
+                        "objects",
+                        "false",
+                        "false",
+                        "<suffix>object</suffix>",
+                        "<childXmlNames>CustomField</childXmlNames><childXmlNames>ValidationRule</childXmlNames>",
+                    ),
+                    ("Report", "reports", "true", "false", "<suffix>report</suffix>", ""),
+                )
+            )
+            return self._metadata_reply(
+                f"<describeMetadataResponse><result>{objects}<organizationNamespace></organizationNamespace>"
+                "<partialSaveAllowed>true</partialSaveAllowed><testRequired>false</testRequired>"
+                "</result></describeMetadataResponse>"
+            )
+        return self._soap_fault("INVALID_OPERATION", "unsupported call")

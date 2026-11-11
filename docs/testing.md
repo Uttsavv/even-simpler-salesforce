@@ -46,6 +46,8 @@ implementation. They have the methods of the real clients for these areas:
 - lead convert, merge and platform events
 - [Files](guides/files.md)
 - [GraphQL](guides/graphql.md), with scripted answers
+- [Metadata API](guides/metadata.md#test-code-that-uses-the-metadata-api), with scripted
+  deployments and seeded components
 - `request`, `limits` and `usage`
 - `with_auth` and `tagged`
 
@@ -237,6 +239,8 @@ def test_partial_failure(esf_fake: FakeSalesforce) -> None:
 - `"apex.get"`, `"apex.post"` and the other Apex REST methods
 - `"limits"`
 - `"graphql"`
+- `"metadata.deploy"`, `"metadata.deploy_status"`, `"metadata.retrieve"`, `"metadata.list"`
+  and `"metadata.describe"`
 - `"raw"`, or the name you pass as `operation=`
 - `"*"` for any operation
 

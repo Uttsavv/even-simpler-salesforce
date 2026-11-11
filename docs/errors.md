@@ -259,6 +259,9 @@ SalesforceError
 ├── BulkJobFailed                  Bulk 2.0 job failed; .job_id, .state, .error_message   (used from 0.3)
 ├── ApexError                      APEX_ERROR, or an error from an Apex REST class; .body
 ├── GraphQLError                   GraphQL errors array; .graphql_errors, .data
+├── DeployFailed                   Metadata API deployment failed or partly failed; .job_id, .state, .result
+├── RetrieveFailed                 Metadata API retrieve ended Failed; .job_id, .state
+├── MetadataTimeout                deployment or retrieve still running after the timeout; .job_id, .state
 ├── SoapFault                      unmapped SOAP fault (lead convert, merge); .fault_code
 └── UnexpectedResponse             HTML pages (proxies, maintenance), non-JSON bodies, unexpected shapes
 ```
@@ -477,6 +480,26 @@ The GraphQL response has an `errors` array. Salesforce can send it with `200 OK`
 `extensions.ErrorType`. `exc.error_code` holds the `ErrorType` of the first entry, for example
 `ValidationError` for an unknown field. `exc.data` holds the partial data, if any. See
 [GraphQL](guides/graphql.md#handle-errors).
+
+### DeployFailed
+
+A Metadata API deployment failed, was canceled or deployed only some components.
+`DeployResult.raise_for_errors()` raises it. `exc.errors` has one entry per failed component
+and per failed Apex test, with the file and line. `exc.result` holds the full `DeployResult`.
+If `check_only=True`, Salesforce saved nothing. See
+[Metadata API](guides/metadata.md#handle-a-failed-deployment).
+
+### RetrieveFailed
+
+A Metadata API retrieve ended in the `Failed` state. Read `exc.message` and `exc.error_code`.
+Check the type names in your `package.xml` against `sf.metadata.describe_metadata()`.
+
+### MetadataTimeout
+
+A deployment or a retrieve was still running when the client stopped waiting. The job keeps
+running in Salesforce. To keep waiting for a deployment, call
+`sf.metadata.deploy_status(exc.job_id, wait=True)` again. To wait longer from the start, pass a
+larger `timeout=`.
 
 ### SoapFault
 
