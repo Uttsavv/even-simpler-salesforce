@@ -269,22 +269,28 @@ Use the same key on every worker of your app. Keep it as secret as your client s
 +)
 ```
 
-👉 **Replace `list_leads` with this version**
+👉 **Change `list_leads` to accept a cursor and return one**
 
-```python
-@app.get("/leads")
-async def list_leads(
-    sf: SF, status: str = "Open - Not Contacted", cursor: str | None = None
-) -> dict[str, Any]:
-    if cursor:
-        page = await sf.query_more(cursor)
-    else:
-        page = await sf.query(
-            "SELECT Id, Name, Company, Status FROM Lead WHERE Status = {} ORDER BY CreatedDate DESC",
-            status,
-            page_size=200,
-        )
-    return {"records": [clean(r) for r in page.records], "next_cursor": page.cursor}
+```diff
+ @app.get("/leads")
+-async def list_leads(sf: SF, status: str = "Open - Not Contacted") -> list[dict[str, Any]]:
+-    page = await sf.query(
+-        "SELECT Id, Name, Company, Status FROM Lead WHERE Status = {} ORDER BY CreatedDate DESC",
+-        status,
+-    )
+-    return [clean(r) for r in page.records]
++async def list_leads(
++    sf: SF, status: str = "Open - Not Contacted", cursor: str | None = None
++) -> dict[str, Any]:
++    if cursor:
++        page = await sf.query_more(cursor)
++    else:
++        page = await sf.query(
++            "SELECT Id, Name, Company, Status FROM Lead WHERE Status = {} ORDER BY CreatedDate DESC",
++            status,
++            page_size=200,
++        )
++    return {"records": [clean(r) for r in page.records], "next_cursor": page.cursor}
 ```
 
 👉 **Get the first page, then the next one**
@@ -439,6 +445,9 @@ limit. The integration can tell you how many calls each request made.
 
 👉 **Add a function that logs the Salesforce calls of a request**
 
+Put it above `esf_app = SalesforceIntegration(...)`, because the integration needs the function
+when Python creates it.
+
 ```python
 import logging
 
@@ -466,7 +475,7 @@ def log_summary(request, fields: dict[str, Any]) -> None:
 
 ```text
 INFO:leads:GET '/leads' sf_calls=1 sf_ms=212
-INFO:leads:POST '/leads/status' sf_calls=1 sf_ms=187
+INFO:leads:PATCH '/leads' sf_calls=1 sf_ms=187
 ```
 
 `fields` holds more than these two values, such as `sf_errors` and `sf_api_used`. Send them to
