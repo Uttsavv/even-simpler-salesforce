@@ -74,6 +74,7 @@ manager.
 1. Keep one record per Salesforce identity, not per app user. If two of your users share one
    Salesforce connection, they must share one record and one `token_key`. If several records
    hold copies of one refresh token, they break as soon as rotation invalidates one of them.
+   If a record changes to another org or user, the client raises `TokenIdentityChanged`.
 2. Make `save` with `expected_version` atomic. Use a compare-and-swap, a row lock or a
    transaction. This makes refresh safe when several processes share a store. If `save` raises
    `TokenConflict`, the client re-reads the store and uses the token the other process saved.

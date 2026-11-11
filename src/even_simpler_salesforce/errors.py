@@ -58,6 +58,7 @@ __all__ = [
     "StorageLimitExceeded",
     "StringTooLong",
     "TokenConflict",
+    "TokenIdentityChanged",
     "TransportError",
     "UnexpectedResponse",
     "UnsupportedApiVersion",
@@ -241,6 +242,14 @@ class RefreshFailed(AuthError):
 
 class TokenConflict(AuthError):
     """Compare-and-swap failure in a token store. Normally handled internally."""
+
+
+class TokenIdentityChanged(AuthError):
+    """A new or re-read token belongs to another org or user than the token it replaces.
+
+    The client refuses to use it, so it never acts as another user. The message names what
+    changed (org or user) and never contains a token.
+    """
 
 
 class OAuthError(AuthError):

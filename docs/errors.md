@@ -226,6 +226,7 @@ SalesforceError
 │   ├── ReauthorizationRequired    refresh token expired, revoked or rotated out: log in again
 │   ├── RefreshFailed              token refresh failed; .ambiguous=True when the outcome is unknown
 │   ├── TokenConflict              token-store compare-and-swap lost (normally handled internally)
+│   ├── TokenIdentityChanged       new or stored token belongs to another org or user
 │   └── OAuthError                 OAuth endpoint error; .error, .error_description
 ├── RequestError                   4xx caused by the request
 │   ├── MalformedQuery             MALFORMED_QUERY, INVALID_QUERY_LOCATOR, rejected cursor, ...
@@ -312,6 +313,16 @@ token that the client didn't receive. Try the call again later.
 
 Two processes saved a token at the same time. The client handles this itself. If you see it,
 your token store may not implement compare-and-swap correctly.
+
+### TokenIdentityChanged
+
+A refreshed token, or a token the client re-read from the token store, belongs to another org
+or user than the token it replaces. The client doesn't use it, so it never acts as another
+user. The message names what changed and the `token_key_hash`.
+
+Check that your token store keeps one record per Salesforce identity. If you refreshed a
+sandbox, the sandbox has a new org id. Delete the stored token with `sf.auth.revoke()` or your
+token store, then log in again.
 
 ### OAuthError
 

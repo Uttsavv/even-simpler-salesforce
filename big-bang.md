@@ -513,7 +513,8 @@ REFRESH(stale):
          - 400 invalid_grant (expired/revoked/rotated-out) → raise ReauthorizationRequired,
                                                          emit `sf.auth.reauth_required`
          - other 4xx/5xx → typed AuthError
-       new = merge(resp, stale)   # keep old refresh_token if the response has none
+       new = merge(resp, stale)   # keep old refresh_token if the response has none;
+                                  # TokenIdentityChanged if org id or user id differs
        saved = await store.save(K, new, expected_version=current.version if current else None)
          - TokenConflict → re-load and use the stored token (another process won)
        memory[K] = saved; emit `sf.auth.refreshed`; return saved
@@ -524,6 +525,7 @@ Rules:
 - The refresh POST itself is never retried blindly. This is a deliberate exception to the general retry policy.
 - `ClientCredentials` / `JwtBearer` have no refresh token; "refresh" is a fresh token request, and blind retries are safe.
 - Default skew for `expires_at` checks: 60 s.
+- Identity check: every token the client adopts in place of a previous one (the refresh response, a store re-read after a concurrent refresh, a timeout, a busy answer or a `TokenConflict`) MUST have the same org id and user id as the previous token. Otherwise raise `TokenIdentityChanged` (an `AuthError`; no token in the message) and don't use it. Ids missing on either side aren't compared; 15-character ids compare with the first 15 characters of an 18-character id. The refresh-token, JWT bearer and client-credentials responses all carry `id` (help pages in Appendix A).
 
 ### 6.5 Proactive refresh
 
@@ -638,6 +640,7 @@ SalesforceError
 │   ├── ReauthorizationRequired          (invalid_grant: refresh token expired/revoked/rotated out)
 │   ├── RefreshFailed                    (.ambiguous=True when the outcome is unknown)
 │   ├── TokenConflict                    (store CAS failure; normally handled internally)
+│   ├── TokenIdentityChanged             (new or re-read token has another org id or user id)
 │   └── OAuthError                       (other OAuth endpoint errors; .error, .error_description)
 ├── RequestError                         (4xx caused by the request)
 │   ├── MalformedQuery                   MALFORMED_QUERY, INVALID_QUERY_LOCATOR

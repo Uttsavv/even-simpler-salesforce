@@ -100,6 +100,18 @@ def test_merge_token() -> None:
     assert merge_token(new, None) is new
 
 
+def test_merge_token_refuses_another_identity() -> None:
+    prev = make_token("old", "RT-old")
+    other_user = prev.replace(access_token="new", user_id="005xx0000000002AAA")
+    with pytest.raises(esf.TokenIdentityChanged, match="another user "):
+        merge_token(other_user, prev)
+    with pytest.raises(esf.TokenIdentityChanged, match="another org and user "):
+        merge_token(other_user.replace(org_id="00Dxx0000000002EAA"), prev)
+    # A 15-character id is the prefix of its 18-character form; a missing id isn't compared.
+    assert merge_token(prev.replace(user_id=USER_ID[:15]), prev).user_id == USER_ID[:15]
+    assert merge_token(prev.replace(org_id=None, user_id=None), prev).org_id == ORG_ID
+
+
 # --- domains -------------------------------------------------------------------------------------
 
 
