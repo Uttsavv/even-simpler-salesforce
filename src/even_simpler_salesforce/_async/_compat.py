@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
+from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable, Sequence
 from typing import Any, TypeVar
 
 __all__ = [
+    "ByteGen",
     "Lock",
     "Periodic",
     "Semaphore",
@@ -19,6 +20,9 @@ __all__ = [
 ]
 
 T = TypeVar("T")
+
+#: A generator of byte chunks (it can be closed early).
+ByteGen = AsyncGenerator[bytes, None]
 
 Lock = asyncio.Lock
 Semaphore = asyncio.Semaphore

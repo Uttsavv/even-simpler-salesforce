@@ -118,7 +118,12 @@ def hint_for(
     code = err.error_code
     if isinstance(err, E.InvalidField):
         return _invalid_field_hint(err, describe)
-    if isinstance(err, E.SessionExpired) and refreshed and err.status == 401:
+    # SOAP faults carry INVALID_SESSION_ID as HTTP 500, not 401.
+    if (
+        isinstance(err, E.SessionExpired)
+        and refreshed
+        and (err.status == 401 or code == "INVALID_SESSION_ID")
+    ):
         return (
             "Salesforce also rejected the token the client just refreshed. Check the connected "
             "app: it needs the 'api' OAuth scope, and its IP and session policies must allow "

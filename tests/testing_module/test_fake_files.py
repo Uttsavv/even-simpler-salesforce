@@ -163,3 +163,21 @@ def test_views_share_files() -> None:
         yield b"q"
 
     assert fake.file_content(fake.files.upload(gen(), filename="q")) == b"q"
+
+
+def test_fake_matches_real_client_on_links_and_sources() -> None:
+    """FirstPublishLocationId only without share_type/visibility; the async fake takes only
+    async iterators as streams, like AsyncSalesforce."""
+    fake = FakeSalesforce()
+    plain = fake.files.upload(b"x", filename="a.txt", link_to=ACCOUNT)
+    shared = fake.files.upload(b"x", filename="b.txt", link_to=ACCOUNT, share_type="C")
+    by_id = {r["Id"]: r for r in fake.records("ContentVersion")}
+    assert by_id[plain]["FirstPublishLocationId"] == ACCOUNT
+    assert "FirstPublishLocationId" not in by_id[shared]
+
+    async def main() -> None:
+        async with AsyncFakeSalesforce() as afake:
+            with pytest.raises(TypeError):
+                await afake.files.upload([b"a", b"b"], filename="c.txt")  # pyright: ignore[reportArgumentType]
+
+    asyncio.run(main())

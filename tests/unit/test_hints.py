@@ -113,6 +113,8 @@ def test_session_hint_only_after_a_refresh() -> None:
     assert "'api' OAuth scope" in hint
     local = esf.SessionExpired("StaticToken expired")  # no HTTP status: raised by the client
     assert H.hint_for(local, refreshed=True) is None
+    soap = esf.SessionExpired("Invalid Session ID", error_code="INVALID_SESSION_ID", status=500)
+    assert H.hint_for(soap, refreshed=True) == hint  # a SOAP fault arrives as HTTP 500
 
 
 def test_api_disabled_and_request_limit_hints() -> None:

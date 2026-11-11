@@ -91,6 +91,8 @@ class AsyncPlatformEvents:
 
         Raises:
             PartialFailure: a whole request of 200 failed while others succeeded.
+            EventPublishFailed: every request failed, for example with ``LIMIT_EXCEEDED``.
+            EventPublishUnavailable: every request failed because publishing is down for a moment.
         """
         check_event_name(name)
         try:
@@ -101,4 +103,10 @@ class AsyncPlatformEvents:
                     [publish_result(r) for r in exc.results], operation=exc.results.operation, sobject=name
                 )
             raise
+        except SalesforceError as exc:
+            # Every request failed (for example LIMIT_EXCEEDED): map it as publish() does.
+            mapped = event_error(exc)
+            if mapped is exc:
+                raise
+            raise mapped from exc.__cause__
         return BatchResult([publish_result(r) for r in batch], operation=batch.operation, sobject=name)

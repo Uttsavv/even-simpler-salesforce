@@ -6,13 +6,16 @@ import contextlib
 import contextvars
 import threading
 import time
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Generator, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, TypeVar
 
-__all__ = ["Lock", "Periodic", "Semaphore", "gather_settled", "iter_bytes", "nullcontext", "sleep", "to_thread"]
+__all__ = ["ByteGen", "Lock", "Periodic", "Semaphore", "gather_settled", "iter_bytes", "nullcontext", "sleep", "to_thread"]
 
 T = TypeVar("T")
+
+#: A generator of byte chunks (it can be closed early).
+ByteGen = Generator[bytes, None, None]
 
 Lock = threading.Lock
 Semaphore = threading.BoundedSemaphore

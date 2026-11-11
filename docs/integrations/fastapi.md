@@ -93,7 +93,7 @@ print(response.status_code, response.json())
 | `MalformedQuery` for an invalid [cursor](../guides/query.md#cursors) | 400 | `salesforce_invalid_cursor` |
 | `LimitError` | 503, with `Retry-After` | `salesforce_limit` |
 | `TransportError` | 502 | `salesforce_unavailable` |
-| `ServerError` | 503 | `salesforce_unavailable` |
+| `ServerError`, `EventPublishUnavailable` | 503 | `salesforce_unavailable` |
 
 Other errors stay unhandled, so FastAPI logs them and answers 500. A `MalformedQuery` for bad
 SOQL is a bug in your app, not in the request.

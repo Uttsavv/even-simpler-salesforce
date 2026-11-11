@@ -115,6 +115,7 @@ class Actions:
 
     def _invoke(self, kind: str, name: str, inputs: Inputs | Sequence[Inputs]) -> Any:
         operation = f"actions.{kind}"
+        path = action_path(kind, name)  # a bad name fails also for an empty list
         single = isinstance(inputs, Mapping)
         if single:
             items = [dict(inputs)]
@@ -128,7 +129,7 @@ class Actions:
         content, ctype = self._sf._transport.encode({"inputs": items})
         spec = RequestSpec(
             "POST",
-            action_path(kind, name),
+            path,
             content=content,
             content_type=ctype,
             operation=operation,

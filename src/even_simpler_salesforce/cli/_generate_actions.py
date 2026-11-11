@@ -7,12 +7,11 @@ import fnmatch
 import importlib.util
 import re
 from collections.abc import Callable, Mapping
-from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any, TextIO
 
 from ..core.actions import ACTION_KINDS, check_action_name
 from ._actions_codegen import ActionDescribe, render_actions
+from ._codegen import file_header, write_output
 from ._env import EnvConfigError
 
 __all__ = ["env_prefix", "generate_actions", "parse_include"]
@@ -71,17 +70,22 @@ def generate_actions(
     with client(env, prefix) as sf:
         selected = _select(sf, includes)
         describes = [ActionDescribe(k, n, sf.actions.describe(k, n)) for k, n in selected]
-        source = render_actions(
-            describes,
-            org=str(sf.instance_url or ""),
+        header = file_header(
+            "Typed invocable action stubs",
+            command=["generate", "actions"]
+            + [x for v in args.include for x in ("--include", v)]
+            + ["--out", args.out]
+            + (["--pydantic"] if args.pydantic else [])
+            + (["--org", args.org] if args.org else []),
+            instance_url=sf.instance_url,
+            org_id=sf.auth.token().org_id,
             api_version=sf.api_version,
-            generated_at=datetime.now(timezone.utc),
-            pydantic=args.pydantic,
         )
-    out = Path(args.out)
-    out.write_text(source, encoding="utf-8")
+        source = render_actions(describes, header=header, pydantic=args.pydantic)
+    # write_output turns an unwritable path into a usage error (exit 2), like the other targets.
+    write_output(source, args.out, err, err)
     noun = "action" if len(describes) == 1 else "actions"
-    err.write(f"wrote {len(describes)} {noun} to {out}\n")
+    err.write(f"generated {len(describes)} {noun}\n")
     return 0
 
 
