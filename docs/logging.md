@@ -193,7 +193,7 @@ Don't put personal data in custom paths. Paths you pass to `sf.request()` appear
 | `sf.auth.refreshed` | a token was acquired or refreshed | `token_key_hash`, `flow`, `duration_ms`, `rotated` (new refresh token), `proactive`, `initial` (first token, not a refresh) |
 | `sf.auth.reauth_required` | a refresh token is dead (`invalid_grant`) | `token_key_hash` |
 | `sf.usage.threshold` | a [budget](usage-and-budgets.md#budgets) threshold was crossed | `threshold`, `fraction`, `used`, `max` |
-| `sf.bulk.job` | a [Bulk API 2.0](guides/bulk.md) job changed state or progress | `job_id`, `operation`, `sobject`, `state`, `records_processed`, `records_failed` |
+| `sf.bulk.job` | a [Bulk API 2.0](guides/bulk.md) job was created or changed state, or a `wait()` poll saw new progress | [see below](#the-sfbulkjob-event) |
 | `sf.debug.attempt` | each HTTP attempt, only with `ESF_DEBUG=2` | `method`, `path_template` (not the URL: paths can carry external id values), `status`, `request_headers` / `response_headers` (`Authorization` and cookies redacted), `elapsed_ms` |
 
 The `reason` of `sf.retry` and each entry of `retry_reasons` take one of these values:
@@ -227,6 +227,33 @@ The `reason` of `sf.retry` and each entry of `retry_reasons` take one of these v
 | `request_id` | Salesforce's request id header (`Sforce-Request-Id`, or `X-Request-Id` / `X-B3-TraceId`) |
 | `api_version` | API version used |
 | `client_id_hash` | 12-character SHA-256 prefix of the OAuth client id (`None` for `StaticToken`) |
+
+## The `sf.bulk.job` event
+
+The client emits `sf.bulk.job` when it creates a [Bulk API 2.0](guides/bulk.md) job and when
+the job changes state. During `wait()`, it also emits the event on each poll where
+`records_processed` or `records_failed` changed. Use it to show the progress of a long job.
+
+```python
+class BulkProgress:
+    def on_event(self, event: esf.Event) -> None:
+        if event.name == "sf.bulk.job":
+            print(event["job_id"], event["state"], event["records_processed"])
+
+
+sf.observers.add(BulkProgress())
+```
+
+| Field | Meaning |
+|---|---|
+| `job_id` | Salesforce job id (`750...`) |
+| `operation` | `insert`, `update`, `upsert`, `delete`, `hardDelete`, `query` or `queryAll` |
+| `sobject` | sObject of the job |
+| `state` | `Open`, `UploadComplete`, `InProgress`, `JobComplete`, `Failed` or `Aborted` |
+| `records_processed` | `numberRecordsProcessed` from the job info |
+| `records_failed` | `numberRecordsFailed` for ingest jobs; `None` for query jobs, which don't report it |
+
+If the client split an ingest over several jobs, each job emits its own events.
 
 ## How it works
 

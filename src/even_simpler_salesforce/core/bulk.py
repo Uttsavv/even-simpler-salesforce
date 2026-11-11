@@ -31,6 +31,13 @@ under https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asyn
   ``resultPages[].resultUrl``, ``nextRecordsUrl`` and ``done``; up to five URLs per response.
 - *Understanding Bulk API 2.0 Query*: queries can't include compound address or geolocation
   fields. Query the components instead.
+- *Create a Query Job* (``query_create_job.htm``): "Bulk API 2.0 doesn't support SOQL queries
+  that include compound data, such as compound address fields, compound geolocation fields,
+  and FIELDS()". The SOQL *SELECT* page
+  (https://developer.salesforce.com/docs/atlas.en-us.soql_sosl.meta/soql_sosl/sforce_api_calls_soql_select_fields.htm)
+  instead lists Bulk API 2.0 as supporting ``FIELDS(STANDARD)`` only. Both agree that
+  ``FIELDS(ALL)`` and ``FIELDS(CUSTOM)`` fail, so :func:`check_bulk_query` rejects those two;
+  ``FIELDS(STANDARD)`` goes to Salesforce (big-bang.md §21 V81).
 """
 
 from __future__ import annotations
@@ -153,6 +160,25 @@ def ingest_job_body(
     if external_id_field is not None:
         body["externalIdFieldName"] = external_id_field
     return body
+
+
+_QUOTED = re.compile(r"'(?:\\.|[^'\\])*'")
+_UNBOUNDED_FIELDS = re.compile(r"\bFIELDS\s*\(\s*(ALL|CUSTOM)\s*\)", re.I)
+
+
+def check_bulk_query(soql: str) -> None:
+    """Reject SOQL that a Bulk API 2.0 query job can't run, before the client creates a job.
+
+    Raises:
+        ValueError: ``soql`` selects ``FIELDS(ALL)`` or ``FIELDS(CUSTOM)``.
+    """
+    m = _UNBOUNDED_FIELDS.search(_QUOTED.sub("''", soql))
+    if m:
+        raise ValueError(
+            f"Bulk API 2.0 query jobs don't support FIELDS({m.group(1).upper()}). List the fields "
+            "instead: build the list from sf.sobject(name).describe() and pass it through "
+            "sf.bulk.expand_compound_fields()"
+        )
 
 
 def query_job_body(soql: str, include_deleted: bool) -> dict[str, Any]:

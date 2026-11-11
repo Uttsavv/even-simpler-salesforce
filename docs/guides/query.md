@@ -143,7 +143,8 @@ print(len(page), len(everything))
 `FIELDS(STANDARD)` works in every query. `FIELDS(ALL)` and `FIELDS(CUSTOM)` need `LIMIT` 200 or
 less, or `WHERE Id IN` with at most 200 ids. See
 [FIELDS()](https://developer.salesforce.com/docs/atlas.en-us.soql_sosl.meta/soql_sosl/sforce_api_calls_soql_select_fields.htm).
-Bulk query jobs don't accept `FIELDS()`.
+Bulk query jobs don't accept `FIELDS(ALL)` or `FIELDS(CUSTOM)`. See
+[Bulk API 2.0](bulk.md#all-fields).
 
 To read every field of more than 200 rows, build the field list from `describe()`:
 

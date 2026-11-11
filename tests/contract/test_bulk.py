@@ -298,26 +298,31 @@ def test_wait_polls_with_backoff_until_complete(h: Harness, mock: respx.MockRout
     routes["status"].side_effect = [
         httpx.Response(200, json=job(state="InProgress")),
         httpx.Response(200, json=job(state="InProgress", numberRecordsProcessed=2)),
+        httpx.Response(200, json=job(state="InProgress", numberRecordsProcessed=2, numberRecordsFailed=1)),
         httpx.Response(200, json=complete),
     ]
     sf = h.client(recorder=rec)
     j = h.run(sf.bulk.ingest("Lead", "insert", rows=[{"LastName": "Doe"}]))
     info = h.run(j.wait(poll=esf.Backoff(start=2, max=3), timeout=3600))
-    assert sf.sleeps == [2, 3]
+    assert sf.sleeps == [2, 3, 3]
     assert info.state is esf.BulkJobState.JOB_COMPLETE
     assert (info.records_processed, info.records_failed, info.total_processing_ms) == (3, 1, 334)
     assert info.api_version == "68.0"
     assert j.info == info
     assert h.run(j.wait()) == info  # already final: no more polling
-    assert routes["status"].call_count == 3
+    assert routes["status"].call_count == 4
     assert h.run(j.refresh()) == info
     events = rec.named("sf.bulk.job")
-    assert [e.fields["state"] for e in events] == [
-        "Open",
-        "UploadComplete",
-        "InProgress",
-        "InProgress",
-        "JobComplete",
+    # Every poll that changed the state, numberRecordsProcessed or numberRecordsFailed emits.
+    assert [
+        (e.fields["state"], e.fields["records_processed"], e.fields["records_failed"]) for e in events
+    ] == [
+        ("Open", 0, 0),
+        ("UploadComplete", 0, 0),
+        ("InProgress", 0, 0),
+        ("InProgress", 2, 0),
+        ("InProgress", 2, 1),
+        ("JobComplete", 3, 1),
     ]
 
 
@@ -465,15 +470,24 @@ def test_query_include_deleted_uses_query_all(h: Harness, mock: respx.MockRouter
     assert json.loads(routes["create"].calls.last.request.content)["operation"] == "queryAll"
 
 
-def test_query_waits_for_the_job(h: Harness, mock: respx.MockRouter) -> None:
+def test_query_waits_for_the_job(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:
+    """Query job info has ``numberRecordsProcessed`` but no ``numberRecordsFailed``
+    (*Get Information About a Query Job*; big-bang.md §21 V82)."""
     routes = query_routes(mock, csv_response("Id\n1\n"))
     routes["status"].side_effect = [
         httpx.Response(200, json=job("bulk/query_job.json", state="InProgress")),
-        httpx.Response(200, json=job("bulk/query_job.json", state="JobComplete")),
+        httpx.Response(200, json=job("bulk/query_job.json", state="InProgress", numberRecordsProcessed=500)),
+        httpx.Response(200, json=job("bulk/query_job.json", state="InProgress", numberRecordsProcessed=500)),
+        httpx.Response(200, json=job("bulk/query_job.json", state="JobComplete", numberRecordsProcessed=900)),
     ]
-    sf = h.client()
-    assert h.collect(sf.bulk.query("SELECT Id FROM Lead", poll=esf.Backoff(start=1, max=1))) == [{"Id": "1"}]
-    assert sf.sleeps == [1]
+    sf = h.client(recorder=rec)
+    rows = h.collect(sf.bulk.query("SELECT Id FROM Lead", poll=esf.Backoff(start=1, max=1)))
+    assert rows == [{"Id": "1"}]
+    assert sf.sleeps == [1, 1, 1]
+    events = [(e.fields["state"], e.fields["records_processed"]) for e in rec.named("sf.bulk.job")]
+    # created, then each poll that changed the state or the progress; the unchanged poll is quiet
+    assert events == [("UploadComplete", 0), ("InProgress", 0), ("InProgress", 500), ("JobComplete", 900)]
+    assert all(e.fields["records_failed"] is None for e in rec.named("sf.bulk.job"))
 
 
 def test_query_stop_early_closes_the_stream(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:
@@ -525,10 +539,15 @@ def test_query_create_error_gets_the_compound_hint(h: Harness, mock: respx.MockR
     assert "components" in ei.value.hint
 
 
-def test_query_rejects_bad_arguments(h: Harness) -> None:
+def test_query_rejects_bad_arguments(h: Harness, mock: respx.MockRouter) -> None:
+    create = mock.post(f"{DATA}/jobs/query").respond(json=job("bulk/query_job.json"))
     sf = h.client()
     with pytest.raises(ValueError, match="parallel_downloads"):
         h.collect(sf.bulk.query("SELECT Id FROM Lead", parallel_downloads=0))
+    # Bulk API 2.0 query jobs don't run FIELDS(ALL) or FIELDS(CUSTOM); see core/bulk.py.
+    with pytest.raises(ValueError, match=r"don't support FIELDS\(CUSTOM\)"):
+        h.collect(sf.bulk.query("SELECT fields(custom) FROM Lead LIMIT {}", 200))
+    assert not create.called
     with pytest.raises(TypeError, match="not a string"):
         h.run(sf.bulk.expand_compound_fields("Account", "BillingAddress"))  # type: ignore[arg-type]
 

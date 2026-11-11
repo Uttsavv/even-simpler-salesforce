@@ -1021,6 +1021,7 @@ async for row in sf.bulk.query("SELECT Id, Name FROM Lead", parallel_downloads=4
 - **Compound fields** (#182): Bulk query rejects address and geolocation compound fields. The
   client maps that job failure to `BulkJobFailed` with a hint naming the component fields, and
   offers `sf.bulk.expand_compound_fields(sobject, fields)` (describe-based) to rewrite a field list.
+- **`FIELDS()`**: `sf.bulk.query` raises `ValueError` before creating a job when the SOQL selects `FIELDS(ALL)` or `FIELDS(CUSTOM)` (string literals ignored). *Create a Query Job* says Bulk 2.0 doesn't support `FIELDS()` at all, while the SOQL *SELECT* page lists `FIELDS(STANDARD)` as supported; both agree on ALL and CUSTOM, so `FIELDS(STANDARD)` is passed to Salesforce (V81).
 - Ingest uploads: one request may carry at most 150 MB **after** Salesforce's base64 conversion, so the client splits raw CSV at **100 MB** per job, as the docs advise. Gzip request compression is still applied on the wire.
 - Results are fetched with `?locator=&maxRecords=` using the **same API version that created the job**; a different version returns 409, so the job object pins its version.
 - Query results use `Sforce-Locator` pagination; with `parallel_downloads>1`, locators are fetched ahead with bounded concurrency while preserving order.
@@ -1519,7 +1520,7 @@ usage so jobs can sleep and resume.
 | `sf.auth.refreshed` | token refreshed | token_key_hash, flow, duration_ms, rotated: bool, proactive: bool |
 | `sf.auth.reauth_required` | invalid_grant | token_key_hash |
 | `sf.usage.threshold` | budget threshold crossed | fraction, used, max |
-| `sf.bulk.job` | bulk job state changes | job_id, state, records_processed, records_failed |
+| `sf.bulk.job` | bulk job created, state changes, or a `wait()` poll sees `numberRecordsProcessed`/`numberRecordsFailed` change | job_id, operation, sobject, state, records_processed, records_failed (`None` for query jobs: their job info has no `numberRecordsFailed`) |
 | `sf.pubsub.subscribed` | a stream opens (first and every reconnect) | topic, replay_preset, resumed_from (`store`/`memory`/`none`), stream_no |
 | `sf.pubsub.batch` | a non-empty `FetchResponse` is received | topic, events, pending, lag_ms (newest event's commit/created time vs now, when the payload has one) |
 | `sf.pubsub.reconnect` | before each resubscribe | topic, attempt, reason (`idle`/`error`/`auth`/`invalid_replay`/`org_migrated`), error_code, rpc_id, delay_ms |
@@ -1929,6 +1930,8 @@ Open for 0.3 (Tooling API): V17, V23 (sandbox half), V45, V46, V47 — all need 
 | V43 | `resultPages` response field name `nextRecordsUrl` (example) or `nextRecordUrl` (field table), and whether its `resultUrl` paths keep the job's API version | 0.3 | **Partly done**: *Get Parallel Results for a Query Job* (API 58.0+, up to five URLs) shows both names; the client accepts both and only follows URLs under the job's own path. Record a response in a sandbox (fixture is `synthetic`) |
 | V44 | `apiVersion` in Bulk 2.0 job info is a JSON number (`68.0`) and `createdDate`/`systemModstamp` use `2026-11-10T10:00:00.000+0000` | 0.3 | **Partly done**: shapes from the *Create a Job* and *Get Job Info* examples; the client also accepts a string version and falls back to the client version. Record job info in a sandbox |
 | V80 | A JSON `null` value in `PATCH sobjects/{o}/{id}` (and Collections update) clears the field; a key left out of the body keeps its value. The records guide relies on it to teach `model_dump(by_alias=True, exclude_unset=True)` | 0.4 | **Open**: no REST API page found that states it; sandbox: update a Lead with `{"Rating": null}` and read the field back |
+| V81 | Bulk API 2.0 query jobs and `FIELDS(STANDARD)`: *Create a Query Job* (api_asynch, `query_create_job.htm`) says `FIELDS()` isn't supported; the SOQL *SELECT* page (`sforce_api_calls_soql_select_fields.htm`) lists Bulk API 2.0 as supporting `FIELDS(STANDARD)` only. The client rejects only `FIELDS(ALL)`/`FIELDS(CUSTOM)` | 0.4 | **Open**: sandbox: create a query job with `SELECT FIELDS(STANDARD) FROM Account` and record the response; if it fails, reject `FIELDS(STANDARD)` too |
+| V82 | Bulk API 2.0 query job info (`GET jobs/query/{id}`) has `numberRecordsProcessed`, updated while the job is `InProgress`, and no `numberRecordsFailed`. `sf.bulk.job` events report `records_failed=None` for query jobs | 0.4 | **Partly done**: field list from the *Get Information About a Query Job* example (no `numberRecordsFailed`). Sandbox: poll a long query job and record job info at `InProgress` |
 
 Remaining open: V4, V5b, V11 (sandbox half), V17, V18, V19, V20, V21, V24, V25, V26, V29, V30 — all need a sandbox (V18/V26 also a docs check). V27 and V28 (0.5) need a sandbox too. V31–V34 (0.2, actions and Apex REST) need a sandbox and a full read of the Actions Developer Guide. V35 and V36 (0.2, SOAP convert/merge and platform event publish) need a sandbox. V37–V39 (0.2, Files) need a sandbox. V50–V53 (0.3, GraphQL) need a sandbox and a browser read of the GraphQL API Developer Guide. V40–V44 (0.3, Bulk), V45–V47 (0.3, Tooling) and V55–V59 (0.3, Composite) need a sandbox.
 
