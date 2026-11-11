@@ -5,7 +5,7 @@ every name in `even_simpler_salesforce.__all__`, plus the documented submodules
 `even_simpler_salesforce.testing`, `even_simpler_salesforce.observability`,
 `even_simpler_salesforce.contrib.fastapi` and `even_simpler_salesforce.contrib.flask`. Classes shown
 here under private module paths (the objects returned by `sf.sobject()`, `sf.collections`,
-`sf.files`, `sf.auth`, `sf.actions`, `sf.apex`, `sf.leads` and `sf.platform_events`) are public
+`sf.files`, `sf.ui`, `sf.auth`, `sf.actions`, `sf.apex`, `sf.leads` and `sf.platform_events`) are public
 through those attributes, not through their import path.
 
 `Salesforce` is generated from `AsyncSalesforce` and has the same methods without `async`, so
@@ -29,6 +29,8 @@ The reasons behind the design are written down in the
 ::: even_simpler_salesforce._async.api.files.AsyncFiles
 
 ::: even_simpler_salesforce.AsyncFileStream
+
+::: even_simpler_salesforce._async.api.ui.AsyncUi
 
 ::: even_simpler_salesforce._async.api.auth_api.AsyncAuthApi
 
@@ -182,6 +184,12 @@ The reasons behind the design are written down in the
 ::: even_simpler_salesforce.testing.FakeFiles
 
 ::: even_simpler_salesforce.testing.AsyncFakeFiles
+
+::: even_simpler_salesforce.testing.FakeUi
+
+::: even_simpler_salesforce.testing.AsyncFakeUi
+
+::: even_simpler_salesforce.testing.ListView
 
 ::: even_simpler_salesforce.testing.key_prefix
 
