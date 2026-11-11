@@ -225,10 +225,17 @@ def _is_action_results(body: Any) -> bool:
 def _as_apex_error(err: E.SalesforceError, body: Any) -> E.SalesforceError:
     """Apex REST (§8.3): whatever the class returned is an :class:`ApexError` with ``.body``.
 
-    Kept as they are: auth errors (the transport refreshes on them), limits, gateway errors
-    without a Salesforce error code, and non-JSON pages (proxies, maintenance).
+    Kept as they are: auth and limit errors with a Salesforce error code (the transport
+    refreshes on ``INVALID_SESSION_ID``), gateway errors without a Salesforce error code, and
+    non-JSON pages (proxies, maintenance).
     """
-    if isinstance(err, (E.AuthError, E.LimitError, E.ApexError, E.UnexpectedResponse)):
+    if isinstance(err, (E.ApexError, E.UnexpectedResponse)):
+        return err
+    # An auth or limit error is Salesforce's only if it carries a code Salesforce uses (or has no
+    # body). A class that sets statusCode=401 or 429 itself returns its own body: ApexError.
+    if isinstance(err, (E.AuthError, E.LimitError)) and (
+        err.error_code in CODE_MAP or err.error_code == "invalid_token" or not body
+    ):
         return err
     if isinstance(err, E.ServerError) and (
         err.error_code == "SERVER_UNAVAILABLE" or (err.error_code is None and not body)

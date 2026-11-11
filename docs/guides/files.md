@@ -142,9 +142,10 @@ To seed a file without recording a call, use `fake.add_file(data, filename=..., 
 ## How it works
 
 The upload body has two parts. The first part is JSON with `PathOnClient`, `Title` and, with
-`link_to=`, `FirstPublishLocationId`. The second part is the file. The client sends
+`link_to=` but no `share_type=` or `visibility=`, `FirstPublishLocationId`. The second part is the file. The client sends
 `Content-Length` when it knows the size, and chunked transfer encoding otherwise.
 
 A download emits its `sf.request` event when the stream closes. `bytes_in` is then the number of
-bytes read. If the connection fails while you read, iteration raises `TransportError` or
+bytes received, which is the compressed size if Salesforce sent the file gzipped. In that case
+`stream.content_length` is `None`, because `Content-Length` counts the compressed bytes. If the connection fails while you read, iteration raises `TransportError` or
 `RequestTimeout`.

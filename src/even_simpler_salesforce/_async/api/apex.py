@@ -20,6 +20,9 @@ def _apex_path(path: str) -> str:
         raise ValueError("pass the path after /services/apexrest, e.g. '/orders/submit'")
     if "?" in path:
         raise ValueError("pass query parameters with params=, not in the path")
+    if "#" in path:
+        # httpx would drop everything after '#' as a URL fragment and call another path.
+        raise ValueError("Apex REST path must not contain '#'")
     return _PREFIX + path
 
 

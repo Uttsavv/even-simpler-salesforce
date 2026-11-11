@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -257,6 +258,10 @@ class UsageSnapshot:
 # --- lead convert, merge, platform events (0.2) ------------------------------------------------
 
 
+#: Characters XML 1.0 can't carry (a SOAP envelope with one is not well-formed).
+_XML_ILLEGAL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]")
+
+
 @dataclass(frozen=True, slots=True)
 class LeadConvert:
     """One lead to convert with ``sf.leads.convert_many()`` (Partner ``LeadConvert``).
@@ -274,7 +279,9 @@ class LeadConvert:
 
     Raises:
         ValueError: an id is not a 15- or 18-character Salesforce id, ``converted_status`` is
-            empty, or ``contact_id`` is set without ``account_id``.
+            empty, ``contact_id`` is set without ``account_id``, or a text value contains
+            control characters (XML can't carry them).
+        TypeError: a text value is not a ``str``, or a flag is not a ``bool``.
     """
 
     lead_id: str
@@ -294,6 +301,18 @@ class LeadConvert:
                 check_record_id(value)
         if not isinstance(self.converted_status, str) or not self.converted_status:  # pyright: ignore[reportUnnecessaryIsInstance]
             raise ValueError("converted_status must be a non-empty LeadStatus value")
+        # These go into the SOAP envelope as text: XML 1.0 can't carry control characters.
+        for name in ("converted_status", "opportunity_name"):
+            text = getattr(self, name)
+            if text is None:
+                continue
+            if not isinstance(text, str):
+                raise TypeError(f"{name} must be a str, got {type(text).__name__}")
+            if _XML_ILLEGAL.search(text):
+                raise ValueError(f"{name} must not contain control characters")
+        for name in ("do_not_create_opportunity", "send_email", "overwrite_lead_source"):
+            if not isinstance(getattr(self, name), bool):
+                raise TypeError(f"{name} must be a bool, got {type(getattr(self, name)).__name__}")
         if self.contact_id is not None and self.account_id is None:
             raise ValueError("contact_id needs account_id (the contact's account)")
 

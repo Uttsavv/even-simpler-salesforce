@@ -1,0 +1,1 @@
+A REST response (such as an Apex REST class's own `500`) that carries `INVALID_SESSION_ID` without HTTP `401` no longer refreshes the token and resends the request; only SOAP faults do. A class that returns its own `401` or `429` body now raises `ApexError` with `.body`, and an Apex REST path with `#` is rejected.

@@ -749,11 +749,11 @@ class FakeActions:
         else:
             items = [dict(i) for i in inputs]
         operation = f"actions.{kind}"
+        if not single and not items:  # like the real client: no request, no call recorded
+            empty: BatchResult[ActionResult] = BatchResult([], operation=operation)
+            return empty
 
         def fn() -> Any:
-            if not items:
-                empty: BatchResult[ActionResult] = BatchResult([], operation=operation)
-                return empty
             results, errors = self._state.invoke_action(kind, name, items)
             if not single:
                 return BatchResult(results, operation=operation)

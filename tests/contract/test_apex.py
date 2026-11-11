@@ -123,7 +123,40 @@ def test_refreshes_on_expired_session(h: Harness, mock: respx.MockRouter) -> Non
     assert route.calls[1].request.headers["authorization"] == "Bearer AT-fresh-0002"
 
 
-@pytest.mark.parametrize("bad", ["orders", "/services/apexrest/orders", "/a?x=1", "/../data"])
+def test_non_401_invalid_session_is_not_resent(h: Harness, mock: respx.MockRouter) -> None:
+    """Only SOAP reports a rejected session without a 401. On REST a 500 came from code that ran,
+    so a POST that returns ``INVALID_SESSION_ID`` with HTTP 500 is not refreshed and resent."""
+    from ..conftest import TOKEN_URL, token_body
+
+    token = mock.post(TOKEN_URL).respond(json=token_body("AT-fresh-0002"))
+    route = mock.post(f"{APEX}/run").respond(
+        500, json=[{"errorCode": "INVALID_SESSION_ID", "message": "Session expired"}]
+    )
+    sf = h.client()
+    with pytest.raises(esf.SessionExpired):
+        h.run(sf.apex.post("/run", {}))
+    assert route.call_count == 1
+    assert not token.called
+
+
+@pytest.mark.parametrize("status", [401, 429])
+def test_class_own_401_or_429_is_apex_error(h: Harness, mock: respx.MockRouter, status: int) -> None:
+    """A class that sets statusCode=401/429 with its own body gets ApexError with .body; the
+    client doesn't refresh the token or resend (the class ran)."""
+    from ..conftest import TOKEN_URL, token_body
+
+    token = mock.post(TOKEN_URL).respond(json=token_body("AT-fresh-0002"))
+    route = mock.get(f"{APEX}/me").respond(status, json={"error": "not_allowed"})
+    sf = h.client()
+    with pytest.raises(esf.ApexError) as ei:
+        h.run(sf.apex.get("/me", idempotent=True))
+    assert ei.value.status == status
+    assert ei.value.body == {"error": "not_allowed"}
+    assert route.call_count == 1
+    assert not token.called
+
+
+@pytest.mark.parametrize("bad", ["orders", "/services/apexrest/orders", "/a?x=1", "/../data", "/a#b"])
 def test_bad_paths(h: Harness, mock: respx.MockRouter, bad: str) -> None:
     sf = h.client()
     with pytest.raises(ValueError):
