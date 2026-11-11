@@ -1,7 +1,8 @@
 """Reports and dashboards of the synthetic docs org (``analytics/...``; all **synthetic**).
 
 Every report answers with the summary report fixture (``tests/fixtures/recorded/reports``):
-opportunities grouped by ``STAGE_NAME``. An asynchronous run finishes at once. Every
+opportunities grouped by ``STAGE_NAME``. ``GET analytics/reports`` lists the recently viewed
+reports of ``recent.json``. An asynchronous run finishes at once. Every
 dashboard answers with the dashboard fixture.
 """
 
@@ -30,6 +31,8 @@ def _run(report_id: str, include_details: bool) -> dict[str, Any]:
 def analytics(method: str, parts: list[str], params: dict[str, str], version: str) -> tuple[Any, int] | None:
     """``(body, status)`` for ``analytics/<parts>``, or ``None`` for an unknown resource."""
     details = params.get("includeDetails", "false") == "true"
+    if parts == ["reports"] and method == "GET":
+        return load_fixture("reports/recent.json"), 200
     if parts[:1] == ["reports"] and len(parts) >= 2:
         rid = parts[1]
         rest = parts[2:]

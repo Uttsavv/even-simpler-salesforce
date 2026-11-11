@@ -6,31 +6,43 @@ import io
 import os
 import shutil
 import tempfile
-import time
 import zipfile
 from collections.abc import AsyncIterator, Iterable, Mapping
 from typing import IO, TYPE_CHECKING, Any
 
+from ...config import Backoff
 from ...core.files import CHUNK_SIZE, new_boundary
-from ...core.http import RequestSpec, check_record_id
+from ...core.http import RequestSpec
 from ...core.metadata import (
+    cancel_deploy_body,
+    cancel_refused,
     check_retrieve_status_envelope,
     deploy_body,
     deploy_multipart,
+    deploy_request_path,
     describe_metadata_envelope,
     is_symlink_entry,
     list_metadata_envelope,
     metadata_soap_path,
+    not_cancelable,
     package_types,
     parse_async_id,
     parse_deploy_result,
     parse_describe_metadata,
     parse_list_metadata,
     parse_retrieve_status,
+    quick_deploy_body,
     retrieve_envelope,
     safe_member,
 )
-from ...errors import MetadataTimeout, RetrieveFailed, UnexpectedResponse
+from ...core.poll import DEFAULT_TIMEOUT, PollClock
+from ...errors import (
+    DeployNotCancelable,
+    MetadataTimeout,
+    RetrieveFailed,
+    SalesforceError,
+    UnexpectedResponse,
+)
 from ...models import DeployOptions, DeployResult, FileProperties, MetadataDescribe, RetrieveResult
 from .. import _compat
 from .soap import soap_send
@@ -40,35 +52,9 @@ if TYPE_CHECKING:
 
 __all__ = ["DEFAULT_TIMEOUT", "AsyncMetadata"]
 
-#: Seconds ``deploy_status(wait=True)`` and ``retrieve()`` wait before they give up.
-DEFAULT_TIMEOUT = 600.0
-_POLL_START = 1.0
-_POLL_MAX = 10.0
 #: A directory is zipped in memory up to this size, then in a temporary file.
 _SPOOL_BYTES = 8 * 1024 * 1024
 _ZIP_MAGIC = (b"PK\x03\x04", b"PK\x05\x06")
-
-
-class _Clock:
-    """Poll delays (1 s doubling to 10 s) within a total ``timeout``."""
-
-    def __init__(self, timeout: float) -> None:
-        if not timeout > 0:
-            raise ValueError("timeout must be > 0 seconds")
-        self.timeout = timeout
-        self.started = time.monotonic()
-        self.slept = 0.0
-        self.delay = _POLL_START
-
-    def next_delay(self) -> float | None:
-        """The next delay, or ``None`` when the timeout has passed."""
-        left = self.timeout - max(time.monotonic() - self.started, self.slept)
-        if left <= 0:
-            return None
-        delay = min(self.delay, left)
-        self.delay = min(self.delay * 2, _POLL_MAX)
-        self.slept += delay
-        return delay
 
 
 def _inside(root: str, path: str) -> bool:
@@ -248,8 +234,111 @@ class AsyncMetadata:
             file.close()
         return parse_deploy_result(raw.json())
 
+    async def quick_deploy(self, validated_id: str) -> DeployResult:
+        """Deploy a validated deployment without running its tests again ("quick deploy").
+
+        Sends ``POST metadata/deployRequest/{validated_id}`` with the body
+        ``{"validatedDeployRequestId": validated_id}``. Salesforce starts a new deployment and
+        returns its id; wait for it with ``deploy_status(result.id, wait=True)``. The client
+        never resends this request once it may have reached Salesforce, so a timeout can't
+        start a second deployment.
+
+        Salesforce accepts a validation for quick deploy only when it succeeded, ran Apex tests
+        (not ``NoTestRun``), and no other deployment ran in the org since. It refuses others
+        with a :class:`RequestError`.
+
+        Args:
+            validated_id: Id of a deployment made with ``DeployOptions(check_only=True)``
+                (``0Af...``).
+
+        Returns:
+            The new deployment, usually with status ``Pending``.
+
+        Raises:
+            ValueError: an invalid id.
+            SalesforceError: Salesforce refused the quick deploy.
+
+        Example:
+            job = await sf.metadata.deploy("src", options=esf.DeployOptions(check_only=True))
+            validated = await sf.metadata.deploy_status(job.id, wait=True)
+            validated.raise_for_errors()
+            quick = await sf.metadata.quick_deploy(validated.id)
+        """
+        path = deploy_request_path(validated_id)
+        content, ctype = self._sf._transport.encode(quick_deploy_body(validated_id))  # pyright: ignore[reportPrivateUsage]
+        raw = await self._sf._send(  # pyright: ignore[reportPrivateUsage]
+            RequestSpec(
+                "POST",
+                path,
+                content=content,
+                content_type=ctype,
+                operation="metadata.quick_deploy",
+                idempotent=False,  # starts a deployment
+            )
+        )
+        return parse_deploy_result(raw.json())
+
+    async def cancel_deploy(self, deploy_id: str) -> DeployResult:
+        """Ask Salesforce to cancel a deployment that is still running.
+
+        Sends ``PATCH metadata/deployRequest/{id}`` with
+        ``{"deployResult": {"status": "Canceling"}}``. The cancel runs in Salesforce: the result
+        usually has status ``Canceling``. Wait with ``deploy_status(id, wait=True)`` until it is
+        ``Canceled``. The client never resends this request once it may have reached
+        Salesforce; call it again if it timed out.
+
+        Args:
+            deploy_id: The id from :meth:`deploy` or :meth:`quick_deploy` (``0Af...``).
+
+        Returns:
+            The deployment as Salesforce reports it after the request.
+
+        Raises:
+            DeployNotCancelable: the deployment is already finalizing. From API 65.0 such a
+                deployment can't be canceled; it finishes on its own.
+            ValueError: an invalid id.
+            SalesforceError: Salesforce refused the request for another reason.
+
+        Example:
+            result = await sf.metadata.cancel_deploy(job.id)
+            final = await sf.metadata.deploy_status(job.id, wait=True)
+        """
+        path = deploy_request_path(deploy_id)
+        content, ctype = self._sf._transport.encode(cancel_deploy_body())  # pyright: ignore[reportPrivateUsage]
+        try:
+            raw = await self._sf._send(  # pyright: ignore[reportPrivateUsage]
+                RequestSpec(
+                    "PATCH",
+                    path,
+                    content=content,
+                    content_type=ctype,
+                    operation="metadata.cancel_deploy",
+                    idempotent=False,
+                )
+            )
+        except SalesforceError as exc:
+            if not cancel_refused(exc):
+                raise
+            raise not_cancelable(exc, deploy_id) from exc.__cause__
+        result = parse_deploy_result(raw.json())
+        if result.status.startswith("Finalizing"):
+            raise DeployNotCancelable(
+                f"deployment {deploy_id} is {result.status} and can't be canceled",
+                job_id=deploy_id,
+                state=result.status,
+                status=raw.status,
+                operation="metadata.cancel_deploy",
+                request_id=raw.request_id,
+            )
+        return result
+
     async def deploy_status(
-        self, deploy_id: str, *, wait: bool = False, timeout: float = DEFAULT_TIMEOUT
+        self,
+        deploy_id: str,
+        *,
+        wait: bool = False,
+        poll: Backoff | None = None,
+        timeout: float = DEFAULT_TIMEOUT,
     ) -> DeployResult:
         """The state of a deployment, with the failed components and tests.
 
@@ -258,9 +347,10 @@ class AsyncMetadata:
 
         Args:
             deploy_id: The id from :meth:`deploy` (``0Af...``).
-            wait: Poll until the deployment is done. The delay between polls starts at 1
-                second and doubles up to 10 seconds.
-            timeout: With ``wait=True``, seconds to wait in total.
+            wait: Poll until the deployment is done.
+            poll: With ``wait=True``, how long to wait between status calls. Defaults to
+                ``esf.Backoff()`` (2 s, doubling up to 30 s).
+            timeout: With ``wait=True``, seconds to wait in total (an hour by default).
 
         Raises:
             MetadataTimeout: ``wait=True`` and the deployment was still running after
@@ -269,16 +359,16 @@ class AsyncMetadata:
             ValueError: an invalid id or a ``timeout`` that is not positive.
 
         Example:
-            result = await sf.metadata.deploy_status(job.id, wait=True)
+            result = await sf.metadata.deploy_status(job.id, wait=True, poll=esf.Backoff(start=5))
             result.raise_for_errors()
         """
-        check_record_id(deploy_id)
-        clock = _Clock(timeout) if wait else None
+        path = deploy_request_path(deploy_id)
+        clock = PollClock(timeout, poll) if wait else None
         while True:
             raw = await self._sf._send(  # pyright: ignore[reportPrivateUsage]
                 RequestSpec(
                     "GET",
-                    f"metadata/deployRequest/{deploy_id}",
+                    path,
                     params={"includeDetails": "true"},
                     operation="metadata.deploy_status",
                 )
@@ -304,6 +394,7 @@ class AsyncMetadata:
         package: str | bytes | Mapping[str, Iterable[str]],
         *,
         extract_to: str | os.PathLike[str] | None = None,
+        poll: Backoff | None = None,
         timeout: float = DEFAULT_TIMEOUT,
     ) -> RetrieveResult:
         """Retrieve metadata as a zip file and wait until Salesforce has built it.
@@ -313,7 +404,9 @@ class AsyncMetadata:
                 names, e.g. ``{"ApexClass": ["*"]}``.
             extract_to: Also write the files of the zip into this folder. Every path is
                 checked first: absolute paths, ``..`` parts and symlinks are refused.
-            timeout: Seconds to wait for the retrieve in total.
+            poll: How long to wait between status calls. Defaults to ``esf.Backoff()``
+                (2 s, doubling up to 30 s).
+            timeout: Seconds to wait for the retrieve in total (an hour by default).
 
         Returns:
             The zip as bytes, with ``package.xml`` at its root, and the list of its files.
@@ -328,7 +421,7 @@ class AsyncMetadata:
             result = await sf.metadata.retrieve({"ApexClass": ["*"]}, extract_to="src")
         """
         types = package_types(package)
-        clock = _Clock(timeout)
+        clock = PollClock(timeout, poll)
         path = metadata_soap_path(self._sf.api_version)
         version = self._sf.api_version
         # Creates a job: never resent once it may have reached Salesforce.

@@ -24,6 +24,7 @@ __all__ = [
     "instance_status",
     "instances_path",
     "parse_instance",
+    "recent_reports_path",
     "report_describe_path",
     "report_path",
     "run_body",
@@ -36,6 +37,15 @@ INSTANCE_STATUSES = frozenset({"New", "Running", "Success", "Error"})
 
 _RAW_LIMIT = 4096
 _TOTAL = "T"
+
+
+def recent_reports_path() -> str:
+    """``analytics/reports``: up to 200 reports the user viewed most recently.
+
+    *Report List* (Reports and Dashboards REST API Developer Guide):
+    https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/sforce_analytics_rest_api_recentreportslist.htm
+    """
+    return "analytics/reports"
 
 
 def report_path(report_id: str) -> str:

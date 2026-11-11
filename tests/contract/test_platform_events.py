@@ -130,16 +130,16 @@ def test_publish_many_goes_through_collections(h: Harness, mock: respx.MockRoute
 
 
 def test_publish_many_partial_chunk_failure_converts_results(h: Harness, mock: respx.MockRouter) -> None:
-    calls = {"n": 0}
+    """The second chunk (events 200-249) fails with a 500. The sync client sends chunks
+    concurrently, so the failure is routed by the chunk's contents, not by call order."""
 
-    def second_fails(request: httpx.Request) -> httpx.Response:
-        calls["n"] += 1
-        if calls["n"] == 2:
+    def second_chunk_fails(request: httpx.Request) -> httpx.Response:
+        records = json.loads(request.content)["records"]
+        if records[0]["N__c"] == 200:
             return httpx.Response(500, json=[{"errorCode": "UNKNOWN_EXCEPTION", "message": "boom"}])
-        n = len(json.loads(request.content)["records"])
-        return httpx.Response(200, json=[load_fixture("platform_events/publish.json")] * n)
+        return httpx.Response(200, json=[load_fixture("platform_events/publish.json")] * len(records))
 
-    mock.post(f"{DATA}/composite/sobjects").mock(side_effect=second_fails)
+    route = mock.post(f"{DATA}/composite/sobjects").mock(side_effect=second_chunk_fails)
     sf = h.client()
     with pytest.raises(esf.PartialFailure) as ei:
         h.run(
@@ -151,8 +151,11 @@ def test_publish_many_partial_chunk_failure_converts_results(h: Harness, mock: r
     results = ei.value.results
     assert results is not None
     assert all(isinstance(r, esf.PublishResult) for r in results)
-    assert sum(r.ok for r in results) == 200
+    assert len(results) == 250
+    assert [r.ok for r in results] == [True] * 200 + [False] * 50
     assert results.sobject == EVENT
+    firsts = sorted(json.loads(c.request.content)["records"][0]["N__c"] for c in route.calls)
+    assert firsts == [0, 200]  # one request per chunk; the failed chunk was not resent
 
 
 def test_publish_many_empty(h: Harness, mock: respx.MockRouter) -> None:

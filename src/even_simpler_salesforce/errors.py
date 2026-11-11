@@ -24,6 +24,7 @@ __all__ = [
     "Conflict",
     "ConnectError",
     "DeployFailed",
+    "DeployNotCancelable",
     "DuplicateDetected",
     "ErrorDetail",
     "EventPublishFailed",
@@ -661,6 +662,25 @@ class ReplayUnavailable(PubSubError):
     def __init__(self, message: str = "", *, replay_id: bytes | None = None, **kw: Any) -> None:
         super().__init__(message, **kw)
         self.replay_id = replay_id
+
+
+class DeployNotCancelable(RequestError):
+    """Salesforce refused to cancel a deployment because it is already finalizing.
+
+    From API 65.0 a deployment in the ``FinalizingDeploy`` stage can't be canceled. Raised by
+    ``sf.metadata.cancel_deploy()``. Wait for the deployment with ``deploy_status(wait=True)``
+    instead. ``.job_id`` is the deployment id and ``.state`` the stage it was in.
+    """
+
+    job_id: str | None
+    state: str | None
+
+    def __init__(
+        self, message: str = "", *, job_id: str | None = None, state: str | None = None, **kw: Any
+    ) -> None:
+        super().__init__(message, **kw)
+        self.job_id = job_id
+        self.state = state
 
 
 class SoapFault(SalesforceError):

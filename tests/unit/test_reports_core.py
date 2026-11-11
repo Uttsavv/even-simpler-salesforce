@@ -28,6 +28,7 @@ INSTANCE = "0LGxx0000000001AAA"
 
 
 def test_paths() -> None:
+    assert r.recent_reports_path() == "analytics/reports"
     assert r.report_path(REPORT) == f"analytics/reports/{REPORT}"
     assert r.report_describe_path(REPORT) == f"analytics/reports/{REPORT}/describe"
     assert r.instances_path(REPORT) == f"analytics/reports/{REPORT}/instances"

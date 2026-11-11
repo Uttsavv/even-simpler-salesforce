@@ -1041,15 +1041,31 @@ async for row in sf.bulk.query("SELECT Id, Name FROM Lead", parallel_downloads=4
 
 ### 9.14 Reports and dashboards — `sf.reports` (0.4)
 
-`describe(report_id)`, `run(report_id, filters=None, include_details=True)` (sync run),
-`run_async(...)` + `instance(...)` polling, `dashboards.get(id)`, `dashboards.refresh(id)`.
-Result helpers turn fact maps into rows.
+`recent()` (`GET analytics/reports`: at most 200 recently viewed reports; to find any report,
+query the `Report` object with SOQL), `describe(report_id)`, `run(report_id, filters=None,
+include_details=True)` (sync run), `run_async(...)` + `instance(report_id, instance_id, *,
+poll=None, timeout=3600)` polling, `dashboards.get(id)`, `dashboards.refresh(id)`. Result
+helpers turn fact maps into rows.
 
 ### 9.15 Metadata API — `sf.metadata` (0.4)
 
 `deploy(zip_bytes | directory, options=DeployOptions(...))` via REST
-`metadata/deployRequest`, `deploy_status(id)`, `retrieve(package_xml_or_types)` via SOAP Metadata
-API with polling. `list_metadata(type)`, `describe_metadata()`. Stdlib only.
+`metadata/deployRequest`, `deploy_status(id, *, wait=False, poll=None, timeout=3600)`,
+`quick_deploy(validated_id)` (`POST metadata/deployRequest/{validatedId}` with
+`{"validatedDeployRequestId": id}`; never resent; the docs warn that `PATCH` there starts a
+new deployment), `cancel_deploy(id)` (`PATCH metadata/deployRequest/{id}` with
+`{"deployResult": {"status": "Canceling"}}`; never resent; from API 65.0 a deployment in
+`FinalizingDeploy` can't be canceled and the refusal raises `DeployNotCancelable`, V85),
+`retrieve(package_xml_or_types, *, poll=None, timeout=3600)` via SOAP Metadata API with
+polling. `list_metadata(type)`, `describe_metadata()`. Stdlib only.
+
+**Waiting for long-running jobs.** Bulk jobs (`job.wait()`, `sf.bulk.query()`), deployments
+(`deploy_status(wait=True)`), retrieves and asynchronous report runs (`instance()`) all wait
+the same way: `poll=esf.Backoff(...)` (default `Backoff()`: 2 s doubling up to 30 s) and
+`timeout=` seconds (default 3600), ending with the area's timeout error (`BulkJobTimeout`,
+`MetadataTimeout`, `ReportTimeout`) while the job keeps running in Salesforce. There is no
+shared job-handle type with a `.wait()` method outside Bulk: deployments and report runs are
+waited for by id, so a later process can resume a wait (open design question, not 0.4).
 
 ### 9.16 Pub/Sub API — `sf.pubsub` (0.5, `[pubsub]`, D31)
 
@@ -1949,8 +1965,11 @@ before the release named.
 | V80 | A JSON `null` value in `PATCH sobjects/{o}/{id}` (and Collections update) clears the field; a key left out of the body keeps its value. The records guide relies on it to teach `model_dump(by_alias=True, exclude_unset=True)` | 0.4 | **Open**: no REST API page found that states it; sandbox: update a Lead with `{"Rating": null}` and read the field back |
 | V81 | Bulk API 2.0 query jobs and `FIELDS(STANDARD)`: *Create a Query Job* (api_asynch, `query_create_job.htm`) says `FIELDS()` isn't supported; the SOQL *SELECT* page (`sforce_api_calls_soql_select_fields.htm`) lists Bulk API 2.0 as supporting `FIELDS(STANDARD)` only. The client rejects only `FIELDS(ALL)`/`FIELDS(CUSTOM)` | 0.4 | **Open**: sandbox: create a query job with `SELECT FIELDS(STANDARD) FROM Account` and record the response; if it fails, reject `FIELDS(STANDARD)` too |
 | V82 | Bulk API 2.0 query job info (`GET jobs/query/{id}`) has `numberRecordsProcessed`, updated while the job is `InProgress`, and no `numberRecordsFailed`. `sf.bulk.job` events report `records_failed=None` for query jobs | 0.4 | **Partly done**: field list from the *Get Information About a Query Job* example (no `numberRecordsFailed`). Sandbox: poll a long query job and record job info at `InProgress` |
+| V85 | Cancel a deployment over REST (`PATCH metadata/deployRequest/{id}`, body `{"deployResult": {"status": "Canceling"}}`): the HTTP status and body of a successful request (the client parses it as a deploy result with status `Canceling` or `Canceled`), and the error a deployment in `FinalizingDeploy` gets from API 65.0. The client maps a 4xx whose message mentions "finaliz" (as the SOAP `cancelDeploy()` `INVALID_ID_FIELD` fault does) and a 2xx that still says `FinalizingDeploy` to `DeployNotCancelable` | 0.4 | **Partly done**: *Cancel a Deployment in Progress Using REST* (`meta_rest_deploy_cancel.htm`) and *cancelDeploy()* (`meta_canceldeploy.htm`), read 2026-11-11 from search excerpts (202 while canceling; a finalizing deployment can't be canceled from 65.0). Sandbox: cancel a running deployment and a finalizing one, record both |
+| V86 | Quick deploy over REST (`POST metadata/deployRequest/{validatedId}`, body `{"validatedDeployRequestId": id}`): the response has the shape of the `POST metadata/deployRequest` response (`id` of the new deployment, `deployResult`), and the error bodies for a validation that failed, ran no tests, is older than 10 days, or was followed by another deployment | 0.4 | **Partly done**: *Deploy a Recently Validated Component Set Without Tests* (`meta_rest_deploy_recentvalidation.htm`), search excerpts 2026-11-11 (method, path, eligibility). Sandbox: quick-deploy a validation, record the response and one refusal |
+| V87 | `GET analytics/reports` (*Report List*, `sforce_analytics_rest_api_recentreportslist.htm`) returns a JSON array of at most 200 recently viewed reports, each with `id`, `name`, `url`, `describeUrl` and `instancesUrl`; `sf.reports.recent()` returns the entries as sent | 0.4 | **Partly done**: the 200 limit and "recently viewed" from search excerpts 2026-11-11; the entry keys are from memory. Sandbox: record the list |
 
-Remaining open: V4, V5b, V11 (sandbox half), V17, V18, V19, V20, V21, V24, V25, V26, V29, V30 — all need a sandbox (V18/V26 also a docs check). V27 and V28 (0.5) need a sandbox too. V31–V34 (0.2, actions and Apex REST) need a sandbox and a full read of the Actions Developer Guide. V35 and V36 (0.2, SOAP convert/merge and platform event publish) need a sandbox. V37–V39 (0.2, Files) need a sandbox. V50–V53 (0.3, GraphQL) need a sandbox and a browser read of the GraphQL API Developer Guide. V40–V44 (0.3, Bulk), V23 (sandbox half) and V45–V47 (0.3, Tooling) and V55–V59 (0.3, Composite) need a sandbox. V60–V64 (0.4, UI API), V65–V69 (0.4, Reports) and V70–V74 (0.4, Metadata) need a sandbox. V75–V79 (0.5, Pub/Sub) need a sandbox. V80–V82 (records null semantics, Bulk `FIELDS(STANDARD)` and query job counters) need a sandbox.
+Remaining open: V4, V5b, V11 (sandbox half), V17, V18, V19, V20, V21, V24, V25, V26, V29, V30 — all need a sandbox (V18/V26 also a docs check). V27 and V28 (0.5) need a sandbox too. V31–V34 (0.2, actions and Apex REST) need a sandbox and a full read of the Actions Developer Guide. V35 and V36 (0.2, SOAP convert/merge and platform event publish) need a sandbox. V37–V39 (0.2, Files) need a sandbox. V50–V53 (0.3, GraphQL) need a sandbox and a browser read of the GraphQL API Developer Guide. V40–V44 (0.3, Bulk), V23 (sandbox half) and V45–V47 (0.3, Tooling) and V55–V59 (0.3, Composite) need a sandbox. V60–V64 (0.4, UI API), V65–V69 (0.4, Reports) and V70–V74 (0.4, Metadata) need a sandbox. V75–V79 (0.5, Pub/Sub) need a sandbox. V80–V82 (records null semantics, Bulk `FIELDS(STANDARD)` and query job counters) need a sandbox. V85–V87 (0.4, Metadata cancel and quick deploy, recent reports) need a sandbox.
 
 Note: developer.salesforce.com blocks non-browser clients (403). In a real browser, each docs page
 has a Markdown version at the same path with `.md` instead of `.html` (fetch it from the page's
