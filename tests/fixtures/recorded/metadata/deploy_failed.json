@@ -1,0 +1,69 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Metadata API Developer Guide: https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_rest_deploy_checkstatus.htm and DeployResult: https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_deployresult.htm",
+  "body": {
+    "id": "0Afxx0000000001AAA",
+    "validatedDeployRequestId": null,
+    "deployOptions": {
+      "checkOnly": false,
+      "ignoreWarnings": false,
+      "purgeOnDelete": false,
+      "allowMissingFiles": false,
+      "autoUpdatePackage": false,
+      "singlePackage": true,
+      "rollbackOnError": true,
+      "testLevel": "NoTestRun",
+      "runTests": null
+    },
+    "deployResult": {
+      "id": "0Afxx0000000001AAA",
+      "checkOnly": false,
+      "createdBy": "005xx0000000001AAA",
+      "createdByName": "Ada Admin",
+      "createdDate": "2026-11-11T10:00:00.000+0000",
+      "ignoreWarnings": false,
+      "rollbackOnError": true,
+      "runTestsEnabled": false,
+      "numberComponentErrors": 1,
+      "numberComponentsDeployed": 1,
+      "numberComponentsTotal": 2,
+      "numberTestErrors": 1,
+      "numberTestsCompleted": 0,
+      "numberTestsTotal": 1,
+      "errorMessage": null,
+      "errorStatusCode": null,
+      "details": {
+        "componentFailures": {
+          "changed": false,
+          "componentType": "ApexClass",
+          "created": false,
+          "deleted": false,
+          "fileName": "classes/Invoice.cls",
+          "fullName": "Invoice",
+          "problem": "Variable does not exist: total",
+          "problemType": "Error",
+          "success": false,
+          "lineNumber": 12,
+          "columnNumber": 9
+        },
+        "componentSuccesses": [],
+        "runTestResult": {
+          "numFailures": 1,
+          "numTestsRun": 1,
+          "failures": [
+            {
+              "name": "InvoiceTest",
+              "methodName": "testTotal",
+              "message": "System.AssertException: Assertion Failed",
+              "stackTrace": "Class.InvoiceTest.testTotal: line 5, column 1",
+              "type": "Class"
+            }
+          ]
+        }
+      },
+      "status": "Failed",
+      "done": true,
+      "success": false
+    }
+  }
+}

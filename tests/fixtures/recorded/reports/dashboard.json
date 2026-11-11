@@ -1,0 +1,171 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Salesforce Reports and Dashboards REST API Developer Guide (Get Dashboard Results, Refresh a Dashboard); no org recording yet",
+  "body": {
+    "componentData": [
+      {
+        "componentId": "01axx0000000001AAA",
+        "reportResult": {
+          "attributes": {
+            "describeUrl": "/services/data/v68.0/analytics/reports/00Oxx0000000001AAA/describe",
+            "instancesUrl": "/services/data/v68.0/analytics/reports/00Oxx0000000001AAA/instances",
+            "reportId": "00Oxx0000000001AAA",
+            "reportName": "Open Opportunities",
+            "type": "Report"
+          },
+          "allData": true,
+          "factMap": {
+            "0!T": {
+              "aggregates": [
+                {
+                  "label": "$1,500.00",
+                  "value": {
+                    "amount": 1500.0,
+                    "currency": null
+                  }
+                },
+                {
+                  "label": "2",
+                  "value": 2
+                }
+              ]
+            },
+            "1!T": {
+              "aggregates": [
+                {
+                  "label": "$2,500.00",
+                  "value": {
+                    "amount": 2500.0,
+                    "currency": null
+                  }
+                },
+                {
+                  "label": "1",
+                  "value": 1
+                }
+              ]
+            },
+            "T!T": {
+              "aggregates": [
+                {
+                  "label": "$4,000.00",
+                  "value": {
+                    "amount": 4000.0,
+                    "currency": null
+                  }
+                },
+                {
+                  "label": "3",
+                  "value": 3
+                }
+              ]
+            }
+          },
+          "groupingsAcross": {
+            "groupings": []
+          },
+          "groupingsDown": {
+            "groupings": [
+              {
+                "key": "0",
+                "label": "Prospecting",
+                "value": "Prospecting",
+                "groupings": [],
+                "dateGranularity": "None"
+              },
+              {
+                "key": "1",
+                "label": "Closed Won",
+                "value": "Closed Won",
+                "groupings": [],
+                "dateGranularity": "None"
+              }
+            ]
+          },
+          "hasDetailRows": false,
+          "reportExtendedMetadata": {
+            "aggregateColumnInfo": {
+              "s!AMOUNT": {
+                "label": "Sum of Amount",
+                "dataType": "currency",
+                "downGroupingContext": null,
+                "acrossGroupingContext": null
+              },
+              "RowCount": {
+                "label": "Record Count",
+                "dataType": "int",
+                "downGroupingContext": null,
+                "acrossGroupingContext": null
+              }
+            },
+            "detailColumnInfo": {
+              "ACCOUNT_NAME": {
+                "label": "Account Name",
+                "dataType": "string"
+              },
+              "OPPORTUNITY_NAME": {
+                "label": "Opportunity Name",
+                "dataType": "string"
+              },
+              "AMOUNT": {
+                "label": "Amount",
+                "dataType": "currency"
+              }
+            },
+            "groupingColumnInfo": {}
+          },
+          "reportMetadata": {
+            "id": "00Oxx0000000001AAA",
+            "name": "Open Opportunities",
+            "reportFormat": "SUMMARY",
+            "detailColumns": [
+              "ACCOUNT_NAME",
+              "OPPORTUNITY_NAME",
+              "AMOUNT"
+            ],
+            "aggregates": [
+              "s!AMOUNT",
+              "RowCount"
+            ],
+            "groupingsDown": [
+              {
+                "name": "STAGE_NAME",
+                "sortOrder": "Asc",
+                "dateGranularity": "None"
+              }
+            ],
+            "groupingsAcross": [],
+            "reportFilters": [],
+            "reportBooleanFilter": null,
+            "hasDetailRows": true,
+            "reportType": {
+              "type": "Opportunity",
+              "label": "Opportunities"
+            }
+          }
+        },
+        "status": {
+          "dataStatus": "DATA",
+          "errorCode": null,
+          "errorMessage": null,
+          "errorSeverity": null,
+          "refreshDate": "2026-11-11T08:00:00Z",
+          "refreshStatus": "IDLE"
+        }
+      }
+    ],
+    "dashboardMetadata": {
+      "id": "01Zxx0000000001AAA",
+      "name": "Pipeline",
+      "components": [
+        {
+          "id": "01axx0000000001AAA",
+          "header": "Pipeline by stage",
+          "reportId": "00Oxx0000000001AAA",
+          "type": "Report"
+        }
+      ]
+    },
+    "statusUrl": "/services/data/v68.0/analytics/dashboards/01Zxx0000000001AAA/status"
+  }
+}

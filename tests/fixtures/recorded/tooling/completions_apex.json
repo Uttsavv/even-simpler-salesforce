@@ -1,0 +1,24 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Tooling API Developer Guide and the ExecuteAnonymousResult reference; no org recording yet (big-bang.md \u00a721 V17, V23, V45-V47)",
+  "body": {
+    "publicDeclarations": {
+      "System": {
+        "Math": {
+          "methods": [
+            {
+              "name": "abs",
+              "returnType": "Integer",
+              "parameters": [
+                {
+                  "name": "i",
+                  "type": "Integer"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+}

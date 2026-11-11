@@ -1,0 +1,5 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Salesforce REST API Developer Guide, Insert or Update Blob Data: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/dome_sobject_insert_update_blob.htm",
+  "body": {"id": "068xx0000000001AAA", "success": true, "errors": []}
+}

@@ -1,0 +1,61 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Salesforce REST API Developer Guide, Composite Graph; no org recording yet",
+  "body": {
+    "graphs": [
+      {
+        "graphId": "g1",
+        "graphResponse": {
+          "compositeResponse": [
+            {
+              "body": {
+                "id": "001xx0000000002AAA",
+                "success": true,
+                "errors": []
+              },
+              "httpHeaders": {
+                "Location": "/services/data/v68.0/sobjects/Account/001xx0000000002AAA"
+              },
+              "httpStatusCode": 201,
+              "referenceId": "acc"
+            }
+          ]
+        },
+        "isSuccessful": true
+      },
+      {
+        "graphId": "g2",
+        "graphResponse": {
+          "compositeResponse": [
+            {
+              "body": [
+                {
+                  "errorCode": "PROCESSING_HALTED",
+                  "message": "The transaction was rolled back since another operation in the same transaction failed."
+                }
+              ],
+              "httpHeaders": {},
+              "httpStatusCode": 400,
+              "referenceId": "acc2"
+            },
+            {
+              "body": [
+                {
+                  "message": "Required fields are missing: [LastName]",
+                  "errorCode": "REQUIRED_FIELD_MISSING",
+                  "fields": [
+                    "LastName"
+                  ]
+                }
+              ],
+              "httpHeaders": {},
+              "httpStatusCode": 400,
+              "referenceId": "Contact2"
+            }
+          ]
+        },
+        "isSuccessful": false
+      }
+    ]
+  }
+}

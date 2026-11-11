@@ -13,17 +13,22 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .models import BatchResult, UsageSnapshot
+    from .models import BatchResult, DeployResult, UsageSnapshot
 
 __all__ = [
     "ApexError",
     "AuthError",
     "BudgetExceeded",
     "BulkJobFailed",
+    "BulkJobTimeout",
     "Conflict",
     "ConnectError",
+    "DeployFailed",
+    "DeployNotCancelable",
     "DuplicateDetected",
     "ErrorDetail",
+    "EventPublishFailed",
+    "EventPublishUnavailable",
     "FlowFailed",
     "Forbidden",
     "Gone",
@@ -34,19 +39,26 @@ __all__ = [
     "InvalidType",
     "LimitError",
     "MalformedQuery",
+    "MetadataTimeout",
     "MultipleMatches",
     "NotFound",
     "OAuthError",
     "PartialFailure",
+    "PubSubError",
+    "PubSubLimitExceeded",
     "ReauthorizationRequired",
     "RecordError",
     "RecordSaveBlocked",
     "RefreshFailed",
+    "ReportRunFailed",
+    "ReportTimeout",
+    "ReplayUnavailable",
     "RequestError",
     "RequestLimitExceeded",
     "RequestTimeout",
     "RequestTooLarge",
     "RequiredFieldMissing",
+    "RetrieveFailed",
     "RowLocked",
     "SalesforceError",
     "ServerError",
@@ -55,6 +67,7 @@ __all__ = [
     "StorageLimitExceeded",
     "StringTooLong",
     "TokenConflict",
+    "TokenIdentityChanged",
     "TransportError",
     "UnexpectedResponse",
     "UnsupportedApiVersion",
@@ -73,6 +86,22 @@ class ErrorDetail:
     message: str
     fields: tuple[str, ...] = ()
     extended: Mapping[str, Any] = field(default_factory=lambda: {}, hash=False)
+
+
+#: Troubleshooting page; each public error class has an entry whose anchor is its lower-cased name.
+ERRORS_PAGE = "https://uttsavv.github.io/even-simpler-salesforce/latest/errors/"
+
+
+def docs_url_for(cls: type[BaseException]) -> str | None:
+    """The troubleshooting entry for ``cls``, e.g. ``.../errors/#invalidfield``.
+
+    A user subclass (such as a class registered in ``error_tags``) gets the entry of its
+    nearest library class.
+    """
+    for klass in cls.__mro__:
+        if klass.__module__ == __name__ and klass.__name__ in __all__:
+            return f"{ERRORS_PAGE}#{klass.__name__.lower()}"
+    return None
 
 
 def _rebuild(cls: type[SalesforceError], state: dict[str, Any]) -> SalesforceError:
@@ -99,9 +128,15 @@ class SalesforceError(Exception):
         errors: Every error entry when Salesforce returned several.
         raw: Original response body, for debugging (never logged by the library).
         tag: Custom error tag parsed from the message (``"[TAG] ..."``), if any.
+        hint: A likely fix, computed from data the client already had (never an API call).
+            ``None`` when the library has nothing specific to say.
+        docs_url: Troubleshooting entry for this error class on the docs site.
     """
 
     default_retryable: bool = False
+    # Class-level fallbacks, so errors pickled before 0.2 still format.
+    hint: str | None = None
+    docs_url: str | None = None
 
     message: str
     error_code: str | None
@@ -133,6 +168,8 @@ class SalesforceError(Exception):
         errors: tuple[ErrorDetail, ...] | list[ErrorDetail] = (),
         raw: bytes | str | None = None,
         tag: str | None = None,
+        hint: str | None = None,
+        docs_url: str | None = None,
     ) -> None:
         super().__init__(message)
         self.message = message
@@ -148,13 +185,20 @@ class SalesforceError(Exception):
         self.errors = tuple(errors)
         self.raw = raw
         self.tag = tag
+        self.hint = hint
+        self.docs_url = docs_url if docs_url is not None else docs_url_for(type(self))
 
     def __str__(self) -> str:
         head = f"{self.error_code}: {self.message}" if self.error_code else self.message
         ctx = [p for p in (self.operation, self.sobject) if p]
         if self.status is not None:
             ctx.append(f"HTTP {self.status}")
-        return f"{head} ({', '.join(ctx)})" if ctx else head
+        text = f"{head} ({', '.join(ctx)})" if ctx else head
+        if self.hint:
+            text += f"\n  hint: {self.hint}"
+        if self.docs_url:
+            text += f"\n  docs: {self.docs_url}"
+        return text
 
     def __repr__(self) -> str:
         return (
@@ -210,6 +254,14 @@ class RefreshFailed(AuthError):
 
 class TokenConflict(AuthError):
     """Compare-and-swap failure in a token store. Normally handled internally."""
+
+
+class TokenIdentityChanged(AuthError):
+    """A new or re-read token belongs to another org or user than the token it replaces.
+
+    The client refuses to use it, so it never acts as another user. The message names what
+    changed (org or user) and never contains a token.
+    """
 
 
 class OAuthError(AuthError):
@@ -346,6 +398,20 @@ class StorageLimitExceeded(RecordError):
     """``STORAGE_LIMIT_EXCEEDED``."""
 
 
+class EventPublishFailed(RecordError):
+    """Salesforce rejected a platform event publish (``EventBus`` error).
+
+    ``error_code`` tells you why, for example ``LIMIT_EXCEEDED`` (the hourly publishing
+    allocation is used up) or ``PLATFORM_EVENT_PUBLISH_FAILED``.
+    """
+
+
+class EventPublishUnavailable(EventPublishFailed):
+    """``PLATFORM_EVENT_PUBLISHING_UNAVAILABLE``: publishing is down for a moment (retryable)."""
+
+    default_retryable = True
+
+
 # --- limits ------------------------------------------------------------------------------
 
 
@@ -361,6 +427,14 @@ class RequestLimitExceeded(LimitError):
     def __init__(self, message: str = "", *, retry_after: float | None = None, **kw: Any) -> None:
         super().__init__(message, **kw)
         self.retry_after = retry_after
+
+
+class PubSubLimitExceeded(LimitError):
+    """A Pub/Sub API allocation was hit (gRPC ``RESOURCE_EXHAUSTED``).
+
+    ``error_code`` holds the Pub/Sub error code, for example one that ends in
+    ``concurrent.client.limit.exceeded``, and ``request_id`` the ``rpcId``.
+    """
 
 
 class BudgetExceeded(LimitError):
@@ -391,7 +465,10 @@ class PartialFailure(SalesforceError):
 
 
 class BulkJobFailed(SalesforceError):
-    """A Bulk 2.0 job ended in state ``Failed``."""
+    """A Bulk 2.0 job ended in state ``Failed`` or ``Aborted``.
+
+    ``state`` says which. ``error_message`` is the job's ``errorMessage``, when Salesforce sent one.
+    """
 
     job_id: str | None
     state: str | None
@@ -412,6 +489,23 @@ class BulkJobFailed(SalesforceError):
         self.error_message = error_message
 
 
+class BulkJobTimeout(SalesforceError):
+    """A Bulk 2.0 job didn't finish within the ``timeout`` of ``wait()``.
+
+    The job keeps running in Salesforce. ``state`` is the last state the client saw.
+    """
+
+    job_id: str | None
+    state: str | None
+
+    def __init__(
+        self, message: str = "", *, job_id: str | None = None, state: str | None = None, **kw: Any
+    ) -> None:
+        super().__init__(message, **kw)
+        self.job_id = job_id
+        self.state = state
+
+
 class ApexError(SalesforceError):
     """``APEX_ERROR`` or an error returned by an Apex REST class. ``.body`` holds the body."""
 
@@ -423,15 +517,173 @@ class ApexError(SalesforceError):
 
 
 class GraphQLError(SalesforceError):
-    """GraphQL response with an ``errors`` array. ``.graphql_errors`` holds it."""
+    """GraphQL response with an ``errors`` array.
+
+    ``.graphql_errors`` holds the entries as Salesforce sent them (``message``, ``locations``,
+    ``path``, ``extensions``). ``.errors`` holds them as :class:`ErrorDetail`, with
+    ``extensions.ErrorType`` as the error code. ``.data`` holds the partial ``data`` that came
+    with the errors, or ``None``.
+    """
 
     graphql_errors: tuple[Mapping[str, Any], ...]
+    data: Any
 
     def __init__(
-        self, message: str = "", *, graphql_errors: tuple[Mapping[str, Any], ...] = (), **kw: Any
+        self,
+        message: str = "",
+        *,
+        graphql_errors: tuple[Mapping[str, Any], ...] = (),
+        data: Any = None,
+        **kw: Any,
     ) -> None:
         super().__init__(message, **kw)
         self.graphql_errors = tuple(graphql_errors)
+        self.data = data
+
+
+class ReportRunFailed(SalesforceError):
+    """An asynchronous report run ended with status ``Error``.
+
+    ``report_id`` and ``instance_id`` name the run. Salesforce doesn't say why; a common cause
+    is that the user lost access to the report after the run started.
+    """
+
+    report_id: str | None
+    instance_id: str | None
+
+    def __init__(
+        self, message: str = "", *, report_id: str | None = None, instance_id: str | None = None, **kw: Any
+    ) -> None:
+        super().__init__(message, **kw)
+        self.report_id = report_id
+        self.instance_id = instance_id
+
+
+class ReportTimeout(SalesforceError):
+    """An asynchronous report run didn't finish within the ``timeout`` of ``instance()``.
+
+    The run keeps going in Salesforce. ``run_status`` is the last run status the client saw
+    (``"New"`` or ``"Running"``); call ``instance()`` again with the same ids to keep waiting.
+    """
+
+    report_id: str | None
+    instance_id: str | None
+    run_status: str | None
+
+    def __init__(
+        self,
+        message: str = "",
+        *,
+        report_id: str | None = None,
+        instance_id: str | None = None,
+        run_status: str | None = None,
+        **kw: Any,
+    ) -> None:
+        super().__init__(message, **kw)
+        self.report_id = report_id
+        self.instance_id = instance_id
+        self.run_status = run_status
+
+
+class DeployFailed(SalesforceError):
+    """A Metadata API deployment failed, was canceled or deployed only some components.
+
+    Raised by ``DeployResult.raise_for_errors()``. ``.result`` holds the full
+    :class:`~even_simpler_salesforce.DeployResult`; ``.errors`` has one entry per failed
+    component and per failed Apex test.
+    """
+
+    job_id: str | None
+    state: str | None
+    result: DeployResult | None
+
+    def __init__(
+        self,
+        message: str = "",
+        *,
+        job_id: str | None = None,
+        state: str | None = None,
+        result: DeployResult | None = None,
+        **kw: Any,
+    ) -> None:
+        super().__init__(message, **kw)
+        self.job_id = job_id
+        self.state = state
+        self.result = result
+
+
+class RetrieveFailed(SalesforceError):
+    """A Metadata API retrieve ended in state ``Failed``. ``.job_id`` is the retrieve id."""
+
+    job_id: str | None
+    state: str | None
+
+    def __init__(
+        self, message: str = "", *, job_id: str | None = None, state: str | None = None, **kw: Any
+    ) -> None:
+        super().__init__(message, **kw)
+        self.job_id = job_id
+        self.state = state
+
+
+class MetadataTimeout(SalesforceError):
+    """A deployment or retrieve was still running when the client stopped waiting.
+
+    The job keeps running in Salesforce. ``.job_id`` and ``.state`` say which job and where it was.
+    """
+
+    job_id: str | None
+    state: str | None
+
+    def __init__(
+        self, message: str = "", *, job_id: str | None = None, state: str | None = None, **kw: Any
+    ) -> None:
+        super().__init__(message, **kw)
+        self.job_id = job_id
+        self.state = state
+
+
+class PubSubError(SalesforceError):
+    """A Pub/Sub API (gRPC) error with no more specific class.
+
+    ``error_code`` is the Pub/Sub ``error-code`` trailer, or the gRPC status name when there is
+    none. ``request_id`` is the ``rpcId`` that Salesforce Support asks for. ``operation`` is
+    ``"pubsub.subscribe"``, ``path`` is the topic and ``status`` is ``None``.
+    """
+
+
+class ReplayUnavailable(PubSubError):
+    """Salesforce rejected the replay id a subscription tried to resume from.
+
+    This happens when the id is older than the retention window (72 hours) or does not belong
+    to the topic. ``replay_id`` holds the rejected id. Pass ``on_invalid_replay="latest"`` or
+    ``"earliest"`` to ``sf.pubsub.subscribe()`` to resubscribe instead.
+    """
+
+    replay_id: bytes | None
+
+    def __init__(self, message: str = "", *, replay_id: bytes | None = None, **kw: Any) -> None:
+        super().__init__(message, **kw)
+        self.replay_id = replay_id
+
+
+class DeployNotCancelable(RequestError):
+    """Salesforce refused to cancel a deployment because it is already finalizing.
+
+    From API 65.0 a deployment in the ``FinalizingDeploy`` stage can't be canceled. Raised by
+    ``sf.metadata.cancel_deploy()``. Wait for the deployment with ``deploy_status(wait=True)``
+    instead. ``.job_id`` is the deployment id and ``.state`` the stage it was in.
+    """
+
+    job_id: str | None
+    state: str | None
+
+    def __init__(
+        self, message: str = "", *, job_id: str | None = None, state: str | None = None, **kw: Any
+    ) -> None:
+        super().__init__(message, **kw)
+        self.job_id = job_id
+        self.state = state
 
 
 class SoapFault(SalesforceError):
@@ -445,4 +697,23 @@ class SoapFault(SalesforceError):
 
 
 class UnexpectedResponse(SalesforceError):
-    """HTML pages (proxy, maintenance), non-JSON bodies or schema surprises."""
+    """HTML pages (proxy, maintenance), non-JSON bodies or schema surprises.
+
+    For a Pub/Sub event that does not decode against its schema, ``event_id`` and
+    ``replay_id`` identify the event; both are ``None`` otherwise.
+    """
+
+    event_id: str | None = None
+    replay_id: bytes | None = None
+
+    def __init__(
+        self,
+        message: str = "",
+        *,
+        event_id: str | None = None,
+        replay_id: bytes | None = None,
+        **kw: Any,
+    ) -> None:
+        super().__init__(message, **kw)
+        self.event_id = event_id
+        self.replay_id = replay_id

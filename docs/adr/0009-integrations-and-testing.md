@@ -11,8 +11,8 @@ classes found in the older libraries' issue trackers.
 ## Decision
 
 - Optional **FastAPI** and **Flask** integrations, a **test fake** and a **pytest plugin** (D17).
-  The fakes, recorder/replayer and plugin ship in 0.1. The packaged integrations are planned
-  for 0.2; example apps show the wiring today.
+  The fakes, recorder/replayer and plugin ship in 0.1. The packaged integrations
+  (`contrib.fastapi`, `contrib.flask`) ship in 0.2, and the example apps use them.
 - Quality gates: ruff, pyright strict, Python 3.10–3.14, runnable documentation examples and a
   minimum coverage (D22).
 - Every design-caused bug class from simple-salesforce's issue history gets a **guard test** (D28;

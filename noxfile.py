@@ -106,13 +106,26 @@ def bench(session: nox.Session) -> None:
     )
 
 
+# Lowest versions of the [pubsub] extra (the protobuf/grpcio floors are the versions the
+# vendored stubs were generated with; fastavro 1.12 is the last line with Python 3.10 wheels).
+PUBSUB_MIN = ("grpcio==1.85.1", "protobuf==7.35.1", "fastavro==1.12.*")
+
+
 @nox.session(python="3.10")
 def min_deps(session: nox.Session) -> None:
-    """Unit + contract tests against the lowest supported httpx."""
+    """Unit + contract tests against the lowest supported httpx and [pubsub] dependencies."""
     _sync(session)
-    session.install("httpx==0.27.*")
+    session.install("httpx==0.27.*", *PUBSUB_MIN)
     session.run("python", "-c", "import httpx; print('httpx', httpx.__version__)")
     session.run("pytest", "tests/unit", "tests/contract", "-m", "not sandbox", *session.posargs)
+
+
+@nox.session(python="3.12")
+def pubsub_proto(session: nox.Session) -> None:
+    """Fail if the vendored Pub/Sub proto or its generated stubs drifted (``-- --upstream`` too)."""
+    _sync(session)
+    session.install("grpcio-tools==1.85.1")
+    session.run("python", "scripts/pubsub_proto.py", "--check", *session.posargs)
 
 
 @nox.session(python="3.12")

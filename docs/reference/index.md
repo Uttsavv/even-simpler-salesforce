@@ -2,9 +2,11 @@
 
 This reference is generated from the docstrings. The **public, SemVer-covered surface** is
 every name in `even_simpler_salesforce.__all__`, plus the documented submodules
-`even_simpler_salesforce.testing` and `even_simpler_salesforce.observability`. Classes shown
-here under private module paths (the objects returned by `sf.sobject()`, `sf.collections` and
-`sf.auth`) are public through those attributes, not through their import path.
+`even_simpler_salesforce.testing`, `even_simpler_salesforce.observability`,
+`even_simpler_salesforce.contrib.fastapi` and `even_simpler_salesforce.contrib.flask`. Classes shown
+here under private module paths (the objects returned by `sf.sobject()`, `sf.collections`,
+`sf.files`, `sf.ui`, `sf.auth`, `sf.actions`, `sf.apex`, `sf.leads` and `sf.platform_events`) are public
+through those attributes, not through their import path.
 
 `Salesforce` is generated from `AsyncSalesforce` and has the same methods without `async`, so
 only the async classes are shown in full.
@@ -24,7 +26,47 @@ The reasons behind the design are written down in the
 
 ::: even_simpler_salesforce._async.api.collections.AsyncCollections
 
+::: even_simpler_salesforce._async.api.files.AsyncFiles
+
+::: even_simpler_salesforce.AsyncFileStream
+
+::: even_simpler_salesforce._async.api.bulk.AsyncBulk
+
+::: even_simpler_salesforce.AsyncIngestJob
+
+::: even_simpler_salesforce._async.api.ui.AsyncUi
+
 ::: even_simpler_salesforce._async.api.auth_api.AsyncAuthApi
+
+::: even_simpler_salesforce._async.api.actions.AsyncActions
+
+::: even_simpler_salesforce._async.api.apex.AsyncApex
+
+::: even_simpler_salesforce.Action
+
+::: even_simpler_salesforce._async.api.leads.AsyncLeads
+
+::: even_simpler_salesforce._async.api.platform_events.AsyncPlatformEvents
+
+::: even_simpler_salesforce._async.api.composite.AsyncComposite
+
+::: even_simpler_salesforce._async.api.composite.AsyncCompositeBuilder
+    options:
+      inherited_members: true
+
+::: even_simpler_salesforce._async.api.composite.AsyncGraphBuilder
+    options:
+      inherited_members: true
+
+::: even_simpler_salesforce._async.api.composite.AsyncBatchBuilder
+    options:
+      inherited_members: true
+
+::: even_simpler_salesforce.Reference
+
+::: even_simpler_salesforce._async.api.pubsub.AsyncPubSub
+
+::: even_simpler_salesforce._async.pubsub_transport.AsyncSubscription
 
 ## Login flows and tokens
 
@@ -52,6 +94,16 @@ The reasons behind the design are written down in the
 
 ::: even_simpler_salesforce.InMemoryTokenStore
 
+## Replay stores
+
+::: even_simpler_salesforce.AsyncReplayStore
+
+::: even_simpler_salesforce.ReplayStore
+
+::: even_simpler_salesforce.AsyncInMemoryReplayStore
+
+::: even_simpler_salesforce.InMemoryReplayStore
+
 ## Query building
 
 ::: even_simpler_salesforce.soql
@@ -74,7 +126,36 @@ The reasons behind the design are written down in the
 
 ::: even_simpler_salesforce.RecordResult
 
+::: even_simpler_salesforce.ActionResult
+
 ::: even_simpler_salesforce.UpsertResult
+
+::: even_simpler_salesforce.LeadConvert
+
+::: even_simpler_salesforce.LeadConvertResult
+
+::: even_simpler_salesforce.MergeResult
+
+::: even_simpler_salesforce.PublishResult
+
+::: even_simpler_salesforce.PubSubEvent
+
+::: even_simpler_salesforce.ChangeHeader
+
+::: even_simpler_salesforce.ChangeType
+
+::: even_simpler_salesforce.FileLink
+
+::: even_simpler_salesforce.CompositeResult
+
+::: even_simpler_salesforce.SubrequestResult
+
+::: even_simpler_salesforce.GraphResult
+::: even_simpler_salesforce.BulkJobState
+
+::: even_simpler_salesforce.BulkJobInfo
+
+::: even_simpler_salesforce.BulkFailure
 
 ::: even_simpler_salesforce.QueryPlan
 
@@ -93,6 +174,8 @@ The reasons behind the design are written down in the
 ::: even_simpler_salesforce.Budget
 
 ::: even_simpler_salesforce.DescribeCacheConfig
+
+::: even_simpler_salesforce.Backoff
 
 ::: even_simpler_salesforce.Cache
 
@@ -127,6 +210,12 @@ The reasons behind the design are written down in the
 
 ::: even_simpler_salesforce.EsfDeprecationWarning
 
+## Framework integrations
+
+::: even_simpler_salesforce.contrib.fastapi.SalesforceIntegration
+
+::: even_simpler_salesforce.contrib.flask.Salesforce
+
 ## Testing
 
 ::: even_simpler_salesforce.testing.FakeSalesforce
@@ -144,6 +233,23 @@ The reasons behind the design are written down in the
 ::: even_simpler_salesforce.testing.FakeCollections
 
 ::: even_simpler_salesforce.testing.AsyncFakeCollections
+
+::: even_simpler_salesforce.testing.FakeFiles
+
+::: even_simpler_salesforce.testing.AsyncFakeFiles
+
+::: even_simpler_salesforce.testing.FakeComposite
+
+::: even_simpler_salesforce.testing.AsyncFakeComposite
+::: even_simpler_salesforce.testing.FakeBulk
+
+::: even_simpler_salesforce.testing.AsyncFakeBulk
+
+::: even_simpler_salesforce.testing.FakeUi
+
+::: even_simpler_salesforce.testing.AsyncFakeUi
+
+::: even_simpler_salesforce.testing.ListView
 
 ::: even_simpler_salesforce.testing.key_prefix
 
@@ -168,6 +274,12 @@ The reasons behind the design are written down in the
 ::: even_simpler_salesforce.testing.TokenStoreContract
 
 ::: even_simpler_salesforce.testing.AsyncTokenStoreContract
+
+::: even_simpler_salesforce.testing.FakePubSub
+
+::: even_simpler_salesforce.testing.ReplayStoreContract
+
+::: even_simpler_salesforce.testing.AsyncReplayStoreContract
 
 ::: even_simpler_salesforce.testing.plugin
     options:

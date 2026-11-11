@@ -1,0 +1,30 @@
+{
+  "synthetic": true,
+  "source": "hand-written from the DescribeSObjectResult Field reference (https://developer.salesforce.com/docs/atlas.en-us.api.meta/api/sforce_api_calls_describesobjects_describesobjectresult.htm)",
+  "body": {
+    "name": "Lead",
+    "label": "Lead",
+    "custom": false,
+    "fields": [
+      {"name": "Id", "label": "Lead ID", "type": "id", "length": 18, "nillable": false, "createable": false, "defaultedOnCreate": true, "custom": false, "picklistValues": [], "restrictedPicklist": false},
+      {"name": "LastName", "label": "Last Name", "type": "string", "length": 80, "nillable": false, "createable": true, "defaultedOnCreate": false, "custom": false, "picklistValues": [], "restrictedPicklist": false},
+      {"name": "Company", "label": "Company", "type": "string", "length": 255, "nillable": false, "createable": true, "defaultedOnCreate": false, "custom": false, "picklistValues": [], "restrictedPicklist": false},
+      {"name": "Email", "label": "Email", "type": "email", "length": 80, "nillable": true, "createable": true, "defaultedOnCreate": false, "custom": false, "picklistValues": [], "restrictedPicklist": false},
+      {"name": "Status", "label": "Status", "type": "picklist", "length": 40, "nillable": false, "createable": true, "defaultedOnCreate": true, "custom": false, "restrictedPicklist": true, "picklistValues": [
+        {"value": "Open", "label": "Open", "active": true, "defaultValue": true},
+        {"value": "Working", "label": "Working", "active": true, "defaultValue": false},
+        {"value": "Retired", "label": "Retired", "active": false, "defaultValue": false}
+      ]},
+      {"name": "LeadSource", "label": "Lead Source", "type": "picklist", "length": 40, "nillable": true, "createable": true, "defaultedOnCreate": false, "custom": false, "restrictedPicklist": false, "picklistValues": [
+        {"value": "Web", "label": "Web", "active": true, "defaultValue": false}
+      ]},
+      {"name": "NumberOfEmployees", "label": "Employees", "type": "int", "length": 0, "nillable": true, "createable": true, "defaultedOnCreate": false, "custom": false, "picklistValues": [], "restrictedPicklist": false},
+      {"name": "AnnualRevenue", "label": "Annual Revenue", "type": "currency", "length": 0, "nillable": true, "createable": true, "defaultedOnCreate": false, "custom": false, "picklistValues": [], "restrictedPicklist": false},
+      {"name": "HasOptedOutOfEmail", "label": "Email Opt Out", "type": "boolean", "length": 0, "nillable": false, "createable": true, "defaultedOnCreate": true, "custom": false, "picklistValues": [], "restrictedPicklist": false},
+      {"name": "ConvertedDate", "label": "Converted Date", "type": "date", "length": 0, "nillable": true, "createable": false, "defaultedOnCreate": false, "custom": false, "picklistValues": [], "restrictedPicklist": false},
+      {"name": "Address", "label": "Address", "type": "address", "length": 0, "nillable": true, "createable": false, "defaultedOnCreate": false, "custom": false, "picklistValues": [], "restrictedPicklist": false},
+      {"name": "OwnerId", "label": "Owner ID", "type": "reference", "length": 18, "nillable": false, "createable": true, "defaultedOnCreate": true, "custom": false, "picklistValues": [], "restrictedPicklist": false, "referenceTo": ["Group", "User"]},
+      {"name": "Score__c", "label": "Score", "type": "double", "length": 0, "nillable": true, "createable": true, "defaultedOnCreate": false, "custom": true, "picklistValues": [], "restrictedPicklist": false}
+    ]
+  }
+}

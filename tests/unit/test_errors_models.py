@@ -75,16 +75,42 @@ class AddressRequired(esf.ValidationRuleFailed):
     pass
 
 
+def _docs(name: str) -> str:
+    return f"\n  docs: {E.ERRORS_PAGE}#{name}"
+
+
 def test_str_and_repr() -> None:
-    assert str(esf.SalesforceError("plain")) == "plain"
-    assert str(esf.SalesforceError("m", error_code="X")) == "X: m"
+    assert str(esf.SalesforceError("plain")) == "plain" + _docs("salesforceerror")
+    assert str(esf.SalesforceError("m", error_code="X")) == "X: m" + _docs("salesforceerror")
     assert str(
         esf.InvalidField("m", error_code="INVALID_FIELD", operation="query", sobject="Lead", status=400)
-    ) == ("INVALID_FIELD: m (query, Lead, HTTP 400)")
-    assert str(esf.NotFound("m", status=404)) == "m (HTTP 404)"
-    assert str(esf.NotFound("m", operation="sobject.get")) == "m (sobject.get)"
+    ) == ("INVALID_FIELD: m (query, Lead, HTTP 400)" + _docs("invalidfield"))
+    assert str(esf.NotFound("m", status=404)) == "m (HTTP 404)" + _docs("notfound")
+    assert str(esf.NotFound("m", operation="sobject.get")) == "m (sobject.get)" + _docs("notfound")
     r = repr(esf.NotFound("m", error_code="NOT_FOUND", status=404, operation="sobject.get"))
     assert r == "NotFound(message='m', error_code='NOT_FOUND', status=404, operation='sobject.get')"
+
+
+def test_str_appends_hint_then_docs_url() -> None:
+    exc = esf.InvalidField("m", status=400, hint="did you mean 'Email'?")
+    assert str(exc) == "m (HTTP 400)\n  hint: did you mean 'Email'?" + _docs("invalidfield")
+    custom = esf.NotFound("m", docs_url="https://example.com/runbook#404")
+    assert str(custom) == "m\n  docs: https://example.com/runbook#404"
+
+
+def test_docs_url_points_at_the_nearest_library_class() -> None:
+    assert esf.InvalidField().docs_url == f"{E.ERRORS_PAGE}#invalidfield"
+    # a class registered in error_tags gets its library parent's entry
+    assert AddressRequired().docs_url == f"{E.ERRORS_PAGE}#validationrulefailed"
+    assert E.docs_url_for(ValueError) is None
+
+
+def test_old_pickles_without_hint_fields_still_format() -> None:
+    exc = esf.NotFound("m")
+    del exc.__dict__["hint"], exc.__dict__["docs_url"]  # state as pickled by 0.1
+    clone = pickle.loads(pickle.dumps(exc))
+    assert str(clone) == "m"
+    assert clone.hint is None
 
 
 def test_defaults_and_retryable() -> None:

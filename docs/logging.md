@@ -193,7 +193,23 @@ Don't put personal data in custom paths. Paths you pass to `sf.request()` appear
 | `sf.auth.refreshed` | a token was acquired or refreshed | `token_key_hash`, `flow`, `duration_ms`, `rotated` (new refresh token), `proactive`, `initial` (first token, not a refresh) |
 | `sf.auth.reauth_required` | a refresh token is dead (`invalid_grant`) | `token_key_hash` |
 | `sf.usage.threshold` | a [budget](usage-and-budgets.md#budgets) threshold was crossed | `threshold`, `fraction`, `used`, `max` |
+| `sf.bulk.job` | a [Bulk API 2.0](guides/bulk.md) job was created or changed state, or a `wait()` poll saw new progress | [see below](#the-sfbulkjob-event) |
 | `sf.debug.attempt` | each HTTP attempt, only with `ESF_DEBUG=2` | `method`, `path_template` (not the URL: paths can carry external id values), `status`, `request_headers` / `response_headers` (`Authorization` and cookies redacted), `elapsed_ms` |
+
+### Pub/Sub events { #pubsub-events }
+
+[Pub/Sub](guides/pubsub.md) streams are long-lived, so they emit these events instead of
+`sf.request`. Replay ids appear as hex. Payloads and field values never appear.
+
+| Event | When | Fields |
+|---|---|---|
+| `sf.pubsub.subscribed` | a stream opens, first and after each reconnect | `topic`, `replay_preset`, `replay_id`, `resumed_from` (`store`, `memory` or `none`), `stream_no`, `batch_size`, `schema_calls` |
+| `sf.pubsub.batch` | a response with events arrives | `topic`, `events`, `pending`, `lag_ms` (now minus the commit or creation time of the newest event) |
+| `sf.pubsub.reconnect` | before each new subscribe | `topic`, `attempt`, `reason` (`idle`, `error`, `auth`, `invalid_replay` or `org_migrated`), `error_code`, `rpc_id`, `delay_ms` |
+| `sf.pubsub.closed` | the `subscribe()` block exits | `topic`, `events`, `reconnects`, `duration_ms`, `outcome`, `error_class` |
+
+The OpenTelemetry observer counts events in `esf.pubsub.events` and records `lag_ms` in the
+`esf.pubsub.lag` histogram, both with a `topic` attribute.
 
 The `reason` of `sf.retry` and each entry of `retry_reasons` take one of these values:
 `connect_error`, `timeout`, `transport_error`, `row_locked`, `rate_limited`, `http_500`,
@@ -226,6 +242,33 @@ The `reason` of `sf.retry` and each entry of `retry_reasons` take one of these v
 | `request_id` | Salesforce's request id header (`Sforce-Request-Id`, or `X-Request-Id` / `X-B3-TraceId`) |
 | `api_version` | API version used |
 | `client_id_hash` | 12-character SHA-256 prefix of the OAuth client id (`None` for `StaticToken`) |
+
+## The `sf.bulk.job` event
+
+The client emits `sf.bulk.job` when it creates a [Bulk API 2.0](guides/bulk.md) job and when
+the job changes state. During `wait()`, it also emits the event on each poll where
+`records_processed` or `records_failed` changed. Use it to show the progress of a long job.
+
+```python
+class BulkProgress:
+    def on_event(self, event: esf.Event) -> None:
+        if event.name == "sf.bulk.job":
+            print(event["job_id"], event["state"], event["records_processed"])
+
+
+sf.observers.add(BulkProgress())
+```
+
+| Field | Meaning |
+|---|---|
+| `job_id` | Salesforce job id (`750...`) |
+| `operation` | `insert`, `update`, `upsert`, `delete`, `hardDelete`, `query` or `queryAll` |
+| `sobject` | sObject of the job |
+| `state` | `Open`, `UploadComplete`, `InProgress`, `JobComplete`, `Failed` or `Aborted` |
+| `records_processed` | `numberRecordsProcessed` from the job info |
+| `records_failed` | `numberRecordsFailed` for ingest jobs; `None` for query jobs, which don't report it |
+
+If the client split an ingest over several jobs, each job emits its own events.
 
 ## How it works
 

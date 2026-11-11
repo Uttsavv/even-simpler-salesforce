@@ -1,0 +1,533 @@
+"""Metadata API: ``sf.metadata`` (§9.15). Deploy over REST, retrieve and describe over SOAP."""
+
+from __future__ import annotations
+
+import io
+import os
+import shutil
+import tempfile
+import zipfile
+from collections.abc import AsyncIterator, Iterable, Mapping
+from typing import IO, TYPE_CHECKING, Any
+
+from ...config import Backoff
+from ...core.files import CHUNK_SIZE, new_boundary
+from ...core.http import RequestSpec
+from ...core.metadata import (
+    cancel_deploy_body,
+    cancel_refused,
+    check_retrieve_status_envelope,
+    deploy_body,
+    deploy_multipart,
+    deploy_request_path,
+    describe_metadata_envelope,
+    is_symlink_entry,
+    list_metadata_envelope,
+    metadata_soap_path,
+    not_cancelable,
+    package_types,
+    parse_async_id,
+    parse_deploy_result,
+    parse_describe_metadata,
+    parse_list_metadata,
+    parse_retrieve_status,
+    quick_deploy_body,
+    retrieve_envelope,
+    safe_member,
+)
+from ...core.poll import DEFAULT_TIMEOUT, PollClock
+from ...errors import (
+    DeployNotCancelable,
+    MetadataTimeout,
+    RetrieveFailed,
+    SalesforceError,
+    UnexpectedResponse,
+)
+from ...models import DeployOptions, DeployResult, FileProperties, MetadataDescribe, RetrieveResult
+from .. import _compat
+from .soap import soap_send
+
+if TYPE_CHECKING:
+    from ..client import AsyncSalesforce
+
+__all__ = ["DEFAULT_TIMEOUT", "AsyncMetadata"]
+
+#: A directory is zipped in memory up to this size, then in a temporary file.
+_SPOOL_BYTES = 8 * 1024 * 1024
+_ZIP_MAGIC = (b"PK\x03\x04", b"PK\x05\x06")
+
+
+def _inside(root: str, path: str) -> bool:
+    return os.path.commonpath([root, path]) == root
+
+
+def _zip_directory(directory: str, need_package_xml: bool) -> IO[bytes]:
+    """Zip ``directory`` into a spooled temporary file, paths relative to it.
+
+    Symlinks are followed only to files inside ``directory``. Symlinked folders are not
+    followed. Anything that points outside raises ``ValueError``.
+    """
+    root = os.path.realpath(directory)
+    if need_package_xml and not os.path.isfile(os.path.join(root, "package.xml")):
+        raise ValueError(f"{directory} has no package.xml at its root")
+    out: IO[bytes] = tempfile.SpooledTemporaryFile(max_size=_SPOOL_BYTES)  # noqa: SIM115
+    try:
+        with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
+            for dirpath, dirnames, filenames in os.walk(root):
+                dirnames.sort()
+                for d in list(dirnames):
+                    full = os.path.join(dirpath, d)
+                    if os.path.islink(full):
+                        if not _inside(root, os.path.realpath(full)):
+                            raise ValueError(f"{full} is a symlink that points outside {directory}")
+                        dirnames.remove(d)
+                for name in sorted(filenames):
+                    full = os.path.join(dirpath, name)
+                    real = os.path.realpath(full)
+                    if not _inside(root, real):
+                        raise ValueError(f"{full} is a symlink that points outside {directory}")
+                    arcname = safe_member(os.path.relpath(full, root).replace(os.sep, "/"))
+                    zf.write(real, arcname)
+        out.seek(0)
+        return out
+    except BaseException:
+        out.close()
+        raise
+
+
+def _open_zip_file(path: str) -> IO[bytes]:
+    f = open(path, "rb")  # noqa: SIM115 (the caller closes it)
+    if f.read(4) not in _ZIP_MAGIC:
+        f.close()
+        raise ValueError(f"{path} is not a zip file")
+    f.seek(0)
+    return f
+
+
+def _prepare_source(source: str, need_package_xml: bool) -> IO[bytes]:
+    if os.path.isdir(source):
+        return _zip_directory(source, need_package_xml)
+    return _open_zip_file(source)  # raises FileNotFoundError before anything is sent
+
+
+def _size(f: IO[bytes]) -> int:
+    size = f.seek(0, os.SEEK_END)
+    f.seek(0)
+    return size
+
+
+def _extract(data: bytes, directory: str) -> None:
+    """Write the files of the zip ``data`` under ``directory``, refusing anything that escapes it."""
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(data))
+    except zipfile.BadZipFile:
+        raise UnexpectedResponse(
+            "retrieved zipFile is not a zip file", operation="metadata.retrieve"
+        ) from None
+    with zf:
+        infos = zf.infolist()
+        names: list[str] = []
+        for info in infos:  # check every entry before writing any file
+            try:
+                names.append(safe_member(info.filename))
+            except ValueError as exc:
+                raise UnexpectedResponse(
+                    f"retrieved zip refused: {exc}", operation="metadata.retrieve"
+                ) from None
+            if is_symlink_entry(info.external_attr):
+                raise UnexpectedResponse(
+                    f"retrieved zip refused: {info.filename!r} is a symlink", operation="metadata.retrieve"
+                )
+        os.makedirs(directory, exist_ok=True)
+        root = os.path.realpath(directory)
+        for info, name in zip(infos, names, strict=True):
+            target = os.path.realpath(os.path.join(root, name))
+            if not _inside(root, target):
+                raise UnexpectedResponse(
+                    f"retrieved zip refused: {info.filename!r} would be written outside {directory}",
+                    operation="metadata.retrieve",
+                )
+            if info.is_dir():
+                os.makedirs(target, exist_ok=True)
+                continue
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            with zf.open(info) as src, open(target, "wb") as dst:
+                shutil.copyfileobj(src, dst, CHUNK_SIZE)
+
+
+class AsyncMetadata:
+    """The Metadata API: deploy and retrieve metadata, list components and types.
+
+    Deployments go through the REST resource ``metadata/deployRequest``. Retrieve,
+    ``list_metadata`` and ``describe_metadata`` use the SOAP Metadata API with your OAuth
+    access token; you never see the SOAP part. Your user needs the "Modify Metadata Through
+    Metadata API Functions" or "Modify All Data" permission.
+    """
+
+    def __init__(self, client: AsyncSalesforce) -> None:
+        self._sf = client
+
+    # --- deploy ------------------------------------------------------------------------------
+
+    async def deploy(
+        self,
+        source: bytes | str | os.PathLike[str],
+        *,
+        options: DeployOptions | None = None,
+    ) -> DeployResult:
+        """Start a deployment. Returns at once with the deployment id and status ``Pending``.
+
+        Wait for the outcome with ``deploy_status(result.id, wait=True)``. The client never
+        resends a deploy request once it may have reached Salesforce, so a timeout can't start
+        a second deployment.
+
+        Args:
+            source: The zip file as ``bytes``, a path to a zip file, or a path to a folder.
+                A folder is zipped on the fly with ``package.xml`` at the root; large folders
+                spill to a temporary file instead of memory. Symlinks must point inside the
+                folder.
+            options: Deploy options. Defaults to ``DeployOptions()``.
+
+        Raises:
+            ValueError: ``source`` is not a zip file, the folder has no ``package.xml``, or a
+                symlink points outside the folder.
+            FileNotFoundError: the path doesn't exist.
+            SalesforceError: Salesforce refused the request, for example an invalid zip.
+
+        Example:
+            job = await sf.metadata.deploy("src", options=esf.DeployOptions(check_only=True))
+        """
+        options = options if options is not None else DeployOptions()
+        if isinstance(source, (bytes, bytearray, memoryview)):
+            data = bytes(source)
+            if data[:4] not in _ZIP_MAGIC:
+                raise ValueError("source bytes are not a zip file")
+            file: IO[bytes] = io.BytesIO(data)
+        elif isinstance(source, (str, os.PathLike)):  # pyright: ignore[reportUnnecessaryIsInstance]
+            file = await _compat.to_thread(_prepare_source, os.fspath(source), options.single_package)
+        else:
+            raise TypeError(f"deploy() takes zip bytes or a path, got {type(source).__name__}")
+        try:
+            options_json, _ = self._sf._transport.encode(deploy_body(options))  # pyright: ignore[reportPrivateUsage]
+            head, tail, ctype = deploy_multipart(options_json, new_boundary())
+            size = await _compat.to_thread(_size, file)
+
+            async def body() -> AsyncIterator[bytes]:
+                await _compat.to_thread(file.seek, 0)  # a resend after a token refresh starts again
+                yield head
+                while chunk := await _compat.to_thread(file.read, CHUNK_SIZE):
+                    yield chunk
+                yield tail
+
+            raw = await self._sf._send(  # pyright: ignore[reportPrivateUsage]
+                RequestSpec(
+                    "POST",
+                    "metadata/deployRequest",
+                    content_type=ctype,
+                    body_stream=body,
+                    body_length=len(head) + size + len(tail),
+                    operation="metadata.deploy",
+                    idempotent=False,
+                )
+            )
+        finally:
+            file.close()
+        return parse_deploy_result(raw.json())
+
+    async def quick_deploy(self, validated_id: str) -> DeployResult:
+        """Deploy a validated deployment without running its tests again ("quick deploy").
+
+        Sends ``POST metadata/deployRequest/{validated_id}`` with the body
+        ``{"validatedDeployRequestId": validated_id}``. Salesforce starts a new deployment and
+        returns its id; wait for it with ``deploy_status(result.id, wait=True)``. The client
+        never resends this request once it may have reached Salesforce, so a timeout can't
+        start a second deployment.
+
+        Salesforce accepts a validation for quick deploy only when it succeeded, ran Apex tests
+        (not ``NoTestRun``), and no other deployment ran in the org since. It refuses others
+        with a :class:`RequestError`.
+
+        Args:
+            validated_id: Id of a deployment made with ``DeployOptions(check_only=True)``
+                (``0Af...``).
+
+        Returns:
+            The new deployment, usually with status ``Pending``.
+
+        Raises:
+            ValueError: an invalid id.
+            SalesforceError: Salesforce refused the quick deploy.
+
+        Example:
+            job = await sf.metadata.deploy("src", options=esf.DeployOptions(check_only=True))
+            validated = await sf.metadata.deploy_status(job.id, wait=True)
+            validated.raise_for_errors()
+            quick = await sf.metadata.quick_deploy(validated.id)
+        """
+        path = deploy_request_path(validated_id)
+        content, ctype = self._sf._transport.encode(quick_deploy_body(validated_id))  # pyright: ignore[reportPrivateUsage]
+        raw = await self._sf._send(  # pyright: ignore[reportPrivateUsage]
+            RequestSpec(
+                "POST",
+                path,
+                content=content,
+                content_type=ctype,
+                operation="metadata.quick_deploy",
+                idempotent=False,  # starts a deployment
+            )
+        )
+        return parse_deploy_result(raw.json())
+
+    async def cancel_deploy(self, deploy_id: str) -> DeployResult:
+        """Ask Salesforce to cancel a deployment that is still running.
+
+        Sends ``PATCH metadata/deployRequest/{id}`` with
+        ``{"deployResult": {"status": "Canceling"}}``. The cancel runs in Salesforce: the result
+        usually has status ``Canceling``. Wait with ``deploy_status(id, wait=True)`` until it is
+        ``Canceled``. The client never resends this request once it may have reached
+        Salesforce; call it again if it timed out.
+
+        Args:
+            deploy_id: The id from :meth:`deploy` or :meth:`quick_deploy` (``0Af...``).
+
+        Returns:
+            The deployment as Salesforce reports it after the request.
+
+        Raises:
+            DeployNotCancelable: the deployment is already finalizing. From API 65.0 such a
+                deployment can't be canceled; it finishes on its own.
+            ValueError: an invalid id.
+            SalesforceError: Salesforce refused the request for another reason.
+
+        Example:
+            result = await sf.metadata.cancel_deploy(job.id)
+            final = await sf.metadata.deploy_status(job.id, wait=True)
+        """
+        path = deploy_request_path(deploy_id)
+        content, ctype = self._sf._transport.encode(cancel_deploy_body())  # pyright: ignore[reportPrivateUsage]
+        try:
+            raw = await self._sf._send(  # pyright: ignore[reportPrivateUsage]
+                RequestSpec(
+                    "PATCH",
+                    path,
+                    content=content,
+                    content_type=ctype,
+                    operation="metadata.cancel_deploy",
+                    idempotent=False,
+                )
+            )
+        except SalesforceError as exc:
+            if not cancel_refused(exc):
+                raise
+            raise not_cancelable(exc, deploy_id) from exc.__cause__
+        result = parse_deploy_result(raw.json())
+        if result.status.startswith("Finalizing"):
+            raise DeployNotCancelable(
+                f"deployment {deploy_id} is {result.status} and can't be canceled",
+                job_id=deploy_id,
+                state=result.status,
+                status=raw.status,
+                operation="metadata.cancel_deploy",
+                request_id=raw.request_id,
+            )
+        return result
+
+    async def deploy_status(
+        self,
+        deploy_id: str,
+        *,
+        wait: bool = False,
+        poll: Backoff | None = None,
+        timeout: float = DEFAULT_TIMEOUT,
+    ) -> DeployResult:
+        """The state of a deployment, with the failed components and tests.
+
+        This returns failed deployments too. Call ``result.raise_for_errors()`` to raise
+        :class:`DeployFailed` when the deployment failed or deployed only some components.
+
+        Args:
+            deploy_id: The id from :meth:`deploy` (``0Af...``).
+            wait: Poll until the deployment is done.
+            poll: With ``wait=True``, how long to wait between status calls. Defaults to
+                ``esf.Backoff()`` (2 s, doubling up to 30 s).
+            timeout: With ``wait=True``, seconds to wait in total (an hour by default).
+
+        Raises:
+            MetadataTimeout: ``wait=True`` and the deployment was still running after
+                ``timeout`` seconds. It keeps running; call this again to keep waiting.
+            UnexpectedResponse: a status that Salesforce doesn't document.
+            ValueError: an invalid id or a ``timeout`` that is not positive.
+
+        Example:
+            result = await sf.metadata.deploy_status(job.id, wait=True, poll=esf.Backoff(start=5))
+            result.raise_for_errors()
+        """
+        path = deploy_request_path(deploy_id)
+        clock = PollClock(timeout, poll) if wait else None
+        while True:
+            raw = await self._sf._send(  # pyright: ignore[reportPrivateUsage]
+                RequestSpec(
+                    "GET",
+                    path,
+                    params={"includeDetails": "true"},
+                    operation="metadata.deploy_status",
+                )
+            )
+            result = parse_deploy_result(raw.json())
+            if clock is None or result.done:
+                return result
+            delay = clock.next_delay()
+            if delay is None:
+                raise MetadataTimeout(
+                    f"deployment {deploy_id} is still {result.status} after {timeout:g} s; "
+                    "it keeps running in Salesforce",
+                    job_id=deploy_id,
+                    state=result.status,
+                    operation="metadata.deploy_status",
+                )
+            await self._sf._transport.sleep(delay)  # pyright: ignore[reportPrivateUsage]
+
+    # --- retrieve and describe (SOAP) --------------------------------------------------------
+
+    async def retrieve(
+        self,
+        package: str | bytes | Mapping[str, Iterable[str]],
+        *,
+        extract_to: str | os.PathLike[str] | None = None,
+        poll: Backoff | None = None,
+        timeout: float = DEFAULT_TIMEOUT,
+    ) -> RetrieveResult:
+        """Retrieve metadata as a zip file and wait until Salesforce has built it.
+
+        Args:
+            package: The text of a ``package.xml``, or a mapping of metadata type to member
+                names, e.g. ``{"ApexClass": ["*"]}``.
+            extract_to: Also write the files of the zip into this folder. Every path is
+                checked first: absolute paths, ``..`` parts and symlinks are refused.
+            poll: How long to wait between status calls. Defaults to ``esf.Backoff()``
+                (2 s, doubling up to 30 s).
+            timeout: Seconds to wait for the retrieve in total (an hour by default).
+
+        Returns:
+            The zip as bytes, with ``package.xml`` at its root, and the list of its files.
+
+        Raises:
+            RetrieveFailed: Salesforce couldn't retrieve the metadata.
+            MetadataTimeout: the retrieve was still running after ``timeout`` seconds.
+            UnexpectedResponse: an unknown status, or a zip with an unsafe path.
+            ValueError: an invalid ``package.xml`` or type name.
+
+        Example:
+            result = await sf.metadata.retrieve({"ApexClass": ["*"]}, extract_to="src")
+        """
+        types = package_types(package)
+        clock = PollClock(timeout, poll)
+        path = metadata_soap_path(self._sf.api_version)
+        version = self._sf.api_version
+        # Creates a job: never resent once it may have reached Salesforce.
+        raw = await soap_send(
+            self._sf,
+            lambda session: retrieve_envelope(types, version, session),
+            operation="metadata.retrieve",
+            sobject=None,
+            records=None,
+            path=path,
+            idempotent=False,
+            dml=False,
+        )
+        job_id = parse_async_id(raw.content)
+        while True:
+            # Status polls are reads. They leave the zip out: Salesforce deletes it once it
+            # was returned, so a resent poll must not be the one that carries it.
+            status = await self._retrieve_status(job_id, include_zip=False)
+            if status["done"]:
+                break
+            delay = clock.next_delay()
+            if delay is None:
+                raise MetadataTimeout(
+                    f"retrieve {job_id} is still {status['status']} after {timeout:g} s",
+                    job_id=job_id,
+                    state=status["status"],
+                    operation="metadata.retrieve",
+                )
+            await self._sf._transport.sleep(delay)  # pyright: ignore[reportPrivateUsage]
+        if status["status"] != "Failed":
+            status = await self._retrieve_status(job_id, include_zip=True)
+        if status["status"] == "Failed" or status["zip_file"] is None:
+            raise RetrieveFailed(
+                status["error_message"] or f"retrieve {job_id} ended {status['status']} without a zip file",
+                error_code=status["error_status_code"],
+                operation="metadata.retrieve",
+                job_id=job_id,
+                state=status["status"],
+            )
+        result = RetrieveResult(
+            id=job_id,
+            zip_file=status["zip_file"],
+            file_properties=status["file_properties"],
+            messages=status["messages"],
+        )
+        if extract_to is not None:
+            await _compat.to_thread(_extract, result.zip_file, os.fspath(extract_to))
+        return result
+
+    async def _retrieve_status(self, job_id: str, *, include_zip: bool) -> dict[str, Any]:
+        raw = await soap_send(
+            self._sf,
+            lambda session: check_retrieve_status_envelope(job_id, include_zip, session),
+            operation="metadata.retrieve_status",
+            sobject=None,
+            records=None,
+            path=metadata_soap_path(self._sf.api_version),
+            # Without the zip it's a read. The call that returns the zip is sent only once.
+            idempotent=not include_zip,
+            dml=False,
+        )
+        return parse_retrieve_status(raw.content)
+
+    async def list_metadata(self, metadata_type: str, *, folder: str | None = None) -> list[FileProperties]:
+        """The components of one metadata type in the org.
+
+        Args:
+            metadata_type: A type name, e.g. ``"ApexClass"`` or ``"CustomField"``.
+            folder: The folder, for types that live in folders (``Report``, ``Dashboard``,
+                ``Document``, ``EmailTemplate``).
+
+        Raises:
+            ValueError: an invalid type name.
+
+        Example:
+            classes = await sf.metadata.list_metadata("ApexClass")
+        """
+        version = self._sf.api_version
+        list_metadata_envelope(metadata_type, folder, version, "")  # validate before sending
+        raw = await soap_send(
+            self._sf,
+            lambda session: list_metadata_envelope(metadata_type, folder, version, session),
+            operation="metadata.list",
+            sobject=None,
+            records=None,
+            path=metadata_soap_path(version),
+            idempotent=True,
+            dml=False,
+        )
+        return parse_list_metadata(raw.content)
+
+    async def describe_metadata(self) -> MetadataDescribe:
+        """The metadata types the org supports, with their folders and file suffixes.
+
+        Example:
+            describe = await sf.metadata.describe_metadata()
+        """
+        version = self._sf.api_version
+        raw = await soap_send(
+            self._sf,
+            lambda session: describe_metadata_envelope(version, session),
+            operation="metadata.describe",
+            sobject=None,
+            records=None,
+            path=metadata_soap_path(version),
+            idempotent=True,
+            dml=False,
+        )
+        return parse_describe_metadata(raw.content)

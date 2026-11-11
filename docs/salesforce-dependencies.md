@@ -31,6 +31,14 @@ Paths are relative to `/services/data/vXX.X/` unless they start with `/services/
 | `query/{}` | GET | sf.query_more, sf.query_iter (nextRecordsUrl, absolute path) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_query.htm) |  |
 | `search` | GET | sf.search (?q= SOSL) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_search.htm) |  |
 | `parameterizedSearch` | POST | sf.parameterized_search | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_search_parameterized.htm) |  |
+| `graphql` | POST | sf.graphql, sf.graphql_iter (body {query, variables}; errors[] on 200 OK) | [docs](https://developer.salesforce.com/docs/platform/graphql/guide/requests-and-responses.html) |  |
+| `ui-api/records/{}` | GET | sf.ui.record() (fields, layoutTypes, modes) | [docs](https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_record_get.htm) |  |
+| `ui-api/object-info/{}` | GET | sf.ui.object_info() (describe cache; If-Modified-Since, V62) | [docs](https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_object_info.htm) |  |
+| `ui-api/object-info/{}/picklist-values/{}` | GET | sf.ui.picklist_values() (describe cache) | [docs](https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_picklist_values_collection.htm) |  |
+| `ui-api/record-defaults/create/{}` | GET | sf.ui.create_defaults() (recordTypeId) | [docs](https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_record_defaults_create.htm) |  |
+| `ui-api/record-defaults/clone/{}` | GET | sf.ui.clone_defaults() | [docs](https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_record_defaults_clone.htm) |  |
+| `ui-api/list-info/{}` | GET | sf.ui.list_views() (V60) | [docs](https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_lists_object_get.htm) |  |
+| `ui-api/list-records/{}/{}` | GET | sf.ui.list_records() (pageSize 1-2,000, pageToken) | [docs](https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_list_views_records.htm) |  |
 | `limits` | GET | sf.limits | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_limits.htm) |  |
 | `sobjects` | GET | sf.describe_global() (If-Modified-Since → 304) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_describeGlobal.htm) |  |
 | `sobjects/{}` | GET | sobject.metadata() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_sobject_basic_info.htm) |  |
@@ -40,9 +48,41 @@ Paths are relative to `/services/data/vXX.X/` unless they start with `/services/
 | `sobjects/{}/{}/{}` | GET, PATCH | sobject.get_by_external_id/upsert() (300 on multiple matches) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_sobject_upsert.htm) |  |
 | `sobjects/{}/updated/` | GET | sobject.updated(start, end) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_getupdated.htm) |  |
 | `sobjects/{}/deleted/` | GET | sobject.deleted(start, end) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_getdeleted.htm) |  |
+| `sobjects/ContentVersion` | POST | sf.files.upload() (multipart: entity_content JSON + VersionData file; 2 GB max) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/dome_sobject_insert_update_blob.htm) |  |
+| `sobjects/ContentVersion/{}/VersionData` | GET | sf.files.download() (streamed), sf.files.download_bytes() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/dome_sobject_blob_retrieve.htm) |  |
+| `sobjects/Attachment/{}/Body` | GET | sf.files.download_attachment() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/dome_sobject_blob_retrieve.htm) |  |
+| `sobjects/ContentDocumentLink` | POST | sf.files.link(), sf.files.upload(share_type=/visibility=) | [docs](https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_contentdocumentlink.htm) |  |
+| `jobs/{}` | POST | sf.bulk.ingest() (jobs/ingest), sf.bulk.query() (jobs/query, operation query or queryAll) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/create_job.htm) | 2026-11-10 |
+| `jobs/ingest/{}` | GET, PATCH | job.wait(), job.refresh() (job info); upload close and job.abort() (state UploadComplete / Aborted) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/get_job_info.htm) |  |
+| `jobs/ingest/{}/batches` | PUT | sf.bulk.ingest() upload (text/csv; charset=UTF-8, streamed, at most 100 MB raw per job) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/upload_job_data.htm) |  |
+| `jobs/ingest/{}/{}` | GET | job.successful_results(), job.failed_results(), job.unprocessed_records() (CSV) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/get_job_successful_results.htm) |  |
+| `jobs/query/{}` | GET | sf.bulk.query() polling | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/query_get_one_job.htm) |  |
+| `jobs/query/{}/results` | GET | sf.bulk.query() result pages (?locator=, Sforce-Locator; same API version or 409) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/query_get_job_results.htm) |  |
+| `jobs/query/{}/resultPages` | GET | sf.bulk.query(parallel_downloads>1) (API 58.0+, up to five result URLs per response) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_bulk_v2/query_get_parallel_job_results.htm) | 2026-11-10 |
 | `composite/sobjects` | POST, PATCH, DELETE | collections.create/update/delete() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobjects_collections.htm) |  |
 | `composite/sobjects/{}` | POST | collections.retrieve() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobjects_collections_retrieve.htm) |  |
 | `composite/sobjects/{}/{}` | PATCH | collections.upsert() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobjects_collections_upsert.htm) |  |
+| `tooling/query` | GET | sf.tooling.query, sf.tooling.query_iter (?q=); the capture_log flow of execute_anonymous | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/intro_rest_resources.htm) |  |
+| `tooling/query/{}` | GET | sf.query_more (Tooling cursors), sf.tooling.query_iter (nextRecordsUrl, absolute path) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/intro_rest_resources.htm) |  |
+| `tooling/sobjects` | GET | sf.tooling.describe_global (describe cache, own key) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/intro_rest_resources.htm) |  |
+| `tooling/sobjects/{}` | GET, POST, PATCH, DELETE | sf.tooling.sobject(name) methods (the sf.sobject paths with a tooling/ prefix); TraceFlag and DebugLevel in execute_anonymous(capture_log=True) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/intro_rest_resources.htm) |  |
+| `tooling/executeAnonymous/` | GET | sf.tooling.execute_anonymous (?anonymousBody=; never resent, ADR 0001) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/intro_rest_resources.htm) |  |
+| `tooling/sobjects/ApexLog/{}/Body` | GET | sf.tooling.execute_anonymous(capture_log=True) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/tooling_api_objects_apexlog.htm) |  |
+| `tooling/runTestsAsynchronous/` | POST | sf.tooling.run_tests_async | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/intro_rest_resources_testing_runner_async.htm) |  |
+| `tooling/completions` | GET | sf.tooling.completions (?type=apex\|visualforce) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/intro_rest_resources.htm) |  |
+| `composite` | POST | composite.builder().send() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_composite_post.htm) |  |
+| `composite/graph` | POST | composite.graph().send() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_graph.htm) |  |
+| `composite/batch` | POST | composite.batch().send() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_batch.htm) |  |
+| `composite/tree/{}` | POST | composite.tree() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobject_tree.htm) |  |
+| `analytics/reports` | GET | sf.reports.recent (up to 200 recently viewed reports; all reports need SOQL on Report) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/sforce_analytics_rest_api_recentreportslist.htm) |  |
+| `analytics/reports/{}` | GET, POST | sf.reports.run (?includeDetails=; POST with reportMetadata.reportFilters; read, resent) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/sforce_analytics_rest_api_getreportrundata.htm) |  |
+| `analytics/reports/{}/describe` | GET | sf.reports.describe | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/sforce_analytics_rest_api_getbasic_reportmetadata.htm) |  |
+| `analytics/reports/{}/instances` | POST | sf.reports.run_async (creates a report instance; never resent) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/sforce_analytics_rest_api_instances_summaryasync.htm) |  |
+| `analytics/reports/{}/instances/{}` | GET | sf.reports.instance (polled; status New, Running, Success or Error) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/sforce_analytics_rest_api_instances_resource.htm) |  |
+| `analytics/dashboards/{}` | GET, PUT | sf.reports.dashboards.get (GET), sf.reports.dashboards.refresh (PUT; never resent) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/analytics_api_dashboard_results_resource.htm) |  |
+| `metadata/deployRequest` | POST | sf.metadata.deploy() (multipart: json deployOptions + file zip; never resent) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_rest_deploy.htm) |  |
+| `metadata/deployRequest/{}` | GET, POST, PATCH | sf.metadata.deploy_status() (GET ?includeDetails=true; polled with wait=True); sf.metadata.quick_deploy() (POST validatedDeployRequestId; starts a deployment; never resent); sf.metadata.cancel_deploy() (PATCH deployResult.status=Canceling; never resent) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_rest_deploy_checkstatus.htm) |  |
+| `/services/Soap/m/{}` | POST | sf.metadata.retrieve() (retrieve + checkRetrieveStatus), list_metadata() (listMetadata), describe_metadata() (describeMetadata); SOAP Metadata API, SessionHeader = OAuth token | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_calls_intro.htm) |  |
 | `/services/oauth2/userinfo` | GET | sf.auth.userinfo() | [docs](https://help.salesforce.com/s/articleView?id=sf.remoteaccess_using_userinfo_endpoint.htm&type=5) |  |
 
 ## OAuth
@@ -82,6 +122,7 @@ Behaviour relied on:
 | `If-Unmodified-Since` | request | update(if_unmodified_since=) → 412 | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/intro_rest_conditional_requests.htm) |  |
 | `Content-Encoding` | request | gzip for bodies over 64 KiB (Collections) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/intro_rest_compression.htm) |  |
 | `Sforce-Limit-Info` | response | api-usage=N/M; api-bursts=N/M → sf.usage, budgets | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/headers_api_usage.htm) |  |
+| `Sforce-Locator` | response | next Bulk query result page; the string null on the last page | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/query_get_job_results.htm) |  |
 | `Sforce-Request-Id` | response | error.request_id, sf.request events |  |  |
 | `Retry-After` | response | 429 / REQUEST_LIMIT_EXCEEDED back-off (seconds or HTTP date) |  |  |
 | `Last-Modified` | response | describe cache revalidation |  |  |
@@ -96,6 +137,10 @@ Behaviour relied on:
 | sObject Collections retrieve | `list, one per id in order`, `null when not found` |
 | Upsert by external id | `id`, `created`, `201 = created, 204/200 = updated`, `300 = list of matching URLs` |
 | Limits | `{name: {Max, Remaining, ...}}` |
+| GraphQL | `data`, `errors[]: message, locations, path, extensions.ErrorType`, `connections: edges[].node, pageInfo {hasNextPage, endCursor}` |
+| UI API | `record: apiName, id, fields {Name: {value, displayValue}}, childRelationships, recordTypeId`, `list-records: records, count, nextPageToken`, `picklist-values: picklistFieldValues {field: {values, defaultValue, controllerValues}}`, `errors: REST error body` |
+| Report run / report instance | `attributes`, `allData`, `hasDetailRows`, `factMap {'<row>!<col>': {aggregates[], rows[].dataCells[]}}`, `groupingsDown/groupingsAcross.groupings[] {key, value, groupings}`, `reportMetadata {reportFormat, detailColumns, aggregates, groupingsDown, groupingsAcross}`, `attributes.status (instances)` |
+| Dashboard results / refresh | `dashboardMetadata`, `componentData[] {componentId, reportResult, status.refreshStatus}`, `statusUrl` |
 | REST error body | `list of {message, errorCode or statusCode, fields}`, `extras such as duplicateResult` |
 | OAuth error body | `error`, `error_description` |
 
@@ -137,7 +182,7 @@ Behaviour relied on:
 | `APEX_ERROR` | `ApexError` |
 | `UNSUPPORTED_API_VERSION` | `UnsupportedApiVersion` |
 
-Also relied on: `ALL_OR_NONE_OPERATION_ROLLED_BACK` (skipped when picking the primary error of an all_or_none batch). HTTP statuses: 300, 304, 401, 403, 404, 409, 410, 412, 414, 420, 428, 429, 431, 500, 502, 503, 504.
+Also relied on: `ALL_OR_NONE_OPERATION_ROLLED_BACK` (skipped when picking the primary error of an all_or_none batch); `PROCESSING_HALTED` (Composite subrequest rolled back or skipped because another one failed; skipped by CompositeResult.raise_for_errors()); `BATCH_PROCESSING_HALTED` (Batch subrequest skipped after an earlier failure with haltOnError; skipped by CompositeResult.raise_for_errors()). HTTP statuses: 300, 304, 401, 403, 404, 409, 410, 412, 414, 420, 428, 429, 431, 500, 502, 503, 504.
 
 ## Limits and sizes
 
@@ -148,3 +193,7 @@ Also relied on: `ALL_OR_NONE_OPERATION_ROLLED_BACK` (skipped when picking the pr
 | `query_batch_size` | `[200, 2000]` |
 | `record_id_lengths` | `[15, 18]` |
 | `gzip_threshold_bytes` | `65536` |
+| `composite_subrequests` | `25` |
+| `graph_subrequests` | `500` |
+| `batch_subrequests` | `25` |
+| `tree_records` | `200` |

@@ -6,32 +6,75 @@ drift apart. The async facade simply awaits nothing: every method completes sync
 
 from __future__ import annotations
 
+import builtins
+import copy
 import re
 from collections.abc import AsyncIterator, Callable, Iterable, Iterator, Mapping, Sequence
 from datetime import datetime
 from types import TracebackType
-from typing import Any
+from typing import Any, TypeVar
 
 from .._async.client import DEFAULT_API_VERSION
+from .._sync.api.apex import _apex_path  # pyright: ignore[reportPrivateUsage]
 from ..auth.flows import Auth, StaticToken, WebServerFlow
 from ..auth.token import Token
 from ..config import Budget, Priority
+from ..core.actions import (
+    Action,
+    action_inputs,
+    action_list_path,
+    action_path,
+    action_result_type,
+    build_action_result,
+)
 from ..core.cursor import Cursor
-from ..core.http import check_instance_url, check_sobject
+from ..core.files import safe_filename
+from ..core.graphql import parse_path
+from ..core.http import check_instance_url, check_record_id, check_sobject
 from ..core.limits import LimitInfo
 from ..core.records import apply_model
 from ..core.soql import soql_identifier, soql_values
-from ..errors import MultipleMatches, NotFound, SalesforceError, SessionExpired
-from ..models import BatchResult, Limit, QueryPlan, QueryResult, RecordResult, UpsertResult
+from ..errors import MalformedQuery, MultipleMatches, NotFound, SalesforceError, SessionExpired
+from ..models import (
+    ActionResult,
+    BatchResult,
+    Limit,
+    MergeResult,
+    QueryPlan,
+    QueryResult,
+    RecordResult,
+    UpsertResult,
+)
 from ..observability.events import Observer, ObserverHub
 from ..usage import UsageTracker
+from ._bulk import AsyncFakeBulk, FakeBulk
+from ._composite import AsyncFakeComposite, FakeComposite
+from ._fake_org import AsyncFakeLeads, AsyncFakePlatformEvents, FakeLeads, FakePlatformEvents, fake_merge
+from ._files import AsyncFakeFiles, FakeFiles
+from ._graphql import GraphQLMatch, GraphQLScript, add_graphql_script, fake_graphql, fake_graphql_iter
+from ._metadata import AsyncFakeMetadata, DeployOutcome, FakeMetadata, seed_component
+from ._pubsub import AsyncFakePubSub, FakePubSub
+from ._reports import (
+    AsyncFakeReports,
+    FakeReports,
+    ReportScript,
+    ResultSpec,
+    add_dashboard,
+    add_report,
+)
 from ._state import FakeCall, FakeRequest, FakeState, Match, QueryScript, RowsSpec, Who, _sobject_of
+from ._tooling import AsyncFakeTooling, FakeTooling, set_anonymous_script, set_completions
+from ._ui import AsyncFakeUi, FakeUi, ListView, add_list_view
 
 __all__ = [
+    "AsyncFakeActions",
+    "AsyncFakeApex",
     "AsyncFakeAuthApi",
     "AsyncFakeCollections",
     "AsyncFakeSObject",
     "AsyncFakeSalesforce",
+    "FakeActions",
+    "FakeApex",
     "FakeAuthApi",
     "FakeCollections",
     "FakeSObject",
@@ -40,6 +83,8 @@ __all__ = [
 
 
 _DEFAULT_INSTANCE = "https://example.my.salesforce.com"
+_APEX = "/services/apexrest"
+R = TypeVar("R")
 
 
 def _instance_of(auth: Auth | None) -> str:
@@ -104,6 +149,81 @@ class _FakeControls:
         """
         return self._state.add_script(QueryScript(match, rows, None, times, "search"))
 
+    def on_graphql(
+        self,
+        match: GraphQLMatch,
+        data: Any = None,
+        *,
+        nodes: Sequence[Any] | None = None,
+        path: str | None = None,
+        page_size: int = 10,
+        times: int | None = None,
+    ) -> GraphQLScript:
+        """Script the answer to a GraphQL document (used by ``graphql`` and ``graphql_iter``).
+
+        Documents are never executed. The newest matching script wins.
+
+        Args:
+            match: The document (compared with whitespace collapsed), a compiled regex
+                (``re.search``), or a predicate ``(query) -> bool``.
+            data: The ``data`` member to return (deep-copied), a callable
+                ``(query, variables) -> data``, or an exception to raise, such as
+                ``esf.GraphQLError(...)``.
+            nodes: Instead of ``data``: the nodes of a connection. The fake builds the
+                connection at ``path`` with ``edges``, ``pageInfo`` and ``totalCount``, and
+                pages it by the ``after`` variable.
+            path: Dotted path to the connection when ``nodes`` is given (``"uiapi.query.Lead"``).
+            page_size: Nodes per page when ``nodes`` is given.
+            times: Match at most this many calls (``None`` = unlimited).
+
+        Returns:
+            The script; its ``hits`` attribute counts how often it matched.
+
+        Example:
+            fake.on_graphql(re.compile(r"\bLead\b"), nodes=[{"Id": lead_id}], path="uiapi.query.Lead")
+        """
+        keys = parse_path(path) if path is not None else ()
+        script = GraphQLScript(match, data, None if nodes is None else list(nodes), keys, page_size, times)
+        return add_graphql_script(self._state, script)
+
+    def on_report(
+        self,
+        report_id: str,
+        result: ResultSpec,
+        *,
+        describe: Mapping[str, Any] | None = None,
+    ) -> ReportScript:
+        """Script a report for ``sf.reports`` (``run``, ``run_async``, ``instance``, ``describe``).
+
+        Reports are never run. An asynchronous run finishes at once.
+
+        Args:
+            report_id: Id of the report (``00O...``).
+            result: The run body Salesforce would return (deep-copied), a ``ReportResult``,
+                a callable ``(filters, include_details) -> body``, or an exception to raise.
+                For a body, ``include_details=False`` drops the detail rows.
+            describe: The body of ``describe()``. Defaults to the ``reportMetadata`` of
+                ``result``.
+
+        Returns:
+            The script; its ``runs`` attribute counts the runs.
+
+        Example:
+            fake.on_report("00O000000000001AAA", body)
+        """
+        return add_report(self._state, ReportScript(report_id, result, describe))
+
+    def on_dashboard(self, dashboard_id: str, body: Mapping[str, Any]) -> None:
+        """Script the body ``sf.reports.dashboards.get(dashboard_id)`` returns (deep-copied).
+
+        ``refresh()`` of a scripted dashboard returns ``id`` and ``statusUrl``.
+
+        Args:
+            dashboard_id: Id of the dashboard (``01Z...``).
+            body: Dashboard results: ``dashboardMetadata``, ``componentData``, ...
+        """
+        add_dashboard(self._state, dashboard_id, body)
+
     def on_request(
         self,
         method: str,
@@ -124,6 +244,86 @@ class _FakeControls:
             times: Match at most this many times (``None`` = unlimited).
         """
         self._state.add_handler(method, path, response, times)
+
+    def on_action(
+        self,
+        kind: str,
+        name: str,
+        outputs: Any = None,
+        *,
+        times: int | None = None,
+    ) -> None:
+        """Register a handler for an invocable action (``sf.actions.*`` and ``sf.run``).
+
+        The handler runs once per input, so bulk calls get one result per input.
+
+        Args:
+            kind: ``"standard"``, ``"flow"`` or ``"apex"``.
+            name: Action name, e.g. the Flow API name or the Apex class name.
+            outputs: Output values (deep-copied), a callable ``(inputs) -> outputs``, or a
+                ``SalesforceError`` instance. An error, raised or given, fails that invocation:
+                a single call raises it, a bulk call reports it in its ``ActionResult``.
+            times: Match at most this many calls (``None`` = unlimited).
+
+        Example:
+            fake.on_action("flow", "Assign_Lead", lambda inputs: {"assignedTo": "005..."})
+        """
+        action_path(kind, name)  # same validation as the client
+        self._state.add_action(kind, name, outputs, times)
+
+    def set_action_describe(self, kind: str, name: str, describe: Mapping[str, Any]) -> None:
+        """Set what ``actions.describe(kind, name)`` returns; the action also appears in ``list``."""
+        action_path(kind, name)
+        with self._state.lock:
+            self._state.action_describes[(kind, name)] = dict(describe)
+
+    def on_apex(
+        self,
+        method: str,
+        path: str | re.Pattern[str],
+        response: Any = None,
+        *,
+        times: int | None = None,
+    ) -> None:
+        """Register a handler for ``sf.apex.<method>(path, ...)``.
+
+        Args:
+            method: HTTP method, or ``"*"`` for any.
+            path: Path after ``/services/apexrest`` (``"/orders/submit"``), or a regex matched
+                against it with ``fullmatch``.
+            response: Value returned to the caller (deep-copied), a callable receiving a
+                :class:`FakeRequest` (its ``path`` is the full ``/services/apexrest/...``
+                path), or an exception instance to raise, such as ``esf.ApexError(...)``.
+            times: Match at most this many times (``None`` = unlimited).
+        """
+        if isinstance(path, str):
+            self._state.add_handler(method, _APEX + path, response, times)
+        else:
+            self._state.add_handler(
+                method, re.compile(re.escape(_APEX) + f"(?:{path.pattern})"), response, times
+            )
+
+    def on_execute_anonymous(
+        self, match: Match, result: Any = None, *, times: int | None = None
+    ) -> QueryScript:
+        """Script the answer to ``sf.tooling.execute_anonymous(code)``. The code never runs.
+
+        Args:
+            match: The Apex code (compared with whitespace collapsed), a compiled regex
+                (``re.search``) or a predicate ``(code) -> bool``. The newest match wins.
+            result: An ``esf.AnonymousResult`` (default: compiled and successful), a callable
+                ``(code) -> AnonymousResult``, or an exception instance to raise. Its ``log``
+                is returned only when the call passes ``capture_log=True``.
+            times: Match at most this many times (``None`` = unlimited).
+
+        Returns:
+            The script; its ``hits`` attribute counts how often it matched.
+        """
+        return set_anonymous_script(self._state, match, result, times)
+
+    def set_completions(self, type: str, completions: Mapping[str, Any]) -> None:
+        """Set what ``sf.tooling.completions(type)`` returns (``{}`` otherwise)."""
+        set_completions(self._state, type, completions)
 
     def fail_next(
         self,
@@ -186,6 +386,29 @@ class _FakeControls:
 
     # --- data -----------------------------------------------------------------------
 
+    def set_list_view(
+        self,
+        sobject: str,
+        api_name: str,
+        *,
+        label: str | None = None,
+        where: Callable[[dict[str, Any]], bool] | None = None,
+        fields: Sequence[str] | None = None,
+    ) -> ListView:
+        """Add a list view that ``ui.list_views`` lists and ``ui.list_records`` reads.
+
+        Args:
+            sobject: The object of the list view.
+            api_name: List view API name, like ``"AllOpenLeads"``.
+            label: The label; defaults to ``api_name``.
+            where: Selects the records: ``(record) -> bool``. ``None`` selects all of them.
+            fields: Fields of each record in ``list_records``; ``None`` returns every field.
+
+        Example:
+            fake.set_list_view("Lead", "OpenLeads", where=lambda r: r.get("Status") == "Open")
+        """
+        return add_list_view(self._state, sobject, api_name, label, where, fields)
+
     def add(self, sobject: str, data: Mapping[str, Any]) -> str:
         """Seed one record without recording a call. Returns its id (``data["Id"]`` if given)."""
         return self._state.seed(sobject, data)
@@ -194,6 +417,11 @@ class _FakeControls:
         """Seed several records. Returns their ids."""
         return [self._state.seed(sobject, r) for r in rows]
 
+    def published(self, name: str) -> list[dict[str, Any]]:
+        """Copies of the platform events published to ``name`` (``Order_Event__e``), oldest first."""
+        with self._state.lock:
+            return copy.deepcopy(self._state.events.get(name, []))
+
     def records(self, sobject: str) -> list[dict[str, Any]]:
         """Copies of every stored record of ``sobject`` (with ``attributes`` and ``Id``)."""
         return self._state.snapshot_records(sobject)
@@ -201,6 +429,63 @@ class _FakeControls:
     def record(self, sobject: str, record_id: str) -> dict[str, Any] | None:
         """A copy of one stored record, or ``None``."""
         return self._state.snapshot_record(sobject, record_id)
+
+    def add_file(
+        self, data: bytes, *, filename: str, title: str | None = None, link_to: str | None = None
+    ) -> str:
+        """Seed one file (ContentDocument, ContentVersion and, with ``link_to``, a link).
+
+        Does not record a call. Returns the ContentVersion id.
+        """
+        with self._state.lock:
+            return FakeFiles(self._state, self._who)._store_file(  # pyright: ignore[reportPrivateUsage]
+                bytes(data), safe_filename(filename), title, link_to and check_record_id(link_to), None, None
+            )
+
+    def file_content(self, content_version_id: str) -> bytes | None:
+        """The bytes stored for a ContentVersion (uploaded or seeded), or ``None``."""
+        with self._state.lock:
+            return self._state.blobs.get(content_version_id[:15])
+
+    def add_metadata(self, metadata_type: str, full_name: str, files: Mapping[str, bytes | str]) -> None:
+        """Seed one metadata component for ``metadata.retrieve``, ``list_metadata`` and ``describe_metadata``.
+
+        Does not record a call. Seeding the same type and name again replaces the component.
+
+        Args:
+            metadata_type: Type name, e.g. ``"ApexClass"``.
+            full_name: Component name, e.g. ``"Invoice"`` (``"Folder/Name"`` for folder types).
+            files: Paths in a retrieved zip and their content, e.g.
+                ``{"classes/Invoice.cls": "...", "classes/Invoice.cls-meta.xml": "..."}``.
+
+        Example:
+            fake.add_metadata("ApexClass", "Invoice", {"classes/Invoice.cls": "public class Invoice {}"})
+        """
+        seed_component(self._state, metadata_type, full_name, files)
+
+    def on_deploy(self, outcome: DeployOutcome, *, times: int | None = None) -> None:
+        """Script how the next deployments end (the default is ``Succeeded``).
+
+        Args:
+            outcome: A :class:`~even_simpler_salesforce.DeployResult` (its ``id`` is replaced
+                by the deployment's), or a callable ``(zip_bytes, options) -> DeployResult``.
+            times: Use it for at most this many deployments (``None`` = every later one).
+
+        Example:
+            fake.on_deploy(esf.DeployResult("0Af", "Failed", done=True, error_message="boom"))
+        """
+        if times is not None and times < 1:
+            raise ValueError("times must be >= 1")
+        with self._state.lock:
+            self._state.deploy_outcomes.append((outcome, times))
+
+    def deployed_zip(self, deploy_id: str) -> bytes | None:
+        """The zip that ``metadata.deploy`` sent for ``deploy_id``, or ``None``."""
+        with self._state.lock:
+            for key, (data, _, _) in self._state.deployments.items():
+                if key[:15] == deploy_id[:15]:
+                    return data
+            return None
 
     def new_id(self, sobject: str) -> str:
         """A fresh, valid-looking 18-character id with ``sobject``'s key prefix."""
@@ -249,6 +534,9 @@ class _FakeControls:
 class FakeSObject:
     """Fake of ``sf.sobject(name)``. Same methods and signatures as the real one."""
 
+    _op = "sobject."  # "tooling.sobject." for ``fake.tooling.sobject(name)``
+    _base = ""
+
     def __init__(self, state: FakeState, who: Who, name: str) -> None:
         self._state = state
         self._who = who
@@ -258,7 +546,7 @@ class FakeSObject:
         return f"<FakeSObject {self.name}>"
 
     def _path(self, *parts: str) -> str:
-        return "/".join(["sobjects", self.name, *parts])
+        return self._base + "/".join(["sobjects", self.name, *parts])
 
     def get(
         self,
@@ -271,7 +559,7 @@ class FakeSObject:
         """Return a stored record. Raises :class:`~even_simpler_salesforce.NotFound` when missing."""
         return self._state.run(
             self._who,
-            "sobject.get",
+            self._op + "get",
             self.name,
             {"id": record_id, "fields": fields, "if_modified_since": if_modified_since},
             lambda: self._state.get(self.name, record_id, fields, model, if_modified_since),
@@ -285,7 +573,7 @@ class FakeSObject:
         """Return the record whose ``field`` equals ``value``."""
         return self._state.run(
             self._who,
-            "sobject.get_by_external_id",
+            self._op + "get_by_external_id",
             self.name,
             {"field": field, "value": value, "fields": fields},
             lambda: self._state.get_by_external_id(self.name, field, value, fields, model),
@@ -297,7 +585,7 @@ class FakeSObject:
         """The describe set with ``fake.set_describe`` or a minimal synthesised one."""
         return self._state.run(
             self._who,
-            "sobject.describe",
+            self._op + "describe",
             self.name,
             {"cached": cached},
             lambda: self._state.describe(self.name),
@@ -309,7 +597,7 @@ class FakeSObject:
         """Basic sObject info (``objectDescribe`` + empty ``recentItems``)."""
         return self._state.run(
             self._who,
-            "sobject.metadata",
+            self._op + "metadata",
             self.name,
             {},
             lambda: self._state.metadata(self.name),
@@ -321,7 +609,7 @@ class FakeSObject:
         """Ids of records created or changed in ``[start, end]``."""
         return self._state.run(
             self._who,
-            "sobject.updated",
+            self._op + "updated",
             self.name,
             {"start": start, "end": end},
             lambda: self._state.updated(self.name, start, end),
@@ -333,7 +621,7 @@ class FakeSObject:
         """Records deleted in ``[start, end]``."""
         return self._state.run(
             self._who,
-            "sobject.deleted",
+            self._op + "deleted",
             self.name,
             {"start": start, "end": end},
             lambda: self._state.deleted_between(self.name, start, end),
@@ -351,7 +639,7 @@ class FakeSObject:
         """Store a new record and return its 18-character id."""
         return self._state.run(
             self._who,
-            "sobject.create",
+            self._op + "create",
             self.name,
             {"data": dict(data), "assignment_rule_id": assignment_rule_id, "allow_save": allow_save},
             lambda: self._state.create(self.name, data),
@@ -372,7 +660,7 @@ class FakeSObject:
         """Merge ``data`` into a stored record. :class:`NotFound` / :class:`Conflict` like the real API."""
         self._state.run(
             self._who,
-            "sobject.update",
+            self._op + "update",
             self.name,
             {
                 "id": record_id,
@@ -400,7 +688,7 @@ class FakeSObject:
         soql_identifier(field)
         return self._state.run(
             self._who,
-            "sobject.upsert",
+            self._op + "upsert",
             self.name,
             {
                 "field": field,
@@ -419,7 +707,7 @@ class FakeSObject:
         """Delete a stored record (a second delete raises ``NotFound(ENTITY_IS_DELETED)``)."""
         self._state.run(
             self._who,
-            "sobject.delete",
+            self._op + "delete",
             self.name,
             {"id": record_id},
             lambda: self._state.delete(self.name, record_id),
@@ -543,6 +831,169 @@ class FakeCollections:
             lambda: self._state.coll_retrieve(sobject, id_list, fields),
             method="POST",
             path=f"composite/sobjects/{sobject}",
+        )
+
+
+class FakeActions:
+    """Fake of ``sf.actions``. Register actions with :meth:`FakeSalesforce.on_action`."""
+
+    def __init__(self, state: FakeState, who: Who) -> None:
+        self._state = state
+        self._who = who
+
+    def standard(self, name: str, inputs: Mapping[str, Any] | Sequence[Mapping[str, Any]]) -> Any:
+        """See ``Salesforce.actions.standard``."""
+        return self._invoke("standard", name, inputs)
+
+    def flow(self, api_name: str, inputs: Mapping[str, Any] | Sequence[Mapping[str, Any]]) -> Any:
+        """See ``Salesforce.actions.flow``."""
+        return self._invoke("flow", api_name, inputs)
+
+    def apex(self, class_name: str, inputs: Mapping[str, Any] | Sequence[Mapping[str, Any]]) -> Any:
+        """See ``Salesforce.actions.apex``."""
+        return self._invoke("apex", class_name, inputs)
+
+    def list(self, kind: str) -> builtins.list[dict[str, Any]]:
+        """Actions registered with ``on_action`` or ``set_action_describe`` for ``kind``."""
+        path = action_list_path(kind)
+        return self._state.run(
+            self._who,
+            "actions.list",
+            None,
+            {"kind": kind},
+            lambda: self._state.list_actions(kind),
+            method="GET",
+            path=path,
+        )
+
+    def describe(self, kind: str, name: str) -> dict[str, Any]:
+        """The describe set with ``set_action_describe`` (a minimal one for registered actions)."""
+        path = action_path(kind, name)
+        return self._state.run(
+            self._who,
+            "actions.describe",
+            None,
+            {"kind": kind, "name": name},
+            lambda: self._state.describe_action(kind, name),
+            method="GET",
+            path=path,
+        )
+
+    def _invoke(self, kind: str, name: str, inputs: Mapping[str, Any] | Sequence[Mapping[str, Any]]) -> Any:
+        path = action_path(kind, name)
+        single = isinstance(inputs, Mapping)
+        if single:
+            items = [dict(inputs)]
+        elif isinstance(inputs, (str, bytes)):
+            raise TypeError("inputs must be a dict or a list of dicts")
+        else:
+            items = [dict(i) for i in inputs]
+        operation = f"actions.{kind}"
+        if not single and not items:  # like the real client: no request, no call recorded
+            empty: BatchResult[ActionResult] = BatchResult([], operation=operation)
+            return empty
+
+        def fn() -> Any:
+            results, errors = self._state.invoke_action(kind, name, items)
+            if not single:
+                return BatchResult(results, operation=operation)
+            if errors[0] is not None:
+                raise errors[0]
+            return dict(results[0].outputs)
+
+        return self._state.run(
+            self._who,
+            operation,
+            None,
+            {"name": name, "inputs": items if not single else items[0]},
+            fn,
+            method="POST",
+            path=path,
+            records=len(items),
+        )
+
+
+class FakeApex:
+    """Fake of ``sf.apex``. Register handlers with :meth:`FakeSalesforce.on_apex`."""
+
+    def __init__(self, client: FakeSalesforce) -> None:
+        self._client = client
+
+    def get(
+        self,
+        path: str,
+        *,
+        params: Mapping[str, Any] | None = None,
+        headers: Mapping[str, str] | None = None,
+        idempotent: bool | None = None,
+    ) -> Any:
+        """See ``Salesforce.apex.get``."""
+        return self._call("GET", path, params, None, headers, idempotent)
+
+    def post(
+        self,
+        path: str,
+        json: Any = None,
+        *,
+        params: Mapping[str, Any] | None = None,
+        headers: Mapping[str, str] | None = None,
+        idempotent: bool | None = None,
+    ) -> Any:
+        """See ``Salesforce.apex.post``."""
+        return self._call("POST", path, params, json, headers, idempotent)
+
+    def put(
+        self,
+        path: str,
+        json: Any = None,
+        *,
+        params: Mapping[str, Any] | None = None,
+        headers: Mapping[str, str] | None = None,
+        idempotent: bool | None = None,
+    ) -> Any:
+        """See ``Salesforce.apex.put``."""
+        return self._call("PUT", path, params, json, headers, idempotent)
+
+    def patch(
+        self,
+        path: str,
+        json: Any = None,
+        *,
+        params: Mapping[str, Any] | None = None,
+        headers: Mapping[str, str] | None = None,
+        idempotent: bool | None = None,
+    ) -> Any:
+        """See ``Salesforce.apex.patch``."""
+        return self._call("PATCH", path, params, json, headers, idempotent)
+
+    def delete(
+        self,
+        path: str,
+        *,
+        params: Mapping[str, Any] | None = None,
+        headers: Mapping[str, str] | None = None,
+        idempotent: bool | None = None,
+    ) -> Any:
+        """See ``Salesforce.apex.delete``."""
+        return self._call("DELETE", path, params, None, headers, idempotent)
+
+    def _call(
+        self,
+        method: str,
+        path: str,
+        params: Mapping[str, Any] | None,
+        json: Any,
+        headers: Mapping[str, str] | None,
+        idempotent: bool | None,
+    ) -> Any:
+        return self._client.request(
+            method,
+            _apex_path(path),
+            params=params,
+            json=json,
+            headers=headers,
+            idempotent=idempotent,
+            operation=f"apex.{method.lower()}",
         )
 
 
@@ -704,6 +1155,18 @@ class FakeSalesforce(_FakeControls):
         self._instance_url = _instance_of(auth)
         self.collections = FakeCollections(self._state, self._who)
         self.auth = FakeAuthApi(self)
+        self.actions = FakeActions(self._state, self._who)
+        self.apex = FakeApex(self)
+        self.leads = FakeLeads(self._state, self._who)
+        self.platform_events = FakePlatformEvents(self._state, self._who)
+        self.files = FakeFiles(self._state, self._who)
+        self.tooling = FakeTooling(self._state, self._who)
+        self.composite = FakeComposite(self._state, self._who)
+        self.bulk = FakeBulk(self._state, self._who)
+        self.ui = FakeUi(self._state, self._who)
+        self.reports = FakeReports(self._state, self._who)
+        self.metadata = FakeMetadata(self._state, self._who)
+        self.pubsub = FakePubSub(self._state, self._who)
 
     @classmethod
     def _view(
@@ -717,6 +1180,18 @@ class FakeSalesforce(_FakeControls):
         view._instance_url = instance_url or _instance_of(auth)
         view.collections = FakeCollections(state, who)
         view.auth = FakeAuthApi(view)
+        view.actions = FakeActions(state, who)
+        view.apex = FakeApex(view)
+        view.leads = FakeLeads(state, who)
+        view.platform_events = FakePlatformEvents(state, who)
+        view.files = FakeFiles(state, who)
+        view.tooling = FakeTooling(state, who)
+        view.composite = FakeComposite(state, who)
+        view.bulk = FakeBulk(state, who)
+        view.ui = FakeUi(state, who)
+        view.reports = FakeReports(state, who)
+        view.metadata = FakeMetadata(state, who)
+        view.pubsub = FakePubSub(state, who)
         return view
 
     def __repr__(self) -> str:
@@ -769,6 +1244,10 @@ class FakeSalesforce(_FakeControls):
     def sobject(self, name: str) -> FakeSObject:
         """Operations on one sObject type."""
         return FakeSObject(self._state, self._who, name)
+
+    def merge(self, master_id: str, duplicate_ids: Sequence[str], *, sobject: str) -> MergeResult:
+        """Delete the duplicates and point fields that held their ids at the master."""
+        return fake_merge(self._state, self._who, master_id, duplicate_ids, sobject)
 
     def describe_global(self, *, cached: bool = True) -> dict[str, Any]:
         """Lists every sObject the fake knows about."""
@@ -859,14 +1338,18 @@ class FakeSalesforce(_FakeControls):
             rows, total, done, nxt, _ = self._state.next_page(path, page_size)
             return self._state.to_result(rows, total, done, nxt, model)
 
+        try:  # a ``fake.tooling.query`` cursor is a Tooling call, as on the real client
+            kind = "tooling/query" if "/tooling/query/" in self._state.decode(cursor) else "query"
+        except MalformedQuery:
+            kind = "query"  # ``fn`` raises it again inside ``run``, so the call is recorded
         return self._state.run(
             self._who,
-            "query_more",
+            "tooling.query_more" if kind == "tooling/query" else "query_more",
             None,
             {"cursor": str(cursor), "page_size": page_size},
             fn,
             method="GET",
-            path=f"/services/data/v{self._state.api_version}/query/000000000000000-0",
+            path=f"/services/data/v{self._state.api_version}/{kind}/000000000000000-0",
         )
 
     def query_iter(
@@ -938,6 +1421,21 @@ class FakeSalesforce(_FakeControls):
             path="parameterizedSearch",
         )
 
+    # --- graphql ----------------------------------------------------------------------
+
+    def graphql(self, query: str, variables: Mapping[str, Any] | None = None) -> dict[str, Any]:
+        """The ``data`` scripted with :meth:`on_graphql` for ``query``."""
+        return fake_graphql(self._state, self._who, query, variables)
+
+    def graphql_iter(
+        self, query: str, variables: Mapping[str, Any] | None = None, *, path: str
+    ) -> Iterator[Any]:
+        """Yield the nodes of the scripted connection, one ``graphql`` call per page.
+
+        Validates the query and ``path`` like the real client.
+        """
+        return fake_graphql_iter(self._state, self._who, query, variables, path)
+
     # --- raw & limits -----------------------------------------------------------------
 
     def request(
@@ -974,6 +1472,13 @@ class FakeSalesforce(_FakeControls):
             method=req.method,
             path=path,
         )
+
+    def run(self, action: Action[R]) -> R:
+        """Run a typed action stub against the handler registered with :meth:`on_action`."""
+        kind, name, inputs = action_inputs(action)
+        outputs = self.actions._invoke(kind, name, inputs)  # pyright: ignore[reportPrivateUsage]
+        result: R = build_action_result(action_result_type(type(action)), outputs)
+        return result
 
     def limits(self) -> dict[str, Limit]:
         """Limits set with :meth:`set_limits` (a small default set otherwise)."""
@@ -1143,6 +1648,98 @@ class AsyncFakeCollections:
         return self._inner.retrieve(sobject, ids, fields, concurrency=concurrency)
 
 
+class AsyncFakeActions:
+    """Async twin of :class:`FakeActions`."""
+
+    def __init__(self, inner: FakeActions) -> None:
+        self._inner = inner
+
+    async def standard(self, name: str, inputs: Mapping[str, Any] | Sequence[Mapping[str, Any]]) -> Any:
+        """See :meth:`FakeActions.standard`."""
+        return self._inner.standard(name, inputs)
+
+    async def flow(self, api_name: str, inputs: Mapping[str, Any] | Sequence[Mapping[str, Any]]) -> Any:
+        """See :meth:`FakeActions.flow`."""
+        return self._inner.flow(api_name, inputs)
+
+    async def apex(self, class_name: str, inputs: Mapping[str, Any] | Sequence[Mapping[str, Any]]) -> Any:
+        """See :meth:`FakeActions.apex`."""
+        return self._inner.apex(class_name, inputs)
+
+    async def list(self, kind: str) -> builtins.list[dict[str, Any]]:
+        """See :meth:`FakeActions.list`."""
+        return self._inner.list(kind)
+
+    async def describe(self, kind: str, name: str) -> dict[str, Any]:
+        """See :meth:`FakeActions.describe`."""
+        return self._inner.describe(kind, name)
+
+
+class AsyncFakeApex:
+    """Async twin of :class:`FakeApex`."""
+
+    def __init__(self, inner: FakeApex) -> None:
+        self._inner = inner
+
+    async def get(
+        self,
+        path: str,
+        *,
+        params: Mapping[str, Any] | None = None,
+        headers: Mapping[str, str] | None = None,
+        idempotent: bool | None = None,
+    ) -> Any:
+        """See :meth:`FakeApex.get`."""
+        return self._inner.get(path, params=params, headers=headers, idempotent=idempotent)
+
+    async def post(
+        self,
+        path: str,
+        json: Any = None,
+        *,
+        params: Mapping[str, Any] | None = None,
+        headers: Mapping[str, str] | None = None,
+        idempotent: bool | None = None,
+    ) -> Any:
+        """See :meth:`FakeApex.post`."""
+        return self._inner.post(path, json, params=params, headers=headers, idempotent=idempotent)
+
+    async def put(
+        self,
+        path: str,
+        json: Any = None,
+        *,
+        params: Mapping[str, Any] | None = None,
+        headers: Mapping[str, str] | None = None,
+        idempotent: bool | None = None,
+    ) -> Any:
+        """See :meth:`FakeApex.put`."""
+        return self._inner.put(path, json, params=params, headers=headers, idempotent=idempotent)
+
+    async def patch(
+        self,
+        path: str,
+        json: Any = None,
+        *,
+        params: Mapping[str, Any] | None = None,
+        headers: Mapping[str, str] | None = None,
+        idempotent: bool | None = None,
+    ) -> Any:
+        """See :meth:`FakeApex.patch`."""
+        return self._inner.patch(path, json, params=params, headers=headers, idempotent=idempotent)
+
+    async def delete(
+        self,
+        path: str,
+        *,
+        params: Mapping[str, Any] | None = None,
+        headers: Mapping[str, str] | None = None,
+        idempotent: bool | None = None,
+    ) -> Any:
+        """See :meth:`FakeApex.delete`."""
+        return self._inner.delete(path, params=params, headers=headers, idempotent=idempotent)
+
+
 class AsyncFakeSalesforce(_FakeControls):
     """In-memory stand-in for :class:`even_simpler_salesforce.AsyncSalesforce`.
 
@@ -1195,6 +1792,18 @@ class AsyncFakeSalesforce(_FakeControls):
         self.auth_config = inner.auth_config
         self.collections = AsyncFakeCollections(inner.collections)
         self.auth = AsyncFakeAuthApi(inner.auth)
+        self.actions = AsyncFakeActions(inner.actions)
+        self.apex = AsyncFakeApex(inner.apex)
+        self.leads = AsyncFakeLeads(inner.leads)
+        self.platform_events = AsyncFakePlatformEvents(inner.platform_events)
+        self.files = AsyncFakeFiles(inner.files)
+        self.tooling = AsyncFakeTooling(inner.tooling)
+        self.composite = AsyncFakeComposite(inner.composite)
+        self.bulk = AsyncFakeBulk(inner.bulk)
+        self.ui = AsyncFakeUi(inner.ui)
+        self.reports = AsyncFakeReports(inner.reports)
+        self.metadata = AsyncFakeMetadata(inner.metadata)
+        self.pubsub = AsyncFakePubSub(inner.pubsub)
 
     @property
     def instance_url(self) -> str:
@@ -1248,6 +1857,10 @@ class AsyncFakeSalesforce(_FakeControls):
     def sobject(self, name: str) -> AsyncFakeSObject:
         """Operations on one sObject type."""
         return AsyncFakeSObject(self._sync.sobject(name))
+
+    async def merge(self, master_id: str, duplicate_ids: Sequence[str], *, sobject: str) -> MergeResult:
+        """See :meth:`FakeSalesforce.merge`."""
+        return self._sync.merge(master_id, duplicate_ids, sobject=sobject)
 
     async def describe_global(self, *, cached: bool = True) -> dict[str, Any]:
         """See :meth:`FakeSalesforce.describe_global`."""
@@ -1328,6 +1941,17 @@ class AsyncFakeSalesforce(_FakeControls):
         """See :meth:`FakeSalesforce.parameterized_search`."""
         return self._sync.parameterized_search(q, sobjects=sobjects, fields=fields, limit=limit, **extra)
 
+    async def graphql(self, query: str, variables: Mapping[str, Any] | None = None) -> dict[str, Any]:
+        """See :meth:`FakeSalesforce.graphql`."""
+        return self._sync.graphql(query, variables)
+
+    async def graphql_iter(
+        self, query: str, variables: Mapping[str, Any] | None = None, *, path: str
+    ) -> AsyncIterator[Any]:
+        """See :meth:`FakeSalesforce.graphql_iter`."""
+        for node in self._sync.graphql_iter(query, variables, path=path):
+            yield node
+
     async def request(
         self,
         method: str,
@@ -1351,6 +1975,10 @@ class AsyncFakeSalesforce(_FakeControls):
             idempotent=idempotent,
             operation=operation,
         )
+
+    async def run(self, action: Action[R]) -> R:
+        """See :meth:`FakeSalesforce.run`."""
+        return self._sync.run(action)
 
     async def limits(self) -> dict[str, Limit]:
         """See :meth:`FakeSalesforce.limits`."""

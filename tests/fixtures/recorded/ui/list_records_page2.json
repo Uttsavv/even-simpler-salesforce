@@ -1,0 +1,30 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Salesforce User Interface API Developer Guide (Get List View Records with URL Parameters; List Records response body); no org recording yet",
+  "body": {
+    "count": 1,
+    "currentPageToken": "2",
+    "currentPageUrl": "/services/data/v68.0/ui-api/list-records/Lead/AllOpenLeads?pageSize=2&pageToken=2",
+    "listInfoETag": "f0e1d2",
+    "nextPageToken": null,
+    "nextPageUrl": null,
+    "previousPageToken": "0",
+    "previousPageUrl": "/services/data/v68.0/ui-api/list-records/Lead/AllOpenLeads?pageSize=2&pageToken=0",
+    "records": [
+      {
+        "apiName": "Lead",
+        "childRelationships": {},
+        "eTag": "x3",
+        "fields": {
+          "Name": {
+            "displayValue": null,
+            "value": "Grace Hopper"
+          }
+        },
+        "id": "00Qxx0000000003AAA",
+        "recordTypeId": "012000000000000AAA",
+        "recordTypeInfo": null
+      }
+    ]
+  }
+}

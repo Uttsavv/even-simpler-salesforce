@@ -42,6 +42,19 @@ def test_fake_matches_real_surface(real_cls: Any, fake_cls: Any) -> None:
     assert _compare(real.sobject("Lead"), fake.sobject("Lead")) == []
     assert _compare(real.collections, fake.collections) == []
     assert _compare(real.auth, fake.auth) == []
+    assert _compare(real.actions, fake.actions) == []
+    assert _compare(real.apex, fake.apex) == []
+    assert _compare(real.leads, fake.leads) == []
+    assert _compare(real.platform_events, fake.platform_events) == []
+    assert _compare(real.files, fake.files) == []
+    assert _compare(real.tooling, fake.tooling) == []
+    assert _compare(real.tooling.sobject("ApexClass"), fake.tooling.sobject("ApexClass")) == []
+    assert _compare(real.bulk, fake.bulk) == []
+    assert _compare(real.ui, fake.ui) == []
+    assert _compare(real.reports, fake.reports) == []
+    assert _compare(real.reports.dashboards, fake.reports.dashboards) == []
+    assert _compare(real.metadata, fake.metadata) == []
+    assert _compare(real.pubsub, fake.pubsub) == []
 
 
 def test_positional_values_and_single_row_helpers() -> None:

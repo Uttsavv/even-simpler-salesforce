@@ -43,6 +43,14 @@ implementation. They have the methods of the real clients for these areas:
 - records
 - query and search
 - Collections
+- lead convert, merge and platform events
+- [Files](guides/files.md)
+- [GraphQL](guides/graphql.md), with scripted answers
+- [Tooling API](guides/tooling.md), including anonymous Apex
+- [Bulk API 2.0](guides/bulk.md): ingest jobs apply their rows at once; queries return the rows of `on_query()`
+- [UI API](guides/ui.md)
+- [Metadata API](guides/metadata.md#test-code-that-uses-the-metadata-api), with scripted
+  deployments and seeded components
 - `request`, `limits` and `usage`
 - `with_auth` and `tagged`
 
@@ -71,9 +79,32 @@ The Collections methods follow the same rules.
 | `fake.set_describe(sobject, describe)` | what `describe()` returns; otherwise the fake makes up a minimal one |
 | `fake.set_limits({...})` | what `limits()` returns |
 | `fake.set_api_usage(used, max)` | pretend the fake saw a `Sforce-Limit-Info` header; drives budgets |
+| `fake.add_file(data, filename=..., link_to=...)` | seed a file without recording a call; returns the ContentVersion id |
+| `fake.file_content(version_id)` | the bytes stored for a file, or `None` |
 
 The fake doesn't run validation rules, triggers or required-field checks. To simulate them, use
 [`reject()` or `fail_next()`](#inject-errors).
+
+### Lead convert, merge and platform events
+
+`fake.leads.convert()` creates the account, contact and opportunity in the fake's store. It
+also marks the lead converted. `fake.merge()` deletes the duplicates and points fields that held
+their ids at the kept record. `fake.published(name)` returns the events you published.
+
+```python
+from even_simpler_salesforce.testing import FakeSalesforce
+
+fake = FakeSalesforce()
+lead = fake.add("Lead", {"LastName": "Doe", "Company": "Acme"})
+result = fake.leads.convert(lead, converted_status="Closed - Converted")
+assert fake.record("Account", result.account_id)["Name"] == "Acme"
+
+fake.platform_events.publish("Order_Event__e", {"Order_Number__c": "A-1"})
+assert fake.published("Order_Event__e") == [{"Order_Number__c": "A-1"}]
+```
+
+`reject("Lead", error)` makes conversions fail, and `reject("Order_Event__e", error)` makes
+publishes fail.
 
 ## Script queries
 
@@ -124,6 +155,90 @@ Pages follow `page_size`, which defaults to 2,000. Cursors work, and so does sig
 `FakeSalesforce(cursor_key=...)`. `query_iter(..., expand_children=True)` is accepted but does
 nothing, because scripted child records are already complete.
 
+## Script GraphQL
+
+The fake doesn't run GraphQL either. `on_graphql(match, data)` sets the `data` that
+`graphql()` returns for a document. With `nodes=` and `path=`, the fake builds the connection
+and pages it by the `after` variable, so `graphql_iter()` works unchanged.
+
+```python
+LEADS = """
+    query Leads($after: String) {
+      uiapi { query { Lead(first: 200, after: $after) {
+        edges { node { Id } } pageInfo { hasNextPage endCursor }
+      } } }
+    }
+"""
+
+
+def test_graphql_paging(esf_fake: FakeSalesforce) -> None:
+    nodes = [{"Id": esf_fake.new_id("Lead")} for _ in range(5)]
+    esf_fake.on_graphql(re.compile(r"\bLead\b"), nodes=nodes, path="uiapi.query.Lead", page_size=2)
+
+    assert list(esf_fake.graphql_iter(LEADS, path="uiapi.query.Lead")) == nodes
+    assert len(esf_fake.calls_for("graphql")) == 3
+
+
+def test_graphql_error(esf_fake: FakeSalesforce) -> None:
+    esf_fake.on_graphql("{ uiapi { a } }", esf.GraphQLError("bad field", error_code="ValidationError"))
+
+    try:
+        esf_fake.graphql("{ uiapi { a } }")
+    except esf.GraphQLError as exc:
+        assert exc.error_code == "ValidationError"
+```
+
+`on_graphql(match, data=None, *, nodes=None, path=None, page_size=10, times=None)` takes these
+arguments:
+
+- `match` is the document, a compiled regex or a predicate `(query) -> bool`, as for
+  `on_query()`.
+- `data` is the `data` dict, a callable `(query, variables) -> data`, or an exception to
+  raise.
+- `nodes` and `path` build a connection with `edges`, `pageInfo` and `totalCount`. The
+  cursors are `fake-cursor-<offset>`.
+
+The fake checks the query and `path` of `graphql_iter()` like the real client. Each page is
+one `"graphql"` call in `calls`.
+
+## UI API
+
+`fake.ui` builds UI API responses from the fake's records and describes, so you don't script
+them. Add list views with `set_list_view()`.
+
+```python
+def test_open_leads_view(esf_fake: FakeSalesforce) -> None:
+    esf_fake.add("Lead", {"LastName": "Lovelace", "Company": "Engines", "Status": "Open"})
+    esf_fake.add("Lead", {"LastName": "Hopper", "Company": "Navy", "Status": "Closed"})
+    esf_fake.set_list_view("Lead", "OpenLeads", where=lambda r: r["Status"] == "Open")
+
+    page = esf_fake.ui.list_records("Lead", "OpenLeads")
+    assert [r["fields"]["LastName"]["value"] for r in page["records"]] == ["Lovelace"]
+    assert esf_fake.ui.list_views("Lead")["lists"][0]["apiName"] == "OpenLeads"
+```
+
+The fake answers each method this way:
+
+| Method | Built from |
+|---|---|
+| `record()` | the stored record; `fields` must exist on the object, else `InvalidField` |
+| `object_info()` | the describe from `set_describe()`, or one made from the records |
+| `picklist_values()` | the active `picklistValues` of each picklist field in the describe |
+| `create_defaults()` | the `defaultValue` of each field in the describe |
+| `clone_defaults()` | the stored record without its id and system fields |
+| `list_views()`, `list_records()` | the views from `set_list_view()`; `__Recent` returns every record |
+
+`set_list_view(sobject, api_name, *, label=None, where=None, fields=None)` replaces a view
+with the same name. `where` takes a copy of each record and returns `True` to select it.
+`fields` limits the fields of each record in `list_records()`. `displayValue` is always
+`None`, because the fake has no formatting rules. `layout_types` returns every stored field.
+## Script reports and dashboards
+
+`on_report(report_id, result)` sets the body that `sf.reports.run()` returns for a report. An
+asynchronous run finishes at once, so `instance()` returns without waiting.
+`on_dashboard(dashboard_id, body)` sets the body of `sf.reports.dashboards.get()`. See
+[Reports and dashboards](guides/reports.md#test-code-that-uses-reports).
+
 ## Inject errors
 
 `fail_next()` makes the next call of an operation raise. `reject()` rejects record writes row by
@@ -161,13 +276,90 @@ def test_partial_failure(esf_fake: FakeSalesforce) -> None:
 - `"sobject.update"`
 - `"query"` and `"query_more"`
 - `"collections.create"`
+- `"actions.flow"`, `"actions.apex"` and `"actions.standard"`
+- `"apex.get"`, `"apex.post"` and the other Apex REST methods
 - `"limits"`
+- `"graphql"`
+- `"ui.record"`, `"ui.object_info"`, `"ui.list_records"` and the other UI API methods
+- `"reports.recent"`, `"reports.run"`, `"reports.run_async"`, `"reports.instance"` and
+  `"reports.describe"`
+- `"metadata.deploy"`, `"metadata.quick_deploy"`, `"metadata.cancel_deploy"`,
+  `"metadata.deploy_status"`, `"metadata.retrieve"`, `"metadata.list"` and `"metadata.describe"`
 - `"raw"`, or the name you pass as `operation=`
 - `"*"` for any operation
 
 `reject(sobject, error, *, when=None)` applies to record writes. A single write raises the error.
 A Collections call returns `RecordResult(ok=False, ...)` for each rejected row. With
 `all_or_none=True`, the fake rolls back the chunk, as the real API does.
+
+## Fake actions and Apex REST
+
+`on_action(kind, name, outputs)` answers `sf.actions.*` and `sf.run()`. The fake runs the
+handler once per input. `on_apex(method, path, response)` answers `sf.apex.*`.
+
+```python
+def assign(sf, lead_id: str) -> str:  # code under test
+    return sf.actions.flow("Assign_Lead", {"leadId": lead_id})["assignedTo"]
+
+
+def test_assign(esf_fake: FakeSalesforce) -> None:
+    def handler(inputs: dict) -> dict:
+        if not inputs.get("leadId"):
+            raise esf.RequiredFieldMissing("leadId is required", error_code="REQUIRED_FIELD_MISSING")
+        return {"assignedTo": "005000000000001AAA"}
+
+    esf_fake.on_action("flow", "Assign_Lead", handler)
+    assert assign(esf_fake, "00Q000000000001AAA") == "005000000000001AAA"
+
+    results = esf_fake.actions.flow("Assign_Lead", [{"leadId": "00Q000000000001AAA"}, {}])
+    assert [r.ok for r in results] == [True, False]
+
+
+def test_closed_order(esf_fake: FakeSalesforce) -> None:
+    esf_fake.on_apex("POST", "/orders/submit", esf.ApexError("closed", status=422, body={"error": "CLOSED"}))
+    try:
+        esf_fake.apex.post("/orders/submit", {"orderId": "801"})
+    except esf.ApexError as exc:
+        assert exc.body == {"error": "CLOSED"}
+    else:
+        raise AssertionError("expected ApexError")
+```
+
+`outputs` is a dict, a callable that gets the inputs, or a `SalesforceError`. If the handler
+raises or returns a `SalesforceError`, that input fails: a single call raises it, and a list call
+reports it in its `ActionResult`. `set_action_describe(kind, name, describe)` sets what
+`actions.describe()` returns. `on_apex` takes the same `response` values as `on_request`, and
+its path is the part after `/services/apexrest`. A call with no handler raises `UnscriptedCall`.
+
+## Fake Pub/Sub events { #pubsub }
+
+`fake.pubsub` feeds `fake.pubsub.subscribe()` without gRPC, so the `[pubsub]` extra isn't
+needed. `emit(topic, payload)` adds a platform event. `emit_change(entity, change_type,
+record_ids, changed_fields=...)` adds a change event. `fail_next(error)` makes the next read
+raise `error`.
+
+```python
+def count_orders(sf) -> int:  # code under test
+    with sf.pubsub.subscribe("/event/Order_Event__e") as events:
+        return sum(1 for _ in events)
+
+
+def test_count_orders(esf_fake: FakeSalesforce) -> None:
+    esf_fake.pubsub.emit("/event/Order_Event__e", {"Order_Number__c": "A-1"})
+    esf_fake.pubsub.emit_change("Account", "GAP_OVERFLOW")
+    assert count_orders(esf_fake) == 1
+    assert esf_fake.pubsub.emitted("/data/AccountChangeEvent")[0].change.is_overflow
+
+    esf_fake.pubsub.fail_next(esf.PubSubLimitExceeded("too many clients"))
+    try:
+        count_orders(esf_fake)
+    except esf.PubSubLimitExceeded:
+        pass
+```
+
+The fake follows the save points of a replay store, rejects an unknown replay id with
+`ReplayUnavailable`, and emits the `sf.pubsub.*` events. Unlike Salesforce, the loop ends when
+every emitted event was yielded. See [Pub/Sub API](guides/pubsub.md#test-your-code).
 
 ## Assert on calls
 
@@ -334,6 +526,10 @@ contract. They check:
 
 See [Token stores](authentication/token-stores.md#checking-your-store-tokenstorecontract) for a
 full example.
+
+`ReplayStoreContract` and `AsyncReplayStoreContract` do the same for a Pub/Sub replay store:
+missing keys, the round trip, overwrites, keys per org and topic, persistence and concurrent
+saves. See [Pub/Sub API](guides/pubsub.md#keep-your-place-with-a-replay-store).
 
 ## Fixture format
 

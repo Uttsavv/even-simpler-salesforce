@@ -1,0 +1,21 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Salesforce REST API Developer Guide, sObject Tree (Create Nested Records); no org recording yet",
+  "body": {
+    "hasErrors": false,
+    "results": [
+      {
+        "referenceId": "acme",
+        "id": "001xx0000000003AAA"
+      },
+      {
+        "referenceId": "ref1",
+        "id": "003xx0000000003AAA"
+      },
+      {
+        "referenceId": "ref2",
+        "id": "001xx0000000004AAA"
+      }
+    ]
+  }
+}

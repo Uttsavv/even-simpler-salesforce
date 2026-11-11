@@ -1,0 +1,10 @@
+{
+  "synthetic": true,
+  "source": "hand-written from the Platform Events Developer Guide, Platform Event Error Status Codes: https://developer.salesforce.com/docs/atlas.en-us.platform_events.meta/platform_events/platform_events_error_status_codes.htm",
+  "body": [
+    {
+      "errorCode": "LIMIT_EXCEEDED",
+      "message": "The number of published platform event messages exceeded the hourly publishing limit."
+    }
+  ]
+}

@@ -24,10 +24,45 @@ except esf.SalesforceError as exc:
 ```
 
 Every error has the same [attributes](#attributes), so one `except` clause can log any of them.
-`str(exc)` gives `"ERROR_CODE: message (operation, sobject, HTTP status)"`.
+`str(exc)` gives `"ERROR_CODE: message (operation, sobject, HTTP status)"`, then a
+[hint](#hints-and-docs-links) if there is one, then a link to the error's entry on this page.
 
 Invalid arguments are different. They raise `ValueError` or `TypeError` when you create the
 object, before the client sends a request.
+
+## Hints and docs links
+
+Some errors have a common cause with a known fix. For these, `exc.hint` says what to check.
+Every error also has `exc.docs_url`, a link to its entry under [Troubleshooting](#troubleshooting).
+
+```python
+await sf.sobject("Lead").describe()  # the hint reads this cached describe
+
+try:
+    await sf.query("SELECT Id, Scores__c FROM Lead")
+except esf.InvalidField as exc:
+    print(exc.hint)  # did you mean 'Score__c'?
+    print(exc.docs_url)  # https://uttsavv.github.io/even-simpler-salesforce/latest/errors/#invalidfield
+```
+
+The client builds a hint only from data it already has. It never sends a request to build one.
+A hint never holds record values or secrets. These errors get a hint:
+
+| Error | Hint |
+|---|---|
+| `InvalidField` for a column that doesn't exist | the closest field names, if the describe for that sObject is in the cache |
+| `SessionExpired` after the client refreshed the token | check the `api` OAuth scope and the session policies of the connected app |
+| `Forbidden` with `API_DISABLED_FOR_ORG` | the org edition and the "API Enabled" user permission |
+| `RequestLimitExceeded` | check `sf.usage.snapshot()` and set a [budget](usage-and-budgets.md) |
+| `MalformedQuery` for a query with an unescaped single quote | pass values as arguments, such as `sf.query("... WHERE Name = {}", name)` |
+
+`str(exc)` shows both on their own lines:
+
+```console
+INVALID_FIELD: No such column 'Scores__c' on entity 'Lead'. (query, Lead, HTTP 400)
+  hint: did you mean 'Score__c'?
+  docs: https://uttsavv.github.io/even-simpler-salesforce/latest/errors/#invalidfield
+```
 
 ## Catch a group of errors
 
@@ -173,6 +208,8 @@ await sf.aclose()
 | `errors` | every `esf.ErrorDetail(error_code, message, fields, extended)` when Salesforce returned several |
 | `raw` | the first 4 KiB of the response body, for debugging; the library never logs it |
 | `tag` | custom tag parsed from a `[TAG] ...` message, if any |
+| `hint` | a likely fix, or `None` (see [Hints and docs links](#hints-and-docs-links)) |
+| `docs_url` | link to the error's entry under [Troubleshooting](#troubleshooting) |
 
 Exceptions pickle with all their attributes, so they survive Celery, multiprocessing and
 `concurrent.futures`.
@@ -189,6 +226,7 @@ SalesforceError
 │   ├── ReauthorizationRequired    refresh token expired, revoked or rotated out: log in again
 │   ├── RefreshFailed              token refresh failed; .ambiguous=True when the outcome is unknown
 │   ├── TokenConflict              token-store compare-and-swap lost (normally handled internally)
+│   ├── TokenIdentityChanged       new or stored token belongs to another org or user
 │   └── OAuthError                 OAuth endpoint error; .error, .error_description
 ├── RequestError                   4xx caused by the request
 │   ├── MalformedQuery             MALFORMED_QUERY, INVALID_QUERY_LOCATOR, rejected cursor, ...
@@ -200,7 +238,8 @@ SalesforceError
 │   ├── Conflict                   409 / 412 / 428
 │   ├── Gone                       410
 │   ├── RequestTooLarge            414 / 431
-│   └── UnsupportedApiVersion      UNSUPPORTED_API_VERSION, or API_VERSION_TOO_OLD (raised locally)
+│   ├── UnsupportedApiVersion      UNSUPPORTED_API_VERSION, or API_VERSION_TOO_OLD (raised locally)
+│   └── DeployNotCancelable        cancel_deploy() refused: the deployment is finalizing; .job_id, .state
 ├── RecordError                    DML rejected by the org
 │   ├── ValidationRuleFailed       FIELD_CUSTOM_VALIDATION_EXCEPTION (validation rule, Flow, addError())
 │   ├── RequiredFieldMissing       REQUIRED_FIELD_MISSING
@@ -211,21 +250,332 @@ SalesforceError
 │   ├── RowLocked                  UNABLE_TO_LOCK_ROW                   (retryable)
 │   ├── RecordSaveBlocked          CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY (often an unhandled trigger exception)
 │   ├── FlowFailed                 CANNOT_EXECUTE_FLOW_TRIGGER
-│   └── StorageLimitExceeded       STORAGE_LIMIT_EXCEEDED
+│   ├── StorageLimitExceeded       STORAGE_LIMIT_EXCEEDED
+│   └── EventPublishFailed         platform event publish refused, e.g. LIMIT_EXCEEDED
+│       └── EventPublishUnavailable  PLATFORM_EVENT_PUBLISHING_UNAVAILABLE  (retryable)
 ├── LimitError
 │   ├── RequestLimitExceeded       REQUEST_LIMIT_EXCEEDED (403) or 429; .retry_after
-│   └── BudgetExceeded             the library's own budget guard; .usage
+│   ├── BudgetExceeded             the library's own budget guard; .usage
+│   └── PubSubLimitExceeded        Pub/Sub RESOURCE_EXHAUSTED, e.g. too many concurrent streams
 ├── ServerError                    420 and 5xx, SERVER_UNAVAILABLE
 ├── PartialFailure                 some records or chunks failed; .results
-├── BulkJobFailed                  Bulk 2.0 job failed; .job_id, .state, .error_message   (used from 0.3)
+├── BulkJobFailed                  Bulk 2.0 job failed or was aborted; .job_id, .state, .error_message
+├── BulkJobTimeout                 Bulk 2.0 job not finished within wait(timeout=); .job_id, .state
 ├── ApexError                      APEX_ERROR, or an error from an Apex REST class; .body
-├── GraphQLError                   GraphQL errors array; .graphql_errors                 (used from 0.3)
-├── SoapFault                      unmapped SOAP fault; .fault_code                      (used from 0.2)
+├── GraphQLError                   GraphQL errors array; .graphql_errors, .data
+├── ReportRunFailed                asynchronous report run ended with Error; .report_id, .instance_id
+├── ReportTimeout                  asynchronous report run still running at timeout; .run_status
+├── DeployFailed                   Metadata API deployment failed or partly failed; .job_id, .state, .result
+├── RetrieveFailed                 Metadata API retrieve ended Failed; .job_id, .state
+├── MetadataTimeout                deployment or retrieve still running after the timeout; .job_id, .state
+├── PubSubError                    other Pub/Sub API (gRPC) errors; .error_code, .request_id (rpcId)
+│   └── ReplayUnavailable          stored or requested replay id rejected; .replay_id
+├── SoapFault                      unmapped SOAP fault (lead convert, merge); .fault_code
 └── UnexpectedResponse             HTML pages (proxies, maintenance), non-JSON bodies, unexpected shapes
 ```
 
-`BulkJobFailed`, `GraphQLError` and `SoapFault` exist now to keep the hierarchy stable. Nothing
-in 0.1 raises them.
+## Troubleshooting
+
+Each error class has an entry here. `exc.docs_url` links to it.
+
+### SalesforceError
+
+The base class of every error. Read `exc.error_code` and `exc.message` first. If you report a
+problem to Salesforce support, include `exc.request_id`.
+
+### TransportError
+
+The client got no usable HTTP response. Check the network, proxies and DNS. The client
+retries reads for you. It doesn't resend writes that may have reached Salesforce.
+
+### ConnectError
+
+The client couldn't connect, so Salesforce never got the request. Check the instance URL, the
+proxy settings and the firewall. It is always safe to send the call again.
+
+### RequestTimeout
+
+The request took longer than the timeout. For a write, check the record before you send it
+again, because the write may have committed. To wait longer, raise `Timeouts(read=...)`.
+
+### AuthError
+
+A login or token problem. Catch this group to send the user back to log in.
+
+### SessionExpired
+
+Salesforce rejected the access token, and one refresh didn't fix it. If the hint names the
+connected app, check its OAuth scopes and session policies. A `StaticToken` can't refresh, so
+get a new token.
+
+### ReauthorizationRequired
+
+The refresh token is expired, revoked or replaced by a newer one. The user must log in again.
+See [Authentication](authentication/index.md#how-tokens-are-handled).
+
+### RefreshFailed
+
+The token refresh failed. If `exc.ambiguous` is `True`, Salesforce may have issued a new
+token that the client didn't receive. Try the call again later.
+
+### TokenConflict
+
+Two processes saved a token at the same time. The client handles this itself. If you see it,
+your token store may not implement compare-and-swap correctly.
+
+### TokenIdentityChanged
+
+A refreshed token, or a token the client re-read from the token store, belongs to another org
+or user than the token it replaces. The client doesn't use it, so it never acts as another
+user. The message names what changed and the `token_key_hash`.
+
+Check that your token store keeps one record per Salesforce identity. If you refreshed a
+sandbox, the sandbox has a new org id. Delete the stored token with `sf.auth.revoke()` or your
+token store, then log in again.
+
+### OAuthError
+
+An OAuth endpoint returned an error. Read `exc.error` and `exc.error_description`. Common
+causes are a wrong client id, a wrong secret or a disabled flow in the connected app.
+
+### RequestError
+
+Salesforce rejected the request itself. Read `exc.error_code`. Sending the same request again
+gives the same error.
+
+### MalformedQuery
+
+The SOQL or SOSL has a syntax error, or a cursor is invalid. Pass values as arguments,
+such as `sf.query("... WHERE Name = {}", name)`. The client then quotes them for you.
+
+### InvalidField
+
+A field name doesn't exist on the sObject, or the user can't see or write it. Check the
+spelling and the `__c` suffix of custom fields. Check field-level security for the user.
+
+### InvalidType
+
+The sObject type doesn't exist, or the user can't see it. Check the spelling and the `__c`
+suffix. Check the object permissions of the user.
+
+### NotFound
+
+The record or resource doesn't exist, or the record is deleted. Check the id and the path.
+
+### Forbidden
+
+The user doesn't have access. Check the profile and permission sets of the user. For
+`API_DISABLED_FOR_ORG`, the user needs the "API Enabled" permission, and the org edition must
+include API access.
+
+### MultipleMatches
+
+An external id value matched more than one record. `exc.matches` lists their URLs. Make the
+external id field unique.
+
+### Conflict
+
+The record changed since you read it, or a precondition failed. Read the record again, then
+retry your change.
+
+### Gone
+
+The resource was removed, often because the API version is retired. Use a newer
+`api_version`.
+
+### RequestTooLarge
+
+The URL or the headers are over 16,384 bytes. To read many records by id, use
+`sf.collections.retrieve`. Split a very long query into smaller ones.
+
+### UnsupportedApiVersion
+
+The org doesn't offer the configured `api_version`, or a feature needs a newer one. Set
+`api_version=` on the client.
+
+### RecordError
+
+The org rejected a record change. Catch this group to show the message to the user.
+
+### ValidationRuleFailed
+
+A validation rule, a Flow custom error or Apex `addError()` rejected the record. Show
+`exc.message` to the user. To catch one rule by class, use [tags](#custom-errors-with-tags).
+
+### RequiredFieldMissing
+
+A required field has no value. `exc.fields` names the fields.
+
+### DuplicateDetected
+
+A duplicate rule blocked the record. `exc.duplicates` holds the matching records when
+Salesforce returns them.
+
+### InvalidReference
+
+An id in a lookup field points to a missing record, or to the wrong sObject type. Check the
+ids in `exc.fields`.
+
+### StringTooLong
+
+A text value is longer than the field allows. Run `esf describe <sObject>` to see the
+length of each field.
+
+### InvalidPicklistValue
+
+The value isn't in the restricted picklist. Run `esf describe <sObject>` to see the active
+values.
+
+### RowLocked
+
+Another transaction holds a lock on the record. The client retries this error. If it still
+fails, send fewer updates to the same parent record at once.
+
+### RecordSaveBlocked
+
+The save was blocked. In practice this is often an unhandled exception in a trigger. Read
+`exc.message`, then check the debug logs in the org.
+
+### FlowFailed
+
+A record-triggered Flow failed. Read `exc.message`, then check the Flow error e-mail or the
+Flow's debug run in the org.
+
+### EventPublishFailed
+
+Salesforce didn't accept a [platform event](guides/platform-events.md). Read `exc.error_code`.
+`LIMIT_EXCEEDED` means the org's hourly publishing allocation is used up: publish less often or
+in fewer calls, or buy more allocation.
+
+### EventPublishUnavailable
+
+Event publishing is down for a moment, so `exc.retryable` is true. Publish the event again after
+a short wait.
+
+### StorageLimitExceeded
+
+The org is out of data or file storage. Delete records or buy more storage.
+
+### LimitError
+
+A Salesforce limit or the library's own budget stopped the call.
+
+### RequestLimitExceeded
+
+The org is over its API request limit, or runs too many long requests at once. Check
+`sf.usage.snapshot()` and set a budget. See [Usage and budgets](usage-and-budgets.md).
+
+### BudgetExceeded
+
+The client's own budget guard stopped the call before it was sent. `exc.usage` shows the
+usage. See [Usage and budgets](usage-and-budgets.md).
+
+### PubSubLimitExceeded
+
+A Pub/Sub API allocation stopped the subscription, for example too many concurrent clients or
+subscriptions, or a service-protection limit. `exc.error_code` holds the Pub/Sub error code.
+Close streams you don't use, and check the allocations for your edition. See
+[Pub/Sub API](guides/pubsub.md#errors-and-reconnects).
+
+### ServerError
+
+Salesforce had an internal error or is not available. The client retries reads. Check
+[Salesforce Trust](https://status.salesforce.com) if the error continues.
+
+### PartialFailure
+
+Some records of a batch failed. `exc.results` holds every row, with an error on each failed
+row.
+
+### BulkJobFailed
+
+A Bulk API 2.0 job ended in the `Failed` or `Aborted` state. `exc.state` says which, and
+`exc.error_message` gives the reason from Salesforce. If an ingest job failed, read
+`job.unprocessed_records()`. If a query selects a compound field such as `BillingAddress`,
+`exc.hint` names its component fields. See [Bulk API 2.0](guides/bulk.md).
+
+### BulkJobTimeout
+
+A Bulk API 2.0 job didn't finish within the `timeout` of `wait()`. The job keeps running in
+Salesforce. Call `wait()` again with a longer `timeout`, or call `job.abort()` to stop it.
+
+### ApexError
+
+Apex code threw an exception, or an Apex REST class returned an error. `exc.body` holds the
+response body.
+
+### GraphQLError
+
+The GraphQL response has an `errors` array. Salesforce can send it with `200 OK`. Read
+`exc.graphql_errors`: each entry has a `message`, and often `locations` in the query and
+`extensions.ErrorType`. `exc.error_code` holds the `ErrorType` of the first entry, for example
+`ValidationError` for an unknown field. `exc.data` holds the partial data, if any. See
+[GraphQL](guides/graphql.md#handle-errors).
+
+### ReportRunFailed
+
+An asynchronous report run ended with status `Error`. Salesforce doesn't say why. A common
+cause is that the user lost access to the report after the run started. Check the report in
+Salesforce, then start a new run. See [Reports](guides/reports.md#run-a-slow-report).
+
+### ReportTimeout
+
+An asynchronous report run didn't finish within the `timeout` of `sf.reports.instance()`. The
+run keeps going in Salesforce. Call `instance()` again with `exc.report_id` and
+`exc.instance_id` to keep waiting. `exc.run_status` is the last status the client saw.
+### DeployFailed
+
+A Metadata API deployment failed, was canceled or deployed only some components.
+`DeployResult.raise_for_errors()` raises it. `exc.errors` has one entry per failed component
+and per failed Apex test, with the file and line. `exc.result` holds the full `DeployResult`.
+If `check_only=True`, Salesforce saved nothing. See
+[Metadata API](guides/metadata.md#handle-a-failed-deployment).
+
+### DeployNotCancelable
+
+`sf.metadata.cancel_deploy()` asked Salesforce to cancel a deployment, and Salesforce refused
+because the deployment is already in the `FinalizingDeploy` stage. From API 65.0 a finalizing
+deployment can't be canceled. It finishes on its own: wait for it with
+`sf.metadata.deploy_status(exc.job_id, wait=True)`. See
+[Metadata API](guides/metadata.md#cancel-a-deployment).
+
+### RetrieveFailed
+
+A Metadata API retrieve ended in the `Failed` state. Read `exc.message` and `exc.error_code`.
+Check the type names in your `package.xml` against `sf.metadata.describe_metadata()`.
+
+### MetadataTimeout
+
+A deployment or a retrieve was still running when the client stopped waiting. The job keeps
+running in Salesforce. To keep waiting for a deployment, call
+`sf.metadata.deploy_status(exc.job_id, wait=True)` again. To wait longer from the start, pass a
+larger `timeout=`.
+### PubSubError
+
+The Pub/Sub API returned an error that has no more specific class, or the client ran out of
+reconnect attempts. `exc.error_code` holds the Pub/Sub `error-code` (or the gRPC status
+name) and `exc.request_id` the `rpcId`. Give both to Salesforce Support. See
+[Pub/Sub API](guides/pubsub.md#errors-and-reconnects).
+
+### ReplayUnavailable
+
+Salesforce rejected the replay id that the subscription tried to start from. This happens
+when it is older than the 72-hour retention window. `exc.replay_id` holds the rejected id.
+Decide what to do with the missed events, for example re-sync the records. Then subscribe with
+`on_invalid_replay="latest"` or `"earliest"`, or save a new position in your replay store. See
+[Pub/Sub API](guides/pubsub.md#when-the-stored-position-is-too-old).
+
+### SoapFault
+
+A SOAP call returned a fault that has no more specific class. Read `exc.fault_code`.
+
+### UnexpectedResponse
+
+The response wasn't what Salesforce normally sends, such as a proxy page or a maintenance
+page. Check proxies between you and Salesforce. `exc.raw` holds the start of the body.
+
+A Pub/Sub event whose payload doesn't match its Avro schema also raises this error. Salesforce
+doesn't check payloads on publish. `exc.event_id` and `exc.replay_id` identify the event.
 
 ## How it works
 
@@ -278,6 +628,20 @@ The client checks each response in this order:
 
 An unknown `errorCode` falls back to the status rule in step 6. `.error_code` still holds the
 code.
+
+### SOAP faults
+
+[Lead convert and merge](guides/leads.md) use the SOAP API. A SOAP fault maps by its
+`exceptionCode` with the table above, because a fault is always HTTP 500. An unknown code
+raises `SoapFault`, with the raw `faultcode` in `.fault_code`. A rejected session
+(`INVALID_SESSION_ID`) refreshes the token once, like a REST `401`.
+
+### Platform event errors
+
+When you publish a [platform event](guides/platform-events.md), `PLATFORM_EVENT_PUBLISHING_UNAVAILABLE`
+raises `EventPublishUnavailable`. `LIMIT_EXCEEDED`, `PLATFORM_EVENT_PUBLISH_FAILED` and any other
+unknown code raise `EventPublishFailed`. Known record errors keep their class, such as
+`RequiredFieldMissing`.
 
 ### What the client doesn't do
 

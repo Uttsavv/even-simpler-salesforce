@@ -51,6 +51,55 @@ rest_endpoints:
     used_by: sf.parameterized_search
     docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_search_parameterized.htm
     checked: null
+  - path: graphql
+    methods: [POST]
+    used_by: "sf.graphql, sf.graphql_iter (body {query, variables}; errors[] on 200 OK)"
+    docs: https://developer.salesforce.com/docs/platform/graphql/guide/requests-and-responses.html
+    checked: null
+    # Read 2026-11-10 from search excerpts only (the page returns 403 to non-browser clients) (V50, V51)
+  - path: "ui-api/records/{}"
+    methods: [GET]
+    used_by: "sf.ui.record() (fields, layoutTypes, modes)"
+    dynamic: true  # built by core/ui.py, not a literal in the area code
+    docs: https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_record_get.htm
+    checked: null
+  - path: "ui-api/object-info/{}"
+    methods: [GET]
+    used_by: "sf.ui.object_info() (describe cache; If-Modified-Since, V62)"
+    dynamic: true  # built by core/ui.py, not a literal in the area code
+    docs: https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_object_info.htm
+    checked: null
+  - path: "ui-api/object-info/{}/picklist-values/{}"
+    methods: [GET]
+    used_by: "sf.ui.picklist_values() (describe cache)"
+    dynamic: true  # built by core/ui.py, not a literal in the area code
+    docs: https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_picklist_values_collection.htm
+    checked: null
+  - path: "ui-api/record-defaults/create/{}"
+    methods: [GET]
+    used_by: "sf.ui.create_defaults() (recordTypeId)"
+    dynamic: true  # built by core/ui.py, not a literal in the area code
+    docs: https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_record_defaults_create.htm
+    checked: null
+  - path: "ui-api/record-defaults/clone/{}"
+    methods: [GET]
+    used_by: "sf.ui.clone_defaults()"
+    dynamic: true  # built by core/ui.py, not a literal in the area code
+    docs: https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_record_defaults_clone.htm
+    checked: null
+  - path: "ui-api/list-info/{}"
+    methods: [GET]
+    used_by: "sf.ui.list_views() (V60)"
+    dynamic: true  # built by core/ui.py, not a literal in the area code
+    docs: https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_lists_object_get.htm
+    checked: null
+  - path: "ui-api/list-records/{}/{}"
+    methods: [GET]
+    used_by: "sf.ui.list_records() (pageSize 1-2,000, pageToken)"
+    dynamic: true  # built by core/ui.py, not a literal in the area code
+    docs: https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_list_views_records.htm
+    checked: null
+    # UI API pages read 2026-11-11 from search excerpts only (403 to non-browser clients) (V60-V64)
   - path: limits
     methods: [GET]
     used_by: sf.limits
@@ -96,6 +145,68 @@ rest_endpoints:
     used_by: sobject.deleted(start, end)
     docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_getdeleted.htm
     checked: null
+  - path: sobjects/ContentVersion
+    methods: [POST]
+    used_by: "sf.files.upload() (multipart: entity_content JSON + VersionData file; 2 GB max)"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/dome_sobject_insert_update_blob.htm
+    checked: null
+    # Part names and the 2 GB limit read 2026-11-10 from search excerpts of this page (V12, V29)
+  - path: "sobjects/ContentVersion/{}/VersionData"
+    methods: [GET]
+    used_by: "sf.files.download() (streamed), sf.files.download_bytes()"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/dome_sobject_blob_retrieve.htm
+    checked: null
+  - path: "sobjects/Attachment/{}/Body"
+    methods: [GET]
+    used_by: sf.files.download_attachment()
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/dome_sobject_blob_retrieve.htm
+    checked: null
+  - path: sobjects/ContentDocumentLink
+    methods: [POST]
+    used_by: "sf.files.link(), sf.files.upload(share_type=/visibility=)"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_contentdocumentlink.htm
+    checked: null
+  - path: "jobs/{}"
+    methods: [POST]
+    used_by: "sf.bulk.ingest() (jobs/ingest), sf.bulk.query() (jobs/query, operation query or queryAll)"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/create_job.htm
+    checked: 2026-11-10
+  - path: "jobs/ingest/{}"
+    methods: [GET, PATCH]
+    used_by: "job.wait(), job.refresh() (job info); upload close and job.abort() (state UploadComplete / Aborted)"
+    dynamic: true  # built in the API version of the job (_job_path)
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/get_job_info.htm
+    checked: null
+  - path: "jobs/ingest/{}/batches"
+    methods: [PUT]
+    used_by: "sf.bulk.ingest() upload (text/csv; charset=UTF-8, streamed, at most 100 MB raw per job)"
+    dynamic: true
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/upload_job_data.htm
+    checked: null
+  - path: "jobs/ingest/{}/{}"
+    methods: [GET]
+    used_by: "job.successful_results(), job.failed_results(), job.unprocessed_records() (CSV)"
+    dynamic: true
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/get_job_successful_results.htm
+    checked: null
+  - path: "jobs/query/{}"
+    methods: [GET]
+    used_by: "sf.bulk.query() polling"
+    dynamic: true
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/query_get_one_job.htm
+    checked: null
+  - path: "jobs/query/{}/results"
+    methods: [GET]
+    used_by: "sf.bulk.query() result pages (?locator=, Sforce-Locator; same API version or 409)"
+    dynamic: true
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/query_get_job_results.htm
+    checked: null
+  - path: "jobs/query/{}/resultPages"
+    methods: [GET]
+    used_by: "sf.bulk.query(parallel_downloads>1) (API 58.0+, up to five result URLs per response)"
+    dynamic: true
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_bulk_v2/query_get_parallel_job_results.htm
+    checked: 2026-11-10
   - path: composite/sobjects
     methods: [POST, PATCH, DELETE]
     used_by: collections.create/update/delete()
@@ -111,6 +222,131 @@ rest_endpoints:
     used_by: collections.upsert()
     docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobjects_collections_upsert.htm
     checked: null
+  - path: tooling/query
+    methods: [GET]
+    used_by: "sf.tooling.query, sf.tooling.query_iter (?q=); the capture_log flow of execute_anonymous"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/intro_rest_resources.htm
+    checked: null
+  - path: "tooling/query/{}"
+    methods: [GET]
+    used_by: "sf.query_more (Tooling cursors), sf.tooling.query_iter (nextRecordsUrl, absolute path)"
+    dynamic: true  # the path comes from the opaque cursor, not a literal in the code
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/intro_rest_resources.htm
+    checked: null
+  - path: tooling/sobjects
+    methods: [GET]
+    used_by: "sf.tooling.describe_global (describe cache, own key)"
+    dynamic: true  # "sobjects" prefixed at runtime with base="tooling/"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/intro_rest_resources.htm
+    checked: null
+  - path: "tooling/sobjects/{}"
+    methods: [GET, POST, PATCH, DELETE]
+    used_by: "sf.tooling.sobject(name) methods (the sf.sobject paths with a tooling/ prefix); TraceFlag and DebugLevel in execute_anonymous(capture_log=True)"
+    dynamic: true  # prefixed at runtime by AsyncSObject(base="tooling/")
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/intro_rest_resources.htm
+    checked: null
+  - path: tooling/executeAnonymous/
+    methods: [GET]
+    used_by: "sf.tooling.execute_anonymous (?anonymousBody=; never resent, ADR 0001)"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/intro_rest_resources.htm
+    checked: null
+  - path: "tooling/sobjects/ApexLog/{}/Body"
+    methods: [GET]
+    used_by: "sf.tooling.execute_anonymous(capture_log=True)"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/tooling_api_objects_apexlog.htm
+    checked: null
+  - path: tooling/runTestsAsynchronous/
+    methods: [POST]
+    used_by: sf.tooling.run_tests_async
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/intro_rest_resources_testing_runner_async.htm
+    checked: null
+  - path: tooling/completions
+    methods: [GET]
+    used_by: "sf.tooling.completions (?type=apex|visualforce)"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/intro_rest_resources.htm
+    checked: null
+  - path: composite
+    methods: [POST]
+    used_by: composite.builder().send()
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_composite_post.htm
+    checked: null
+  - path: composite/graph
+    methods: [POST]
+    used_by: composite.graph().send()
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_graph.htm
+    checked: null
+  - path: composite/batch
+    methods: [POST]
+    used_by: composite.batch().send()
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_batch.htm
+    checked: null
+  - path: "composite/tree/{}"
+    methods: [POST]
+    used_by: composite.tree()
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobject_tree.htm
+    checked: null
+  # Reports and Dashboards REST API (sf.reports). Paths are built by core/reports.py, so the
+  # code scan can't see them (dynamic). Read 2026-11-11 from search excerpts only; the pages
+  # return 403 to non-browser clients (V65-V68).
+  - path: analytics/reports
+    methods: [GET]
+    used_by: "sf.reports.recent (up to 200 recently viewed reports; all reports need SOQL on Report)"
+    dynamic: true
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/sforce_analytics_rest_api_recentreportslist.htm
+    checked: null
+  - path: "analytics/reports/{}"
+    methods: [GET, POST]
+    used_by: "sf.reports.run (?includeDetails=; POST with reportMetadata.reportFilters; read, resent)"
+    dynamic: true
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/sforce_analytics_rest_api_getreportrundata.htm
+    checked: null
+  - path: "analytics/reports/{}/describe"
+    methods: [GET]
+    used_by: sf.reports.describe
+    dynamic: true
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/sforce_analytics_rest_api_getbasic_reportmetadata.htm
+    checked: null
+  - path: "analytics/reports/{}/instances"
+    methods: [POST]
+    used_by: "sf.reports.run_async (creates a report instance; never resent)"
+    dynamic: true
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/sforce_analytics_rest_api_instances_summaryasync.htm
+    checked: null
+  - path: "analytics/reports/{}/instances/{}"
+    methods: [GET]
+    used_by: "sf.reports.instance (polled; status New, Running, Success or Error)"
+    dynamic: true
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/sforce_analytics_rest_api_instances_resource.htm
+    checked: null
+  - path: "analytics/dashboards/{}"
+    methods: [GET, PUT]
+    used_by: "sf.reports.dashboards.get (GET), sf.reports.dashboards.refresh (PUT; never resent)"
+    dynamic: true
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/analytics_api_dashboard_results_resource.htm
+    checked: null
+  - path: metadata/deployRequest
+    methods: [POST]
+    used_by: "sf.metadata.deploy() (multipart: json deployOptions + file zip; never resent)"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_rest_deploy.htm
+    checked: null
+    # Part names, the 39 MB zip limit and the response shape read 2026-11-11 from search excerpts (V70)
+  - path: "metadata/deployRequest/{}"
+    methods: [GET, POST, PATCH]
+    used_by: "sf.metadata.deploy_status() (GET ?includeDetails=true; polled with wait=True); sf.metadata.quick_deploy() (POST validatedDeployRequestId; starts a deployment; never resent); sf.metadata.cancel_deploy() (PATCH deployResult.status=Canceling; never resent)"
+    dynamic: true
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_rest_deploy_checkstatus.htm
+    checked: null
+    # Path built by core/metadata.py deploy_request_path(). DeployResult status values (V71).
+    # Quick deploy: https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_rest_deploy_recentvalidation.htm
+    #   (the docs warn that PATCH there starts a new deployment; response shape V86).
+    # Cancel: https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_rest_deploy_cancel.htm
+    #   From API 65.0 a FinalizingDeploy deployment can't be canceled -> DeployNotCancelable (V85).
+  - path: "/services/Soap/m/{}"
+    methods: [POST]
+    used_by: "sf.metadata.retrieve() (retrieve + checkRetrieveStatus), list_metadata() (listMetadata), describe_metadata() (describeMetadata); SOAP Metadata API, SessionHeader = OAuth token"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_calls_intro.htm
+    checked: null
+    # Envelopes and fault shapes from memory of the Metadata WSDL; fixtures are synthetic (V72, V73)
   - path: /services/oauth2/userinfo
     methods: [GET]
     used_by: sf.auth.userinfo()
@@ -207,6 +443,11 @@ headers:
     used_for: "api-usage=N/M; api-bursts=N/M → sf.usage, budgets"
     docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/headers_api_usage.htm
     checked: null
+  - name: Sforce-Locator
+    direction: response
+    used_for: "next Bulk query result page; the string null on the last page"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/query_get_job_results.htm
+    checked: null
   - name: Sforce-Request-Id
     direction: response
     used_for: "error.request_id, sf.request events"
@@ -236,6 +477,14 @@ response_shapes:
     fields: [id, created, "201 = created, 204/200 = updated", "300 = list of matching URLs"]
   - resource: Limits
     fields: ["{name: {Max, Remaining, ...}}"]
+  - resource: GraphQL
+    fields: [data, "errors[]: message, locations, path, extensions.ErrorType", "connections: edges[].node, pageInfo {hasNextPage, endCursor}"]
+  - resource: UI API
+    fields: ["record: apiName, id, fields {Name: {value, displayValue}}, childRelationships, recordTypeId", "list-records: records, count, nextPageToken", "picklist-values: picklistFieldValues {field: {values, defaultValue, controllerValues}}", "errors: REST error body"]
+  - resource: Report run / report instance
+    fields: [attributes, allData, hasDetailRows, "factMap {'<row>!<col>': {aggregates[], rows[].dataCells[]}}", "groupingsDown/groupingsAcross.groupings[] {key, value, groupings}", "reportMetadata {reportFormat, detailColumns, aggregates, groupingsDown, groupingsAcross}", "attributes.status (instances)"]
+  - resource: Dashboard results / refresh
+    fields: [dashboardMetadata, "componentData[] {componentId, reportResult, status.refreshStatus}", statusUrl]
   - resource: REST error body
     fields: ["list of {message, errorCode or statusCode, fields}", "extras such as duplicateResult"]
   - resource: OAuth error body
@@ -280,6 +529,10 @@ error_codes:
 other_error_codes:
   - code: ALL_OR_NONE_OPERATION_ROLLED_BACK
     note: skipped when picking the primary error of an all_or_none batch
+  - code: PROCESSING_HALTED
+    note: Composite subrequest rolled back or skipped because another one failed; skipped by CompositeResult.raise_for_errors()
+  - code: BATCH_PROCESSING_HALTED
+    note: Batch subrequest skipped after an earlier failure with haltOnError; skipped by CompositeResult.raise_for_errors()
 
 http_statuses: [300, 304, 401, 403, 404, 409, 410, 412, 414, 420, 428, 429, 431, 500, 502, 503, 504]
 
@@ -289,3 +542,7 @@ limits:
   query_batch_size: [200, 2000]  # Sforce-Query-Options validation
   record_id_lengths: [15, 18]    # check_record_id
   gzip_threshold_bytes: 65536    # GZIP_THRESHOLD
+  composite_subrequests: 25      # COMPOSITE_MAX (at most 5 of them sObject Collections or query: COMPOSITE_MAX_HEAVY)
+  graph_subrequests: 500         # GRAPH_MAX, per graph
+  batch_subrequests: 25          # BATCH_MAX
+  tree_records: 200              # TREE_MAX_RECORDS (5 types, 5 levels)

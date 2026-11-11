@@ -10,12 +10,13 @@ Rules for writers of documentation pages:
 - Every HTTP request goes to a synthetic org (:mod:`tests.docs._org`) through respx, whatever
   the host. The environment has ``SF_DOMAIN``, ``SF_CLIENT_ID``, ``SF_CLIENT_SECRET``,
   ``SF_USERNAME``, ``SF_ACCESS_TOKEN`` and ``SF_INSTANCE_URL`` set, and the working directory
-  contains ``server.key`` (an RSA private key) for JWT examples.
+  contains ``server.key`` (an RSA private key) and ``server-encrypted.key`` (the same key,
+  encrypted with ``SF_KEY_PASSPHRASE``) for JWT examples.
 - Functions named ``test_*`` defined by a block are called afterwards with pytest-style fixture
   arguments (``esf_fake`` / ``esf_async_fake`` get fresh fakes, ``esf_replay`` resolves paths
   against the working directory; other names are resolved with
   ``request.getfixturevalue``). Coroutine functions are awaited.
-- ``Test*`` classes that subclass ``TokenStoreContract`` / ``AsyncTokenStoreContract`` are run
+- ``Test*`` classes that subclass a token-store or replay-store contract class are run
   with pytest in a subprocess, from a module holding the imports and definitions of every block
   of the page up to that point.
 - A block that can't run (needs a database, a real org, ...) is opted out by putting
@@ -114,6 +115,13 @@ def org(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Any:
             serialization.NoEncryption(),
         )
     )
+    (tmp_path / "server-encrypted.key").write_bytes(
+        key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.BestAvailableEncryption(b"docs-key-passphrase"),
+        )
+    )
     monkeypatch.chdir(tmp_path)
     for name, value in {
         "SF_DOMAIN": INSTANCE,
@@ -122,6 +130,7 @@ def org(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Any:
         "SF_USERNAME": "integration@acme.example",
         "SF_ACCESS_TOKEN": "AT-docs-static",
         "SF_INSTANCE_URL": INSTANCE,
+        "SF_KEY_PASSPHRASE": "docs-key-passphrase",
         "ESF_SANDBOX_ACCESS_TOKEN": "AT-docs-sandbox",  # esf_sandbox examples hit the fake org
         "ESF_SANDBOX_INSTANCE_URL": INSTANCE,
     }.items():
@@ -155,15 +164,18 @@ def _run_tests(ns: dict[str, Any], before: set[str], loop: asyncio.AbstractEvent
 
 
 def _run_contracts(ns: dict[str, Any], before: set[str], sources: list[str], tmp: Path, where: str) -> None:
-    from even_simpler_salesforce.testing import AsyncTokenStoreContract, TokenStoreContract
+    from even_simpler_salesforce.testing import (
+        AsyncReplayStoreContract,
+        AsyncTokenStoreContract,
+        ReplayStoreContract,
+        TokenStoreContract,
+    )
 
+    contracts = (TokenStoreContract, AsyncTokenStoreContract, ReplayStoreContract, AsyncReplayStoreContract)
     new = [
         v
         for k, v in ns.items()
-        if k not in before
-        and k.startswith("Test")
-        and isinstance(v, type)
-        and issubclass(v, (TokenStoreContract, AsyncTokenStoreContract))
+        if k not in before and k.startswith("Test") and isinstance(v, type) and issubclass(v, contracts)
     ]
     if not new:
         return

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-__all__ = ["Budget", "DescribeCacheConfig", "Priority", "RetryPolicy", "Timeouts"]
+__all__ = ["Backoff", "Budget", "DescribeCacheConfig", "Priority", "RetryPolicy", "Timeouts"]
 
 Priority = Literal["low", "normal", "high"]
 
@@ -79,3 +79,33 @@ class DescribeCacheConfig:
     max_entries: int = 500
     revalidate: bool = True
     stale_ttl: float = 86400.0
+
+
+@dataclass(frozen=True, slots=True)
+class Backoff:
+    """How often to poll a long-running job, such as a Bulk job in ``job.wait()``.
+
+    The first wait is ``start`` seconds. Each next wait is ``factor`` times longer, up to
+    ``max`` seconds. There is no jitter: a status call is cheap and the job runs in Salesforce.
+
+    Attributes:
+        start: First delay in seconds.
+        max: Longest delay in seconds.
+        factor: Growth of the delay per poll.
+    """
+
+    start: float = 2.0
+    max: float = 30.0
+    factor: float = 2.0
+
+    def __post_init__(self) -> None:
+        if not self.start > 0:
+            raise ValueError("Backoff.start must be > 0")
+        if not self.max >= self.start:
+            raise ValueError("Backoff.max must be >= start")
+        if not self.factor >= 1:
+            raise ValueError("Backoff.factor must be >= 1")
+
+    def delay(self, attempt: int) -> float:
+        """The wait before poll number ``attempt`` (0-based)."""
+        return min(self.max, self.start * self.factor ** min(attempt, 64))

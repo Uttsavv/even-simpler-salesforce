@@ -80,9 +80,16 @@ def test_help_and_usage_errors(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["query", "SELECT Id FROM Lead", "--json", "--csv"]) == EXIT_USAGE
 
 
-def test_generate_is_0_2(capsys: pytest.CaptureFixture[str]) -> None:
+def test_generate_needs_a_known_target(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["generate"]) == EXIT_USAGE
+    assert main(["generate", "nope"]) == EXIT_USAGE
+    assert "invalid choice" in capsys.readouterr().err
+
+
+def test_generate_needs_a_generator_and_options(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["generate"]) == EXIT_USAGE
     assert main(["generate", "actions"]) == EXIT_USAGE
-    assert "not available until 0.2" in capsys.readouterr().err
+    assert "--include" in capsys.readouterr().err
 
 
 def test_missing_login(capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:
@@ -306,6 +313,24 @@ def test_api_errors_exit_1(capsys: pytest.CaptureFixture[str], static_env: None)
     err = _assert_no_token(capsys)[1]
     assert "InvalidField" in err
     assert "No such column" in err
+
+
+@respx.mock
+def test_api_errors_print_hint_and_docs_on_their_own_lines(
+    capsys: pytest.CaptureFixture[str], static_env: None
+) -> None:
+    """``API_DISABLED_FOR_ORG`` (synthetic body; *Status Codes and Error Responses*,
+    https://developer.salesforce.com/docs/platform/api-rest/guide/errorcodes.html)."""
+    respx.get(f"{API}/limits").respond(
+        403, json=[{"errorCode": "API_DISABLED_FOR_ORG", "message": "The REST API is not enabled\x1b[2J"}]
+    )
+    assert main(["limits"]) == EXIT_API_ERROR
+    lines = _assert_no_token(capsys)[1].splitlines()
+    assert lines[0] == (
+        "esf: Forbidden: API_DISABLED_FOR_ORG: The REST API is not enabled\\x1b[2J (limits, HTTP 403)"
+    )
+    assert lines[1].startswith("  hint: API access is off.")
+    assert lines[2] == "  docs: https://uttsavv.github.io/even-simpler-salesforce/latest/errors/#forbidden"
 
 
 @respx.mock

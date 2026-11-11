@@ -190,6 +190,9 @@ async with esf.AsyncSalesforce(auth) as sf:
    with `error_code="no_refresh_token"`. It sends no token request.
 9. For `ClientCredentials` and `JwtBearer`, `invalid_grant` means a configuration problem and
    raises `OAuthError`.
+10. A new token must belong to the same org and user as the token it replaces. This applies to
+    a refreshed token and to a token the client re-reads from the token store. If the org id or
+    user id differs, the client raises `TokenIdentityChanged` and doesn't use the token.
 
 Token requests to `/services/oauth2/token` don't count as API calls in `sf.request` events.
 They emit `sf.auth.refreshed` instead. See [Logging](../logging.md).

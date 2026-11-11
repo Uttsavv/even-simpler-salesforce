@@ -12,15 +12,54 @@ The org enforces a few rules so error examples have something to hit:
 - a ``Lead`` with ``Country`` but no ``Street`` fails the validation rule
   ``[ADDR_REQUIRED] Street is required when Country is set`` (``FIELD_CUSTOM_VALIDATION_EXCEPTION``);
 - custom fields other than ``External_Id__c`` / ``Score__c`` don't exist (``INVALID_FIELD``);
-- objects other than Lead, Account, Contact, Opportunity and User don't exist (``INVALID_TYPE``).
+- objects other than Lead, Account, Contact, Opportunity, User, Report and the Files objects
+  (ContentVersion, ContentDocument, ContentDocumentLink, Attachment) don't exist (``INVALID_TYPE``);
+- platform events (``*__e``) are accepted and kept in :attr:`FakeOrg.events`;
+- the Partner SOAP endpoint answers ``convertLead`` and ``merge``;
+- ``POST graphql`` answers ``uiapi { query { <Object>(first:, after:) { edges { node { ... } }
+  pageInfo { ... } } } }`` over the stored records (no filters), with ``{value}`` fields and
+  cursors ``v1:<offset>``. An unknown field gets ``200 OK`` with a ``ValidationError``.
+- ``composite``, ``composite/graph``, ``composite/batch`` and ``composite/tree/{sobject}`` run
+  their subrequests against the same records, resolving ``@{ref.field}`` references;
+- ``GET ui-api/...`` answers records, object info, picklist values, create and clone defaults,
+  and the list views ``AllOpenLeads`` and ``MyUnreadLeads`` of Lead (``pageToken`` = offset).
+
+Metadata API: a multipart ``POST metadata/deployRequest`` stores the zip; the first
+``GET metadata/deployRequest/{id}`` reports it done (``Failed`` when an Apex class in it contains
+``Broken``). ``POST metadata/deployRequest/{id}`` with ``validatedDeployRequestId`` quick-deploys
+a succeeded validation; ``PATCH`` with ``deployResult.status=Canceling`` cancels a deployment,
+which then reports ``Canceled``. The SOAP endpoint ``/services/Soap/m/{v}`` answers
+``retrieve`` (done at once), ``checkRetrieveStatus``, ``listMetadata`` and ``describeMetadata``
+over :data:`APEX_CLASSES`.
+
+Files: a multipart ``POST sobjects/ContentVersion`` stores the bytes and creates the
+ContentDocument (plus a ContentDocumentLink for ``FirstPublishLocationId``);
+``GET .../VersionData`` and ``GET sobjects/Attachment/{id}/Body`` return the bytes.
+
+Tooling API (``tooling/...``): ``ApexClass``, ``TraceFlag``, ``DebugLevel`` and ``ApexLog``
+records, listed by ``GET tooling/sobjects``; ``executeAnonymous`` fails to compile code
+containing ``System debug``, throws for ``1 / 0`` and, while a ``USER_DEBUG`` trace flag
+exists, writes an ``ApexLog`` with one ``USER_DEBUG`` line per ``System.debug('...')``.
+Bulk API 2.0: an ingest job is processed when the client closes it (``PATCH state=UploadComplete``)
+and is ``JobComplete`` from then on; its rows go through the same create, update, upsert and
+delete rules as REST. A query job runs the SOQL above and serves the rows as CSV pages of
+``BULK_PAGE`` rows with ``Sforce-Locator`` and ``resultPages``.
+Reports and dashboards (``analytics/...``) answer from :mod:`tests.docs._analytics`.
 """
 
 from __future__ import annotations
 
+import base64
+import copy
+import csv
 import gzip
+import io
 import itertools
 import json
 import re
+import uuid
+import xml.etree.ElementTree as ET
+import zipfile
 from datetime import datetime, timedelta, timezone
 from email.utils import format_datetime
 from typing import Any
@@ -28,22 +67,63 @@ from urllib.parse import parse_qsl
 
 import httpx
 
+from ._analytics import analytics
+
 INSTANCE = "https://acme.my.salesforce.com"
 ORG_ID = "00Dxx0000000001EAA"
 USER_ID = "005xx0000000001AAA"
 ID_URL = f"https://login.salesforce.com/id/{ORG_ID}/{USER_ID}"
 API_MAX = 100_000
 
-PREFIXES = {"Lead": "00Q", "Account": "001", "Contact": "003", "Opportunity": "006", "User": "005"}
+PREFIXES = {
+    "Lead": "00Q",
+    "Account": "001",
+    "Contact": "003",
+    "Opportunity": "006",
+    "User": "005",
+    "ContentVersion": "068",
+    "ContentDocument": "069",
+    "ContentDocumentLink": "06A",
+    "Attachment": "00P",
+    "Report": "00O",
+}
+TOOLING_PREFIXES = {"ApexClass": "01p", "TraceFlag": "7tf", "DebugLevel": "7dl", "ApexLog": "07L"}
+_DEBUG = re.compile(r"System\.debug\(\s*'((?:[^'\\]|\\.)*)'\s*\)")
 CUSTOM_FIELDS = {"External_Id__c", "Score__c"}
 CHILD_RELATIONSHIPS = {"Contacts": ("Contact", "AccountId"), "Opportunities": ("Opportunity", "AccountId")}
+PARENT_RELATIONSHIPS = {"ContentDocument": ("ContentDocument", "ContentDocumentId")}
+BULK_PAGE = 200  # rows per Bulk query result page
 CHILD_PAGE = 2  # tiny on purpose, so ``expand_children`` has something to follow
 
+_SOAP = re.compile(r"^/services/Soap/u/\d+\.\d$")
+_MSOAP = re.compile(r"^/services/Soap/m/\d+\.\d$")
+_M = "{http://soap.sforce.com/2006/04/metadata}"
+#: Apex classes of the org's metadata: name -> source.
+APEX_CLASSES = {
+    "InvoiceService": "public with sharing class InvoiceService {\n    public static void send() {}\n}\n",
+    "LeadScoring": "public with sharing class LeadScoring {\n    public static void score() {}\n}\n",
+}
+_CLASS_META = (
+    '<?xml version="1.0" encoding="UTF-8"?>'
+    '<ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">'
+    "<apiVersion>68.0</apiVersion><status>Active</status></ApexClass>"
+)
+_P = "{urn:partner.soap.sforce.com}"
+_O = "{urn:sobject.partner.soap.sforce.com}"
+_ENV = "{http://schemas.xmlsoap.org/soap/envelope/}"
 _DATA = re.compile(r"^/services/data/v(?P<v>\d+\.\d)/(?P<rest>.*)$")
 _FIELD_LIST = re.compile(r"^\s*SELECT\s+(?P<fields>.+?)\s+FROM\s+(?P<obj>\w+)(?P<tail>.*)$", re.I | re.S)
 _EQ = re.compile(r"(\w+)\s*=\s*('(?:[^'\\]|\\.)*'|true|false|null|-?\d+(?:\.\d+)?)", re.I)
 _IN = re.compile(r"(\w+)\s+IN\s*\(([^)]*)\)", re.I)
 _LIMIT = re.compile(r"\bLIMIT\s+(\d+)", re.I)
+_FIELDS_FN = re.compile(r"FIELDS\(\s*(STANDARD|CUSTOM|ALL)\s*\)", re.I)
+_GQL_CONN = re.compile(r"\buiapi\s*\{\s*query\s*\{\s*(?P<obj>\w+)\s*(?:\((?P<args>[^)]*)\))?\s*\{", re.S)
+_GQL_FIRST = re.compile(r"\bfirst\s*:\s*(?:(\d+)|\$(\w+))")
+GQL_FIELDS = {"Name", "FirstName", "LastName", "Company", "Email", "Status", "Phone", "Country", "Street"}
+UI_COMPACT = {"Lead": ["Name", "Company", "Email", "Phone", "Status"]}
+UI_STATUSES = ["Open", "Working", "Closed - Not Converted"]
+UI_LISTS = {"AllOpenLeads": ("All Open Leads", "Open"), "MyUnreadLeads": ("My Unread Leads", None)}
+UI_MASTER = "012000000000000AAA"
 _SUBQUERY = re.compile(r"\(\s*SELECT\s+(?P<fields>[^()]+?)\s+FROM\s+(?P<rel>\w+)\s*\)", re.I)
 
 
@@ -113,12 +193,22 @@ class FakeOrg:
         self.revoked: set[str] = set()
         self.requests: list[httpx.Request] = []
         self.describe_modified = _now() - timedelta(days=3)
+        self.events: list[tuple[str, dict[str, Any]]] = []
+        self.blobs: dict[str, bytes] = {}
+        self.tooling: dict[str, dict[str, dict[str, Any]]] = {name: {} for name in TOOLING_PREFIXES}
+        self.apex_logs: dict[str, str] = {}  # ApexLog id -> body
+        self.jobs: dict[str, dict[str, Any]] = {}
+        self.deploys: dict[str, tuple[bytes, dict[str, Any]]] = {}  # id -> (zip, deployOptions)
+        self.canceled: set[str] = set()  # deployments canceled with PATCH
+        self.retrieves: dict[str, list[tuple[str, list[str]]]] = {}  # id -> package types
         self._seed()
 
     # --- data ------------------------------------------------------------------------
 
     def new_id(self, sobject: str) -> str:
-        return f"{PREFIXES[sobject]}8d{next(self.ids):013d}"
+        # The counter sits in the first 15 characters, which are unique per record in Salesforce
+        # (the last 3 are a case checksum).
+        return f"{PREFIXES[sobject]}8d{next(self.ids):010d}AAA"
 
     def _store(self, sobject: str, data: dict[str, Any]) -> dict[str, Any]:
         rid = data.get("Id") or self.new_id(sobject)
@@ -129,7 +219,19 @@ class FakeOrg:
         return rec
 
     def _seed(self) -> None:
+        for name in ("OrderService", "OrderServiceTest", "LeadScoring"):
+            rid = f"01p8d{next(self.ids):010d}AAA"
+            self.tooling["ApexClass"][rid] = {"Id": rid, "Name": name, "Status": "Active"}
         self._store("User", {"Username": "integration@acme.example", "LastName": "Integration"})
+        self._store(
+            "Report",
+            {
+                "Id": "00Oxx0000000001AAA",
+                "Name": "Open Opportunities",
+                "DeveloperName": "Open_Opportunities",
+                "FolderName": "Sales Reports",
+            },
+        )
         accounts = [self._store("Account", {"Name": n}) for n in ("Acme", "Globex", "Initech")]
         for i, last in enumerate(("Doe", "Roe", "Poe")):
             self._store(
@@ -156,6 +258,10 @@ class FakeOrg:
                     "External_Id__c": f"ext-{last.lower()}",
                 },
             )
+        self.upload("price-list.pdf", b"%PDF-1.7 price list", accounts[0]["Id"])
+        self.blobs[
+            self._store("Attachment", {"Name": "contract.pdf", "ParentId": accounts[0]["Id"]})["Id"]
+        ] = b"%PDF-1.4 legacy attachment"
         for i in range(447):
             self._store(
                 "Lead",
@@ -197,7 +303,67 @@ class FakeOrg:
         if sobject not in self.records:
             raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
 
+    def upload(
+        self, path_on_client: str, data: bytes, first_publish: str | None, title: str | None = None
+    ) -> str:
+        ext = path_on_client.rsplit(".", 1)[1].lower() if "." in path_on_client else None
+        info = {"Title": title or path_on_client, "FileExtension": ext, "ContentSize": len(data)}
+        doc = self._store("ContentDocument", info)
+        version = self._store(
+            "ContentVersion", {**info, "PathOnClient": path_on_client, "ContentDocumentId": doc["Id"]}
+        )
+        doc["LatestPublishedVersionId"] = version["Id"]
+        self.blobs[version["Id"]] = data
+        if first_publish:
+            self.link(doc["Id"], first_publish, "I", "AllUsers")
+        return version["Id"]
+
+    def link(self, doc_id: str, record_id: str, share_type: str, visibility: str | None) -> str:
+        if doc_id not in self.records["ContentDocument"]:
+            raise Rejected("INVALID_CROSS_REFERENCE_KEY", "invalid cross reference id", ["ContentDocumentId"])
+        rec = self._store(
+            "ContentDocumentLink",
+            {
+                "ContentDocumentId": doc_id,
+                "LinkedEntityId": record_id,
+                "ShareType": share_type,
+                "Visibility": visibility or "AllUsers",
+            },
+        )
+        return rec["Id"]
+
+    def _multipart(self, request: httpx.Request) -> httpx.Response:
+        """A ContentVersion upload: ``entity_content`` JSON plus a ``VersionData`` file part."""
+        m = re.search(r'boundary="?([^";]+)"?', request.headers.get("content-type", ""))
+        if not m:
+            raise Rejected("INVALID_MULTIPART_REQUEST", "multipart body expected")
+        entity: dict[str, Any] = {}
+        data = b""
+        for part in request.content.split(b"--" + m.group(1).encode())[1:-1]:
+            head, _, body = part.removeprefix(b"\r\n").partition(b"\r\n\r\n")
+            body = body.removesuffix(b"\r\n")
+            if b'name="entity_content"' in head:
+                entity = json.loads(body)
+            elif b'name="VersionData"' in head:
+                data = body
+        if not entity.get("PathOnClient"):
+            raise Rejected(
+                "REQUIRED_FIELD_MISSING", "Required fields are missing: [PathOnClient]", ["PathOnClient"]
+            )
+        rid = self.upload(
+            entity["PathOnClient"], data, entity.get("FirstPublishLocationId"), entity.get("Title")
+        )
+        return self._json({"id": rid, "success": True, "errors": []}, 201)
+
     def create(self, sobject: str, data: dict[str, Any]) -> dict[str, Any]:
+        if sobject == "ContentDocumentLink":
+            rid = self.link(
+                data["ContentDocumentId"],
+                data["LinkedEntityId"],
+                data.get("ShareType", "V"),
+                data.get("Visibility"),
+            )
+            return self.records[sobject][rid]
         self._validate(sobject, data, creating=True)
         return self._store(sobject, data)
 
@@ -238,6 +404,142 @@ class FakeOrg:
     def _was_deleted(self, rid: str) -> bool:
         return any(d[1] == rid for d in self.deleted)
 
+    # --- Bulk API 2.0 --------------------------------------------------------------------
+
+    def _csv(self, rows: list[dict[str, Any]], columns: list[str]) -> bytes:
+        buf = io.StringIO()
+        w = csv.writer(buf, lineterminator="\n")
+        w.writerow(columns)
+        for r in rows:
+            w.writerow(
+                [
+                    "" if r.get(c) is None else str(r[c]).lower() if isinstance(r[c], bool) else r[c]
+                    for c in columns
+                ]
+            )
+        return buf.getvalue().encode()
+
+    def _csv_response(self, data: bytes, headers: dict[str, str] | None = None) -> httpx.Response:
+        h = {"content-type": "text/csv", "sforce-limit-info": f"api-usage={self.api_used}/{API_MAX}"}
+        return httpx.Response(200, headers={**h, **(headers or {})}, content=data)
+
+    def _run_ingest(self, job: dict[str, Any]) -> None:
+        info = job["info"]
+        delim = {"COMMA": ",", "TAB": "\t", "PIPE": "|", "SEMICOLON": ";", "CARET": "^", "BACKQUOTE": "`"}
+        reader = csv.DictReader(
+            io.StringIO(job["data"].decode("utf-8-sig"), newline=""), delimiter=delim[info["columnDelimiter"]]
+        )
+        columns = list(reader.fieldnames or [])
+        ok: list[dict[str, Any]] = []
+        failed: list[dict[str, Any]] = []
+        sobject, op = info["object"], info["operation"]
+        for row in reader:
+            data = {k: (None if v == "#N/A" else v) for k, v in row.items() if v != ""}
+            try:
+                if op == "insert":
+                    rid, created = self.create(sobject, data)["Id"], True
+                elif op == "upsert":
+                    field = info["externalIdFieldName"]
+                    rid, created = self.upsert(sobject, field, str(data.pop(field, "")), data)
+                elif op == "update":
+                    rid, created = str(data.pop("Id", "")), False
+                    self.update(sobject, rid, data)
+                else:
+                    rid, created = str(data.get("Id", "")), False
+                    self.delete(sobject, rid)
+                ok.append({"sf__Id": rid, "sf__Created": "true" if created else "false", **row})
+            except Rejected as exc:
+                error = f"{exc.code}:{exc.message}:{','.join(exc.fields)} --"
+                failed.append({"sf__Id": row.get("Id", ""), "sf__Error": error, **row})
+        job["ok"] = self._csv(ok, ["sf__Id", "sf__Created", *columns])
+        job["failed"] = self._csv(failed, ["sf__Id", "sf__Error", *columns])
+        info.update(
+            state="JobComplete",
+            numberRecordsProcessed=len(ok) + len(failed),
+            numberRecordsFailed=len(failed),
+            totalProcessingTime=42,
+        )
+
+    def _bulk(
+        self,
+        request: httpx.Request,
+        method: str,
+        kind: str,
+        parts: list[str],
+        params: dict[str, str],
+        version: str,
+    ) -> httpx.Response:
+        if not parts and method == "POST":
+            body = self._body(request) or {}
+            jid = f"7508d{next(self.ids):010d}AAA"
+            info = {
+                "id": jid,
+                "object": body.get("object"),
+                "state": "Open",
+                "apiVersion": float(version),
+                "contentType": "CSV",
+                "lineEnding": body.get("lineEnding", "LF"),
+                "columnDelimiter": body.get("columnDelimiter", "COMMA"),
+                "operation": body["operation"],
+                "createdDate": "2026-11-10T10:00:00.000+0000",
+                "systemModstamp": "2026-11-10T10:00:00.000+0000",
+            }
+            if "externalIdFieldName" in body:
+                info["externalIdFieldName"] = body["externalIdFieldName"]
+            job: dict[str, Any] = {"info": info, "data": b""}
+            if kind == "query":
+                result = self.query(body["query"], 10**9, version)
+                fields = _split_top(_FIELD_LIST.match(body["query"]).group("fields"))  # type: ignore[union-attr]
+                info["object"] = result["records"][0]["attributes"]["type"] if result["records"] else None
+                rows = [{f: self._dotted(r, f) for f in fields} for r in result["records"]]
+                job.update(rows=rows, fields=fields)
+                info["state"] = "UploadComplete"
+            self.jobs[jid] = job
+            return self._json(dict(info))
+        job = self.jobs.get(parts[0]) if parts else None
+        if job is None:
+            raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+        info = job["info"]
+        rest = parts[1:]
+        if kind == "ingest" and rest == ["batches"] and method == "PUT":
+            job["data"] += request.content
+            return httpx.Response(201)
+        if kind == "ingest" and not rest and method == "PATCH":
+            state = (self._body(request) or {}).get("state")
+            if state == "Aborted":
+                info["state"] = "Aborted"
+                return self._json(dict(info))
+            info["state"] = "UploadComplete"
+            reply = dict(info)
+            self._run_ingest(job)
+            return self._json(reply)
+        if not rest:
+            if kind == "query":
+                info.update(state="JobComplete", numberRecordsProcessed=len(job["rows"]))
+            return self._json(dict(info))
+        if kind == "ingest":
+            names = {"successfulResults": "ok", "failedResults": "failed"}
+            return self._csv_response(job.get(names.get(rest[0], ""), b"sf__Id\n"))
+        if rest == ["results"]:
+            start = int(params.get("locator") or 0)
+            size = int(params.get("maxRecords") or BULK_PAGE)
+            page = job["rows"][start : start + size]
+            nxt = str(start + size) if start + size < len(job["rows"]) else "null"
+            return self._csv_response(self._csv(page, job["fields"]), {"sforce-locator": nxt})
+        if rest == ["resultPages"]:
+            base = f"/services/data/v{version}/jobs/query/{info['id']}"
+            starts = list(range(0, max(len(job["rows"]), 1), BULK_PAGE))
+            urls = [{"resultUrl": f"{base}/results?locator={n}&maxRecords={BULK_PAGE}"} for n in starts]
+            return self._json({"resultPages": urls, "nextRecordsUrl": None, "done": True})
+        raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+
+    @staticmethod
+    def _dotted(rec: dict[str, Any], field: str) -> Any:
+        value: Any = rec
+        for part in field.split("."):
+            value = value.get(part) if isinstance(value, dict) else None
+        return value
+
     # --- query -----------------------------------------------------------------------
 
     def _project(self, sobject: str, rec: dict[str, Any], fields: list[str], version: str) -> dict[str, Any]:
@@ -262,7 +564,16 @@ class FakeOrg:
                 ]
                 out[rel] = self._page(kids, CHILD_PAGE, version) if kids else None
             elif "." in f:
-                out[f.split(".", 1)[0]] = None
+                rel, field = f.split(".", 1)
+                parent_obj, fk = PARENT_RELATIONSHIPS.get(rel, ("", ""))
+                parent = self.records.get(parent_obj, {}).get(str(rec.get(fk)))
+                if parent is None:
+                    out[rel] = None
+                else:
+                    url = f"/services/data/v{version}/sobjects/{parent_obj}/{parent['Id']}"
+                    out.setdefault(rel, {"attributes": {"type": parent_obj, "url": url}})[field] = parent.get(
+                        field
+                    )
             else:
                 out[f] = _value(sobject, rec, f)
         return out
@@ -297,6 +608,7 @@ class FakeOrg:
             rows = rows[: int(lim.group(1))]
         it = iter(_SUBQUERY.finditer(soql))
         fields = [next(it).group(0) if f == "__SUBQUERY__" else f for f in _split_top(m.group("fields"))]
+        fields = self._expand_fields_fn(sobject, fields, lim)
         if [f.upper() for f in fields] == ["COUNT()"]:
             return {"totalSize": len(rows), "done": True, "records": []}
         for f in fields:
@@ -304,6 +616,28 @@ class FakeOrg:
                 raise Rejected("INVALID_FIELD", f"No such column '{f}' on entity '{sobject}'.")
         projected = [self._project(sobject, r, fields, version) for r in rows]
         return self._page(projected, batch, version)
+
+    def _expand_fields_fn(self, sobject: str, fields: list[str], lim: re.Match[str] | None) -> list[str]:
+        """``FIELDS(STANDARD|CUSTOM|ALL)``: ALL and CUSTOM need ``LIMIT`` 200 or less (the
+        ``WHERE Id IN`` form isn't modelled). Field names come from the stored records.
+        https://developer.salesforce.com/docs/atlas.en-us.soql_sosl.meta/soql_sosl/sforce_api_calls_soql_select_fields.htm
+        """
+        known = sorted({k for r in self.records[sobject].values() for k in r})
+        out: list[str] = []
+        for f in fields:
+            fm = _FIELDS_FN.fullmatch(f.strip())
+            if not fm:
+                out.append(f)
+                continue
+            kind = fm.group(1).upper()
+            if kind != "STANDARD" and (lim is None or int(lim.group(1)) > 200):
+                raise Rejected("MALFORMED_QUERY", "The SOQL FIELDS function must have a LIMIT of at most 200")
+            out += [
+                k
+                for k in known
+                if k not in out and (kind == "ALL" or k.endswith("__c") == (kind == "CUSTOM"))
+            ]
+        return out
 
     def explain(self, soql: str) -> dict[str, Any]:
         """Synthetic ``query?explain=`` (shape from the REST API Developer Guide, v264)."""
@@ -358,14 +692,16 @@ class FakeOrg:
         try:
             if path.startswith("/services/oauth2/"):
                 return self._oauth(request, path.rsplit("/", 1)[1])
-            if path.startswith("/services/Soap/"):
+            if _SOAP.match(path):
                 return self._soap(request)
+            if _MSOAP.match(path):
+                return self._metadata_soap(request)
             auth = request.headers.get("authorization", "")
             if not auth.startswith("Bearer ") or auth[7:] in self.revoked:
                 raise Rejected("INVALID_SESSION_ID", "Session expired or invalid", status=401)
             self.api_used += 1
             if path.startswith("/services/apexrest/"):
-                return self._json({"ok": True, "path": path.removeprefix("/services/apexrest")})
+                return self._apexrest(request, path.removeprefix("/services/apexrest"))
             m = _DATA.match(path)
             if not m:
                 raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
@@ -374,25 +710,6 @@ class FakeOrg:
             if exc.status == 300:
                 return self._json(["/services/data/v68.0/sobjects/Lead/00Q8d0000000000001"], 300)
             return self._json(exc.body(), exc.status)
-
-    def _soap(self, request: httpx.Request) -> httpx.Response:
-        """A SOAP call: checks the ``sessionId`` in the body, like Salesforce does."""
-        m = re.search(rb"<(?:\w+:)?sessionId>([^<]*)</", request.content)
-        session = m.group(1).decode() if m else ""
-        xml = {"content-type": "text/xml;charset=UTF-8"}
-        envelope = '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"><soapenv:Body>{}</soapenv:Body></soapenv:Envelope>'
-        if not session.startswith("AT-docs-") or session in self.revoked:
-            fault = (
-                "<soapenv:Fault><faultcode>sf:INVALID_SESSION_ID</faultcode>"
-                "<faultstring>INVALID_SESSION_ID: Invalid Session ID found in SessionHeader</faultstring>"
-                "</soapenv:Fault>"
-            )
-            return httpx.Response(500, headers=xml, content=envelope.format(fault).encode())
-        result = (
-            '<getUserInfoResponse xmlns="urn:partner.soap.sforce.com">'
-            f"<result><userId>{USER_ID}</userId></result></getUserInfoResponse>"
-        )
-        return httpx.Response(200, headers=xml, content=envelope.format(result).encode())
 
     def _json(self, body: Any, status: int = 200, headers: dict[str, str] | None = None) -> httpx.Response:
         h = {
@@ -497,11 +814,326 @@ class FakeOrg:
             return self._json(
                 {"sObjects": [{"name": n, "count": len(self.records.get(n, {}))} for n in names if n]}
             )
+        if parts[0] == "tooling":
+            return self._tooling(request, method, parts[1:], params, version)
+        if parts[0] == "actions":
+            return self._actions(request, parts[1:])
+        if parts[0] == "metadata" and len(parts) >= 2 and parts[1] == "deployRequest":
+            if len(parts) == 2 and method == "POST":
+                return self._deploy(request)
+            if len(parts) == 3 and method == "GET":
+                return self._json(self._deploy_status(parts[2]))
+            if len(parts) == 3 and method == "POST":
+                return self._quick_deploy(parts[2], self._body(request) or {})
+            if len(parts) == 3 and method == "PATCH":
+                return self._cancel_deploy(parts[2], self._body(request) or {})
+        if rest == "graphql" and method == "POST":
+            return self._json(self._graphql(self._body(request) or {}))
+        if parts[0] == "jobs" and len(parts) >= 2 and parts[1] in ("ingest", "query"):
+            return self._bulk(request, method, parts[1], parts[2:], params, version)
+        if parts[0] == "ui-api" and method == "GET":
+            return self._json(self._ui(parts[1:], params, version))
+        if parts[0] == "analytics" and (found := analytics(method, parts[1:], params, version)):
+            return self._json(*found)
+        if parts[0] == "sobjects" and len(parts) == 2 and parts[1].endswith("__e") and method == "POST":
+            return self._json(self._publish(parts[1], self._body(request) or {}), 201)
+        if rest == "composite" or (parts[0] == "composite" and parts[1] in ("graph", "batch", "tree")):
+            return self._composite(request, version, parts[1:])
         if parts[0] == "composite" and len(parts) >= 2 and parts[1] == "sobjects":
             return self._collections(request, method, parts[2:], params)
         if parts[0] == "sobjects":
             return self._sobjects(request, method, parts[1:], params, version)
         raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+
+    # --- UI API ---------------------------------------------------------------------------
+
+    def _find(self, rid: str) -> tuple[str, dict[str, Any]]:
+        for sobject, recs in self.records.items():
+            if rid in recs:
+                return sobject, recs[rid]
+        raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+
+    def _ui_record(self, sobject: str, rec: dict[str, Any], fields: list[str]) -> dict[str, Any]:
+        def field(f: str) -> dict[str, Any]:
+            value = _value(sobject, rec, f)
+            return {"displayValue": value if f == "Status" else None, "value": value}
+
+        return {
+            "apiName": sobject,
+            "childRelationships": {},
+            "fields": {f: field(f) for f in fields},
+            "id": rec.get("Id"),
+            "recordTypeId": UI_MASTER,
+        }
+
+    def _object_info(self, sobject: str) -> dict[str, Any]:
+        self._known(sobject)
+        types = {"Status": "Picklist", "LeadSource": "Picklist", "Email": "Email", "Phone": "Phone"}
+        names = ["Name", "FirstName", "LastName", "Company", "Email", "Phone", "Status", "LeadSource"]
+        return {
+            "apiName": sobject,
+            "label": sobject,
+            "defaultRecordTypeId": UI_MASTER,
+            "recordTypeInfos": {UI_MASTER: {"master": True, "name": "Master", "recordTypeId": UI_MASTER}},
+            "fields": {n: {"apiName": n, "dataType": types.get(n, "String"), "label": n} for n in names},
+            "childRelationships": [],
+        }
+
+    def _ui(self, parts: list[str], params: dict[str, str], version: str) -> dict[str, Any]:
+        kind, args = parts[0], parts[1:]
+        if kind == "records":
+            sobject, rec = self._find(args[0])
+            if "fields" in params:
+                fields = [f.split(".", 1)[1] for f in params["fields"].split(",")]
+                for f in fields:
+                    if f not in GQL_FIELDS | CUSTOM_FIELDS | {"Id"}:
+                        raise Rejected("INVALID_FIELD", f"No such column '{f}' on entity '{sobject}'")
+            elif params.get("layoutTypes") == "Compact":
+                fields = UI_COMPACT.get(sobject, ["Name"])
+            else:
+                fields = [k for k in rec if k not in ("CreatedDate", "LastModifiedDate")]
+            return self._ui_record(sobject, rec, fields)
+        if kind == "object-info" and len(args) == 1:
+            return self._object_info(args[0])
+        if kind == "object-info" and len(args) == 3 and args[1] == "picklist-values":
+            self._known(args[0])
+            entry = [{"attributes": None, "label": v, "validFor": [], "value": v} for v in UI_STATUSES]
+            web = [{"attributes": None, "label": "Web", "validFor": [], "value": "Web"}]
+            return {
+                "picklistFieldValues": {
+                    "Status": {"controllerValues": {}, "defaultValue": entry[0], "values": entry},
+                    "LeadSource": {"controllerValues": {}, "defaultValue": None, "values": web},
+                }
+            }
+        defaults = {"layout": {"layoutType": "Full", "mode": "Create", "sections": []}}
+        if kind == "record-defaults" and args[0] == "create":
+            info = self._object_info(args[1])
+            new = {"Id": None, "Status": "Open", "OwnerId": USER_ID}
+            record = self._ui_record(args[1], new, ["Status", "OwnerId"])
+            return {**defaults, "objectInfos": {args[1]: info}, "record": record}
+        if kind == "record-defaults" and args[0] == "clone":
+            sobject, rec = self._find(args[1])
+            keep = [k for k in rec if k not in ("Id", "CreatedDate", "LastModifiedDate")]
+            record = self._ui_record(sobject, {**rec, "Id": None}, keep)
+            return {**defaults, "objectInfos": {sobject: self._object_info(sobject)}, "record": record}
+        if kind == "list-info":
+            self._known(args[0])
+            base = f"/services/data/v{version}/ui-api/list-info/{args[0]}"
+            lists = [
+                {"apiName": n, "label": label, "url": f"{base}/{n}"}
+                for n, (label, _) in (UI_LISTS.items() if args[0] == "Lead" else [])
+            ]
+            return {"count": len(lists), "lists": lists, "nextPageToken": None, "objectApiName": args[0]}
+        if kind == "list-records":
+            sobject, view = args
+            self._known(sobject)
+            if view not in UI_LISTS or sobject != "Lead":
+                raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+            status = UI_LISTS[view][1]
+            rows = [r for r in self.records[sobject].values() if status is None or r.get("Status") == status]
+            size = int(params.get("pageSize", 50))
+            start = int(params.get("pageToken", 0))
+            page = rows[start : start + size]
+            end = start + len(page)
+            return {
+                "count": len(page),
+                "currentPageToken": str(start),
+                "nextPageToken": str(end) if end < len(rows) else None,
+                "records": [self._ui_record(sobject, r, ["Name", "Status"]) for r in page],
+            }
+        raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+
+    @staticmethod
+    def _gql_block(text: str, start: int) -> tuple[str, int]:
+        """The text inside the ``{`` at ``start`` and the index after its ``}``."""
+        depth, i = 0, start
+        while i < len(text):
+            depth += {"{": 1, "}": -1}.get(text[i], 0)
+            if depth == 0:
+                return text[start + 1 : i], i + 1
+            i += 1
+        raise Rejected("BAD_REQUEST", "unbalanced braces", status=400)
+
+    def _graphql(self, body: dict[str, Any]) -> dict[str, Any]:
+        query, variables = str(body.get("query", "")), dict(body.get("variables") or {})
+        m = _GQL_CONN.search(query)
+        if not m or m.group("obj") not in PREFIXES:
+            return {
+                "data": None,
+                "errors": [{"message": "Invalid Syntax", "extensions": {"ErrorType": "InvalidSyntax"}}],
+            }
+        obj, args = m.group("obj"), m.group("args") or ""
+        conn, _ = self._gql_block(query, m.end() - 1)
+        node_at = re.search(r"\bnode\s*\{", conn)
+        fields: list[str] = []
+        if node_at:
+            inner, _ = self._gql_block(conn, node_at.end() - 1)
+            flat = re.sub(r"\{[^{}]*\}", " ", inner)
+            fields = re.findall(r"\w+", flat)
+        for f in fields:
+            if f != "Id" and f not in GQL_FIELDS | CUSTOM_FIELDS:
+                return {
+                    "data": None,
+                    "errors": [
+                        {
+                            "message": (
+                                "Validation error of type FieldUndefined: "
+                                f"Field '{f}' in type '{obj}' is undefined"
+                            ),
+                            "locations": [{"line": 1, "column": query.find(f) + 1}],
+                            "path": None,
+                            "extensions": {"ErrorType": "ValidationError"},
+                        }
+                    ],
+                }
+        fm = _GQL_FIRST.search(args)
+        first = 10
+        if fm:
+            first = int(fm.group(1)) if fm.group(1) else int(variables.get(fm.group(2)) or 10)
+        after = variables.get("after") if "$after" in args else None
+        start = int(str(after).split(":", 1)[1]) if after else 0
+        rows = list(self.records[obj].values())
+        page = rows[start : start + first]
+        end = start + len(page)
+
+        def node(rec: dict[str, Any]) -> dict[str, Any]:
+            return {f: rec["Id"] if f == "Id" else {"value": _value(obj, rec, f)} for f in fields}
+
+        return {
+            "data": {
+                "uiapi": {
+                    "query": {
+                        obj: {
+                            "edges": [{"node": node(r)} for r in page],
+                            "pageInfo": {
+                                "hasNextPage": end < len(rows),
+                                "endCursor": f"v1:{end}",
+                                "hasPreviousPage": start > 0,
+                                "startCursor": f"v1:{start}",
+                            },
+                            "totalCount": len(rows),
+                        }
+                    }
+                }
+            },
+            "errors": [],
+        }
+
+    # --- composite --------------------------------------------------------------------
+
+    def _sub(self, request: httpx.Request, version: str, method: str, url: str, body: Any) -> tuple[int, Any]:
+        """Run one subrequest through :meth:`_data`; returns ``(status, decoded body)``."""
+        url = url if url.startswith("/") else f"/services/data/{url}"
+        sub = httpx.Request(method, INSTANCE + url, headers=dict(request.headers), json=body)
+        sub.headers.pop("content-encoding", None)
+        m = _DATA.match(sub.url.path)
+        try:
+            resp = self._data(sub, m.group("v") if m else version, m.group("rest").rstrip("/") if m else "")
+        except Rejected as exc:
+            return exc.status, exc.body()
+        return resp.status_code, (json.loads(resp.content) if resp.content else None)
+
+    def _run(self, request: httpx.Request, version: str, items: list[Any], all_or_none: bool) -> list[Any]:
+        ref = re.compile(r"@\{(\w+)\.([^{}]+)\}")
+        done: dict[str, Any] = {}
+
+        def lookup(m: re.Match[str]) -> str:
+            value: Any = done.get(m.group(1))
+            for name, index in re.findall(r"(\w+)|\[(\d+)\]", m.group(2)):
+                value = value[name] if name else value[int(index)]
+            return str(value)
+
+        def resolve(value: Any) -> Any:
+            if isinstance(value, str):
+                return ref.sub(lookup, value)
+            if isinstance(value, dict):
+                return {k: resolve(v) for k, v in value.items()}
+            if isinstance(value, list):
+                return [resolve(v) for v in value]
+            return value
+
+        snapshot = copy.deepcopy(self.records)
+        out: list[dict[str, Any]] = []
+        failed = False
+        for item in items:
+            if failed and all_or_none:
+                status, body = 400, [{"errorCode": "PROCESSING_HALTED", "message": "halted"}]
+            else:
+                status, body = self._sub(
+                    request, version, item["method"], resolve(item["url"]), resolve(item.get("body"))
+                )
+            failed = failed or status >= 400
+            done[item["referenceId"]] = body
+            out.append(
+                {
+                    "body": body,
+                    "httpHeaders": {},
+                    "httpStatusCode": status,
+                    "referenceId": item["referenceId"],
+                }
+            )
+        if failed and all_or_none:
+            self.records = snapshot
+            rolled = [{"errorCode": "PROCESSING_HALTED", "message": "rolled back"}]
+            for r in out:
+                if r["httpStatusCode"] < 400:
+                    r.update(body=rolled, httpStatusCode=400)
+        return out
+
+    def _composite(self, request: httpx.Request, version: str, parts: list[str]) -> httpx.Response:
+        body = self._body(request)
+        if not parts:
+            items = body["compositeRequest"]
+            return self._json({"compositeResponse": self._run(request, version, items, body["allOrNone"])})
+        if parts[0] == "graph":
+            graphs = []
+            for g in body["graphs"]:
+                results = self._run(request, version, g["compositeRequest"], True)
+                ok = all(r["httpStatusCode"] < 400 for r in results)
+                graphs.append(
+                    {
+                        "graphId": g["graphId"],
+                        "graphResponse": {"compositeResponse": results},
+                        "isSuccessful": ok,
+                    }
+                )
+            return self._json({"graphs": graphs})
+        if parts[0] == "batch":
+            results = []
+            for item in body["batchRequests"]:
+                status, result = self._sub(
+                    request, version, item["method"], item["url"], item.get("richInput")
+                )
+                results.append({"statusCode": status, "result": result})
+            return self._json({"hasErrors": any(r["statusCode"] >= 400 for r in results), "results": results})
+        snapshot = copy.deepcopy(self.records)
+        created: list[dict[str, Any]] = []
+        current = [""]
+
+        def make(row: dict[str, Any], parent: tuple[str, str] | None) -> None:
+            sobject, ref = row["attributes"]["type"], row["attributes"]["referenceId"]
+            current[0] = ref
+            data = {k: v for k, v in row.items() if k != "attributes" and not isinstance(v, dict)}
+            if parent is not None:
+                data.setdefault(f"{parent[0]}Id", parent[1])
+            self._known(sobject)
+            rid = self.create(sobject, data)["Id"]
+            created.append({"referenceId": ref, "id": rid})
+            for value in row.values():
+                if isinstance(value, dict) and "records" in value:
+                    for kid in value["records"]:
+                        make(kid, (sobject, rid))
+
+        try:
+            for root in body["records"]:
+                make(root, None)
+        except Rejected as exc:
+            self.records = snapshot
+            errors = [{"statusCode": exc.code, "message": exc.message, "fields": exc.fields}]
+            return self._json(
+                {"hasErrors": True, "results": [{"referenceId": current[0], "errors": errors}]}, 400
+            )
+        return self._json({"hasErrors": False, "results": created}, 201)
 
     def _sobjects(
         self, request: httpx.Request, method: str, parts: list[str], params: dict[str, str], version: str
@@ -520,6 +1152,8 @@ class FakeOrg:
         sobject = parts[0]
         self._known(sobject)
         if len(parts) == 1:
+            if method == "POST" and sobject == "ContentVersion":
+                return self._multipart(request)
             if method == "POST":
                 rec = self.create(sobject, self._body(request) or {})
                 return self._json({"id": rec["Id"], "success": True, "errors": []}, 201)
@@ -536,7 +1170,14 @@ class FakeOrg:
                 {"name": "Id", "type": "id"},
                 {"name": "Name", "type": "string"},
                 {"name": "LastName", "type": "string", "length": 80},
+                *({"name": f, "type": "string", "custom": True} for f in sorted(CUSTOM_FIELDS)),
             ]
+            if sobject == "Account":  # a compound address, for the Bulk page
+                fields.append({"name": "BillingAddress", "type": "address"})
+                fields += [
+                    {"name": f"Billing{p}", "type": "string", "compoundFieldName": "BillingAddress"}
+                    for p in ("Street", "City", "State", "PostalCode", "Country")
+                ]
             return self._json(
                 {"name": sobject, "label": sobject, "createable": True, "fields": fields},
                 headers={"last-modified": format_datetime(self.describe_modified, usegmt=True)},
@@ -555,6 +1196,21 @@ class FakeOrg:
                     "earliestDateAvailable": params.get("start"),
                     "latestDateCovered": params.get("end"),
                 }
+            )
+        if len(parts) == 3 and (sobject, parts[2]) in (
+            ("ContentVersion", "VersionData"),
+            ("Attachment", "Body"),
+        ):
+            blob = self.blobs.get(parts[1])
+            if blob is None:
+                raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+            return httpx.Response(
+                200,
+                headers={
+                    "content-type": "application/octet-stream",
+                    "sforce-limit-info": f"api-usage={self.api_used}/{API_MAX}",
+                },
+                content=blob,
             )
         if len(parts) == 3:  # external id
             field, value = parts[1], parts[2]
@@ -613,6 +1269,8 @@ class FakeOrg:
             return self._json(out)
         rows = body.get("records", [])
         aon = bool(body.get("allOrNone"))
+        if method == "POST" and rows and all(str(r["attributes"]["type"]).endswith("__e") for r in rows):
+            return self._json([self._publish(r["attributes"]["type"], r) for r in rows])
         if method == "POST":
             return self._json(self._batch(rows, aon, lambda r: self.create(r["attributes"]["type"], r)["Id"]))
         if method == "PATCH" and not parts:
@@ -677,3 +1335,475 @@ class FakeOrg:
                         ],
                     )
         return results
+
+    # --- Tooling API (synthetic) -----------------------------------------------------
+
+    def _tooling(
+        self, request: httpx.Request, method: str, parts: list[str], params: dict[str, str], version: str
+    ) -> httpx.Response:
+        if parts == ["query"]:
+            m = _FIELD_LIST.match(params["q"])
+            name = m.group("obj") if m else ""
+            if name not in self.tooling:
+                raise Rejected("INVALID_TYPE", f"sObject type '{name}' is not supported.")
+            rows = list(self.tooling[name].values())
+            for field, lit in _EQ.findall(m.group("tail") if m else ""):
+                if field in ("Name", "DeveloperName", "TracedEntityId", "LogUserId"):
+                    rows = [r for r in rows if r.get(field) == _literal(lit)]
+            if name == "ApexLog":  # the client asks ORDER BY StartTime DESC
+                rows.reverse()
+            recs = [{"attributes": {"type": name, "url": ""}, **r} for r in rows]
+            return self._json({"size": len(recs), "totalSize": len(recs), "done": True, "records": recs})
+        if parts == ["executeAnonymous"]:
+            return self._json(self._anonymous(params["anonymousBody"]))
+        if parts == ["runTestsAsynchronous"] and method == "POST":
+            return self._json(f"7078d{next(self.ids):010d}")
+        if parts == ["sobjects"] and method == "GET":  # describe global, synthetic shape
+            objs = [{"name": n, "label": n, "keyPrefix": TOOLING_PREFIXES[n]} for n in sorted(self.tooling)]
+            return self._json({"encoding": "UTF-8", "maxBatchSize": 200, "sobjects": objs})
+        if parts == ["completions"]:
+            return self._json({"publicDeclarations": {"System": {"Math": [{"name": "abs"}], "String": []}}})
+        if len(parts) == 4 and parts[1] == "ApexLog" and parts[3] == "Body":
+            body = self.apex_logs.get(parts[2])
+            if body is None:
+                raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+            return httpx.Response(200, headers={"content-type": "text/plain"}, content=body.encode())
+        if parts[0] == "sobjects" and len(parts) >= 2 and parts[1] in self.tooling:
+            store = self.tooling[parts[1]]
+            if len(parts) == 2 and method == "POST":
+                rid = f"{TOOLING_PREFIXES[parts[1]]}8d{next(self.ids):010d}AAA"
+                store[rid] = {"Id": rid, **(self._body(request) or {})}
+                return self._json({"id": rid, "success": True, "errors": []}, 201)
+            rec = store.get(parts[2]) if len(parts) == 3 else None
+            if rec is None:
+                raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+            if method == "DELETE":
+                del store[parts[2]]
+                return self._json(None, 204)
+            if method == "PATCH":
+                rec.update(self._body(request) or {})
+                return self._json(None, 204)
+            return self._json({"attributes": {"type": parts[1]}, **rec})
+        raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+
+    def _anonymous(self, code: str) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "line": -1,
+            "column": -1,
+            "compiled": True,
+            "success": True,
+            "compileProblem": None,
+            "exceptionMessage": None,
+            "exceptionStackTrace": None,
+        }
+        if "System debug" in code:
+            col = code.index("System debug") + 8
+            return {
+                **result,
+                "compiled": False,
+                "success": False,
+                "line": 1,
+                "column": col,
+                "compileProblem": "Unexpected token 'debug'.",
+            }
+        if "1 / 0" in code:
+            result.update(
+                success=False,
+                line=1,
+                column=1,
+                exceptionMessage="System.MathException: Divide by 0",
+                exceptionStackTrace="AnonymousBlock: line 1, column 1",
+            )
+        if any(f.get("LogType") == "USER_DEBUG" for f in self.tooling["TraceFlag"].values()):
+            rid = f"07L8d{next(self.ids):010d}AAA"
+            start = _now().strftime("%Y-%m-%dT%H:%M:%S.000+0000")
+            self.tooling["ApexLog"][rid] = {
+                "Id": rid,
+                "LogUserId": USER_ID,
+                "Operation": "/services/data/v68.0/tooling/executeAnonymous/",
+                "StartTime": start,
+            }
+            lines = ["68.0 APEX_CODE,DEBUG", "Execute Anonymous: " + code.splitlines()[0]]
+            lines += [f"12:00:00.0 (1)|USER_DEBUG|[1]|DEBUG|{msg}" for msg in _DEBUG.findall(code)]
+            self.apex_logs[rid] = "\n".join(lines) + "\n"
+        return result
+
+    # --- org automation (synthetic) -------------------------------------------------
+
+    def _apexrest(self, request: httpx.Request, path: str) -> httpx.Response:
+        """``/orders/{id}`` answers like an order service; a closed order returns 422."""
+        if path.startswith("/orders/closed"):
+            return self._json({"error": "ORDER_CLOSED", "message": "Order is closed"}, 422)
+        if path.startswith("/orders/"):
+            body = self._body(request) if request.method in ("POST", "PUT", "PATCH") else None
+            if request.method == "DELETE":
+                return self._json(None, 204)
+            return self._json({"id": path.rsplit("/", 1)[1], "status": "Submitted", **(body or {})})
+        return self._json({"ok": True, "path": path})
+
+    def _actions(self, request: httpx.Request, parts: list[str]) -> httpx.Response:
+        """Flow ``Assign_Lead``, Apex ``LeadScoring`` and standard ``chatterPost``."""
+        known = {
+            ("custom", "flow", "Assign_Lead"): self._assign_lead,
+            ("custom", "apex", "LeadScoring"): lambda i: {"score": 42 if i.get("leadId") else 0},
+            ("standard", "chatterPost"): lambda i: {"feedItemId": "0D5xx0000000001AAA"},
+        }
+        key = tuple(parts)
+        if request.method == "GET":
+            listed = [k for k in known if k[:-1] == key]
+            if listed:
+                return self._json({"actions": [self._action_summary(k) for k in listed]})
+            if key in known:
+                return self._json(self._action_describe(key))
+            raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+        if key not in known:
+            raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+        results = []
+        for item in (self._body(request) or {}).get("inputs", []):
+            try:
+                out = known[key](item)
+                results.append(
+                    {"actionName": key[-1], "errors": None, "isSuccess": True, "outputValues": out}
+                )
+            except Rejected as exc:
+                errors = [{"statusCode": exc.code, "message": exc.message, "fields": exc.fields}]
+                results.append(
+                    {"actionName": key[-1], "errors": errors, "isSuccess": False, "outputValues": None}
+                )
+        failed = all(not r["isSuccess"] for r in results)
+        return self._json(results, 400 if results and failed else 200)
+
+    def _assign_lead(self, inputs: dict[str, Any]) -> dict[str, Any]:
+        if not inputs.get("leadId"):
+            raise Rejected("REQUIRED_FIELD_MISSING", "Required fields are missing: [leadId]", ["leadId"])
+        if inputs.get("region") == "Mars":
+            raise Rejected("FIELD_CUSTOM_VALIDATION_EXCEPTION", "[REGION_UNKNOWN] Region Mars does not exist")
+        return {"assignedTo": USER_ID, "Flow__InterviewStatus": "Finished"}
+
+    @staticmethod
+    def _action_summary(key: tuple[str, ...]) -> dict[str, Any]:
+        return {"name": key[-1], "label": key[-1].replace("_", " "), "type": key[-2].upper(), "url": ""}
+
+    def _action_describe(self, key: tuple[str, ...]) -> dict[str, Any]:
+        params = {
+            "Assign_Lead": (
+                [("leadId", "STRING", True), ("region", "STRING", False)],
+                [("assignedTo", "STRING"), ("Flow__InterviewStatus", "PICKLIST")],
+            ),
+            "LeadScoring": ([("leadId", "ID", True)], [("score", "INTEGER")]),
+            "chatterPost": (
+                [("text", "TEXTAREA", True), ("subjectNameOrId", "STRING", True)],
+                [("feedItemId", "ID")],
+            ),
+        }[key[-1]]
+        return {
+            **self._action_summary(key),
+            "description": f"{key[-1].replace('_', ' ')} (synthetic docs org)",
+            "inputs": [{"name": n, "type": t, "required": r, "maxOccurs": 1} for n, t, r in params[0]],
+            "outputs": [{"name": n, "type": t, "required": False, "maxOccurs": 1} for n, t in params[1]],
+        }
+
+    # --- platform events ---------------------------------------------------------------
+
+    def _publish(self, name: str, data: dict[str, Any]) -> dict[str, Any]:
+        self.events.append((name, {k: v for k, v in data.items() if k != "attributes"}))
+        return {
+            "id": f"e008d{next(self.ids):010d}AAA",
+            "success": True,
+            "errors": [{"statusCode": "OPERATION_ENQUEUED", "message": str(uuid.uuid4()), "fields": []}],
+        }
+
+    # --- Partner SOAP (convertLead, merge) ---------------------------------------------
+
+    def _soap_reply(self, inner: str, status: int = 200) -> httpx.Response:
+        body = (
+            '<?xml version="1.0" encoding="UTF-8"?><soapenv:Envelope '
+            'xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns="urn:partner.soap.sforce.com" '
+            'xmlns:sf="urn:fault.partner.soap.sforce.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">'
+            f"<soapenv:Body>{inner}</soapenv:Body></soapenv:Envelope>"
+        )
+        return httpx.Response(
+            status, headers={"content-type": "text/xml; charset=utf-8"}, content=body.encode()
+        )
+
+    def _soap_fault(self, code: str, message: str) -> httpx.Response:
+        return self._soap_reply(
+            f"<soapenv:Fault><faultcode>sf:{code}</faultcode><faultstring>{code}: {message}</faultstring>"
+            f'<detail><sf:UnexpectedErrorFault xsi:type="sf:UnexpectedErrorFault">'
+            f"<sf:exceptionCode>{code}</sf:exceptionCode><sf:exceptionMessage>{message}</sf:exceptionMessage>"
+            "</sf:UnexpectedErrorFault></detail></soapenv:Fault>",
+            500,
+        )
+
+    @staticmethod
+    def _soap_errors(exc: Rejected) -> str:
+        fields = "".join(f"<fields>{f}</fields>" for f in exc.fields)
+        return f"<errors>{fields}<message>{exc.message}</message><statusCode>{exc.code}</statusCode></errors>"
+
+    def _soap(self, request: httpx.Request) -> httpx.Response:
+        root = ET.fromstring(request.content)
+        session = root.findtext(f"{_ENV}Header/{_P}SessionHeader/{_P}sessionId") or ""
+        if not session or session in self.revoked:
+            return self._soap_fault(
+                "INVALID_SESSION_ID", "Invalid Session ID found in SessionHeader: Illegal Session"
+            )
+        self.api_used += 1
+        body = root.find(f"{_ENV}Body")
+        call = body[0] if body is not None and len(body) else None
+        if call is not None and call.tag == f"{_P}convertLead":
+            results = [self._convert(c) for c in call.findall(f"{_P}leadConverts")]
+            return self._soap_reply(f"<convertLeadResponse>{''.join(results)}</convertLeadResponse>")
+        if call is not None and call.tag == f"{_P}merge":
+            results = [self._merge(r) for r in call.findall(f"{_P}request")]
+            return self._soap_reply(f"<mergeResponse>{''.join(results)}</mergeResponse>")
+        if call is not None and call.tag == f"{_P}getUserInfo":
+            return self._soap_reply(
+                f"<getUserInfoResponse><result><userId>{USER_ID}</userId></result></getUserInfoResponse>"
+            )
+        return self._soap_fault("INVALID_OPERATION", "unsupported call")
+
+    def _convert(self, c: ET.Element) -> str:
+        lead_id = c.findtext(f"{_P}leadId") or ""
+        lead = self.records["Lead"].get(lead_id)
+        if lead is None or lead.get("IsConverted"):
+            exc = Rejected("INVALID_CROSS_REFERENCE_KEY", "invalid cross reference id", [])
+            return f"<result>{self._soap_errors(exc)}<success>false</success></result>"
+        account = c.findtext(f"{_P}accountId") or self._store("Account", {"Name": lead["Company"]})["Id"]
+        contact = (
+            c.findtext(f"{_P}contactId")
+            or self._store(
+                "Contact", {"LastName": lead["LastName"], "AccountId": account, "Email": lead.get("Email")}
+            )["Id"]
+        )
+        opp = ""
+        if c.findtext(f"{_P}doNotCreateOpportunity") != "true":
+            name = c.findtext(f"{_P}opportunityName") or lead["Company"]
+            opp = self._store("Opportunity", {"Name": name, "AccountId": account})["Id"]
+        lead.update(Status=c.findtext(f"{_P}convertedStatus"), IsConverted=True)
+        return (
+            f"<result><accountId>{account}</accountId><contactId>{contact}</contactId><leadId>{lead_id}</leadId>"
+            + (f"<opportunityId>{opp}</opportunityId>" if opp else '<opportunityId xsi:nil="true"/>')
+            + "<success>true</success></result>"
+        )
+
+    def _merge(self, r: ET.Element) -> str:
+        sobject = r.findtext(f"{_P}masterRecord/{_O}type") or ""
+        master = r.findtext(f"{_P}masterRecord/{_O}Id") or ""
+        dups = [e.text or "" for e in r.findall(f"{_P}recordToMergeIds")]
+        table = self.records.get(sobject, {})
+        if master not in table or any(d not in table for d in dups):
+            exc = Rejected("ENTITY_IS_DELETED", "entity is deleted", [])
+            return f'<result>{self._soap_errors(exc)}<id xsi:nil="true"/><success>false</success></result>'
+        related: list[str] = []
+        for recs in self.records.values():
+            for rec in recs.values():
+                for k, v in list(rec.items()):
+                    if k != "Id" and v in dups:
+                        rec[k] = master
+                        related.append(rec["Id"])
+        for d in dups:
+            self.delete(sobject, d)
+        merged = "".join(f"<mergedRecordIds>{d}</mergedRecordIds>" for d in dups)
+        moved = "".join(f"<updatedRelatedIds>{i}</updatedRelatedIds>" for i in related)
+        return f"<result><id>{master}</id>{merged}<success>true</success>{moved}</result>"
+
+    # --- Metadata API (deploy over REST, retrieve/list/describe over SOAP) ---------------
+
+    def _deploy(self, request: httpx.Request) -> httpx.Response:
+        m = re.search(r'boundary="?([^";]+)"?', request.headers.get("content-type", ""))
+        if not m:
+            raise Rejected("INVALID_MULTIPART_REQUEST", "multipart body expected")
+        options: dict[str, Any] = {}
+        data = b""
+        for part in request.content.split(b"--" + m.group(1).encode())[1:-1]:
+            head, _, body = part.removeprefix(b"\r\n").partition(b"\r\n\r\n")
+            body = body.removesuffix(b"\r\n")
+            if b'name="json"' in head:
+                options = json.loads(body).get("deployOptions", {})
+            elif b'name="file"' in head:
+                data = body
+        try:
+            zipfile.ZipFile(io.BytesIO(data)).close()
+        except zipfile.BadZipFile:
+            raise Rejected("INVALID_ZIP", "the file part is not a valid zip file") from None
+        rid = f"0Afxx{next(self.ids):010d}AAA"
+        self.deploys[rid] = (data, options)
+        result = {"id": rid, "status": "Pending", "done": False, "checkOnly": bool(options.get("checkOnly"))}
+        return self._json({"id": rid, "deployOptions": options, "deployResult": result}, 201)
+
+    def _quick_deploy(self, vid: str, body: dict[str, Any]) -> httpx.Response:
+        if body.get("validatedDeployRequestId") != vid:
+            raise Rejected("INVALID_INPUT", "validatedDeployRequestId must match the URL")
+        validated = self._deploy_status(vid)
+        if not (validated["deployOptions"].get("checkOnly") and validated["deployResult"]["success"]):
+            raise Rejected("INVALID_ID_FIELD", "This deployment is not a successful validation")
+        data, options = self.deploys[vid]
+        rid = f"0Afxx{next(self.ids):010d}AAA"
+        self.deploys[rid] = (data, {**options, "checkOnly": False})
+        result = {"id": rid, "status": "Pending", "done": False, "checkOnly": False}
+        return self._json({"id": rid, "validatedDeployRequestId": vid, "deployResult": result}, 201)
+
+    def _cancel_deploy(self, rid: str, body: dict[str, Any]) -> httpx.Response:
+        if body != {"deployResult": {"status": "Canceling"}}:
+            raise Rejected("INVALID_INPUT", "unsupported deployRequest PATCH body")
+        self._deploy_status(rid)  # 404 for an unknown id
+        self.canceled.add(rid)
+        result = {"id": rid, "status": "Canceling", "done": False}
+        return self._json({"id": rid, "deployResult": result}, 202)
+
+    def _deploy_status(self, rid: str) -> dict[str, Any]:
+        if rid not in self.deploys:
+            raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+        data, options = self.deploys[rid]
+        if rid in self.canceled:
+            result = {"id": rid, "status": "Canceled", "done": True, "success": False}
+            return {"id": rid, "deployOptions": options, "deployResult": result}
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            classes = {
+                n: zf.read(n).decode()
+                for n in zf.namelist()
+                if n.startswith("classes/") and n.endswith(".cls")
+            }
+        failures = [
+            {
+                "componentType": "ApexClass",
+                "fullName": n.removeprefix("classes/").removesuffix(".cls"),
+                "fileName": n,
+                "problem": "Unexpected token 'Broken'.",
+                "problemType": "Error",
+                "lineNumber": 1,
+                "columnNumber": 1,
+                "success": False,
+            }
+            for n, src in sorted(classes.items())
+            if "Broken" in src
+        ]
+        ok = not failures
+        result = {
+            "id": rid,
+            "status": "Succeeded" if ok else "Failed",
+            "done": True,
+            "success": ok,
+            "checkOnly": bool(options.get("checkOnly")),
+            "numberComponentsTotal": len(classes),
+            "numberComponentsDeployed": len(classes) - len(failures),
+            "numberComponentErrors": len(failures),
+            "numberTestsTotal": 0,
+            "numberTestsCompleted": 0,
+            "numberTestErrors": 0,
+            "details": {"componentFailures": failures, "componentSuccesses": []},
+        }
+        if not ok and options.get("rollbackOnError", True):
+            result["numberComponentsDeployed"] = 0
+        return {"id": rid, "deployOptions": options, "deployResult": result}
+
+    def _metadata_reply(self, inner: str) -> httpx.Response:
+        body = (
+            '<?xml version="1.0" encoding="UTF-8"?><soapenv:Envelope '
+            'xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" '
+            'xmlns="http://soap.sforce.com/2006/04/metadata">'
+            f"<soapenv:Body>{inner}</soapenv:Body></soapenv:Envelope>"
+        )
+        return httpx.Response(200, headers={"content-type": "text/xml; charset=utf-8"}, content=body.encode())
+
+    def _retrieve_zip(self, types: list[tuple[str, list[str]]]) -> tuple[bytes, list[str]]:
+        buf = io.BytesIO()
+        names: list[str] = []
+        package = "".join(
+            "<types>" + "".join(f"<members>{m}</members>" for m in members) + f"<name>{t}</name></types>"
+            for t, members in types
+        )
+        with zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr(
+                "package.xml",
+                '<?xml version="1.0" encoding="UTF-8"?>'
+                f'<Package xmlns="http://soap.sforce.com/2006/04/metadata">{package}'
+                "<version>68.0</version></Package>",
+            )
+            for t, members in types:
+                if t != "ApexClass":
+                    continue
+                for name, src in APEX_CLASSES.items():
+                    if "*" in members or name in members:
+                        zf.writestr(f"classes/{name}.cls", src)
+                        zf.writestr(f"classes/{name}.cls-meta.xml", _CLASS_META)
+                        names.append(name)
+        return buf.getvalue(), names
+
+    @staticmethod
+    def _class_props(name: str) -> str:
+        return (
+            f"<createdById>005xx0000000001AAA</createdById><createdByName>Ada Admin</createdByName>"
+            f"<createdDate>2026-11-01T10:00:00.000Z</createdDate><fileName>classes/{name}.cls</fileName>"
+            f"<fullName>{name}</fullName><id>01pxx00000000{len(name):02d}AAA</id>"
+            "<lastModifiedById>005xx0000000001AAA</lastModifiedById><lastModifiedByName>Ada Admin"
+            "</lastModifiedByName><lastModifiedDate>2026-11-02T10:00:00.000Z</lastModifiedDate>"
+            "<manageableState>unmanaged</manageableState><type>ApexClass</type>"
+        )
+
+    def _metadata_soap(self, request: httpx.Request) -> httpx.Response:
+        root = ET.fromstring(request.content)
+        session = root.findtext(f"{_ENV}Header/{_M}SessionHeader/{_M}sessionId") or ""
+        if not session or session in self.revoked:
+            return self._soap_fault(
+                "INVALID_SESSION_ID", "Invalid Session ID found in SessionHeader: Illegal Session"
+            )
+        self.api_used += 1
+        body = root.find(f"{_ENV}Body")
+        call = body[0] if body is not None and len(body) else None
+        tag = call.tag.removeprefix(_M) if call is not None else ""
+        if call is not None and tag == "retrieve":
+            types = [
+                (t.findtext(f"{_M}name") or "", [m.text or "" for m in t.findall(f"{_M}members")])
+                for t in call.iter(f"{_M}types")
+            ]
+            rid = f"09Sxx{next(self.ids):010d}AAA"
+            self.retrieves[rid] = types
+            return self._metadata_reply(
+                f"<retrieveResponse><result><done>false</done><id>{rid}</id><state>Queued</state>"
+                "</result></retrieveResponse>"
+            )
+        if call is not None and tag == "checkRetrieveStatus":
+            rid = call.findtext(f"{_M}asyncProcessId") or ""
+            data, names = self._retrieve_zip(self.retrieves.get(rid, []))
+            zip_el = ""
+            if call.findtext(f"{_M}includeZip") == "true":
+                zip_el = f"<zipFile>{base64.b64encode(data).decode()}</zipFile>"
+            props = "".join(f"<fileProperties>{self._class_props(n)}</fileProperties>" for n in names)
+            return self._metadata_reply(
+                f"<checkRetrieveStatusResponse><result><done>true</done>{props}<id>{rid}</id>"
+                f"<status>Succeeded</status><success>true</success>{zip_el}</result>"
+                "</checkRetrieveStatusResponse>"
+            )
+        if call is not None and tag == "listMetadata":
+            mtype = call.findtext(f"{_M}queries/{_M}type")
+            results = (
+                "".join(f"<result>{self._class_props(n)}</result>" for n in APEX_CLASSES)
+                if mtype == "ApexClass"
+                else ""
+            )
+            return self._metadata_reply(f"<listMetadataResponse>{results}</listMetadataResponse>")
+        if call is not None and tag == "describeMetadata":
+            objects = "".join(
+                f"<metadataObjects>{children}<directoryName>{d}</directoryName><inFolder>{f}</inFolder>"
+                f"<metaFile>{mf}</metaFile>{suffix}<xmlName>{x}</xmlName></metadataObjects>"
+                for x, d, f, mf, suffix, children in (
+                    ("ApexClass", "classes", "false", "true", "<suffix>cls</suffix>", ""),
+                    ("ApexTrigger", "triggers", "false", "true", "<suffix>trigger</suffix>", ""),
+                    (
+                        "CustomObject",
+                        "objects",
+                        "false",
+                        "false",
+                        "<suffix>object</suffix>",
+                        "<childXmlNames>CustomField</childXmlNames><childXmlNames>ValidationRule</childXmlNames>",
+                    ),
+                    ("Report", "reports", "true", "false", "<suffix>report</suffix>", ""),
+                )
+            )
+            return self._metadata_reply(
+                f"<describeMetadataResponse><result>{objects}<organizationNamespace></organizationNamespace>"
+                "<partialSaveAllowed>true</partialSaveAllowed><testRequired>false</testRequired>"
+                "</result></describeMetadataResponse>"
+            )
+        return self._soap_fault("INVALID_OPERATION", "unsupported call")

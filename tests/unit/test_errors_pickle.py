@@ -27,7 +27,7 @@ import pytest
 from even_simpler_salesforce import errors as E
 from even_simpler_salesforce.core.classify import classify
 from even_simpler_salesforce.core.http import RawResponse, RequestSpec
-from even_simpler_salesforce.models import BatchResult, RecordResult, UsageSnapshot
+from even_simpler_salesforce.models import BatchResult, DeployResult, RecordResult, UsageSnapshot
 
 ERROR_CLASSES: list[type[E.SalesforceError]] = [
     obj
@@ -53,6 +53,8 @@ COMMON: dict[str, Any] = {
     "errors": list(DETAILS),
     "raw": b'[{"errorCode":"SOME_CODE"}]',
     "tag": "MY_TAG",
+    "hint": "did you mean 'Email'?",
+    "docs_url": "https://example.com/runbook#some-code",
 }
 
 _SNAPSHOT = UsageSnapshot(
@@ -72,6 +74,8 @@ _SNAPSHOT = UsageSnapshot(
 # Sample value for every subclass-specific keyword argument (by parameter name).
 EXTRA_SAMPLES: dict[str, Any] = {
     "ambiguous": True,
+    "event_id": "5e4b3c2a-1d0e-4f9a-8b7c-6d5e4f3a2b1c",
+    "replay_id": b"\x00\x00\x00\x00\x00\x01\x02\x03",
     "error": "invalid_client",
     "error_description": "client secret is wrong",
     "matches": ("/services/data/v1/sobjects/Lead/a", "/services/data/v1/sobjects/Lead/b"),
@@ -88,7 +92,12 @@ EXTRA_SAMPLES: dict[str, Any] = {
     "error_message": "InvalidBatch",
     "body": {"message": "apex said no"},
     "graphql_errors": ({"message": "bad field", "path": ["uiapi"]},),
+    "data": {"uiapi": {"query": {"Lead": None}}},
     "fault_code": "sf:INVALID_ID",
+    "report_id": "00Oxx0000000001AAA",
+    "instance_id": "0LGxx0000000001AAA",
+    "run_status": "Running",
+    "result": DeployResult("0Afxx0000000001AAA", "Failed", done=True, error_message="boom"),
 }
 
 BASE_ATTRS = (
@@ -105,6 +114,8 @@ BASE_ATTRS = (
     "errors",
     "raw",
     "tag",
+    "hint",
+    "docs_url",
 )
 
 
@@ -141,14 +152,23 @@ def test_classes_with_extras_are_the_expected_ones() -> None:
         "ApexError": ["body"],
         "BudgetExceeded": ["usage"],
         "BulkJobFailed": ["job_id", "state", "error_message"],
+        "BulkJobTimeout": ["job_id", "state"],
+        "DeployFailed": ["job_id", "state", "result"],
+        "DeployNotCancelable": ["job_id", "state"],
         "DuplicateDetected": ["duplicates"],
-        "GraphQLError": ["graphql_errors"],
+        "GraphQLError": ["graphql_errors", "data"],
+        "MetadataTimeout": ["job_id", "state"],
         "MultipleMatches": ["matches"],
         "OAuthError": ["error", "error_description"],
         "PartialFailure": ["results"],
         "RefreshFailed": ["ambiguous"],
+        "ReportRunFailed": ["report_id", "instance_id"],
+        "ReportTimeout": ["report_id", "instance_id", "run_status"],
+        "ReplayUnavailable": ["replay_id"],
         "RequestLimitExceeded": ["retry_after"],
+        "RetrieveFailed": ["job_id", "state"],
         "SoapFault": ["fault_code"],
+        "UnexpectedResponse": ["event_id", "replay_id"],
     }
 
 
@@ -172,6 +192,7 @@ def test_roundtrip_keeps_type_text_and_every_attribute(cls: type[E.SalesforceErr
     assert type(out) is cls
     assert isinstance(out, E.SalesforceError)
     assert str(out) == str(exc)
+    assert str(out).endswith("\n  hint: did you mean 'Email'?\n  docs: https://example.com/runbook#some-code")
     assert repr(out) == repr(exc)
     assert repr(out).startswith(f"{cls.__name__}(")
     assert out.args == exc.args == ("something failed",)
@@ -198,7 +219,9 @@ def test_roundtrip_with_defaults_only(cls: type[E.SalesforceError]) -> None:
     out = pickle.loads(pickle.dumps(exc))
     assert type(out) is cls
     assert out.__dict__ == exc.__dict__
-    assert str(out) == str(exc) == ""
+    assert str(out) == str(exc) == f"\n  docs: {E.docs_url_for(cls)}"
+    assert out.docs_url is not None
+    assert out.docs_url.endswith("#" + cls.__name__.lower())
     assert out.retryable is cls.default_retryable
 
 

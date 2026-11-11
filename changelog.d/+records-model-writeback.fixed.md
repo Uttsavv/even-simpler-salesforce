@@ -1,0 +1,1 @@
+The records guide now shows how to write a Pydantic model back with only the fields you changed, and no longer says that Pydantic `Decimal` fields give exact numbers on read: the client parses JSON numbers as `float` first.

@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 from email.utils import format_datetime
 from typing import TYPE_CHECKING, Any, TypeVar, overload
 
-from ...core.http import RequestSpec, check_record_id, check_sobject, url_segment
+from ...core.http import RawResponse, RequestSpec, check_record_id, check_sobject, url_segment
 from ...core.records import apply_model, duplicate_rule_header, format_sf_datetime, parse_upsert
 from ...core.soql import soql_identifier
 from ...errors import UnexpectedResponse
@@ -47,14 +48,30 @@ def _write_headers(
 
 
 class AsyncSObject:
-    """Operations on one sObject type. Get one with ``sf.sobject("Lead")``."""
+    """Operations on one sObject type. Get one with ``sf.sobject("Lead")``.
 
-    def __init__(self, client: AsyncSalesforce, name: str) -> None:
+    ``sf.tooling.sobject("ApexClass")`` returns the same class for a Tooling API object: its
+    paths start with ``tooling/`` and its operation names with ``tooling.``.
+    """
+
+    def __init__(self, client: AsyncSalesforce, name: str, *, base: str = "") -> None:
         self._sf = client
         self.name = check_sobject(name)
+        self._base = base  # "" (REST API) or "tooling/" (Tooling API)
 
     def __repr__(self) -> str:
         return f"<{type(self).__name__} {self.name}>"
+
+    async def _send(self, spec: RequestSpec) -> RawResponse:
+        if self._base:
+            template = spec.path_template
+            spec = dataclasses.replace(
+                spec,
+                path=self._base + spec.path,
+                operation="tooling." + spec.operation,
+                path_template=f"/{self._base}{template.lstrip('/')}" if template else None,
+            )
+        return await self._sf._send(spec)
 
     # --- read --------------------------------------------------------------------------
 
@@ -105,7 +122,7 @@ class AsyncSObject:
         """``GET sobjects/{o}/{id}``. With ``if_modified_since``, returns ``None`` on 304."""
         params = {"fields": ",".join(soql_identifier(f) for f in fields)} if fields else None
         headers = {"If-Modified-Since": _http_date(if_modified_since)} if if_modified_since else {}
-        raw = await self._sf._send(
+        raw = await self._send(
             RequestSpec(
                 "GET",
                 f"sobjects/{self.name}/{check_record_id(record_id)}",
@@ -125,7 +142,7 @@ class AsyncSObject:
     ) -> Any:
         """``GET sobjects/{o}/{field}/{value}``."""
         params = {"fields": ",".join(soql_identifier(f) for f in fields)} if fields else None
-        raw = await self._sf._send(
+        raw = await self._send(
             RequestSpec(
                 "GET",
                 f"sobjects/{self.name}/{soql_identifier(field)}/{url_segment(str(value))}",
@@ -140,12 +157,12 @@ class AsyncSObject:
     async def describe(self, *, cached: bool = True) -> dict[str, Any]:
         """``GET sobjects/{o}/describe``, served from the describe cache when fresh."""
         return await self._sf._describe(
-            f"sobjects/{self.name}/describe", f"sobject:{self.name}", cached, self.name
+            f"sobjects/{self.name}/describe", f"sobject:{self.name}", cached, self.name, base=self._base
         )
 
     async def metadata(self) -> dict[str, Any]:
         """``GET sobjects/{o}`` (basic info and recent items)."""
-        raw = await self._sf._send(
+        raw = await self._send(
             RequestSpec("GET", f"sobjects/{self.name}", operation="sobject.metadata", sobject=self.name)
         )
         return raw.json()
@@ -159,7 +176,7 @@ class AsyncSObject:
         return await self._changed("deleted", start, end)
 
     async def _changed(self, kind: str, start: datetime, end: datetime) -> dict[str, Any]:
-        raw = await self._sf._send(
+        raw = await self._send(
             RequestSpec(
                 "GET",
                 f"sobjects/{self.name}/{kind}/",
@@ -187,7 +204,7 @@ class AsyncSObject:
             allow_save: Send ``Sforce-Duplicate-Rule-Header: allowSave=...``.
         """
         content, ctype = self._sf._transport.encode(dict(data))
-        raw = await self._sf._send(
+        raw = await self._send(
             RequestSpec(
                 "POST",
                 f"sobjects/{self.name}/",
@@ -203,7 +220,9 @@ class AsyncSObject:
         body = raw.json()
         if not isinstance(body, dict) or not body.get("id"):  # pyright: ignore[reportUnknownMemberType]
             raise UnexpectedResponse(
-                "create returned no id", raw=raw.content[:4096], operation="sobject.create"
+                "create returned no id",
+                raw=raw.content[:4096],
+                operation="tooling.sobject.create" if self._base else "sobject.create",
             )
         return str(body["id"])  # pyright: ignore[reportUnknownArgumentType]
 
@@ -218,7 +237,7 @@ class AsyncSObject:
     ) -> None:
         """``PATCH sobjects/{o}/{id}``. ``if_unmodified_since`` → :class:`Conflict` on 412."""
         content, ctype = self._sf._transport.encode(dict(data))
-        await self._sf._send(
+        await self._send(
             RequestSpec(
                 "PATCH",
                 f"sobjects/{self.name}/{check_record_id(record_id)}",
@@ -243,7 +262,7 @@ class AsyncSObject:
     ) -> UpsertResult:
         """``PATCH sobjects/{o}/{field}/{value}``. Raises :class:`MultipleMatches` on HTTP 300."""
         content, ctype = self._sf._transport.encode(dict(data))
-        raw = await self._sf._send(
+        raw = await self._send(
             RequestSpec(
                 "PATCH",
                 f"sobjects/{self.name}/{soql_identifier(field)}/{url_segment(str(value))}",
@@ -267,7 +286,7 @@ class AsyncSObject:
         (REST API Developer Guide, *Conditional Request Headers*), so a precondition would be
         ignored and the record deleted anyway.
         """
-        await self._sf._send(
+        await self._send(
             RequestSpec(
                 "DELETE",
                 f"sobjects/{self.name}/{check_record_id(record_id)}",

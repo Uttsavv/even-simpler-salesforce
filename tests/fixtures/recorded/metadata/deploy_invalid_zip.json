@@ -1,0 +1,10 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Metadata API Developer Guide: https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_rest_deploy.htm",
+  "body": [
+    {
+      "message": "Unable to read the zip file",
+      "errorCode": "INVALID_INPUT"
+    }
+  ]
+}

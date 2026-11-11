@@ -20,6 +20,7 @@ KNOWN_PREFIXES: dict[str, str] = {
     "RecordType": "012",
     "ContentVersion": "068",
     "ContentDocument": "069",
+    "ContentDocumentLink": "06A",
     "Organization": "00D",
     "UserRole": "00E",
     "Group": "00G",
@@ -36,6 +37,15 @@ KNOWN_PREFIXES: dict[str, str] = {
     "Campaign": "701",
     "Contract": "800",
     "Order": "801",
+    # Tooling API objects
+    "ApexClass": "01p",
+    "ApexTrigger": "01q",
+    "ApexLog": "07L",
+    "AsyncApexJob": "707",
+    "DebugLevel": "7dl",
+    "TraceFlag": "7tf",
+    "DeployRequest": "0Af",  # Metadata API deployments (fake.metadata)
+    "RetrieveRequest": "09S",  # Metadata API retrieve jobs (fake.metadata)
 }
 
 

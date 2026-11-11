@@ -1,0 +1,151 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Salesforce Reports and Dashboards REST API Developer Guide (Execute Sync, Decode the Fact Map); no org recording yet",
+  "body": {
+    "attributes": {
+      "describeUrl": "/services/data/v68.0/analytics/reports/00Oxx0000000001AAA/describe",
+      "instancesUrl": "/services/data/v68.0/analytics/reports/00Oxx0000000001AAA/instances",
+      "reportId": "00Oxx0000000001AAA",
+      "reportName": "Open Opportunities",
+      "type": "Report"
+    },
+    "allData": true,
+    "hasDetailRows": true,
+    "factMap": {
+      "T!T": {
+        "aggregates": [
+          {
+            "label": "$4,000.00",
+            "value": {
+              "amount": 4000.0,
+              "currency": null
+            }
+          },
+          {
+            "label": "3",
+            "value": 3
+          }
+        ],
+        "rows": [
+          {
+            "dataCells": [
+              {
+                "label": "Acme",
+                "value": "001xx0000000001AAA"
+              },
+              {
+                "label": "Acme - 200 units",
+                "value": "Acme - 200 units"
+              },
+              {
+                "label": "$1,000.00",
+                "value": {
+                  "amount": 1000.0,
+                  "currency": null
+                }
+              }
+            ]
+          },
+          {
+            "dataCells": [
+              {
+                "label": "Globex",
+                "value": "001xx0000000002AAA"
+              },
+              {
+                "label": "Globex renewal",
+                "value": "Globex renewal"
+              },
+              {
+                "label": "$2,500.00",
+                "value": {
+                  "amount": 2500.0,
+                  "currency": null
+                }
+              }
+            ]
+          },
+          {
+            "dataCells": [
+              {
+                "label": "Initech",
+                "value": "001xx0000000003AAA"
+              },
+              {
+                "label": "Initech pilot",
+                "value": "Initech pilot"
+              },
+              {
+                "label": "$500.00",
+                "value": {
+                  "amount": 500.0,
+                  "currency": null
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "groupingsAcross": {
+      "groupings": []
+    },
+    "groupingsDown": {
+      "groupings": []
+    },
+    "reportExtendedMetadata": {
+      "aggregateColumnInfo": {
+        "s!AMOUNT": {
+          "label": "Sum of Amount",
+          "dataType": "currency",
+          "downGroupingContext": null,
+          "acrossGroupingContext": null
+        },
+        "RowCount": {
+          "label": "Record Count",
+          "dataType": "int",
+          "downGroupingContext": null,
+          "acrossGroupingContext": null
+        }
+      },
+      "detailColumnInfo": {
+        "ACCOUNT_NAME": {
+          "label": "Account Name",
+          "dataType": "string"
+        },
+        "OPPORTUNITY_NAME": {
+          "label": "Opportunity Name",
+          "dataType": "string"
+        },
+        "AMOUNT": {
+          "label": "Amount",
+          "dataType": "currency"
+        }
+      },
+      "groupingColumnInfo": {}
+    },
+    "reportMetadata": {
+      "id": "00Oxx0000000001AAA",
+      "name": "Open Opportunities",
+      "reportFormat": "TABULAR",
+      "detailColumns": [
+        "ACCOUNT_NAME",
+        "OPPORTUNITY_NAME",
+        "AMOUNT"
+      ],
+      "aggregates": [
+        "s!AMOUNT",
+        "RowCount"
+      ],
+      "groupingsDown": [],
+      "groupingsAcross": [],
+      "reportFilters": [],
+      "reportBooleanFilter": null,
+      "hasDetailRows": true,
+      "reportType": {
+        "type": "Opportunity",
+        "label": "Opportunities"
+      }
+    }
+  }
+}

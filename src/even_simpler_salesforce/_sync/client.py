@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import re
 import time
 from collections.abc import Iterator, Iterable, Mapping, Sequence
@@ -21,19 +20,36 @@ from ..cache import Cache, MemoryCache
 from ..config import Budget, DescribeCacheConfig, Priority, RetryPolicy, Timeouts
 from ..context import current_call_context
 from ..core import jsonlib
+from ..core.actions import Action, action_inputs, action_result_type, build_action_result
 from ..core.cursor import Cursor, decode_cursor, encode_cursor
 from ..core.http import RawResponse, RequestSpec, check_sobject
+from ..core.pubsub import check_endpoint
 from ..core.records import apply_model, parse_query_plans
 from ..core.soql import soql_values
 from ..errors import MultipleMatches, NotFound, SalesforceError, UnexpectedResponse
-from ..models import Limit, QueryPlan, QueryResult
+from ..models import Limit, MergeResult, QueryPlan, QueryResult
 from ..observability.debug import DebugPrinter, debug_level
 from ..observability.events import Observer, ObserverHub
 from ..usage import UsageTracker, org_key
 from . import _compat
+from .api.actions import Actions
+from .api.apex import Apex
 from .api.auth_api import AuthApi
+from .api.bulk import Bulk
 from .api.collections import Collections
+from .api.composite import Composite
+from .api.files import Files
+from .api.graphql import graphql as _graphql
+from .api.graphql import graphql_iter as _graphql_iter
+from .api.leads import Leads
+from .api.metadata import Metadata
+from .api.platform_events import PlatformEvents
+from .api.pubsub import PubSub
+from .api.reports import Reports
+from .api.soap import merge as _merge
 from .api.sobject import SObject
+from .api.tooling import Tooling
+from .api.ui import Ui
 from .auth_runtime import AuthRuntime
 from .token_store import InMemoryTokenStore
 from .transport import Transport
@@ -45,6 +61,7 @@ MIN_API_VERSION = (59, 0)
 MIN_LIMITS_POLL_INTERVAL = 300.0
 
 M = TypeVar("M")
+R = TypeVar("R")
 _FROM = re.compile(r"\bFROM\s+([A-Za-z][A-Za-z0-9_]*)", re.IGNORECASE)
 _STRING_LIT = re.compile(r"'(?:\\.|[^'\\])*'")
 _PARENS = re.compile(r"\([^()]*\)")
@@ -125,6 +142,9 @@ class Salesforce:
         http2: Enable HTTP/2 on the owned client (needs the ``[http2]`` extra).
         client_name: Sent as ``Sforce-Call-Options: client=<name>`` on every API call so admins
             can attribute API usage to this integration (letters, digits, ``_ . : -``; max 64).
+        pubsub_endpoint: ``host:port`` of the Pub/Sub API for ``sf.pubsub``. Defaults to
+            ``api.pubsub.salesforce.com:443``; use ``api.deu.pubsub.salesforce.com:443`` to keep
+            data in transit in the EU.
     """
 
     def __init__(
@@ -149,6 +169,7 @@ class Salesforce:
         log_soql: Literal["hash", "redacted"] = "hash",
         http2: bool = False,
         client_name: str | None = None,
+        pubsub_endpoint: str | None = None,
     ) -> None:
         for tag, cls in (error_tags or {}).items():
             if not (isinstance(cls, type) and issubclass(cls, SalesforceError)):  # pyright: ignore[reportUnnecessaryIsInstance]
@@ -179,6 +200,7 @@ class Salesforce:
             http2=http2,
             debug=level,
             client_name=client_name,
+            pubsub_endpoint=check_endpoint(pubsub_endpoint) if pubsub_endpoint is not None else None,
         )
         self._store: TokenStore = store if store is not None else InMemoryTokenStore()
         self._runtime = AuthRuntime(auth, self._transport, self._store, instance_url=instance_url)
@@ -190,6 +212,18 @@ class Salesforce:
     def _init_areas(self) -> None:
         self.collections = Collections(self)
         self.auth = AuthApi(self)
+        self.actions = Actions(self)
+        self.apex = Apex(self)
+        self.leads = Leads(self)
+        self.platform_events = PlatformEvents(self)
+        self.files = Files(self)
+        self.tooling = Tooling(self)
+        self.composite = Composite(self)
+        self.bulk = Bulk(self)
+        self.ui = Ui(self)
+        self.reports = Reports(self)
+        self.metadata = Metadata(self)
+        self.pubsub = PubSub(self)
 
     @classmethod
     def _child(
@@ -305,26 +339,60 @@ class Salesforce:
         """Operations on one sObject type, e.g. ``sf.sobject("Lead").get(id)``."""
         return SObject(self, name)
 
+    def merge(self, master_id: str, duplicate_ids: Sequence[str], *, sobject: str) -> MergeResult:
+        """Merge up to two records into a master record (SOAP ``merge``; REST has none).
+
+        Salesforce deletes the merged records and moves their related records to the master.
+
+        Args:
+            master_id: The record to keep.
+            duplicate_ids: One or two records of the same object to merge into the master.
+            sobject: ``"Lead"``, ``"Contact"`` or ``"Account"``.
+
+        Returns:
+            The master id, the merged ids and the related records that moved.
+
+        Raises:
+            ValueError: unsupported ``sobject``, malformed ids, or not 1 to 2 distinct duplicates.
+            RecordError: Salesforce refused the merge; the subclass follows the status code.
+        """
+        return _merge(self, master_id, duplicate_ids, sobject)
+
     def describe_global(self, *, cached: bool = True) -> dict[str, Any]:
         """``GET sobjects``: list of sObjects, served from the describe cache when fresh."""
         return self._describe("sobjects", "global", cached, None)
 
-    def _describe(self, path: str, what: str, cached: bool, sobject: str | None) -> dict[str, Any]:
+    def _describe(
+        self,
+        path: str,
+        what: str,
+        cached: bool,
+        sobject: str | None,
+        operation: str | None = None,
+        *,
+        base: str = "",
+    ) -> dict[str, Any]:
+        # Callers get their own copy: the cached dict is shared by the whole family.
+        # ``base="tooling/"`` describes a Tooling API object (own path, cache key and operation).
+        # ``operation`` names other cached metadata reads (sf.ui); it defaults to the describe ones.
         t = self._transport
         tok = self._runtime.token()
-        user = hashlib.sha256((tok.user_id or self._runtime.key).encode()).hexdigest()[:12]
-        key = f"esf:describe:{tok.org_id or tok.instance_url}:{t.api_version}:{what}:{user}"
+        key = t.describe_key(tok, self._runtime.key, base + what)
+        op = operation or (
+            ("tooling." if base else "") + ("sobject.describe" if sobject else "describe_global")
+        )
+        path = base + path
         if not cached:
-            return (self._describe_fetch(path, key, False, sobject))[1]
+            return (self._describe_fetch(path, key, False, sobject, op))[1]
         # Single flight: concurrent misses for one key wait for the first fetch, then hit the cache.
         with t.single_flight(key):
-            body, data = self._describe_fetch(path, key, True, sobject)
+            body, data = self._describe_fetch(path, key, True, sobject, op)
         # The cache holds the JSON text, so each caller decodes its own private copy, outside
         # the lock. Decoding is several times faster than deep-copying a large describe.
         return data if data is not None else t.loads(body.encode())
 
     def _describe_fetch(
-        self, path: str, key: str, cached: bool, sobject: str | None
+        self, path: str, key: str, cached: bool, sobject: str | None, op: str
     ) -> tuple[str, Any]:
         """Return ``(json_text, parsed_or_None)``; ``parsed`` is set only for a fresh 200."""
         t = self._transport
@@ -347,7 +415,7 @@ class Salesforce:
                 "GET",
                 path,
                 headers=headers,
-                operation="sobject.describe" if sobject else "describe_global",
+                operation=op,
                 sobject=sobject,
                 allow_not_modified=bool(headers),
             )
@@ -390,15 +458,18 @@ class Salesforce:
             raise ValueError("page_size must be between 200 and 2000")
         return {"Sforce-Query-Options": f"batchSize={page_size}"}
 
-    def _query_body(self, soql: str, page_size: int | None, include_deleted: bool) -> Any:
+    def _query_body(
+        self, soql: str, page_size: int | None, include_deleted: bool, base: str = ""
+    ) -> Any:
+        # ``base`` is "" for the REST API or "tooling/" for the Tooling API (same resource shape).
         raw = self._send(
             RequestSpec(
                 "GET",
-                "queryAll" if include_deleted else "query",
+                "tooling/query" if base else ("queryAll" if include_deleted else "query"),
                 params={"q": soql},
                 headers=self._query_headers(page_size),
                 idempotent=True,
-                operation="query",
+                operation="tooling.query" if base else "query",
                 sobject=_sobject_of(soql),
                 soql=soql,
             )
@@ -406,13 +477,14 @@ class Salesforce:
         return raw.json()
 
     def _locator_body(self, path: str, page_size: int | None, soql: str | None = None) -> Any:
+        tooling = "/tooling/query/" in path
         raw = self._send(
             RequestSpec(
                 "GET",
                 path,
                 headers=self._query_headers(page_size),
                 idempotent=True,
-                operation="query_more",
+                operation="tooling.query_more" if tooling else "query_more",
                 sobject=_sobject_of(soql) if soql else None,
                 soql=soql,
             )
@@ -522,7 +594,10 @@ class Salesforce:
     def query_more(
         self, cursor: Cursor | str, *, page_size: int | None = None, model: Any = None
     ) -> QueryResult[Any]:
-        """Fetch the page after ``cursor``. Rejects tampered or foreign cursors."""
+        """Fetch the page after ``cursor``. Rejects tampered or foreign cursors.
+
+        Accepts cursors of ``sf.tooling.query`` too; the page then comes from the Tooling API.
+        """
         path = decode_cursor(cursor, self._transport.cursor_key)
         return self._page(self._locator_body(path, page_size), model)
 
@@ -542,7 +617,19 @@ class Salesforce:
         completion before the parent row is yielded.
         """
         soql = soql_values(soql, values)
-        body: Any = self._query_body(soql, page_size, include_deleted)
+        for rec in self._rows(soql, page_size, include_deleted, model, expand_children):
+            yield rec
+
+    def _rows(
+        self,
+        soql: str,
+        page_size: int | None,
+        include_deleted: bool,
+        model: Any,
+        expand_children: bool,
+        base: str = "",
+    ) -> Iterator[Any]:
+        body: Any = self._query_body(soql, page_size, include_deleted, base)
         while True:
             page = self._page(body, None)
             for rec in page.records:
@@ -628,6 +715,77 @@ class Salesforce:
         if isinstance(body, dict):
             return list(body.get("searchRecords") or [])  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]
         return list(body or [])  # pyright: ignore[reportUnknownArgumentType]
+
+    # --- graphql -----------------------------------------------------------------------
+
+    def graphql(self, query: str, variables: Mapping[str, Any] | None = None) -> dict[str, Any]:
+        """``POST graphql``: run a GraphQL query and return its ``data`` member.
+
+        Example:
+            data = sf.graphql(
+                "query Lead($id: ID) { uiapi { query { Lead(where: {Id: {eq: $id}}) "
+                "{ edges { node { Id Name { value } } } } } } }",
+                {"id": lead_id},
+            )
+
+        Queries are reads, so the client resends them after a timeout or a 5xx. A document
+        with a ``mutation`` is never resent after it may have reached Salesforce.
+
+        Args:
+            query: The GraphQL document.
+            variables: Values for the variables the document declares.
+
+        Raises:
+            GraphQLError: the response has an ``errors`` array, even with ``200 OK``.
+                ``.data`` holds any partial data that came with the errors.
+        """
+        return _graphql(self, query, variables)
+
+    def graphql_iter(
+        self, query: str, variables: Mapping[str, Any] | None = None, *, path: str
+    ) -> Iterator[Any]:
+        """Yield every node of a GraphQL connection, fetching pages lazily.
+
+        Example:
+            for lead in sf.graphql_iter(query, path="uiapi.query.Lead"):
+                print(lead["Id"])
+
+        The query must declare an ``$after`` variable and pass it to the connection, and must
+        select ``pageInfo { hasNextPage endCursor }``. The client sets ``after`` to
+        ``endCursor`` for each next page and yields each ``edges[].node``.
+
+        Args:
+            query: A GraphQL document with exactly one query that declares ``$after``.
+            variables: Values for the other variables (an ``after`` here sets the first cursor).
+            path: Dotted path from ``data`` to the connection, e.g. ``"uiapi.query.Lead"``.
+
+        Raises:
+            ValueError: the query doesn't declare ``$after``, or ``path`` is malformed.
+            GraphQLError: a page has an ``errors`` array.
+            UnexpectedResponse: ``path`` isn't in the response or lacks ``edges``/``pageInfo``.
+        """
+        for node in _graphql_iter(self, query, variables, path):
+            yield node
+
+    # --- org automation --------------------------------------------------------------
+
+    def run(self, action: Action[R]) -> R:
+        """Run a typed action stub (written by ``esf generate actions``) and return its result.
+
+        Example:
+            result = sf.run(AssignLead(lead_id="00Q..."))
+
+        The inputs are the stub's fields; fields set to ``None`` are not sent. The output values
+        become the stub's result type (a dataclass or a Pydantic model).
+
+        Raises:
+            SalesforceError: the typed error of the failed invocation, as for
+                ``sf.actions.flow(name, {...})``.
+        """
+        kind, name, inputs = action_inputs(action)
+        outputs = self.actions._invoke(kind, name, inputs)
+        result: R = build_action_result(action_result_type(type(action)), outputs)
+        return result
 
     # --- raw & limits ------------------------------------------------------------------
 

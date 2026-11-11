@@ -34,3 +34,32 @@ def test_hierarchy_matches_errors_module() -> None:
     for name, parent in tree.items():
         expected = classes[name].__mro__[1].__name__ if name != "SalesforceError" else None
         assert parent == expected, f"{name}: page says {parent}, code says {expected}"
+
+
+def _anchors() -> set[str]:
+    """Heading ids as the docs site makes them: lower case, spaces to ``-``, punctuation dropped."""
+    out: set[str] = set()
+    for line in PAGE.read_text(encoding="utf-8").splitlines():
+        m = re.match(r"^#{2,3} (?P<text>.+)$", line)
+        if m:
+            text = re.sub(r"[^\w\s-]", "", m.group("text").lower()).strip()
+            out.add(re.sub(r"[\s]+", "-", text))
+    return out
+
+
+def test_every_docs_url_has_an_entry_on_the_page() -> None:
+    """``SalesforceError.docs_url`` (spec §8.5) must land on a real heading of ``errors.md``."""
+    anchors = _anchors()
+    missing: list[str] = []
+    for name in E.__all__:
+        cls = getattr(E, name)
+        if not (isinstance(cls, type) and issubclass(cls, E.SalesforceError)):
+            continue
+        url = cls().docs_url
+        assert url is not None
+        assert url.startswith(E.ERRORS_PAGE)
+        if url.split("#", 1)[1] not in anchors:
+            missing.append(name)
+    assert not missing, f"add a '### <Class>' entry under '## Troubleshooting' for: {missing}"
+    assert "hints-and-docs-links" in anchors
+    assert "troubleshooting" in anchors

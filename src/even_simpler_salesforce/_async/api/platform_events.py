@@ -1,0 +1,112 @@
+"""Platform events: ``sf.platform_events`` (§9.10). Publish only; subscribing is Pub/Sub (0.5)."""
+
+from __future__ import annotations
+
+from collections.abc import Iterable, Mapping
+from typing import TYPE_CHECKING, Any
+
+from ...core.classify import error_from_detail
+from ...core.events import check_event_name, event_error, parse_publish, publish_result
+from ...core.http import RequestSpec
+from ...errors import PartialFailure, SalesforceError, UnexpectedResponse
+from ...models import BatchResult, PublishResult
+
+if TYPE_CHECKING:
+    from ..client import AsyncSalesforce
+
+__all__ = ["AsyncPlatformEvents"]
+
+
+class AsyncPlatformEvents:
+    """Publish platform events (``Order_Event__e``) with the REST API.
+
+    A successful publish means Salesforce queued the event. Delivery to subscribers happens
+    later, so ``ok`` doesn't mean a subscriber received it.
+    """
+
+    def __init__(self, client: AsyncSalesforce) -> None:
+        self._sf = client
+
+    async def publish(self, name: str, data: Mapping[str, Any]) -> PublishResult:
+        """Publish one event with ``POST sobjects/{name}``.
+
+        Args:
+            name: Event API name, ending in ``__e``.
+            data: Field values of the event.
+
+        Returns:
+            The queued event, with its ``uuid`` (``EventUuid``).
+
+        Raises:
+            EventPublishFailed: Salesforce refused the event, for example ``LIMIT_EXCEEDED``.
+            EventPublishUnavailable: publishing is down for a moment; try again later.
+            RecordError: another record error, such as ``RequiredFieldMissing``.
+        """
+        check_event_name(name)
+        content, ctype = self._sf._transport.encode(dict(data))  # pyright: ignore[reportPrivateUsage]
+        spec = RequestSpec(
+            "POST",
+            f"sobjects/{name}",
+            content=content,
+            content_type=ctype,
+            operation="platform_events.publish",
+            sobject=name,
+            records=1,
+            dml=True,
+        )
+        try:
+            raw = await self._sf._send(spec)  # pyright: ignore[reportPrivateUsage]
+        except SalesforceError as exc:
+            mapped = event_error(exc)
+            if mapped is exc:
+                raise
+            raise mapped from exc.__cause__
+        result = parse_publish(raw.json())
+        if not result.ok:
+            if not result.errors:
+                raise UnexpectedResponse(
+                    "platform event publish failed without error details", operation=spec.operation
+                )
+            raise event_error(
+                error_from_detail(
+                    result.errors[0],
+                    status=raw.status,
+                    spec=spec,
+                    dml=True,
+                    error_tags=self._sf._transport.error_tags,  # pyright: ignore[reportPrivateUsage]
+                    errors=result.errors,
+                )
+            )
+        return result
+
+    async def publish_many(self, name: str, rows: Iterable[Mapping[str, Any]]) -> BatchResult[PublishResult]:
+        """Publish many events through sObject Collections, 200 per request.
+
+        Results keep the input order. Each event publishes on its own: check ``.failed`` or
+        call ``.raise_for_errors()``.
+
+        Args:
+            name: Event API name, ending in ``__e``.
+            rows: Field values, one mapping per event.
+
+        Raises:
+            PartialFailure: a whole request of 200 failed while others succeeded.
+            EventPublishFailed: every request failed, for example with ``LIMIT_EXCEEDED``.
+            EventPublishUnavailable: every request failed because publishing is down for a moment.
+        """
+        check_event_name(name)
+        try:
+            batch = await self._sf.collections.create(rows, sobject=name)
+        except PartialFailure as exc:
+            if exc.results is not None:
+                exc.results = BatchResult(
+                    [publish_result(r) for r in exc.results], operation=exc.results.operation, sobject=name
+                )
+            raise
+        except SalesforceError as exc:
+            # Every request failed (for example LIMIT_EXCEEDED): map it as publish() does.
+            mapped = event_error(exc)
+            if mapped is exc:
+                raise
+            raise mapped from exc.__cause__
+        return BatchResult([publish_result(r) for r in batch], operation=batch.operation, sobject=name)

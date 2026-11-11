@@ -11,13 +11,14 @@ from even_simpler_salesforce.core.cursor import Cursor, decode_cursor, encode_cu
 
 LOC = "/services/data/v68.0/query/01gxx0000000001AAA-2000"
 LOC_ALL = "/services/data/v59.0/queryAll/01gxx00000000Ab-200"
+LOC_TOOLING = "/services/data/v68.0/tooling/query/01gxx0000000001AAA-2000"
 
 
 def _b64(s: str) -> str:
     return base64.urlsafe_b64encode(s.encode()).rstrip(b"=").decode()
 
 
-@pytest.mark.parametrize("path", [LOC, LOC_ALL])
+@pytest.mark.parametrize("path", [LOC, LOC_ALL, LOC_TOOLING])
 def test_roundtrip_unsigned(path: str) -> None:
     c = encode_cursor(path)
     assert isinstance(c, Cursor)
@@ -70,6 +71,9 @@ def test_tampered_payload_rejected() -> None:
         "/services/data/v68/query/01gxx0000000001AAA-2000",
         "/services/apexrest/query/01gxx0000000001AAA-2000",
         "/services/data/v68.0/query/01gxx0000000001AAA-2000?x=1",
+        "/services/data/v68.0/tooling/sobjects/User",
+        "/services/data/v68.0/tooling/queryAll/01gxx0000000001AAA-2000",
+        "/services/data/v68.0/tooling/executeAnonymous/01gxx0000000001AAA-2000",
         "",
     ],
 )

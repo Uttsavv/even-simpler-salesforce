@@ -1,0 +1,21 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Tooling API Developer Guide and the ExecuteAnonymousResult reference; no org recording yet (big-bang.md \u00a721 V17, V23, V45-V47)",
+  "body": {
+    "size": 3,
+    "totalSize": 3,
+    "done": true,
+    "queryLocator": null,
+    "entityTypeName": "ApexClass",
+    "records": [
+      {
+        "attributes": {
+          "type": "ApexClass",
+          "url": "/services/data/v68.0/tooling/sobjects/ApexClass/01pxx0000000003AAA"
+        },
+        "Id": "01pxx0000000003AAA",
+        "Name": "LeadScoring"
+      }
+    ]
+  }
+}

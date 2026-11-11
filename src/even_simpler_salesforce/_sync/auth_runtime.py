@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from ..auth.flows import Auth
 from ..auth.store import TokenStore, store_lock_sync
-from ..auth.token import Token, merge_token, parse_token_response
+from ..auth.token import Token, check_same_identity, merge_token, parse_token_response
 from ..core.http import RawResponse, check_instance_url
 from ..core.retry import backoff_delay
 from ..errors import (
@@ -263,17 +263,30 @@ class AuthRuntime:
     def _post_form(self, url: str, form: dict[str, str]) -> RawResponse:
         return self.transport.post_form(url, form)
 
+    def _check_identity(self, new: Token, previous: Token | None, what: str) -> None:
+        check_same_identity(new, previous, what=f"{what} (token_key_hash={self.key_hash})")
+
     def _reload_if_changed(self, base: Token | None) -> Token | None:
         reloaded = self._load()
         if reloaded is not None and (base is None or reloaded.access_token != base.access_token):
+            self._check_identity(reloaded, base, "stored token")
             return reloaded
         return None
+
+    def _reload_after_conflict(self, previous: Token) -> Token | None:
+        reloaded = self._load()
+        if reloaded is not None:
+            self._check_identity(reloaded, previous, "stored token")
+        return reloaded
 
     def _refresh_locked(self, stale: Token | None, *, proactive: bool) -> Token:
         started = time.perf_counter()
         policy = self.transport.retry
         with store_lock_sync(self.store, self.key):
             current = self._load()
+            if current is not None:
+                # Another process may have saved a token for another user under this key.
+                self._check_identity(current, stale, "stored token")
             newer = current is not None and (stale is None or current.access_token != stale.access_token)
             if newer and current is not None and not self._due(current):
                 return current  # another process refreshed already
@@ -353,7 +366,9 @@ class AuthRuntime:
                 ) from None
             if not isinstance(data, dict):
                 raise UnexpectedResponse("token endpoint returned unexpected JSON")
-            new = merge_token(parse_token_response(data, now=self.transport.now()), base)  # pyright: ignore[reportUnknownArgumentType]
+            parsed = parse_token_response(data, now=self.transport.now())  # pyright: ignore[reportUnknownArgumentType]
+            self._check_identity(parsed, base, "refreshed token")
+            new = merge_token(parsed, base)
             rotated = bool(
                 base is not None
                 and base.refresh_token
@@ -366,7 +381,7 @@ class AuthRuntime:
                     self.key, new, expected_version=current.version if current is not None else None
                 )
             except TokenConflict:
-                reloaded = self._load()
+                reloaded = self._reload_after_conflict(new)
                 if reloaded is None:
                     raise
                 return reloaded
@@ -431,7 +446,7 @@ class AuthRuntime:
         try:
             return self.store.save(self.key, updated, expected_version=saved.version)
         except TokenConflict:
-            return (self._load()) or saved
+            return (self._reload_after_conflict(saved)) or saved
 
     def _warn_introspect(self, msg: str) -> None:
         if not self._introspect_warned:

@@ -1,0 +1,31 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Salesforce User Interface API Developer Guide (Get List Views for an Object; List Info Summary Collection); no org recording yet",
+  "body": {
+    "count": 2,
+    "currentPageToken": "0",
+    "currentPageUrl": "/services/data/v68.0/ui-api/list-info/Lead?pageSize=20&pageToken=0",
+    "nextPageToken": null,
+    "nextPageUrl": null,
+    "pageSize": 20,
+    "previousPageToken": null,
+    "previousPageUrl": null,
+    "lists": [
+      {
+        "apiName": "AllOpenLeads",
+        "id": "00Bxx0000000001AAA",
+        "label": "All Open Leads",
+        "url": "/services/data/v68.0/ui-api/list-info/Lead/AllOpenLeads"
+      },
+      {
+        "apiName": "MyUnreadLeads",
+        "id": "00Bxx0000000002AAA",
+        "label": "My Unread Leads",
+        "url": "/services/data/v68.0/ui-api/list-info/Lead/MyUnreadLeads"
+      }
+    ],
+    "objectApiName": "Lead",
+    "queryString": null,
+    "recentListsOnly": false
+  }
+}

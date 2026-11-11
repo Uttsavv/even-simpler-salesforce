@@ -6,10 +6,12 @@ import re
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
-from typing import Any
+from typing import Any, cast
 
 from .. import errors as E
+from .graphql import graphql_error
 from .http import RawResponse, RequestSpec, path_template
+from .soap import is_soap_path, parse_fault
 
 __all__ = [
     "CODE_MAP",
@@ -80,7 +82,9 @@ _STATUS_MAP: dict[int, type[E.SalesforceError]] = {
 
 _RETRYABLE_STATUS = frozenset({500, 502, 503, 504})
 # Operations on an sObject *type* (no record id): NOT_FOUND there means the type doesn't exist.
-_TYPE_OPS = frozenset({"sobject.describe", "sobject.metadata", "sobject.updated", "sobject.deleted"})
+_TYPE_OPS = frozenset(
+    {"sobject.describe", "sobject.metadata", "sobject.updated", "sobject.deleted", "ui.object_info"}
+)
 
 
 def _as_str_tuple(value: Any) -> tuple[str, ...]:
@@ -213,12 +217,122 @@ def _truncate(content: bytes) -> bytes:
     return content if len(content) <= _RAW_LIMIT else content[:_RAW_LIMIT]
 
 
+def _is_action_results(body: Any) -> bool:
+    """A non-empty list of invocable action results (each with ``isSuccess``)."""
+    if not isinstance(body, list) or not body:
+        return False
+    return all(isinstance(item, Mapping) and "isSuccess" in item for item in body)  # pyright: ignore[reportUnknownVariableType]
+
+
+def _is_tree_errors(body: Any) -> bool:
+    """An sObject Tree error response: ``{"hasErrors": true, "results": [...]}``."""
+    if not isinstance(body, Mapping):
+        return False
+    m = cast("Mapping[str, Any]", body)
+    return m.get("hasErrors") is True and isinstance(m.get("results"), list)
+
+
+def _as_apex_error(err: E.SalesforceError, body: Any) -> E.SalesforceError:
+    """Apex REST (§8.3): whatever the class returned is an :class:`ApexError` with ``.body``.
+
+    Kept as they are: auth and limit errors with a Salesforce error code (the transport
+    refreshes on ``INVALID_SESSION_ID``), gateway errors without a Salesforce error code, and
+    non-JSON pages (proxies, maintenance).
+    """
+    if isinstance(err, (E.ApexError, E.UnexpectedResponse)):
+        return err
+    # An auth or limit error is Salesforce's only if it carries a code Salesforce uses (or has no
+    # body). A class that sets statusCode=401 or 429 itself returns its own body: ApexError.
+    if isinstance(err, (E.AuthError, E.LimitError)) and (
+        err.error_code in CODE_MAP or err.error_code == "invalid_token" or not body
+    ):
+        return err
+    if isinstance(err, E.ServerError) and (
+        err.error_code == "SERVER_UNAVAILABLE" or (err.error_code is None and not body)
+    ):
+        return err
+    return E.ApexError(
+        err.message,
+        body=body,
+        error_code=err.error_code,
+        fields=err.fields,
+        status=err.status,
+        operation=err.operation,
+        sobject=err.sobject,
+        method=err.method,
+        path=err.path,
+        request_id=err.request_id,
+        errors=err.errors,
+        raw=err.raw,
+        tag=err.tag,
+    )
+
+
+def _soap_error(
+    detail: E.ErrorDetail,
+    resp: RawResponse,
+    error_tags: Mapping[str, type[E.SalesforceError]] | None,
+    raw: bytes,
+    common: dict[str, Any],
+) -> E.SalesforceError:
+    """Typed error for a SOAP fault: a known ``exceptionCode`` gets its class, else ``SoapFault``.
+
+    SOAP faults always arrive as HTTP 500, so the status never picks the class.
+    """
+    code = detail.error_code
+    cls: type[E.SalesforceError] = (CODE_MAP.get(code) if code else None) or E.SoapFault
+    cls, message, tag = _apply_tag(cls, detail.message, error_tags)
+    kw: dict[str, Any] = {}
+    if issubclass(cls, E.SoapFault):
+        kw["fault_code"] = detail.extended.get("fault_code")
+    if issubclass(cls, E.RequestLimitExceeded):
+        kw["retry_after"] = parse_retry_after(resp.headers.get("retry-after"))
+    retryable: bool | None = None
+    if cls is E.ServerError:
+        retryable = code == "SERVER_UNAVAILABLE"
+    return cls(
+        message, error_code=code, errors=(detail,), raw=raw, tag=tag, retryable=retryable, **common, **kw
+    )
+
+
 def classify(
     resp: RawResponse,
     spec: RequestSpec,
     error_tags: Mapping[str, type[E.SalesforceError]] | None = None,
 ) -> E.SalesforceError | None:
-    """Return ``None`` for success, else the typed error for this response."""
+    """Return ``None`` for success, else the typed error for this response.
+
+    Two areas differ from the REST rules:
+
+    - ``actions.*``: a 400 whose body is a list of per-invocation results is returned to the
+      area as success; it maps each ``isSuccess=false`` entry itself (§9.7).
+    - ``apex.*``: errors become :class:`ApexError` carrying the decoded body (§8.3).
+    - ``graphql``: a body with an ``errors`` array is a :class:`GraphQLError`, even with
+      ``200 OK`` (§9.6).
+    - ``composite.tree``: a 400 whose body has ``hasErrors`` and ``results`` is returned to the
+      area as success; it raises the typed error of the first failed record itself (§9.4).
+    """
+    if spec.operation == "graphql":
+        gql = graphql_error(resp, spec)
+        if gql is not None:
+            return gql
+    err = _classify(resp, spec, error_tags)
+    if err is None or not spec.operation.startswith(("actions.", "apex.", "composite.tree")):
+        return err
+    # _classify already turned a body that isn't JSON into UnexpectedResponse.
+    body: Any = None if isinstance(err, E.UnexpectedResponse) else resp.json()
+    if spec.operation.startswith("actions."):
+        return None if resp.status == 400 and _is_action_results(body) else err
+    if spec.operation == "composite.tree":
+        return None if resp.status == 400 and _is_tree_errors(body) else err
+    return _as_apex_error(err, body)
+
+
+def _classify(
+    resp: RawResponse,
+    spec: RequestSpec,
+    error_tags: Mapping[str, type[E.SalesforceError]] | None = None,
+) -> E.SalesforceError | None:
     status = resp.status
     if 200 <= status < 300 or (status == 304 and spec.allow_not_modified):
         return None
@@ -232,6 +346,14 @@ def classify(
         "request_id": resp.request_id,
     }
     raw = _truncate(resp.content)
+
+    if is_soap_path(spec.path) and resp.content and "xml" in resp.content_type:
+        try:
+            fault = parse_fault(resp.content)
+        except E.UnexpectedResponse:
+            fault = None
+        if fault is not None:
+            return _soap_error(fault, resp, error_tags, raw, common)
 
     body: Any = None
     parsed = False
