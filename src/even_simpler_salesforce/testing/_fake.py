@@ -50,6 +50,7 @@ from ..usage import UsageTracker
 from ._fake_org import AsyncFakeLeads, AsyncFakePlatformEvents, FakeLeads, FakePlatformEvents, fake_merge
 from ._files import AsyncFakeFiles, FakeFiles
 from ._graphql import GraphQLMatch, GraphQLScript, add_graphql_script, fake_graphql, fake_graphql_iter
+from ._pubsub import AsyncFakePubSub, FakePubSub
 from ._state import FakeCall, FakeRequest, FakeState, Match, QueryScript, RowsSpec, Who, _sobject_of
 
 __all__ = [
@@ -999,6 +1000,7 @@ class FakeSalesforce(_FakeControls):
         self.leads = FakeLeads(self._state, self._who)
         self.platform_events = FakePlatformEvents(self._state, self._who)
         self.files = FakeFiles(self._state, self._who)
+        self.pubsub = FakePubSub(self._state, self._who)
 
     @classmethod
     def _view(
@@ -1017,6 +1019,7 @@ class FakeSalesforce(_FakeControls):
         view.leads = FakeLeads(state, who)
         view.platform_events = FakePlatformEvents(state, who)
         view.files = FakeFiles(state, who)
+        view.pubsub = FakePubSub(state, who)
         return view
 
     def __repr__(self) -> str:
@@ -1618,6 +1621,7 @@ class AsyncFakeSalesforce(_FakeControls):
         self.leads = AsyncFakeLeads(inner.leads)
         self.platform_events = AsyncFakePlatformEvents(inner.platform_events)
         self.files = AsyncFakeFiles(inner.files)
+        self.pubsub = AsyncFakePubSub(inner.pubsub)
 
     @property
     def instance_url(self) -> str:

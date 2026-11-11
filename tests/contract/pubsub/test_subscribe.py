@@ -70,12 +70,17 @@ def test_receives_decoded_platform_events(ps: PubSubHarness, rec: Recorder) -> N
     assert ps.server.schema_calls[0][1]["accesstoken"] == "AT-initial-0001"
 
     (sub,) = rec.named("sf.pubsub.subscribed")
-    assert sub["topic"] == TOPIC and sub["replay_preset"] == "LATEST" and sub["resumed_from"] == "none"
+    assert sub["topic"] == TOPIC
+    assert sub["replay_preset"] == "LATEST"
+    assert sub["resumed_from"] == "none"
     assert sub["stream_no"] == 1
     (b,) = rec.named("sf.pubsub.batch")
-    assert b["events"] == 2 and b["lag_ms"] is not None
+    assert b["events"] == 2
+    assert b["lag_ms"] is not None
     (closed,) = rec.named("sf.pubsub.closed")
-    assert closed["outcome"] == "ok" and closed["events"] == 2 and closed["reconnects"] == 0
+    assert closed["outcome"] == "ok"
+    assert closed["events"] == 2
+    assert closed["reconnects"] == 0
     assert rec.requests == []  # streams emit no sf.request
     # Payload values are never logged.
     assert "O-1" not in repr([e.fields for e in rec.events])
@@ -118,12 +123,14 @@ def test_change_event_header_and_bitmaps(ps: PubSubHarness) -> None:
     assert ev.schema_id == ACCOUNT_SCHEMA_ID
     assert ch.entity_name == "Account"
     assert ch.change_type is esf.ChangeType.UPDATE
-    assert not ch.is_gap and not ch.is_overflow
+    assert not ch.is_gap
+    assert not ch.is_overflow
     assert ch.record_ids == ("001xx0000000001AAA",)
     assert ch.changed_fields == ("Name", "Phone", "BillingAddress.City")
     assert ch.nulled_fields == ("BillingAddress.City", "BillingAddress.State")
     assert ch.diff_fields == ("Description",)
-    assert ch.transaction_key == "tx-1" and ch.sequence_number == 1
+    assert ch.transaction_key == "tx-1"
+    assert ch.sequence_number == 1
     assert ch.commit_timestamp == datetime(2026, 1, 1, tzinfo=timezone.utc)
     assert ch.commit_number == 1001
     assert ev.payload["LastModifiedDate"] == datetime(2026, 1, 1, tzinfo=timezone.utc)
@@ -142,9 +149,11 @@ def test_gap_and_overflow_events(ps: PubSubHarness) -> None:
         )
     )
     gap, overflow = ps.consume("/data/AccountChangeEvent", n=2)
-    assert gap.change.is_gap and not gap.change.is_overflow
+    assert gap.change.is_gap
+    assert not gap.change.is_overflow
     assert gap.change.record_ids == ("001xx0000000001AAA", "001xx0000000002AAA")
-    assert overflow.change.is_gap and overflow.change.is_overflow
+    assert overflow.change.is_gap
+    assert overflow.change.is_overflow
     assert overflow.change.record_ids == ()
 
 
@@ -336,9 +345,12 @@ def test_reconnect_resumes_from_the_last_processed_event(ps: PubSubHarness, rec:
     evs = ps.consume(n=3)
     assert [e.replay_id for e in evs] == [rid(1), rid(2), rid(3)]
     second = ps.server.streams[1].first
-    assert second.replay_preset == 2 and second.replay_id == rid(2)
+    assert second.replay_preset == 2
+    assert second.replay_id == rid(2)
     (rc,) = rec.named("sf.pubsub.reconnect")
-    assert rc["reason"] == "error" and rc["error_code"] == "UNAVAILABLE" and rc["rpc_id"] == "rpc-fail-1"
+    assert rc["reason"] == "error"
+    assert rc["error_code"] == "UNAVAILABLE"
+    assert rc["rpc_id"] == "rpc-fail-1"
     assert rc["attempt"] == 1
     assert ps.sf.sleeps == [0.25]
     subs = rec.named("sf.pubsub.subscribed")

@@ -253,12 +253,15 @@ SalesforceError
 │       └── EventPublishUnavailable  PLATFORM_EVENT_PUBLISHING_UNAVAILABLE  (retryable)
 ├── LimitError
 │   ├── RequestLimitExceeded       REQUEST_LIMIT_EXCEEDED (403) or 429; .retry_after
-│   └── BudgetExceeded             the library's own budget guard; .usage
+│   ├── BudgetExceeded             the library's own budget guard; .usage
+│   └── PubSubLimitExceeded        Pub/Sub RESOURCE_EXHAUSTED, e.g. too many concurrent streams
 ├── ServerError                    420 and 5xx, SERVER_UNAVAILABLE
 ├── PartialFailure                 some records or chunks failed; .results
 ├── BulkJobFailed                  Bulk 2.0 job failed; .job_id, .state, .error_message   (used from 0.3)
 ├── ApexError                      APEX_ERROR, or an error from an Apex REST class; .body
 ├── GraphQLError                   GraphQL errors array; .graphql_errors, .data
+├── PubSubError                    other Pub/Sub API (gRPC) errors; .error_code, .request_id (rpcId)
+│   └── ReplayUnavailable          stored or requested replay id rejected; .replay_id
 ├── SoapFault                      unmapped SOAP fault (lead convert, merge); .fault_code
 └── UnexpectedResponse             HTML pages (proxies, maintenance), non-JSON bodies, unexpected shapes
 ```
@@ -451,6 +454,13 @@ The org is over its API request limit, or runs too many long requests at once. C
 The client's own budget guard stopped the call before it was sent. `exc.usage` shows the
 usage. See [Usage and budgets](usage-and-budgets.md).
 
+### PubSubLimitExceeded
+
+A Pub/Sub API allocation stopped the subscription, for example too many concurrent clients or
+subscriptions, or a service-protection limit. `exc.error_code` holds the Pub/Sub error code.
+Close streams you don't use, and check the allocations for your edition. See
+[Pub/Sub API](guides/pubsub.md#errors-and-reconnects).
+
 ### ServerError
 
 Salesforce had an internal error or is not available. The client retries reads. Check
@@ -478,6 +488,21 @@ The GraphQL response has an `errors` array. Salesforce can send it with `200 OK`
 `ValidationError` for an unknown field. `exc.data` holds the partial data, if any. See
 [GraphQL](guides/graphql.md#handle-errors).
 
+### PubSubError
+
+The Pub/Sub API returned an error that has no more specific class, or the client ran out of
+reconnect attempts. `exc.error_code` holds the Pub/Sub `error-code` (or the gRPC status
+name) and `exc.request_id` the `rpcId`. Give both to Salesforce Support. See
+[Pub/Sub API](guides/pubsub.md#errors-and-reconnects).
+
+### ReplayUnavailable
+
+Salesforce rejected the replay id that the subscription tried to start from. This happens
+when it is older than the 72-hour retention window. `exc.replay_id` holds the rejected id.
+Decide what to do with the missed events, for example re-sync the records. Then subscribe with
+`on_invalid_replay="latest"` or `"earliest"`, or save a new position in your replay store. See
+[Pub/Sub API](guides/pubsub.md#when-the-stored-position-is-too-old).
+
 ### SoapFault
 
 A SOAP call returned a fault that has no more specific class. Read `exc.fault_code`.
@@ -486,6 +511,9 @@ A SOAP call returned a fault that has no more specific class. Read `exc.fault_co
 
 The response wasn't what Salesforce normally sends, such as a proxy page or a maintenance
 page. Check proxies between you and Salesforce. `exc.raw` holds the start of the body.
+
+A Pub/Sub event whose payload doesn't match its Avro schema also raises this error. Salesforce
+doesn't check payloads on publish. `exc.event_id` and `exc.replay_id` identify the event.
 
 ## How it works
 

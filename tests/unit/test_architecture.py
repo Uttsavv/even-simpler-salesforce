@@ -299,3 +299,39 @@ def test_resolve_relative_imports() -> None:
     assert resolve(path, nodes[0]) == "even_simpler_salesforce._async"
     assert resolve(path, nodes[1]) == "even_simpler_salesforce.core"
     assert resolve(PKG / "core" / "__init__.py", nodes[1]) == "even_simpler_salesforce.core"
+
+
+# --- the Pub/Sub extra (§5.1, D31) -----------------------------------------------------------------
+
+# The [pubsub] extra's packages, and the only files that may import each at runtime. Everything
+# else, in particular the client modules every user imports, must work without the extra.
+PUBSUB_IMPORT_ALLOWLIST: dict[str, set[str]] = {
+    # gRPC calls go through the GrpcStream adapter only (the generated stub module is unused).
+    "grpc": {"_async/_compat.py", "_sync/_compat.py", "_pubsub/pubsub_api_pb2_grpc.py"},
+    # The protobuf messages: the generated stubs and the gRPC path that builds requests.
+    "google.protobuf": {"_pubsub/pubsub_api_pb2.py"},
+    "even_simpler_salesforce._pubsub": {
+        "_async/pubsub_transport.py",
+        "_sync/pubsub_transport.py",
+        "_pubsub/pubsub_api_pb2_grpc.py",
+    },
+    # Avro decoding is a pure function in core/pubsub.py.
+    "fastavro": {"core/pubsub.py"},
+}
+
+
+@pytest.mark.parametrize("package", sorted(PUBSUB_IMPORT_ALLOWLIST))
+def test_pubsub_extra_imports_stay_in_the_pubsub_modules(package: str) -> None:
+    importers = {
+        rel(p)
+        for p in FILES
+        if any(i.module == package or i.module.startswith(package + ".") for i in runtime_imports(p))
+    }
+    assert importers == PUBSUB_IMPORT_ALLOWLIST[package], f"only these files may import {package}"
+
+
+def test_client_modules_import_the_pubsub_transport_lazily() -> None:
+    """``import even_simpler_salesforce`` must work without the [pubsub] extra."""
+    for name in ("_async/client.py", "_async/api/pubsub.py", "__init__.py"):
+        mods = {i.module for i in runtime_imports(PKG / name) if not i.module.endswith("pubsub_transport")}
+        assert not {m for m in mods if m.startswith(("grpc", "google.protobuf", "fastavro"))}, name

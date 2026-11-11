@@ -289,6 +289,8 @@ class FakeState:
         self._locator_seq = 0
         self.explain_plans: list[QueryPlan] = []
         self.events: dict[str, list[dict[str, Any]]] = {}  # published platform events
+        self.pubsub: dict[str, list[Any]] = {}  # Pub/Sub events by topic (testing/_pubsub.py)
+        self.pubsub_seq = 0
         self.counter = 0
         self.closed = False
         self.debug = debug_level()
