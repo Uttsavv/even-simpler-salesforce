@@ -1,0 +1,21 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Salesforce REST API Developer Guide, sObject Tree (Create Nested Records); no org recording yet",
+  "body": {
+    "hasErrors": true,
+    "results": [
+      {
+        "referenceId": "ref1",
+        "errors": [
+          {
+            "statusCode": "INVALID_EMAIL_ADDRESS",
+            "message": "Email: invalid email address: not-an-email",
+            "fields": [
+              "Email"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

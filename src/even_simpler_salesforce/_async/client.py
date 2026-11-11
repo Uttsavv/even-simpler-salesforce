@@ -33,6 +33,7 @@ from .api.actions import AsyncActions
 from .api.apex import AsyncApex
 from .api.auth_api import AsyncAuthApi
 from .api.collections import AsyncCollections
+from .api.composite import AsyncComposite
 from .api.files import AsyncFiles
 from .api.graphql import graphql as _graphql
 from .api.graphql import graphql_iter as _graphql_iter
@@ -204,6 +205,7 @@ class AsyncSalesforce:
         self.platform_events = AsyncPlatformEvents(self)
         self.files = AsyncFiles(self)
         self.tooling = AsyncTooling(self)
+        self.composite = AsyncComposite(self)
 
     @classmethod
     def _child(

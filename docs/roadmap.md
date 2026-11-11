@@ -6,7 +6,6 @@ later releases.
 
 | Area | Release | What's planned |
 |---|---|---|
-| Composite | 0.3 | Composite, Composite Graph, sObject Tree and Batch, with references between subrequests. |
 | Bulk API 2.0 | 0.3 | Ingest and query jobs, chunked uploads and `BulkJobFailed`. |
 | UI API | 0.4 | Records with layout information, list views and picklist values. |
 | Reports and dashboards | 0.4 | Run reports and read dashboards. |

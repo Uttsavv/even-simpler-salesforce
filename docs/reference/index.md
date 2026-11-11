@@ -42,6 +42,22 @@ The reasons behind the design are written down in the
 
 ::: even_simpler_salesforce._async.api.platform_events.AsyncPlatformEvents
 
+::: even_simpler_salesforce._async.api.composite.AsyncComposite
+
+::: even_simpler_salesforce._async.api.composite.AsyncCompositeBuilder
+    options:
+      inherited_members: true
+
+::: even_simpler_salesforce._async.api.composite.AsyncGraphBuilder
+    options:
+      inherited_members: true
+
+::: even_simpler_salesforce._async.api.composite.AsyncBatchBuilder
+    options:
+      inherited_members: true
+
+::: even_simpler_salesforce.Reference
+
 ## Login flows and tokens
 
 ::: even_simpler_salesforce.Auth
@@ -103,6 +119,12 @@ The reasons behind the design are written down in the
 ::: even_simpler_salesforce.PublishResult
 
 ::: even_simpler_salesforce.FileLink
+
+::: even_simpler_salesforce.CompositeResult
+
+::: even_simpler_salesforce.SubrequestResult
+
+::: even_simpler_salesforce.GraphResult
 
 ::: even_simpler_salesforce.QueryPlan
 
@@ -182,6 +204,10 @@ The reasons behind the design are written down in the
 ::: even_simpler_salesforce.testing.FakeFiles
 
 ::: even_simpler_salesforce.testing.AsyncFakeFiles
+
+::: even_simpler_salesforce.testing.FakeComposite
+
+::: even_simpler_salesforce.testing.AsyncFakeComposite
 
 ::: even_simpler_salesforce.testing.key_prefix
 

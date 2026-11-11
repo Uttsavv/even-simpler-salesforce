@@ -19,6 +19,8 @@ The org enforces a few rules so error examples have something to hit:
 - ``POST graphql`` answers ``uiapi { query { <Object>(first:, after:) { edges { node { ... } }
   pageInfo { ... } } } }`` over the stored records (no filters), with ``{value}`` fields and
   cursors ``v1:<offset>``. An unknown field gets ``200 OK`` with a ``ValidationError``.
+- ``composite``, ``composite/graph``, ``composite/batch`` and ``composite/tree/{sobject}`` run
+  their subrequests against the same records, resolving ``@{ref.field}`` references.
 
 Files: a multipart ``POST sobjects/ContentVersion`` stores the bytes and creates the
 ContentDocument (plus a ContentDocumentLink for ``FirstPublishLocationId``);
@@ -32,6 +34,7 @@ records; ``executeAnonymous`` fails to compile code containing ``System debug``,
 
 from __future__ import annotations
 
+import copy
 import gzip
 import itertools
 import json
@@ -605,6 +608,8 @@ class FakeOrg:
             return self._json(self._graphql(self._body(request) or {}))
         if parts[0] == "sobjects" and len(parts) == 2 and parts[1].endswith("__e") and method == "POST":
             return self._json(self._publish(parts[1], self._body(request) or {}), 201)
+        if rest == "composite" or (parts[0] == "composite" and parts[1] in ("graph", "batch", "tree")):
+            return self._composite(request, version, parts[1:])
         if parts[0] == "composite" and len(parts) >= 2 and parts[1] == "sobjects":
             return self._collections(request, method, parts[2:], params)
         if parts[0] == "sobjects":
@@ -686,6 +691,122 @@ class FakeOrg:
             },
             "errors": [],
         }
+
+    # --- composite --------------------------------------------------------------------
+
+    def _sub(self, request: httpx.Request, version: str, method: str, url: str, body: Any) -> tuple[int, Any]:
+        """Run one subrequest through :meth:`_data`; returns ``(status, decoded body)``."""
+        url = url if url.startswith("/") else f"/services/data/{url}"
+        sub = httpx.Request(method, INSTANCE + url, headers=dict(request.headers), json=body)
+        sub.headers.pop("content-encoding", None)
+        m = _DATA.match(sub.url.path)
+        try:
+            resp = self._data(sub, m.group("v") if m else version, m.group("rest").rstrip("/") if m else "")
+        except Rejected as exc:
+            return exc.status, exc.body()
+        return resp.status_code, (json.loads(resp.content) if resp.content else None)
+
+    def _run(self, request: httpx.Request, version: str, items: list[Any], all_or_none: bool) -> list[Any]:
+        ref = re.compile(r"@\{(\w+)\.([^{}]+)\}")
+        done: dict[str, Any] = {}
+
+        def lookup(m: re.Match[str]) -> str:
+            value: Any = done.get(m.group(1))
+            for name, index in re.findall(r"(\w+)|\[(\d+)\]", m.group(2)):
+                value = value[name] if name else value[int(index)]
+            return str(value)
+
+        def resolve(value: Any) -> Any:
+            if isinstance(value, str):
+                return ref.sub(lookup, value)
+            if isinstance(value, dict):
+                return {k: resolve(v) for k, v in value.items()}
+            if isinstance(value, list):
+                return [resolve(v) for v in value]
+            return value
+
+        snapshot = copy.deepcopy(self.records)
+        out: list[dict[str, Any]] = []
+        failed = False
+        for item in items:
+            if failed and all_or_none:
+                status, body = 400, [{"errorCode": "PROCESSING_HALTED", "message": "halted"}]
+            else:
+                status, body = self._sub(
+                    request, version, item["method"], resolve(item["url"]), resolve(item.get("body"))
+                )
+            failed = failed or status >= 400
+            done[item["referenceId"]] = body
+            out.append(
+                {
+                    "body": body,
+                    "httpHeaders": {},
+                    "httpStatusCode": status,
+                    "referenceId": item["referenceId"],
+                }
+            )
+        if failed and all_or_none:
+            self.records = snapshot
+            rolled = [{"errorCode": "PROCESSING_HALTED", "message": "rolled back"}]
+            for r in out:
+                if r["httpStatusCode"] < 400:
+                    r.update(body=rolled, httpStatusCode=400)
+        return out
+
+    def _composite(self, request: httpx.Request, version: str, parts: list[str]) -> httpx.Response:
+        body = self._body(request)
+        if not parts:
+            items = body["compositeRequest"]
+            return self._json({"compositeResponse": self._run(request, version, items, body["allOrNone"])})
+        if parts[0] == "graph":
+            graphs = []
+            for g in body["graphs"]:
+                results = self._run(request, version, g["compositeRequest"], True)
+                ok = all(r["httpStatusCode"] < 400 for r in results)
+                graphs.append(
+                    {
+                        "graphId": g["graphId"],
+                        "graphResponse": {"compositeResponse": results},
+                        "isSuccessful": ok,
+                    }
+                )
+            return self._json({"graphs": graphs})
+        if parts[0] == "batch":
+            results = []
+            for item in body["batchRequests"]:
+                status, result = self._sub(
+                    request, version, item["method"], item["url"], item.get("richInput")
+                )
+                results.append({"statusCode": status, "result": result})
+            return self._json({"hasErrors": any(r["statusCode"] >= 400 for r in results), "results": results})
+        snapshot = copy.deepcopy(self.records)
+        created: list[dict[str, Any]] = []
+        current = [""]
+
+        def make(row: dict[str, Any], parent: tuple[str, str] | None) -> None:
+            sobject, ref = row["attributes"]["type"], row["attributes"]["referenceId"]
+            current[0] = ref
+            data = {k: v for k, v in row.items() if k != "attributes" and not isinstance(v, dict)}
+            if parent is not None:
+                data.setdefault(f"{parent[0]}Id", parent[1])
+            self._known(sobject)
+            rid = self.create(sobject, data)["Id"]
+            created.append({"referenceId": ref, "id": rid})
+            for value in row.values():
+                if isinstance(value, dict) and "records" in value:
+                    for kid in value["records"]:
+                        make(kid, (sobject, rid))
+
+        try:
+            for root in body["records"]:
+                make(root, None)
+        except Rejected as exc:
+            self.records = snapshot
+            errors = [{"statusCode": exc.code, "message": exc.message, "fields": exc.fields}]
+            return self._json(
+                {"hasErrors": True, "results": [{"referenceId": current[0], "errors": errors}]}, 400
+            )
+        return self._json({"hasErrors": False, "results": created}, 201)
 
     def _sobjects(
         self, request: httpx.Request, method: str, parts: list[str], params: dict[str, str], version: str

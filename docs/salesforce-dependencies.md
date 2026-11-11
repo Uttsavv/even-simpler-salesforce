@@ -55,6 +55,10 @@ Paths are relative to `/services/data/vXX.X/` unless they start with `/services/
 | `tooling/sobjects/ApexLog/{}/Body` | GET | sf.tooling.execute_anonymous(capture_log=True) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/tooling_api_objects_apexlog.htm) |  |
 | `tooling/runTestsAsynchronous/` | POST | sf.tooling.run_tests_async | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/intro_rest_resources_testing_runner_async.htm) |  |
 | `tooling/completions` | GET | sf.tooling.completions (?type=apex\|visualforce) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/intro_rest_resources.htm) |  |
+| `composite` | POST | composite.builder().send() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_composite_post.htm) |  |
+| `composite/graph` | POST | composite.graph().send() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_graph.htm) |  |
+| `composite/batch` | POST | composite.batch().send() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_batch.htm) |  |
+| `composite/tree/{}` | POST | composite.tree() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobject_tree.htm) |  |
 | `/services/oauth2/userinfo` | GET | sf.auth.userinfo() | [docs](https://help.salesforce.com/s/articleView?id=sf.remoteaccess_using_userinfo_endpoint.htm&type=5) |  |
 
 ## OAuth
@@ -150,7 +154,7 @@ Behaviour relied on:
 | `APEX_ERROR` | `ApexError` |
 | `UNSUPPORTED_API_VERSION` | `UnsupportedApiVersion` |
 
-Also relied on: `ALL_OR_NONE_OPERATION_ROLLED_BACK` (skipped when picking the primary error of an all_or_none batch). HTTP statuses: 300, 304, 401, 403, 404, 409, 410, 412, 414, 420, 428, 429, 431, 500, 502, 503, 504.
+Also relied on: `ALL_OR_NONE_OPERATION_ROLLED_BACK` (skipped when picking the primary error of an all_or_none batch); `PROCESSING_HALTED` (Composite subrequest rolled back or skipped because another one failed; skipped by CompositeResult.raise_for_errors()); `BATCH_PROCESSING_HALTED` (Batch subrequest skipped after an earlier failure with haltOnError; skipped by CompositeResult.raise_for_errors()). HTTP statuses: 300, 304, 401, 403, 404, 409, 410, 412, 414, 420, 428, 429, 431, 500, 502, 503, 504.
 
 ## Limits and sizes
 
@@ -161,3 +165,7 @@ Also relied on: `ALL_OR_NONE_OPERATION_ROLLED_BACK` (skipped when picking the pr
 | `query_batch_size` | `[200, 2000]` |
 | `record_id_lengths` | `[15, 18]` |
 | `gzip_threshold_bytes` | `65536` |
+| `composite_subrequests` | `25` |
+| `graph_subrequests` | `500` |
+| `batch_subrequests` | `25` |
+| `tree_records` | `200` |

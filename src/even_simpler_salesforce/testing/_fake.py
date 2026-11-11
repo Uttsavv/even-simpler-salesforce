@@ -47,6 +47,7 @@ from ..models import (
 )
 from ..observability.events import Observer, ObserverHub
 from ..usage import UsageTracker
+from ._composite import AsyncFakeComposite, FakeComposite
 from ._fake_org import AsyncFakeLeads, AsyncFakePlatformEvents, FakeLeads, FakePlatformEvents, fake_merge
 from ._files import AsyncFakeFiles, FakeFiles
 from ._graphql import GraphQLMatch, GraphQLScript, add_graphql_script, fake_graphql, fake_graphql_iter
@@ -1026,6 +1027,7 @@ class FakeSalesforce(_FakeControls):
         self.platform_events = FakePlatformEvents(self._state, self._who)
         self.files = FakeFiles(self._state, self._who)
         self.tooling = FakeTooling(self._state, self._who)
+        self.composite = FakeComposite(self._state, self._who)
 
     @classmethod
     def _view(
@@ -1045,6 +1047,7 @@ class FakeSalesforce(_FakeControls):
         view.platform_events = FakePlatformEvents(state, who)
         view.files = FakeFiles(state, who)
         view.tooling = FakeTooling(state, who)
+        view.composite = FakeComposite(state, who)
         return view
 
     def __repr__(self) -> str:
@@ -1651,6 +1654,7 @@ class AsyncFakeSalesforce(_FakeControls):
         self.platform_events = AsyncFakePlatformEvents(inner.platform_events)
         self.files = AsyncFakeFiles(inner.files)
         self.tooling = AsyncFakeTooling(inner.tooling)
+        self.composite = AsyncFakeComposite(inner.composite)
 
     @property
     def instance_url(self) -> str:

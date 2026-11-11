@@ -1,0 +1,38 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Salesforce REST API Developer Guide, Batch (Execute Multiple Requests) and Batch Request Body; no org recording yet",
+  "body": {
+    "hasErrors": true,
+    "results": [
+      {
+        "statusCode": 200,
+        "result": {
+          "attributes": {
+            "type": "Account",
+            "url": "/services/data/v68.0/sobjects/Account/001xx0000000001AAA"
+          },
+          "Id": "001xx0000000001AAA",
+          "Name": "Acme"
+        }
+      },
+      {
+        "statusCode": 404,
+        "result": [
+          {
+            "errorCode": "NOT_FOUND",
+            "message": "The requested resource does not exist"
+          }
+        ]
+      },
+      {
+        "statusCode": 412,
+        "result": [
+          {
+            "errorCode": "BATCH_PROCESSING_HALTED",
+            "message": "Batch processing halted per request"
+          }
+        ]
+      }
+    ]
+  }
+}

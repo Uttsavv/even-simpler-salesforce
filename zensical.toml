@@ -32,6 +32,7 @@ nav = [
     { "Records" = "guides/records.md" },
     { "Query and search" = "guides/query.md" },
     { "Collections" = "guides/collections.md" },
+    { "Composite requests" = "guides/composite.md" },
     { "Invocable actions" = "guides/actions.md" },
     { "Apex REST" = "guides/apex.md" },
     { "Files" = "guides/files.md" },

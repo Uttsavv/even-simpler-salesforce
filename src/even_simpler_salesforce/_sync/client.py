@@ -35,6 +35,7 @@ from .api.actions import Actions
 from .api.apex import Apex
 from .api.auth_api import AuthApi
 from .api.collections import Collections
+from .api.composite import Composite
 from .api.files import Files
 from .api.graphql import graphql as _graphql
 from .api.graphql import graphql_iter as _graphql_iter
@@ -206,6 +207,7 @@ class Salesforce:
         self.platform_events = PlatformEvents(self)
         self.files = Files(self)
         self.tooling = Tooling(self)
+        self.composite = Composite(self)
 
     @classmethod
     def _child(
