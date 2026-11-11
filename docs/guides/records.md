@@ -300,3 +300,18 @@ for revalidation for `stale_ttl`, which is 24 hours by default.
 To configure the cache, pass `describe_cache=esf.DescribeCacheConfig(...)`. To share describe
 results across processes, pass your own `cache=`. It must have `get`, `set(key, value, ttl)` and
 `delete`, and hold plain JSON data.
+
+### Clear the cache after a deploy
+
+If a deploy adds or changes fields, the cached describe results are out of date until `ttl`
+ends. To start fresh at once, pass your own `esf.MemoryCache` and call `clear()` after the deploy.
+
+```python
+cache = esf.MemoryCache()
+async with esf.AsyncSalesforce(auth, cache=cache) as sf:
+    await sf.sobject("Lead").describe()  # cached
+    cache.clear()  # after the deploy: the next describe() asks Salesforce again
+    await sf.sobject("Lead").describe()
+```
+
+To refresh one object only, call `describe(cached=False)`.
