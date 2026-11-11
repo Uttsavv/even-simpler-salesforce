@@ -39,6 +39,7 @@ from .api.files import Files
 from .api.graphql import graphql as _graphql
 from .api.graphql import graphql_iter as _graphql_iter
 from .api.leads import Leads
+from .api.metadata import Metadata
 from .api.platform_events import PlatformEvents
 from .api.soap import merge as _merge
 from .api.sobject import SObject
@@ -204,6 +205,7 @@ class Salesforce:
         self.leads = Leads(self)
         self.platform_events = PlatformEvents(self)
         self.files = Files(self)
+        self.metadata = Metadata(self)
 
     @classmethod
     def _child(

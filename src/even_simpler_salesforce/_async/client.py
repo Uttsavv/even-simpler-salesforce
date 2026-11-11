@@ -37,6 +37,7 @@ from .api.files import AsyncFiles
 from .api.graphql import graphql as _graphql
 from .api.graphql import graphql_iter as _graphql_iter
 from .api.leads import AsyncLeads
+from .api.metadata import AsyncMetadata
 from .api.platform_events import AsyncPlatformEvents
 from .api.soap import merge as _merge
 from .api.sobject import AsyncSObject
@@ -202,6 +203,7 @@ class AsyncSalesforce:
         self.leads = AsyncLeads(self)
         self.platform_events = AsyncPlatformEvents(self)
         self.files = AsyncFiles(self)
+        self.metadata = AsyncMetadata(self)
 
     @classmethod
     def _child(
