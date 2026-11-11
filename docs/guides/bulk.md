@@ -26,7 +26,7 @@ Pass the rows as dicts, as the path of a CSV file, or as CSV `bytes`. The operat
 `"insert"`, `"update"`, `"upsert"`, `"delete"` or `"hardDelete"`.
 
 ```python
-with open("leads.csv", "w", encoding="utf-8") as f:
+with open("leads.csv", "w", encoding="utf-8", newline="") as f:  # keep LF line endings
     f.write("External_Id__c,LastName,Company\next-1,Doe,Acme\next-2,Roe,Globex\n")
 
 job = await sf.bulk.ingest("Lead", "upsert", external_id_field="External_Id__c", rows="leads.csv")
