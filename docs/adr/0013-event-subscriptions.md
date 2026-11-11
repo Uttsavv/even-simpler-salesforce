@@ -80,8 +80,9 @@ keepalive replay id saved before buffered events were processed silently skips t
   `FakeSalesforce.pubsub` and `replay_store_contract`.
 - On Python 3.10, `[pubsub]` resolves fastavro 1.12.x, because fastavro 1.13 needs Python 3.11.
   Python 3.10 reached end of life on 2026-10-01. Whether to keep it (O2) is a separate decision.
-- Two facts still need a sandbox before 0.5 ships: bitmap bit order (V27) and how schemas mark
-  Date/DateTime fields (V28).
+- Recorded on a Developer Edition org (2026-11-12): bit 0 of a bitmap is the least-significant
+  bit (V27). Schemas mark Date and DateTime fields only in `doc` (V28, V77). Change events
+  carry a `ConsumerEvent.event.id` too, although the docs describe it for platform events only.
 
 ## Implementation notes (0.5)
 
@@ -101,8 +102,9 @@ Choices made while building 0.5, within the decision above:
 - **Endpoint.** The client takes `pubsub_endpoint=` (`host:port`). A loopback endpoint uses a
   plaintext channel. That exists only for in-process test servers; every other host uses TLS.
 - **Dates.** A `long` becomes a UTC `datetime` when its Avro `doc` matches
-  `<name>:DateTime[:…]`, or through fastavro's `timestamp-millis` and `date` logical types
-  (V28, V77).
+  `<name>:DateTime[:…]`, and a `date` when it matches `<name>:DateOnly[:…]` (epoch ms at
+  midnight UTC, recorded). fastavro's `timestamp-millis` and `date` logical types are honoured
+  too (V28, V77).
 - **Extra fields.** `ChangeHeader.commit_number` carries `commitNumber`.
   `UnexpectedResponse` gained `event_id` and `replay_id` for undecodable payloads.
   `sf.pubsub.subscribed` also reports `replay_id`, `batch_size` and `schema_calls`.

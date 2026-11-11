@@ -1119,9 +1119,11 @@ for ev in events:`. It blocks, so the docs recommend running it in a dedicated t
 - When nothing is pending, Salesforce closes a stream that gets no new `FetchRequest` within 60
   seconds. A consumer slower than that therefore sees a transparent resubscribe from the last
   processed replay id (§9.16.4), reported as a `sf.pubsub.reconnect` event with
-  `reason="idle"`. No events are lost or skipped.
+  `reason="idle"`. No events are lost or skipped. Recorded (V76): the stream ends cleanly
+  (gRPC `OK`, no trailers) about 68 s after the last requested event was delivered.
 - Server keepalives (an empty `FetchResponse` carrying `latest_replay_id`, sent within 270 s) are
-  consumed internally. They are never yielded to the consumer.
+  consumed internally. They are never yielded to the consumer. Recorded (V76): with one event
+  requested on a quiet topic they came every ~120 s, with `pending_num_requested` = 1.
 
 #### 9.16.3 Events and decoding
 
@@ -1132,13 +1134,18 @@ change: ChangeHeader | None)`:
   Payloads are decoded with fastavro. An event whose payload does not decode against its schema
   raises `UnexpectedResponse` with `event_id` and `replay_id` set. Salesforce does not validate
   Avro on publish, so such events can exist.
-- **`event_id`** is `ConsumerEvent.event.id`, the stable key for de-duplication. Salesforce sets
-  it on platform events only, so it is `None` for change events. Change events de-duplicate on
-  `(change.transaction_key, change.sequence_number)`. Replay ids are not unique across org
+- **`event_id`** is `ConsumerEvent.event.id` as sent (`None` when empty). On platform events it
+  is the `EventUuid`, the documented de-duplication key. *Event Message Durability* says the id
+  is present on platform events and not on change events, but a recorded change event carried a
+  UUID id, stable on redelivery (DISCREPANCY, V79). The client passes it through unchanged and
+  the docs keep `(change.transaction_key, change.sequence_number)` as the de-duplication key for
+  change events, because only that is documented. Replay ids are not unique across org
   migrations and must never be used as a de-duplication key.
-- **Dates**: Date and DateTime values arrive as epoch numbers. They are converted to `date` /
-  aware UTC `datetime` only where the schema identifies the field type. ⚠️ **VERIFY** how the
-  schema marks them (V28). Any other `long` stays an `int`.
+- **Dates**: Date and DateTime values arrive as a `long` of epoch milliseconds with no logical
+  type; only the Avro `doc` marks them (recorded, V28/V77): `"CreatedDate:DateTime"`,
+  `"Data:DateTime"` or `"Data:DateTime:00N…"` becomes an aware UTC `datetime`, and
+  `"Data:DateOnly:00N…"` (midnight UTC) becomes a `date`. `timestamp-millis` and `date` logical
+  types are honoured too. Any other `long` stays an `int`.
 - **`ChangeHeader`** is built from `ChangeEventHeader` for every CDC event and is `None` for
   platform events:
   - `entity_name`, `change_type` (an enum: `CREATE`, `UPDATE`, `DELETE`, `UNDELETE`,
@@ -1162,9 +1169,8 @@ change: ChangeHeader | None)`:
     leading `0x…`.
   - Bits for fields the subscriber cannot see are already cleared, and hidden compound entries
     are omitted, so the decoder never invents names.
-  - Bit order (bit 0 = least-significant bit of the hex value, as the official Python sample
-    implies) ⚠️ **VERIFY** against a recorded CDC event (V27). The decoder is original code, not
-    a port of the sample.
+  - Bit order: bit 0 = least-significant bit of the hex value, confirmed on a recorded CDC
+    event (V27). The decoder is original code, not a port of the official Python sample.
 - **Gap events are not resolved automatically.** Re-fetching costs API calls and the fields to
   fetch are app-specific. The docs page has a replication recipe: buffer by `transaction_key`;
   on a gap event re-read `record_ids`; on an overflow event re-sync `entity_name`.
@@ -2050,7 +2056,8 @@ read in a browser 2026-11-09 (sources for §9.16 and ADR 0013):
   fields. Bits for fields without permission are cleared. Dates arrive as epoch numbers. Byte
   fields such as `replay_id` are little-endian.
 - *Event Message Durability*: 72-hour retention. Replay ids are not contiguous and not unique
-  across org migrations. Use the event `id` (platform events only) to identify a message.
+  across org migrations. Use the event `id` (platform events only) to identify a message. (A recorded change event
+  carried an id too; see §9.16.3.)
 - *Handle Errors* / *Retry Long-Lived RPC Calls*: the custom code is in the `error-code` trailer
   and an `rpcId` is appended. `replayid.corrupted` means the replay id is invalid or outside
   retention. `org.migrated` needs retries at least 30 minutes apart.
