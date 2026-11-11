@@ -260,6 +260,8 @@ SalesforceError
 ├── BulkJobTimeout                 Bulk 2.0 job not finished within wait(timeout=); .job_id, .state
 ├── ApexError                      APEX_ERROR, or an error from an Apex REST class; .body
 ├── GraphQLError                   GraphQL errors array; .graphql_errors, .data
+├── ReportRunFailed                asynchronous report run ended with Error; .report_id, .instance_id
+├── ReportTimeout                  asynchronous report run still running at timeout; .run_status
 ├── SoapFault                      unmapped SOAP fault (lead convert, merge); .fault_code
 └── UnexpectedResponse             HTML pages (proxies, maintenance), non-JSON bodies, unexpected shapes
 ```
@@ -484,6 +486,18 @@ The GraphQL response has an `errors` array. Salesforce can send it with `200 OK`
 `extensions.ErrorType`. `exc.error_code` holds the `ErrorType` of the first entry, for example
 `ValidationError` for an unknown field. `exc.data` holds the partial data, if any. See
 [GraphQL](guides/graphql.md#handle-errors).
+
+### ReportRunFailed
+
+An asynchronous report run ended with status `Error`. Salesforce doesn't say why. A common
+cause is that the user lost access to the report after the run started. Check the report in
+Salesforce, then start a new run. See [Reports](guides/reports.md#run-a-slow-report).
+
+### ReportTimeout
+
+An asynchronous report run didn't finish within the `timeout` of `sf.reports.instance()`. The
+run keeps going in Salesforce. Call `instance()` again with `exc.report_id` and
+`exc.instance_id` to keep waiting. `exc.run_status` is the last status the client saw.
 
 ### SoapFault
 

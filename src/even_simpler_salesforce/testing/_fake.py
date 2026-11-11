@@ -52,6 +52,14 @@ from ._composite import AsyncFakeComposite, FakeComposite
 from ._fake_org import AsyncFakeLeads, AsyncFakePlatformEvents, FakeLeads, FakePlatformEvents, fake_merge
 from ._files import AsyncFakeFiles, FakeFiles
 from ._graphql import GraphQLMatch, GraphQLScript, add_graphql_script, fake_graphql, fake_graphql_iter
+from ._reports import (
+    AsyncFakeReports,
+    FakeReports,
+    ReportScript,
+    ResultSpec,
+    add_dashboard,
+    add_report,
+)
 from ._state import FakeCall, FakeRequest, FakeState, Match, QueryScript, RowsSpec, Who, _sobject_of
 from ._tooling import AsyncFakeTooling, FakeTooling, set_anonymous_script, set_completions
 from ._ui import AsyncFakeUi, FakeUi, ListView, add_list_view
@@ -175,6 +183,44 @@ class _FakeControls:
         keys = parse_path(path) if path is not None else ()
         script = GraphQLScript(match, data, None if nodes is None else list(nodes), keys, page_size, times)
         return add_graphql_script(self._state, script)
+
+    def on_report(
+        self,
+        report_id: str,
+        result: ResultSpec,
+        *,
+        describe: Mapping[str, Any] | None = None,
+    ) -> ReportScript:
+        """Script a report for ``sf.reports`` (``run``, ``run_async``, ``instance``, ``describe``).
+
+        Reports are never run. An asynchronous run finishes at once.
+
+        Args:
+            report_id: Id of the report (``00O...``).
+            result: The run body Salesforce would return (deep-copied), a ``ReportResult``,
+                a callable ``(filters, include_details) -> body``, or an exception to raise.
+                For a body, ``include_details=False`` drops the detail rows.
+            describe: The body of ``describe()``. Defaults to the ``reportMetadata`` of
+                ``result``.
+
+        Returns:
+            The script; its ``runs`` attribute counts the runs.
+
+        Example:
+            fake.on_report("00O000000000001AAA", body)
+        """
+        return add_report(self._state, ReportScript(report_id, result, describe))
+
+    def on_dashboard(self, dashboard_id: str, body: Mapping[str, Any]) -> None:
+        """Script the body ``sf.reports.dashboards.get(dashboard_id)`` returns (deep-copied).
+
+        ``refresh()`` of a scripted dashboard returns ``id`` and ``statusUrl``.
+
+        Args:
+            dashboard_id: Id of the dashboard (``01Z...``).
+            body: Dashboard results: ``dashboardMetadata``, ``componentData``, ...
+        """
+        add_dashboard(self._state, dashboard_id, body)
 
     def on_request(
         self,
@@ -1055,6 +1101,7 @@ class FakeSalesforce(_FakeControls):
         self.composite = FakeComposite(self._state, self._who)
         self.bulk = FakeBulk(self._state, self._who)
         self.ui = FakeUi(self._state, self._who)
+        self.reports = FakeReports(self._state, self._who)
 
     @classmethod
     def _view(
@@ -1077,6 +1124,7 @@ class FakeSalesforce(_FakeControls):
         view.composite = FakeComposite(state, who)
         view.bulk = FakeBulk(state, who)
         view.ui = FakeUi(state, who)
+        view.reports = FakeReports(state, who)
         return view
 
     def __repr__(self) -> str:
@@ -1686,6 +1734,7 @@ class AsyncFakeSalesforce(_FakeControls):
         self.composite = AsyncFakeComposite(inner.composite)
         self.bulk = AsyncFakeBulk(inner.bulk)
         self.ui = AsyncFakeUi(inner.ui)
+        self.reports = AsyncFakeReports(inner.reports)
 
     @property
     def instance_url(self) -> str:

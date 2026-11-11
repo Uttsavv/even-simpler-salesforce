@@ -42,6 +42,7 @@ from .api.graphql import graphql as _graphql
 from .api.graphql import graphql_iter as _graphql_iter
 from .api.leads import Leads
 from .api.platform_events import PlatformEvents
+from .api.reports import Reports
 from .api.soap import merge as _merge
 from .api.sobject import SObject
 from .api.tooling import Tooling
@@ -212,6 +213,7 @@ class Salesforce:
         self.composite = Composite(self)
         self.bulk = Bulk(self)
         self.ui = Ui(self)
+        self.reports = Reports(self)
 
     @classmethod
     def _child(

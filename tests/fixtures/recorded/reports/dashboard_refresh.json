@@ -1,0 +1,8 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Salesforce Reports and Dashboards REST API Developer Guide (Get Dashboard Results, Refresh a Dashboard); no org recording yet",
+  "body": {
+    "id": "01Zxx0000000001AAA",
+    "statusUrl": "/services/data/v68.0/analytics/dashboards/01Zxx0000000001AAA/status"
+  }
+}

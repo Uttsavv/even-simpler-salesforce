@@ -73,6 +73,11 @@ Paths are relative to `/services/data/vXX.X/` unless they start with `/services/
 | `composite/graph` | POST | composite.graph().send() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_graph.htm) |  |
 | `composite/batch` | POST | composite.batch().send() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_batch.htm) |  |
 | `composite/tree/{}` | POST | composite.tree() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobject_tree.htm) |  |
+| `analytics/reports/{}` | GET, POST | sf.reports.run (?includeDetails=; POST with reportMetadata.reportFilters; read, resent) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/sforce_analytics_rest_api_getreportrundata.htm) |  |
+| `analytics/reports/{}/describe` | GET | sf.reports.describe | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/sforce_analytics_rest_api_getbasic_reportmetadata.htm) |  |
+| `analytics/reports/{}/instances` | POST | sf.reports.run_async (creates a report instance; never resent) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/sforce_analytics_rest_api_instances_summaryasync.htm) |  |
+| `analytics/reports/{}/instances/{}` | GET | sf.reports.instance (polled; status New, Running, Success or Error) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/sforce_analytics_rest_api_instances_resource.htm) |  |
+| `analytics/dashboards/{}` | GET, PUT | sf.reports.dashboards.get (GET), sf.reports.dashboards.refresh (PUT; never resent) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/analytics_api_dashboard_results_resource.htm) |  |
 | `/services/oauth2/userinfo` | GET | sf.auth.userinfo() | [docs](https://help.salesforce.com/s/articleView?id=sf.remoteaccess_using_userinfo_endpoint.htm&type=5) |  |
 
 ## OAuth
@@ -129,6 +134,8 @@ Behaviour relied on:
 | Limits | `{name: {Max, Remaining, ...}}` |
 | GraphQL | `data`, `errors[]: message, locations, path, extensions.ErrorType`, `connections: edges[].node, pageInfo {hasNextPage, endCursor}` |
 | UI API | `record: apiName, id, fields {Name: {value, displayValue}}, childRelationships, recordTypeId`, `list-records: records, count, nextPageToken`, `picklist-values: picklistFieldValues {field: {values, defaultValue, controllerValues}}`, `errors: REST error body` |
+| Report run / report instance | `attributes`, `allData`, `hasDetailRows`, `factMap {'<row>!<col>': {aggregates[], rows[].dataCells[]}}`, `groupingsDown/groupingsAcross.groupings[] {key, value, groupings}`, `reportMetadata {reportFormat, detailColumns, aggregates, groupingsDown, groupingsAcross}`, `attributes.status (instances)` |
+| Dashboard results / refresh | `dashboardMetadata`, `componentData[] {componentId, reportResult, status.refreshStatus}`, `statusUrl` |
 | REST error body | `list of {message, errorCode or statusCode, fields}`, `extras such as duplicateResult` |
 | OAuth error body | `error`, `error_description` |
 

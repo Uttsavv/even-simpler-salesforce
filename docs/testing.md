@@ -230,6 +230,12 @@ The fake answers each method this way:
 with the same name. `where` takes a copy of each record and returns `True` to select it.
 `fields` limits the fields of each record in `list_records()`. `displayValue` is always
 `None`, because the fake has no formatting rules. `layout_types` returns every stored field.
+## Script reports and dashboards
+
+`on_report(report_id, result)` sets the body that `sf.reports.run()` returns for a report. An
+asynchronous run finishes at once, so `instance()` returns without waiting.
+`on_dashboard(dashboard_id, body)` sets the body of `sf.reports.dashboards.get()`. See
+[Reports and dashboards](guides/reports.md#test-code-that-uses-reports).
 
 ## Inject errors
 

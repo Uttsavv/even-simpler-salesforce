@@ -40,6 +40,7 @@ from .api.graphql import graphql as _graphql
 from .api.graphql import graphql_iter as _graphql_iter
 from .api.leads import AsyncLeads
 from .api.platform_events import AsyncPlatformEvents
+from .api.reports import AsyncReports
 from .api.soap import merge as _merge
 from .api.sobject import AsyncSObject
 from .api.tooling import AsyncTooling
@@ -210,6 +211,7 @@ class AsyncSalesforce:
         self.composite = AsyncComposite(self)
         self.bulk = AsyncBulk(self)
         self.ui = AsyncUi(self)
+        self.reports = AsyncReports(self)
 
     @classmethod
     def _child(

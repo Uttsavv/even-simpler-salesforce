@@ -36,6 +36,7 @@ Bulk API 2.0: an ingest job is processed when the client closes it (``PATCH stat
 and is ``JobComplete`` from then on; its rows go through the same create, update, upsert and
 delete rules as REST. A query job runs the SOQL above and serves the rows as CSV pages of
 ``BULK_PAGE`` rows with ``Sforce-Locator`` and ``resultPages``.
+Reports and dashboards (``analytics/...``) answer from :mod:`tests.docs._analytics`.
 """
 
 from __future__ import annotations
@@ -55,6 +56,8 @@ from typing import Any
 from urllib.parse import parse_qsl
 
 import httpx
+
+from ._analytics import analytics
 
 INSTANCE = "https://acme.my.salesforce.com"
 ORG_ID = "00Dxx0000000001EAA"
@@ -760,6 +763,8 @@ class FakeOrg:
             return self._bulk(request, method, parts[1], parts[2:], params, version)
         if parts[0] == "ui-api" and method == "GET":
             return self._json(self._ui(parts[1:], params, version))
+        if parts[0] == "analytics" and (found := analytics(method, parts[1:], params, version)):
+            return self._json(*found)
         if parts[0] == "sobjects" and len(parts) == 2 and parts[1].endswith("__e") and method == "POST":
             return self._json(self._publish(parts[1], self._body(request) or {}), 201)
         if rest == "composite" or (parts[0] == "composite" and parts[1] in ("graph", "batch", "tree")):

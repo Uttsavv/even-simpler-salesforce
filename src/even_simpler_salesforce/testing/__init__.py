@@ -44,6 +44,7 @@ from ._fake_org import AsyncFakeLeads, AsyncFakePlatformEvents, FakeLeads, FakeP
 from ._files import AsyncFakeFiles, AsyncFakeFileStream, FakeFiles, FakeFileStream
 from ._graphql import GraphQLScript
 from ._ids import key_prefix
+from ._reports import AsyncFakeDashboards, AsyncFakeReports, FakeDashboards, FakeReports, ReportScript
 from ._state import FakeCall, FakeRequest, QueryScript, UnscriptedCall
 from ._ui import AsyncFakeUi, FakeUi, ListView
 from .recorder import RecordingTransport, Redactor, ReplayMismatch, record, replay
@@ -60,8 +61,10 @@ __all__ = [
     "AsyncFakeCollections",
     "AsyncFakeComposite",
     "AsyncFakeCompositeBuilder",
+    "AsyncFakeDashboards",
     "AsyncFakeLeads",
     "AsyncFakePlatformEvents",
+    "AsyncFakeReports",
     "AsyncFakeFileStream",
     "AsyncFakeFiles",
     "AsyncFakeGraphBuilder",
@@ -78,8 +81,10 @@ __all__ = [
     "FakeCollections",
     "FakeComposite",
     "FakeCompositeBuilder",
+    "FakeDashboards",
     "FakeLeads",
     "FakePlatformEvents",
+    "FakeReports",
     "FakeFileStream",
     "FakeFiles",
     "FakeGraphBuilder",
@@ -94,6 +99,7 @@ __all__ = [
     "RecordingTransport",
     "Redactor",
     "ReplayMismatch",
+    "ReportScript",
     "TokenStoreContract",
     "UnscriptedCall",
     "key_prefix",
