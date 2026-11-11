@@ -157,3 +157,21 @@ def test_async_fake() -> None:
         assert await fake.tooling.completions("visualforce") == {"publicDeclarations": {}}
 
     asyncio.run(main())
+
+
+def test_describe_global_lists_known_objects() -> None:
+    fake = FakeSalesforce()
+    fake.tooling.sobject("ApexClass").create({"Name": "C"})
+    got = fake.tooling.describe_global(cached=False)
+    assert "ApexClass" in [o["name"] for o in got["sobjects"]]
+    (call,) = fake.calls_for("tooling.describe_global")
+    assert call.args == {"cached": False}
+
+
+def test_async_describe_global() -> None:
+    async def main() -> None:
+        fake = AsyncFakeSalesforce()
+        got = await fake.tooling.describe_global()
+        assert "sobjects" in got
+
+    asyncio.run(main())

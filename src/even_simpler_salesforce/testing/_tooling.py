@@ -2,6 +2,7 @@
 
 - ``query`` and ``query_iter`` answer from the scripts registered with ``fake.on_query``.
 - ``sobject(name)`` reads and writes the fake's record store, like ``fake.sobject(name)``.
+- ``describe_global`` lists every sObject the fake knows, like ``fake.describe_global()``.
 - ``execute_anonymous`` answers from ``fake.on_execute_anonymous`` scripts; no Apex runs.
 - ``run_tests_async`` returns a new ``AsyncApexJob`` id; ``completions`` returns what
   ``fake.set_completions`` set.
@@ -128,6 +129,18 @@ class FakeTooling:
         obj._base = "tooling/"  # pyright: ignore[reportPrivateUsage]
         return obj
 
+    def describe_global(self, *, cached: bool = True) -> dict[str, Any]:
+        """Lists every sObject the fake knows about (the fake has one record store)."""
+        return self._state.run(
+            self._who,
+            "tooling.describe_global",
+            None,
+            {"cached": cached},
+            self._state.describe_global,
+            method="GET",
+            path="tooling/sobjects",
+        )
+
     # --- anonymous Apex ---------------------------------------------------------------
 
     def execute_anonymous(self, code: str, *, capture_log: bool = False) -> AnonymousResult:
@@ -222,6 +235,10 @@ class AsyncFakeTooling:
         from ._fake import AsyncFakeSObject
 
         return AsyncFakeSObject(self._inner.sobject(name))
+
+    async def describe_global(self, *, cached: bool = True) -> dict[str, Any]:
+        """See :meth:`FakeTooling.describe_global`."""
+        return self._inner.describe_global(cached=cached)
 
     async def execute_anonymous(self, code: str, *, capture_log: bool = False) -> AnonymousResult:
         """See :meth:`FakeTooling.execute_anonymous`."""

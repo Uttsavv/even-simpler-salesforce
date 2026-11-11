@@ -190,6 +190,12 @@ rest_endpoints:
     dynamic: true  # the path comes from the opaque cursor, not a literal in the code
     docs: https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/intro_rest_resources.htm
     checked: null
+  - path: tooling/sobjects
+    methods: [GET]
+    used_by: "sf.tooling.describe_global (describe cache, own key)"
+    dynamic: true  # "sobjects" prefixed at runtime with base="tooling/"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/intro_rest_resources.htm
+    checked: null
   - path: "tooling/sobjects/{}"
     methods: [GET, POST, PATCH, DELETE]
     used_by: "sf.tooling.sobject(name) methods (the sf.sobject paths with a tooling/ prefix); TraceFlag and DebugLevel in execute_anonymous(capture_log=True)"

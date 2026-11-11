@@ -1029,7 +1029,8 @@ async for row in sf.bulk.query("SELECT Id, Name FROM Lead", parallel_downloads=4
 
 ### 9.12 Tooling — `sf.tooling` (0.3)
 
-`query`, `query_iter`, `sobject(name)` (same interface as §9.1), `execute_anonymous`,
+`query`, `query_iter`, `sobject(name)` (same interface as §9.1), `describe_global(cached=True)`
+(`GET tooling/sobjects`, cached like `sf.describe_global()` under its own key), `execute_anonymous`,
 `run_tests_async(class_ids)`, `completions(type)`. Uses `/services/data/vXX/tooling/`.
 
 ### 9.13 UI API — `sf.ui` (0.4)

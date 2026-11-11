@@ -27,9 +27,9 @@ ContentDocument (plus a ContentDocumentLink for ``FirstPublishLocationId``);
 ``GET .../VersionData`` and ``GET sobjects/Attachment/{id}/Body`` return the bytes.
 
 Tooling API (``tooling/...``): ``ApexClass``, ``TraceFlag``, ``DebugLevel`` and ``ApexLog``
-records; ``executeAnonymous`` fails to compile code containing ``System debug``, throws for
-``1 / 0`` and, while a ``USER_DEBUG`` trace flag exists, writes an ``ApexLog`` with one
-``USER_DEBUG`` line per ``System.debug('...')``.
+records, listed by ``GET tooling/sobjects``; ``executeAnonymous`` fails to compile code
+containing ``System debug``, throws for ``1 / 0`` and, while a ``USER_DEBUG`` trace flag
+exists, writes an ``ApexLog`` with one ``USER_DEBUG`` line per ``System.debug('...')``.
 Bulk API 2.0: an ingest job is processed when the client closes it (``PATCH state=UploadComplete``)
 and is ``JobComplete`` from then on; its rows go through the same create, update, upsert and
 delete rules as REST. A query job runs the SOQL above and serves the rows as CSV pages of
@@ -1201,6 +1201,9 @@ class FakeOrg:
             return self._json(self._anonymous(params["anonymousBody"]))
         if parts == ["runTestsAsynchronous"] and method == "POST":
             return self._json(f"7078d{next(self.ids):010d}")
+        if parts == ["sobjects"] and method == "GET":  # describe global, synthetic shape
+            objs = [{"name": n, "label": n, "keyPrefix": TOOLING_PREFIXES[n]} for n in sorted(self.tooling)]
+            return self._json({"encoding": "UTF-8", "maxBatchSize": 200, "sobjects": objs})
         if parts == ["completions"]:
             return self._json({"publicDeclarations": {"System": {"Math": [{"name": "abs"}], "String": []}}})
         if len(parts) == 4 and parts[1] == "ApexLog" and parts[3] == "Body":

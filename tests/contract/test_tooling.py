@@ -157,6 +157,32 @@ def test_tooling_describe_does_not_share_the_rest_cache(h: Harness, mock: respx.
     assert tool.called
 
 
+def test_describe_global_is_cached_apart_from_the_rest_one(
+    h: Harness, mock: respx.MockRouter, rec: Recorder
+) -> None:
+    """``GET tooling/sobjects`` lists the Tooling objects (*Tooling API REST resources*,
+    ``intro_rest_resources.htm``). Synthetic body in the shape of the REST ``sobjects`` list."""
+    body = {
+        "encoding": "UTF-8",
+        "maxBatchSize": 200,
+        "sobjects": [{"name": "ApexClass"}, {"name": "TraceFlag"}],
+    }
+    tool = mock.get(f"{TOOLING}/sobjects").respond(json=body)
+    rest = mock.get(f"{DATA}/sobjects").respond(json={"sobjects": [{"name": "Lead"}]})
+    sf = _client(h, rec)
+    got = h.run(sf.tooling.describe_global())
+    assert [o["name"] for o in got["sobjects"]] == ["ApexClass", "TraceFlag"]
+    got["sobjects"].clear()  # callers get a copy, not the cached dict
+    assert len(h.run(sf.tooling.describe_global())["sobjects"]) == 2
+    assert tool.call_count == 1  # second call served from the cache
+    assert h.run(sf.describe_global())["sobjects"] == [{"name": "Lead"}]
+    assert rest.call_count == 1
+    h.run(sf.tooling.describe_global(cached=False))
+    assert tool.call_count == 2
+    ops = [e.fields["operation"] for e in rec.requests]
+    assert ops == ["tooling.describe_global", "describe_global", "tooling.describe_global"]
+
+
 def test_sobject_external_id_path_template(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:
     mock.get(f"{TOOLING}/sobjects/ApexClass/Name/Tmp").respond(json={"Id": "01pxx0000000009AAA"})
     sf = _client(h, rec)
