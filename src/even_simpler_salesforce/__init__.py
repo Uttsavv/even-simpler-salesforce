@@ -9,9 +9,11 @@
 """
 
 from ._async.client import AsyncSalesforce
+from ._async.replay_store import AsyncInMemoryReplayStore, AsyncReplayStore
 from ._async.token_store import AsyncInMemoryTokenStore
 from ._async.transport import AsyncFileStream
 from ._sync.client import Salesforce
+from ._sync.replay_store import InMemoryReplayStore, ReplayStore
 from ._sync.token_store import InMemoryTokenStore
 from ._sync.transport import FileStream
 from ._version import __version__
@@ -58,10 +60,13 @@ from .errors import (
     NotFound,
     OAuthError,
     PartialFailure,
+    PubSubError,
+    PubSubLimitExceeded,
     ReauthorizationRequired,
     RecordError,
     RecordSaveBlocked,
     RefreshFailed,
+    ReplayUnavailable,
     RequestError,
     RequestLimitExceeded,
     RequestTimeout,
@@ -83,12 +88,15 @@ from .errors import (
 from .models import (
     ActionResult,
     BatchResult,
+    ChangeHeader,
+    ChangeType,
     FileLink,
     LeadConvert,
     LeadConvertResult,
     Limit,
     MergeResult,
     PublishResult,
+    PubSubEvent,
     QueryPlan,
     QueryPlanNote,
     QueryResult,
@@ -108,7 +116,9 @@ __all__ = [
     "ActionResult",
     "ApexError",
     "AsyncFileStream",
+    "AsyncInMemoryReplayStore",
     "AsyncInMemoryTokenStore",
+    "AsyncReplayStore",
     "AsyncSalesforce",
     "AsyncTokenStore",
     "Auth",
@@ -119,6 +129,8 @@ __all__ = [
     "BudgetExceeded",
     "BulkJobFailed",
     "Cache",
+    "ChangeHeader",
+    "ChangeType",
     "ClientCredentials",
     "Conflict",
     "ConnectError",
@@ -136,6 +148,7 @@ __all__ = [
     "Forbidden",
     "Gone",
     "GraphQLError",
+    "InMemoryReplayStore",
     "InMemoryTokenStore",
     "InvalidField",
     "InvalidPicklistValue",
@@ -154,6 +167,9 @@ __all__ = [
     "OAuthError",
     "Observer",
     "PartialFailure",
+    "PubSubError",
+    "PubSubEvent",
+    "PubSubLimitExceeded",
     "PublishResult",
     "QueryPlan",
     "QueryPlanNote",
@@ -163,6 +179,8 @@ __all__ = [
     "RecordResult",
     "RecordSaveBlocked",
     "RefreshFailed",
+    "ReplayStore",
+    "ReplayUnavailable",
     "RequestError",
     "RequestLimitExceeded",
     "RequestTimeout",

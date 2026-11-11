@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import Enum
 from typing import Any, Generic, TypeVar
 
 from .core.cursor import Cursor
@@ -14,11 +15,14 @@ from .errors import ErrorDetail, PartialFailure
 __all__ = [
     "ActionResult",
     "BatchResult",
+    "ChangeHeader",
+    "ChangeType",
     "LeadConvert",
     "LeadConvertResult",
     "FileLink",
     "Limit",
     "MergeResult",
+    "PubSubEvent",
     "PublishResult",
     "QueryPlan",
     "QueryPlanNote",
@@ -356,3 +360,99 @@ class PublishResult:
     id: str | None = None
     uuid: str | None = None
     errors: tuple[ErrorDetail, ...] = ()
+
+
+class ChangeType(str, Enum):
+    """``ChangeEventHeader.changeType`` of a Change Data Capture event.
+
+    ``GAP_*`` events say that Salesforce could not produce a normal change event, so they carry
+    no field values: re-read the records. ``GAP_OVERFLOW`` says that one transaction changed
+    too many records for Salesforce to send a change event for each one: re-sync the object.
+    """
+
+    CREATE = "CREATE"
+    UPDATE = "UPDATE"
+    DELETE = "DELETE"
+    UNDELETE = "UNDELETE"
+    GAP_CREATE = "GAP_CREATE"
+    GAP_UPDATE = "GAP_UPDATE"
+    GAP_DELETE = "GAP_DELETE"
+    GAP_UNDELETE = "GAP_UNDELETE"
+    GAP_OVERFLOW = "GAP_OVERFLOW"
+
+    @property
+    def is_gap(self) -> bool:
+        """``True`` for every ``GAP_*`` value, including ``GAP_OVERFLOW``."""
+        return self.value.startswith("GAP_")
+
+
+@dataclass(frozen=True, slots=True)
+class ChangeHeader:
+    """The decoded ``ChangeEventHeader`` of a Change Data Capture event.
+
+    The ``*_fields`` tuples hold field names, decoded from the bitmaps Salesforce sends. A
+    component of a compound field is named ``Parent.Child``, for example
+    ``BillingAddress.City``.
+
+    Attributes:
+        entity_name: The sObject, e.g. ``"Account"``.
+        change_type: What happened to the records.
+        record_ids: The changed records. Several ids mean Salesforce merged identical changes
+            into one event. Empty for an overflow event.
+        changed_fields: Fields set by an update (``UPDATE`` and ``UNDELETE`` only).
+        nulled_fields: Fields set to ``null`` by an update.
+        diff_fields: Long text fields sent as a diff instead of the full value.
+        transaction_key: Groups the events of one transaction.
+        sequence_number: Order of this event within its transaction (starts at 1).
+        commit_timestamp: When the transaction was committed (UTC).
+        commit_user: Id of the user who made the change.
+        commit_number: The system change number of the commit.
+        change_origin: The client that made the change, e.g. ``"com/salesforce/api/rest/68.0"``.
+    """
+
+    entity_name: str
+    change_type: ChangeType
+    record_ids: tuple[str, ...] = ()
+    changed_fields: tuple[str, ...] = ()
+    nulled_fields: tuple[str, ...] = ()
+    diff_fields: tuple[str, ...] = ()
+    transaction_key: str | None = None
+    sequence_number: int | None = None
+    commit_timestamp: datetime | None = None
+    commit_user: str | None = None
+    commit_number: int | None = None
+    change_origin: str | None = None
+
+    @property
+    def is_gap(self) -> bool:
+        """``True`` for ``GAP_*`` events: they carry no field values."""
+        return self.change_type.is_gap
+
+    @property
+    def is_overflow(self) -> bool:
+        """``True`` for ``GAP_OVERFLOW``: re-sync every record of :attr:`entity_name`."""
+        return self.change_type is ChangeType.GAP_OVERFLOW
+
+
+@dataclass(frozen=True, slots=True)
+class PubSubEvent:
+    """One event received from a Pub/Sub API subscription.
+
+    Attributes:
+        topic: The topic you subscribed to, e.g. ``"/data/AccountChangeEvent"``.
+        replay_id: Opaque position of the event in the stream. Store it to resume after it.
+            Replay ids are not unique across org migrations: never de-duplicate on them.
+        event_id: ``EventUuid`` of a platform event, the key to de-duplicate on. ``None`` for
+            change events: de-duplicate those on ``(change.transaction_key,
+            change.sequence_number)``.
+        schema_id: Id of the Avro schema the payload was written with.
+        payload: The decoded event. Change events keep their ``ChangeEventHeader`` here too.
+        change: The decoded header of a change event, ``None`` for a platform event.
+    """
+
+    topic: str
+    replay_id: bytes
+    event_id: str | None
+    schema_id: str
+    payload: Mapping[str, Any]
+    change: ChangeHeader | None = None
