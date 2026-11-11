@@ -37,6 +37,8 @@ KNOWN_PREFIXES: dict[str, str] = {
     "Campaign": "701",
     "Contract": "800",
     "Order": "801",
+    "DeployRequest": "0Af",  # Metadata API deployments (fake.metadata)
+    "RetrieveRequest": "09S",  # Metadata API retrieve jobs (fake.metadata)
 }
 
 

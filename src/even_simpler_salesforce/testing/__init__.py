@@ -33,6 +33,7 @@ from ._fake_org import AsyncFakeLeads, AsyncFakePlatformEvents, FakeLeads, FakeP
 from ._files import AsyncFakeFiles, AsyncFakeFileStream, FakeFiles, FakeFileStream
 from ._graphql import GraphQLScript
 from ._ids import key_prefix
+from ._metadata import AsyncFakeMetadata, FakeMetadata
 from ._state import FakeCall, FakeRequest, QueryScript, UnscriptedCall
 from .recorder import RecordingTransport, Redactor, ReplayMismatch, record, replay
 
@@ -45,6 +46,7 @@ __all__ = [
     "AsyncFakeApex",
     "AsyncFakeCollections",
     "AsyncFakeLeads",
+    "AsyncFakeMetadata",
     "AsyncFakePlatformEvents",
     "AsyncFakeFileStream",
     "AsyncFakeFiles",
@@ -56,6 +58,7 @@ __all__ = [
     "FakeCall",
     "FakeCollections",
     "FakeLeads",
+    "FakeMetadata",
     "FakePlatformEvents",
     "FakeFileStream",
     "FakeFiles",

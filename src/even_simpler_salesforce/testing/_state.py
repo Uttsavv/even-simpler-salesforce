@@ -289,6 +289,10 @@ class FakeState:
         self._locator_seq = 0
         self.explain_plans: list[QueryPlan] = []
         self.events: dict[str, list[dict[str, Any]]] = {}  # published platform events
+        # Metadata API (testing/_metadata.py): seeded components, deployments, scripted outcomes
+        self.metadata_components: dict[tuple[str, str], dict[str, bytes]] = {}
+        self.deployments: dict[str, tuple[bytes, Any, Any]] = {}  # id -> (zip, DeployOptions, DeployResult)
+        self.deploy_outcomes: list[tuple[Any, int | None]] = []  # (DeployOutcome, times), oldest first
         self.counter = 0
         self.closed = False
         self.debug = debug_level()
