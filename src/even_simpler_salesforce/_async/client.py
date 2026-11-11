@@ -38,6 +38,7 @@ from .api.graphql import graphql as _graphql
 from .api.graphql import graphql_iter as _graphql_iter
 from .api.leads import AsyncLeads
 from .api.platform_events import AsyncPlatformEvents
+from .api.reports import AsyncReports
 from .api.soap import merge as _merge
 from .api.sobject import AsyncSObject
 from .auth_runtime import AsyncAuthRuntime
@@ -202,6 +203,7 @@ class AsyncSalesforce:
         self.leads = AsyncLeads(self)
         self.platform_events = AsyncPlatformEvents(self)
         self.files = AsyncFiles(self)
+        self.reports = AsyncReports(self)
 
     @classmethod
     def _child(

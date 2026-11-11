@@ -24,6 +24,8 @@ __all__ = [
     "QueryPlanNote",
     "QueryResult",
     "RecordResult",
+    "ReportInstance",
+    "ReportResult",
     "UpsertResult",
     "UsageSnapshot",
 ]
@@ -356,3 +358,107 @@ class PublishResult:
     id: str | None = None
     uuid: str | None = None
     errors: tuple[ErrorDetail, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ReportInstance:
+    """One asynchronous report run, from ``sf.reports.run_async()``.
+
+    Pass ``report_id`` and ``id`` to ``sf.reports.instance()`` to wait for the results.
+
+    Attributes:
+        id: Id of the report instance (the run).
+        report_id: Id of the report.
+        status: ``"New"``, ``"Running"``, ``"Success"`` or ``"Error"``.
+        request_date: When the run was requested (ISO 8601 text from Salesforce).
+        completion_date: When the run finished, or ``None`` while it runs.
+        url: Path of the instance results, or ``None`` if the run failed.
+    """
+
+    id: str
+    report_id: str
+    status: str
+    request_date: str | None = None
+    completion_date: str | None = None
+    url: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ReportResult:
+    """The results of one report run: the body Salesforce returned, with row helpers.
+
+    ``sf.reports.run()`` and ``sf.reports.instance()`` return one. You can also wrap the
+    ``reportResult`` of a dashboard component: ``esf.ReportResult(component["reportResult"])``.
+
+    Attributes:
+        raw: The response body (``attributes``, ``reportMetadata``, ``factMap``, ...).
+    """
+
+    raw: Mapping[str, Any]
+
+    @property
+    def report_id(self) -> str | None:
+        """Id of the report (``attributes.reportId``, else ``reportMetadata.id``)."""
+        return _str_or_none(
+            _sub(self.raw, "attributes").get("reportId") or _sub(self.raw, "reportMetadata").get("id")
+        )
+
+    @property
+    def name(self) -> str | None:
+        """Name of the report (``attributes.reportName``, else ``reportMetadata.name``)."""
+        return _str_or_none(
+            _sub(self.raw, "attributes").get("reportName") or _sub(self.raw, "reportMetadata").get("name")
+        )
+
+    @property
+    def format(self) -> str | None:
+        """``"TABULAR"``, ``"SUMMARY"``, ``"MATRIX"`` or ``"MULTI_BLOCK"`` (``reportFormat``)."""
+        return _str_or_none(_sub(self.raw, "reportMetadata").get("reportFormat"))
+
+    @property
+    def all_data(self) -> bool:
+        """``False`` when Salesforce cut the detail rows short (``allData``)."""
+        return self.raw.get("allData") is not False
+
+    @property
+    def has_detail_rows(self) -> bool:
+        """Whether the run returned detail rows (``hasDetailRows``)."""
+        return self.raw.get("hasDetailRows") is True
+
+    def rows(self) -> list[dict[str, Any]]:
+        """The detail rows, one dict per record: grouping values, then detail column values.
+
+        Keys are column API names such as ``"ACCOUNT_NAME"``; values are the cell ``value``.
+        Empty when the run had no details.
+
+        Raises:
+            UnexpectedResponse: the body isn't a report result Salesforce would send.
+            ValueError: the report is a joined report (``MULTI_BLOCK``).
+        """
+        from .core.reports import detail_rows
+
+        return detail_rows(self.raw)
+
+    def summary_rows(self) -> list[dict[str, Any]]:
+        """The aggregates of every grouping, subtotal and the grand total, one dict each.
+
+        Keys are grouping column names and aggregate names such as ``"s!Amount"`` and
+        ``"RowCount"``. A subtotal lacks the deeper grouping columns; the grand total has only
+        aggregates.
+
+        Raises:
+            UnexpectedResponse: the body isn't a report result Salesforce would send.
+            ValueError: the report is a joined report (``MULTI_BLOCK``).
+        """
+        from .core.reports import summary_rows
+
+        return summary_rows(self.raw)
+
+
+def _sub(raw: Mapping[str, Any], key: str) -> Mapping[str, Any]:
+    value: Any = raw.get(key)
+    return value if isinstance(value, Mapping) else {}  # pyright: ignore[reportUnknownVariableType]
+
+
+def _str_or_none(value: Any) -> str | None:
+    return value if isinstance(value, str) else None

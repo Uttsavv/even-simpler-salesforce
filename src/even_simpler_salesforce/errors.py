@@ -44,6 +44,8 @@ __all__ = [
     "RecordError",
     "RecordSaveBlocked",
     "RefreshFailed",
+    "ReportRunFailed",
+    "ReportTimeout",
     "RequestError",
     "RequestLimitExceeded",
     "RequestTimeout",
@@ -489,6 +491,50 @@ class GraphQLError(SalesforceError):
         super().__init__(message, **kw)
         self.graphql_errors = tuple(graphql_errors)
         self.data = data
+
+
+class ReportRunFailed(SalesforceError):
+    """An asynchronous report run ended with status ``Error``.
+
+    ``report_id`` and ``instance_id`` name the run. Salesforce doesn't say why; a common cause
+    is that the user lost access to the report after the run started.
+    """
+
+    report_id: str | None
+    instance_id: str | None
+
+    def __init__(
+        self, message: str = "", *, report_id: str | None = None, instance_id: str | None = None, **kw: Any
+    ) -> None:
+        super().__init__(message, **kw)
+        self.report_id = report_id
+        self.instance_id = instance_id
+
+
+class ReportTimeout(SalesforceError):
+    """An asynchronous report run didn't finish within the ``timeout`` of ``instance()``.
+
+    The run keeps going in Salesforce. ``run_status`` is the last run status the client saw
+    (``"New"`` or ``"Running"``); call ``instance()`` again with the same ids to keep waiting.
+    """
+
+    report_id: str | None
+    instance_id: str | None
+    run_status: str | None
+
+    def __init__(
+        self,
+        message: str = "",
+        *,
+        report_id: str | None = None,
+        instance_id: str | None = None,
+        run_status: str | None = None,
+        **kw: Any,
+    ) -> None:
+        super().__init__(message, **kw)
+        self.report_id = report_id
+        self.instance_id = instance_id
+        self.run_status = run_status
 
 
 class SoapFault(SalesforceError):
