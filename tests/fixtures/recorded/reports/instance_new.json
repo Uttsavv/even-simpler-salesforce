@@ -1,0 +1,14 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Salesforce Reports and Dashboards REST API Developer Guide (Execute Async, Instances List, Instance Results); no org recording yet",
+  "body": {
+    "id": "0LGxx0000000001AAA",
+    "requestDate": "2026-11-11T09:00:00Z",
+    "completionDate": null,
+    "hasDetailRows": true,
+    "ownerId": "005xx0000000001AAA",
+    "queryable": false,
+    "status": "New",
+    "url": "/services/data/v68.0/analytics/reports/00Oxx0000000001AAA/instances/0LGxx0000000001AAA"
+  }
+}

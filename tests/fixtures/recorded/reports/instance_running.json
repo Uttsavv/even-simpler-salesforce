@@ -1,0 +1,48 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Salesforce Reports and Dashboards REST API Developer Guide (Execute Async, Instances List, Instance Results); no org recording yet",
+  "body": {
+    "attributes": {
+      "id": "0LGxx0000000001AAA",
+      "reportId": "00Oxx0000000001AAA",
+      "reportName": "Open Opportunities",
+      "ownerId": "005xx0000000001AAA",
+      "requestDate": "2026-11-11T09:00:00Z",
+      "type": "ReportInstance",
+      "status": "Running",
+      "completionDate": null
+    },
+    "allData": false,
+    "hasDetailRows": false,
+    "factMap": {},
+    "reportMetadata": {
+      "id": "00Oxx0000000001AAA",
+      "name": "Open Opportunities",
+      "reportFormat": "SUMMARY",
+      "detailColumns": [
+        "ACCOUNT_NAME",
+        "OPPORTUNITY_NAME",
+        "AMOUNT"
+      ],
+      "aggregates": [
+        "s!AMOUNT",
+        "RowCount"
+      ],
+      "groupingsDown": [
+        {
+          "name": "STAGE_NAME",
+          "sortOrder": "Asc",
+          "dateGranularity": "None"
+        }
+      ],
+      "groupingsAcross": [],
+      "reportFilters": [],
+      "reportBooleanFilter": null,
+      "hasDetailRows": true,
+      "reportType": {
+        "type": "Opportunity",
+        "label": "Opportunities"
+      }
+    }
+  }
+}
