@@ -29,7 +29,6 @@ from ...core.bulk import (
     check_line_ending,
     combine_infos,
     compound_hint,
-    has_result_pages,
     ingest_job_body,
     parse_bulk_error,
     parse_job_info,
@@ -579,10 +578,8 @@ class AsyncBulk:
         infos = [info]
         await _Jobs(self._sf, "query").wait(infos, poll, timeout, lambda i: hint(i.error_message))
         info = infos[0]
-        if parallel_downloads > 1 and has_result_pages(info.api_version):
-            rows = self._parallel(info, parallel_downloads)
-        else:  # resultPages needs API 58.0; older versions download one page at a time
-            rows = self._serial(info)
+        # resultPages needs API 58.0; the client supports 59.0 and later.
+        rows = self._serial(info) if parallel_downloads == 1 else self._parallel(info, parallel_downloads)
         try:
             async for row in rows:
                 yield {k: (v if v != "" else None) for k, v in row.items()}

@@ -72,7 +72,6 @@ __all__ = [
     "parse_job_state",
     "parse_locator",
     "parse_result_pages",
-    "has_result_pages",
     "query_job_body",
     "select_fields",
 ]
@@ -620,18 +619,6 @@ def parse_locator(headers: Mapping[str, str]) -> str | None:
     if value is None or value.strip() in ("", "null"):
         return None
     return value.strip()
-
-
-#: First API version with ``GET jobs/query/{id}/resultPages``.
-RESULT_PAGES_VERSION = 58.0
-
-
-def has_result_pages(api_version: str) -> bool:
-    """Whether ``api_version`` offers the ``resultPages`` resource for parallel downloads."""
-    try:
-        return float(api_version) >= RESULT_PAGES_VERSION
-    except ValueError:
-        return False
 
 
 def parse_result_pages(body: Any, prefix: str) -> tuple[list[str], str | None]:

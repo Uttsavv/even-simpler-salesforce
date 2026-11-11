@@ -33,7 +33,7 @@ from ..core.bulk import (
 from ..core.http import check_sobject
 from ..core.records import flatten
 from ..core.soql import soql_values
-from ..errors import BulkJobFailed, SalesforceError
+from ..errors import SalesforceError
 from ..models import BulkFailure, BulkJobInfo, BulkJobState, ErrorDetail
 from ._ids import make_id
 from ._state import FakeState, Who
@@ -101,7 +101,7 @@ class FakeIngestJob:
 
     @property
     def info(self) -> BulkJobInfo:
-        """Final status: ``JobComplete``, or ``Aborted`` after :meth:`abort`."""
+        """Final status: always ``JobComplete``."""
         return self._info
 
     @property
@@ -114,17 +114,12 @@ class FakeIngestJob:
         return self._info
 
     def wait(self, *, poll: Backoff | None = None, timeout: float = 3600.0) -> BulkJobInfo:
-        """Return at once. Raises :class:`BulkJobFailed` for an aborted job, like the real one."""
+        """Return the final :attr:`info` at once: the fake job is already ``JobComplete``.
+
+        Use ``fake.fail_next("bulk.ingest", esf.BulkJobFailed(...))`` to test a failed job.
+        """
         if not timeout > 0:
             raise ValueError("timeout must be > 0 seconds")
-        if self._info.state is not BulkJobState.JOB_COMPLETE:
-            raise BulkJobFailed(
-                f"Bulk job {self._info.id} ended in state {self._info.state.value}",
-                job_id=self._info.id,
-                state=self._info.state.value,
-                operation="bulk.ingest",
-                sobject=self._info.sobject,
-            )
         return self._info
 
     def abort(self) -> BulkJobInfo:

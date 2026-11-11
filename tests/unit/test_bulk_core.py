@@ -493,13 +493,6 @@ def test_parse_locator(headers: dict[str, str], locator: str | None) -> None:
     assert B.parse_locator(headers) == locator
 
 
-def test_has_result_pages() -> None:
-    assert B.has_result_pages("68.0")
-    assert B.has_result_pages("58.0")
-    assert not B.has_result_pages("57.0")
-    assert not B.has_result_pages("latest")
-
-
 PREFIX = f"/services/data/v68.0/jobs/query/{JOB}/"
 
 
