@@ -117,6 +117,47 @@ rest_endpoints:
     used_by: "sf.files.link(), sf.files.upload(share_type=/visibility=)"
     docs: https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_contentdocumentlink.htm
     checked: null
+  - path: "jobs/{}"
+    methods: [POST]
+    used_by: "sf.bulk.ingest() (jobs/ingest), sf.bulk.query() (jobs/query, operation query or queryAll)"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/create_job.htm
+    checked: 2026-11-10
+  - path: "jobs/ingest/{}"
+    methods: [GET, PATCH]
+    used_by: "job.wait(), job.refresh() (job info); upload close and job.abort() (state UploadComplete / Aborted)"
+    dynamic: true  # built in the API version of the job (_job_path)
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/get_job_info.htm
+    checked: null
+  - path: "jobs/ingest/{}/batches"
+    methods: [PUT]
+    used_by: "sf.bulk.ingest() upload (text/csv; charset=UTF-8, streamed, at most 100 MB raw per job)"
+    dynamic: true
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/upload_job_data.htm
+    checked: null
+  - path: "jobs/ingest/{}/{}"
+    methods: [GET]
+    used_by: "job.successful_results(), job.failed_results(), job.unprocessed_records() (CSV)"
+    dynamic: true
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/get_job_successful_results.htm
+    checked: null
+  - path: "jobs/query/{}"
+    methods: [GET]
+    used_by: "sf.bulk.query() polling"
+    dynamic: true
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/query_get_one_job.htm
+    checked: null
+  - path: "jobs/query/{}/results"
+    methods: [GET]
+    used_by: "sf.bulk.query() result pages (?locator=, Sforce-Locator; same API version or 409)"
+    dynamic: true
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/query_get_job_results.htm
+    checked: null
+  - path: "jobs/query/{}/resultPages"
+    methods: [GET]
+    used_by: "sf.bulk.query(parallel_downloads>1) (API 58.0+, up to five result URLs per response)"
+    dynamic: true
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_bulk_v2/query_get_parallel_job_results.htm
+    checked: 2026-11-10
   - path: composite/sobjects
     methods: [POST, PATCH, DELETE]
     used_by: collections.create/update/delete()
@@ -227,6 +268,11 @@ headers:
     direction: response
     used_for: "api-usage=N/M; api-bursts=N/M → sf.usage, budgets"
     docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/headers_api_usage.htm
+    checked: null
+  - name: Sforce-Locator
+    direction: response
+    used_for: "next Bulk query result page; the string null on the last page"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/query_get_job_results.htm
     checked: null
   - name: Sforce-Request-Id
     direction: response

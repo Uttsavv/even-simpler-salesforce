@@ -45,6 +45,7 @@ implementation. They have the methods of the real clients for these areas:
 - Collections
 - lead convert, merge and platform events
 - [Files](guides/files.md)
+- [Bulk API 2.0](guides/bulk.md): ingest jobs apply their rows at once; queries return the rows of `on_query()`
 - `request`, `limits` and `usage`
 - `with_auth` and `tagged`
 

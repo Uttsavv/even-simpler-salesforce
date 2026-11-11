@@ -44,6 +44,13 @@ Paths are relative to `/services/data/vXX.X/` unless they start with `/services/
 | `sobjects/ContentVersion/{}/VersionData` | GET | sf.files.download() (streamed), sf.files.download_bytes() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/dome_sobject_blob_retrieve.htm) |  |
 | `sobjects/Attachment/{}/Body` | GET | sf.files.download_attachment() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/dome_sobject_blob_retrieve.htm) |  |
 | `sobjects/ContentDocumentLink` | POST | sf.files.link(), sf.files.upload(share_type=/visibility=) | [docs](https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_contentdocumentlink.htm) |  |
+| `jobs/{}` | POST | sf.bulk.ingest() (jobs/ingest), sf.bulk.query() (jobs/query, operation query or queryAll) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/create_job.htm) | 2026-11-10 |
+| `jobs/ingest/{}` | GET, PATCH | job.wait(), job.refresh() (job info); upload close and job.abort() (state UploadComplete / Aborted) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/get_job_info.htm) |  |
+| `jobs/ingest/{}/batches` | PUT | sf.bulk.ingest() upload (text/csv; charset=UTF-8, streamed, at most 100 MB raw per job) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/upload_job_data.htm) |  |
+| `jobs/ingest/{}/{}` | GET | job.successful_results(), job.failed_results(), job.unprocessed_records() (CSV) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/get_job_successful_results.htm) |  |
+| `jobs/query/{}` | GET | sf.bulk.query() polling | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/query_get_one_job.htm) |  |
+| `jobs/query/{}/results` | GET | sf.bulk.query() result pages (?locator=, Sforce-Locator; same API version or 409) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/query_get_job_results.htm) |  |
+| `jobs/query/{}/resultPages` | GET | sf.bulk.query(parallel_downloads>1) (API 58.0+, up to five result URLs per response) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_bulk_v2/query_get_parallel_job_results.htm) | 2026-11-10 |
 | `composite/sobjects` | POST, PATCH, DELETE | collections.create/update/delete() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobjects_collections.htm) |  |
 | `composite/sobjects/{}` | POST | collections.retrieve() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobjects_collections_retrieve.htm) |  |
 | `composite/sobjects/{}/{}` | PATCH | collections.upsert() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobjects_collections_upsert.htm) |  |
@@ -86,6 +93,7 @@ Behaviour relied on:
 | `If-Unmodified-Since` | request | update/delete(if_unmodified_since=) → 412 | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/intro_rest_conditional_requests.htm) |  |
 | `Content-Encoding` | request | gzip for bodies over 64 KiB (Collections) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/intro_rest_compression.htm) |  |
 | `Sforce-Limit-Info` | response | api-usage=N/M; api-bursts=N/M → sf.usage, budgets | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/headers_api_usage.htm) |  |
+| `Sforce-Locator` | response | next Bulk query result page; the string null on the last page | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/query_get_job_results.htm) |  |
 | `Sforce-Request-Id` | response | error.request_id, sf.request events |  |  |
 | `Retry-After` | response | 429 / REQUEST_LIMIT_EXCEEDED back-off (seconds or HTTP date) |  |  |
 | `Last-Modified` | response | describe cache revalidation |  |  |
