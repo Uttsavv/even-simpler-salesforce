@@ -55,15 +55,22 @@ def client_from_env() -> esf.AsyncSalesforce:
     )
 
 
+def _log_safe(value: str) -> str:
+    """Escape CR, LF and other control characters so a request can't forge log lines."""
+    # After unicode_escape no raw CR or LF is left; the replace calls only make that explicit.
+    return value.encode("unicode_escape").decode("ascii").replace("\r", "").replace("\n", "")
+
+
 def log_summary(request: Request, fields: dict[str, Any]) -> None:
     """Merge the Salesforce roll-up into the app's canonical request log line."""
+    method, path = _log_safe(request.method), _log_safe(request.url.path)
     log.info(
         "request.completed %s %s sf_calls=%s sf_ms=%s",
-        request.method,
-        request.url.path,
+        method,
+        path,
         fields["sf_calls"],
         fields["sf_ms"],
-        extra={"http_method": request.method, "http_path": request.url.path, **fields},
+        extra={"http_method": method, "http_path": path, **fields},
     )
 
 
