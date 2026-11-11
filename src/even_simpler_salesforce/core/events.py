@@ -94,6 +94,7 @@ def event_error(exc: E.SalesforceError) -> E.SalesforceError:
         return exc
     state = dict(exc.__dict__)
     state["retryable"] = target.default_retryable
+    state["docs_url"] = E.docs_url_for(target)  # the entry of the new class, not the old one
     new = E._rebuild(target, state)  # pyright: ignore[reportPrivateUsage]
     new.__cause__ = exc.__cause__
     return new

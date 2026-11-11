@@ -106,6 +106,19 @@ def test_upload_bytes_is_multipart(h: Harness, mock: respx.MockRouter, rec: Reco
     assert event.fields["bytes_out"] == len(req.content)
 
 
+def test_upload_memoryview_counts_bytes(h: Harness, mock: respx.MockRouter) -> None:
+    """A memoryview of wider items (array of int32) is sent with its length in bytes."""
+    import array
+
+    route = mock.post(CV_URL).mock(return_value=created())
+    sf = h.client()
+    data = array.array("i", range(100_000))
+    assert h.run(sf.files.upload(memoryview(data), filename="a.bin")) == CV_ID
+    req = route.calls.last.request
+    assert parts(req)[2] == data.tobytes()
+    assert req.headers["content-length"] == str(len(req.content))
+
+
 def test_upload_path_defaults_filename_and_links(h: Harness, mock: respx.MockRouter, tmp_path: Path) -> None:
     route = mock.post(CV_URL).mock(return_value=created())
     path = tmp_path / "Q1 report.csv"
@@ -404,6 +417,55 @@ def test_upload_from_path_keeps_memory_flat(h: Harness, tmp_path: Path) -> None:
     assert peak < 4 * 1024 * 1024, f"peak {peak} bytes for a {size}-byte file"
 
 
+class _AsyncBreaksMidBody(httpx.AsyncBaseTransport):
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        assert isinstance(request.stream, httpx.AsyncByteStream)
+        seen = 0
+        async for _ in request.stream:  # the head, then the first file chunk
+            seen += 1
+            if seen == 2:
+                raise httpx.WriteError("connection reset")
+        raise AssertionError("unreachable")
+
+
+class _SyncBreaksMidBody(httpx.BaseTransport):
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        assert isinstance(request.stream, httpx.SyncByteStream)
+        for seen, _ in enumerate(request.stream, 1):  # the head, then the first file chunk
+            if seen == 2:
+                raise httpx.WriteError("connection reset")
+        raise AssertionError("unreachable")
+
+
+def test_upload_from_path_closes_the_file_when_the_send_fails(
+    h: Harness, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """httpx leaves a half-read request body open; the client closes it (and the file) at once."""
+    import importlib
+
+    files_mod = importlib.import_module(
+        f"even_simpler_salesforce.{'_async' if h.is_async else '_sync'}.api.files"
+    )
+    opened: list[Any] = []
+    real_open = files_mod._open_binary
+
+    def tracking_open(path: str) -> Any:
+        f = real_open(path)
+        opened.append(f)
+        return f
+
+    monkeypatch.setattr(files_mod, "_open_binary", tracking_open)
+    path = tmp_path / "big.bin"
+    path.write_bytes(b"\x01" * (CHUNK * 4))
+    transport: Any = _AsyncBreaksMidBody() if h.is_async else _SyncBreaksMidBody()
+    http: Any = httpx.AsyncClient(transport=transport) if h.is_async else httpx.Client(transport=transport)
+    sf = h.client(http_client=http)
+    with pytest.raises(esf.TransportError):
+        h.run(sf.files.upload(path))
+    assert len(opened) == 1  # not resent: a write that may have reached Salesforce
+    assert opened[0].closed
+
+
 # --- download ---------------------------------------------------------------------------------
 
 
@@ -469,6 +531,26 @@ def test_download_streams_and_logs_on_close(h: Harness, mock: respx.MockRouter, 
     assert event.fields["outcome"] == "ok"
     assert event.fields["bytes_in"] == len(data)
     assert event.fields["path_template"] == "/sobjects/ContentVersion/:id/VersionData"
+
+
+def test_download_gzip_has_no_content_length(h: Harness, mock: respx.MockRouter) -> None:
+    """With Content-Encoding, Content-Length is the compressed size, so it isn't reported."""
+    import gzip
+
+    data = b"a" * 50_000
+    packed = gzip.compress(data)
+    mock.get(f"{CV_URL}/{CV_ID}/VersionData").respond(
+        200,
+        content=packed,
+        headers={
+            "content-type": "text/plain",
+            "content-encoding": "gzip",
+            "content-length": str(len(packed)),
+        },
+    )
+    got, stream = _read_all(h, h.client())
+    assert got == data
+    assert stream.content_length is None
 
 
 def test_download_stop_early_closes(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:
@@ -602,6 +684,19 @@ def test_download_bytes_and_attachment(h: Harness, mock: respx.MockRouter, rec: 
     ]
     with pytest.raises(ValueError):
         h.run(sf.files.download_bytes("../x"))
+
+
+def test_download_of_json_file_is_not_parsed(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:
+    """A downloaded .json file is the file, not an API response: no records count, no parsing."""
+    body = json.dumps([{"a": 1}, {"a": 2}, {"a": 3}]).encode()
+    mock.get(f"{CV_URL}/{CV_ID}/VersionData").respond(
+        200, content=body, headers={"content-type": "application/json"}
+    )
+    sf = h.client(recorder=rec)
+    assert h.run(sf.files.download_bytes(CV_ID)) == body
+    got, _ = _read_all(h, sf)
+    assert got == body
+    assert [e.fields["records"] for e in rec.requests] == [None, None]
 
 
 # --- link and list_for ------------------------------------------------------------------------

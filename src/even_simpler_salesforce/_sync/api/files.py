@@ -41,16 +41,16 @@ _ANY = {"Accept": "*/*"}
 
 @dataclass(frozen=True, slots=True)
 class _Source:
-    chunks: Callable[[], Iterator[bytes]]  # a fresh iterator per attempt
+    chunks: Callable[[], _compat.ByteGen]  # a fresh iterator per attempt
     length: int | None  # None: unknown, sent with chunked transfer encoding
     once: bool  # can be read only once, so the request is never resent
     name: str | None  # a file name to use when the caller passes none
 
 
 def _bytes_source(data: bytes | bytearray | memoryview) -> _Source:
-    view = memoryview(data)
+    view = memoryview(data).cast("B")  # length in bytes, also for arrays of wider items
 
-    def chunks() -> Iterator[bytes]:
+    def chunks() -> _compat.ByteGen:
         for i in range(0, len(view), CHUNK_SIZE):
             yield bytes(view[i : i + CHUNK_SIZE])
 
@@ -65,7 +65,7 @@ def _path_source(path: str | os.PathLike[str]) -> _Source:
     fspath = os.fspath(path)
     size = os.stat(fspath).st_size  # raises FileNotFoundError before anything is sent
 
-    def chunks() -> Iterator[bytes]:
+    def chunks() -> _compat.ByteGen:
         f = _compat.to_thread(_open_binary, fspath)
         try:
             while chunk := _compat.to_thread(f.read, CHUNK_SIZE):
@@ -86,7 +86,7 @@ def _file_source(f: IO[bytes]) -> _Source:
         length = f.seek(0, os.SEEK_END) - start
         f.seek(start)
 
-    def chunks() -> Iterator[bytes]:
+    def chunks() -> _compat.ByteGen:
         if seekable:
             f.seek(start)  # a resend starts from the same place
         while chunk := _compat.to_thread(f.read, CHUNK_SIZE):
@@ -98,7 +98,7 @@ def _file_source(f: IO[bytes]) -> _Source:
 
 
 def _stream_source(stream: Iterable[bytes]) -> _Source:
-    def chunks() -> Iterator[bytes]:  # called once: body_once stops any resend
+    def chunks() -> _compat.ByteGen:  # called once: body_once stops any resend
         for chunk in stream:
             if not isinstance(chunk, (bytes, bytearray, memoryview)):  # pyright: ignore[reportUnnecessaryIsInstance]
                 raise TypeError(f"upload streams must yield bytes, got {type(chunk).__name__}")
@@ -191,8 +191,12 @@ class Files:
 
         def body() -> Iterator[bytes]:
             yield head
-            for chunk in src.chunks():
-                yield chunk
+            inner = src.chunks()
+            try:
+                for chunk in inner:
+                    yield chunk
+            finally:
+                inner.close()  # closes the file now if the send stops part way
             yield tail
 
         raw = self._sf._send(

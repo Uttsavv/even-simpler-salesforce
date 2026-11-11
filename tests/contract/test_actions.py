@@ -96,6 +96,8 @@ def test_bulk_empty_sends_nothing(h: Harness, mock: respx.MockRouter) -> None:
     sf = h.client()
     assert len(h.run(sf.actions.apex("OrderService", []))) == 0
     assert not mock.calls
+    with pytest.raises(ValueError):
+        h.run(sf.actions.apex("bad name", []))  # the name is checked also when nothing is sent
 
 
 def test_inputs_must_be_dicts(h: Harness) -> None:

@@ -95,7 +95,7 @@ print(response.status_code, response.json)
 | `MalformedQuery` for an invalid [cursor](../guides/query.md#cursors) | 400 | `salesforce_invalid_cursor` |
 | `LimitError` | 503, with `Retry-After` | `salesforce_limit` |
 | `TransportError` | 502 | `salesforce_unavailable` |
-| `ServerError` | 503 | `salesforce_unavailable` |
+| `ServerError`, `EventPublishUnavailable` | 503 | `salesforce_unavailable` |
 
 Other errors stay unhandled, so Flask logs them and answers 500. To change one mapping, register
 your own handler. A handler for a subclass wins over the extension's handler for its base class.

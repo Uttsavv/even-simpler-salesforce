@@ -105,11 +105,34 @@ def test_merge_envelope() -> None:
         ({"lead_id": LEAD, "converted_status": ""}, "converted_status"),
         ({"lead_id": LEAD, "converted_status": "s", "owner_id": "bad"}, "invalid Salesforce id"),
         ({"lead_id": LEAD, "converted_status": "s", "contact_id": "003xx0000000001AAA"}, "account_id"),
+        ({"lead_id": LEAD, "converted_status": "s\x01"}, "control characters"),
+        ({"lead_id": LEAD, "converted_status": "s", "opportunity_name": "a\x0bb"}, "control characters"),
+        ({"lead_id": LEAD, "converted_status": "s", "opportunity_name": "\ud800"}, "control characters"),
     ],
 )
 def test_lead_convert_validation(kwargs: dict[str, str], match: str) -> None:
     with pytest.raises(ValueError, match=match):
         esf.LeadConvert(**kwargs)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"opportunity_name": 42},
+        {"send_email": "yes"},
+        {"do_not_create_opportunity": 1},
+        {"overwrite_lead_source": None},
+    ],
+)
+def test_lead_convert_rejects_wrong_types(kwargs: dict[str, object]) -> None:
+    """Values go into the envelope as text; a wrong type would send invalid XML or crash."""
+    with pytest.raises(TypeError):
+        esf.LeadConvert(LEAD, "s", **kwargs)  # type: ignore[arg-type]
+
+
+def test_lead_convert_allows_tabs_and_newlines() -> None:
+    c = esf.LeadConvert(LEAD, "s", opportunity_name="a\tb\nc")
+    ET.fromstring(soap.convert_lead_envelope([c], "tok"))
 
 
 def test_lead_converts_rejects_other_types() -> None:
@@ -365,7 +388,8 @@ def test_event_error_mapping() -> None:
         "platform_events.publish",
         "x",
     )
-    assert str(mapped) == str(plain)
+    assert str(mapped).splitlines()[0] == str(plain).splitlines()[0]
+    assert str(mapped).endswith("#eventpublishfailed")
 
     unknown = events.event_error(esf.RecordError("y", error_code="SOMETHING_NEW"))
     assert type(unknown) is esf.EventPublishFailed
@@ -400,3 +424,13 @@ def test_body_found_after_header() -> None:
         "<success>true</success></result></mergeResponse></soapenv:Body></soapenv:Envelope>"
     ).encode()
     assert soap.parse_merge_results(body)[0].id == ACC
+
+
+def test_event_error_points_at_its_own_docs_entry() -> None:
+    from even_simpler_salesforce import errors as E
+    from even_simpler_salesforce.core.events import event_error
+
+    mapped = event_error(E.RecordError("x", error_code="PLATFORM_EVENT_PUBLISHING_UNAVAILABLE"))
+    assert type(mapped) is E.EventPublishUnavailable
+    assert mapped.docs_url == E.docs_url_for(E.EventPublishUnavailable)
+    assert "#eventpublishunavailable" in str(mapped)

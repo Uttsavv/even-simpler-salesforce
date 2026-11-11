@@ -37,6 +37,7 @@ from ..core.http import (
 )
 from ..core.limits import parse_limit_info
 from ..core.retry import backoff_delay, decide_retry, resend_after_401
+from ..core.soap import is_soap_path
 from ..core.soql import redact_soql, soql_hash
 from ..errors import (
     ConnectError,
@@ -163,7 +164,9 @@ class AsyncFileStream:
         self._closed = False
         self.content_type: str | None = response.headers.get("content-type")
         length = response.headers.get("content-length")
-        self.content_length: int | None = int(length) if length and length.isdigit() else None
+        # With Content-Encoding (gzip), Content-Length counts the compressed bytes, not the file.
+        encoded = response.headers.get("content-encoding", "identity").lower() != "identity"
+        self.content_length: int | None = int(length) if length and length.isdigit() and not encoded else None
 
     def __repr__(self) -> str:
         return f"<{type(self).__name__} {self.content_type or 'unknown type'}, {self.content_length} bytes>"
@@ -428,8 +431,11 @@ class AsyncTransport:
                         raise err  # the caller's stream was (partly) read; it can't be resent
 
                     # SOAP reports a rejected session as an HTTP 500 fault with INVALID_SESSION_ID.
+                    # Only there: on REST a non-401 status means code ran (an Apex REST class can
+                    # return any body), so it is never answered with a refresh and a resend.
                     if isinstance(err, SessionExpired) and (
-                        err.status == 401 or err.error_code == "INVALID_SESSION_ID"
+                        err.status == 401
+                        or (err.error_code == "INVALID_SESSION_ID" and is_soap_path(spec.path))
                     ):
                         if refreshed or not runtime.can_refresh or not resend_after_401(spec, err):
                             if refreshed:
@@ -532,11 +538,13 @@ class AsyncTransport:
             headers = merge_call_options(headers, self.call_options)
         sent_bytes = [0]
         body: Any = content
+        chunks: Any = None
         if spec.body_stream is not None:
             headers.setdefault("Content-Type", spec.content_type or "application/octet-stream")
             if spec.body_length is not None:
                 headers["Content-Length"] = str(spec.body_length)
-            body = _counted(spec.body_stream(), sent_bytes)
+            chunks = spec.body_stream()
+            body = _counted(chunks, sent_bytes)
         elif content is not None:
             headers.setdefault("Content-Type", spec.content_type or "application/json")
             if spec.compress and len(content) > GZIP_THRESHOLD:
@@ -575,6 +583,12 @@ class AsyncTransport:
                 TransportError(f"transport error: {exc!r}", operation=spec.operation, method=spec.method),
                 sent=True,
             ) from exc
+        finally:
+            # httpx doesn't close a request body it stopped reading (a failed send): close it
+            # here, so a file the upload opened is closed now, not when garbage is collected.
+            for gen in (body, chunks):
+                if chunks is not None and hasattr(gen, "aclose"):
+                    await gen.aclose()
         info = parse_limit_info(response.headers.get("sforce-limit-info"))
         if info is not None:
             self.usage.observe(info)
@@ -640,7 +654,13 @@ class AsyncTransport:
         error = failure if isinstance(failure, SalesforceError) else None
         records = spec.records
         records_failed: int | None = None
-        if failure is None and raw is not None and raw.is_json:
+        # A downloaded file is not an API response: never parse it here, whatever its type.
+        if (
+            failure is None
+            and raw is not None
+            and raw.is_json
+            and not spec.operation.startswith("files.download")
+        ):
             try:
                 body = raw.json()
             except ValueError:
