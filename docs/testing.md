@@ -281,8 +281,10 @@ def test_partial_failure(esf_fake: FakeSalesforce) -> None:
 - `"limits"`
 - `"graphql"`
 - `"ui.record"`, `"ui.object_info"`, `"ui.list_records"` and the other UI API methods
-- `"metadata.deploy"`, `"metadata.deploy_status"`, `"metadata.retrieve"`, `"metadata.list"`
-  and `"metadata.describe"`
+- `"reports.recent"`, `"reports.run"`, `"reports.run_async"`, `"reports.instance"` and
+  `"reports.describe"`
+- `"metadata.deploy"`, `"metadata.quick_deploy"`, `"metadata.cancel_deploy"`,
+  `"metadata.deploy_status"`, `"metadata.retrieve"`, `"metadata.list"` and `"metadata.describe"`
 - `"raw"`, or the name you pass as `operation=`
 - `"*"` for any operation
 

@@ -1,0 +1,1 @@
+Long-running jobs now all wait the same way as Bulk jobs: `sf.metadata.deploy_status(wait=True)`, `sf.metadata.retrieve()` and `sf.reports.instance()` take `poll=esf.Backoff(...)` (default 2 s doubling up to 30 s) and `timeout=` with a default of 3600 s instead of 600 s. `sf.reports.instance()` takes `poll` instead of `poll_interval`.

@@ -32,6 +32,7 @@ from collections.abc import Iterable, Mapping
 from typing import Any, cast
 from xml.sax.saxutils import escape
 
+from .. import errors as E
 from ..errors import UnexpectedResponse
 from ..models import (
     DeployMessage,
@@ -43,6 +44,7 @@ from ..models import (
     MetadataType,
     RetrieveMessage,
 )
+from .http import check_record_id
 from .soap import NS_ENVELOPE, child_text, children, parse_xml, soap_body
 
 __all__ = [
@@ -58,7 +60,12 @@ __all__ = [
     "list_metadata_envelope",
     "metadata_soap_path",
     "package_types",
+    "cancel_deploy_body",
+    "cancel_refused",
+    "not_cancelable",
+    "deploy_request_path",
     "parse_async_id",
+    "quick_deploy_body",
     "parse_deploy_result",
     "parse_describe_metadata",
     "parse_list_metadata",
@@ -94,6 +101,53 @@ _TYPE_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 _CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 _ASYNC_ID = re.compile(r"^[A-Za-z0-9]{15}(?:[A-Za-z0-9]{3})?$")
 _RAW_LIMIT = 4096
+
+
+def deploy_request_path(deploy_id: str) -> str:
+    """``metadata/deployRequest/{id}``: one deployment (status, quick deploy, cancel)."""
+    return f"metadata/deployRequest/{check_record_id(deploy_id)}"
+
+
+def quick_deploy_body(validated_id: str) -> dict[str, Any]:
+    """The ``POST metadata/deployRequest/{id}`` body that deploys a validated deployment.
+
+    *Deploy a Recently Validated Component Set Without Tests*:
+    https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_rest_deploy_recentvalidation.htm
+    """
+    return {"validatedDeployRequestId": check_record_id(validated_id)}
+
+
+def cancel_deploy_body() -> dict[str, Any]:
+    """The ``PATCH metadata/deployRequest/{id}`` body that asks Salesforce to cancel a deployment.
+
+    *Cancel a Deployment in Progress Using REST*:
+    https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_rest_deploy_cancel.htm
+    """
+    return {"deployResult": {"status": "Canceling"}}
+
+
+def cancel_refused(exc: E.SalesforceError) -> bool:
+    """Whether a refused cancel request means the deployment is already finalizing.
+
+    From API 65.0 a deployment in the ``FinalizingDeploy`` stage can't be canceled. The SOAP
+    ``cancelDeploy()`` call answers ``INVALID_ID_FIELD`` with a message about finalizing; the
+    REST body is assumed to carry the same message (V85 in big-bang.md §21).
+    """
+    if not isinstance(exc, E.RequestError):
+        return False
+    return any("finaliz" in (m or "").lower() for m in (exc.message, *(e.message for e in exc.errors)))
+
+
+def not_cancelable(exc: E.SalesforceError, deploy_id: str) -> E.DeployNotCancelable:
+    """Turn a refused cancel request into :class:`DeployNotCancelable`, keeping its details."""
+    state = dict(exc.__dict__)
+    state["retryable"] = False
+    state["docs_url"] = E.docs_url_for(E.DeployNotCancelable)
+    state["job_id"] = deploy_id
+    state["state"] = "FinalizingDeploy"
+    new = E._rebuild(E.DeployNotCancelable, state)  # pyright: ignore[reportPrivateUsage]
+    new.__cause__ = exc.__cause__
+    return cast("E.DeployNotCancelable", new)
 
 
 def metadata_soap_path(api_version: str) -> str:

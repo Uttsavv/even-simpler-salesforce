@@ -9,6 +9,14 @@ were read from search excerpts on 2026-11-11:
   https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_rest_deploy.htm
 - Deploy status with REST (``GET metadata/deployRequest/{id}?includeDetails=true``):
   https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_rest_deploy_checkstatus.htm
+- Deploy a recently validated component set without tests ("quick deploy", ``POST
+  metadata/deployRequest/{validatedId}`` with ``validatedDeployRequestId``; the page warns that
+  ``PATCH`` there starts a new deployment):
+  https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_rest_deploy_recentvalidation.htm
+- Cancel a deployment with REST (``PATCH metadata/deployRequest/{id}`` with
+  ``{"deployResult": {"status": "Canceling"}}``; from API 65.0 a deployment in the
+  ``FinalizingDeploy`` stage can't be canceled):
+  https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_rest_deploy_cancel.htm
 - DeployResult (status values, ``details.componentFailures``):
   https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_deployresult.htm
 - retrieve(): https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_retrieve.htm
@@ -349,7 +357,7 @@ def test_deploy_status_wait_polls_until_done(h: Harness, mock: respx.MockRouter,
     res = h.run(sf.metadata.deploy_status(DID, wait=True))
     assert res.status == "Succeeded"
     assert route.call_count == 3
-    assert sf.sleeps == [1.0, 2.0]
+    assert sf.sleeps == [2.0, 4.0]  # esf.Backoff() by default
     assert {e["operation"] for e in rec.requests} == {"metadata.deploy_status"}
 
 
@@ -361,7 +369,110 @@ def test_deploy_status_wait_times_out(h: Harness, mock: respx.MockRouter) -> Non
     assert ei.value.job_id == DID
     assert ei.value.state == "InProgress"
     assert sum(sf.sleeps) == pytest.approx(5)
-    assert sf.sleeps == [1.0, 2.0, 2.0]
+    assert sf.sleeps == [2.0, 3.0]
+
+
+def test_deploy_status_wait_uses_poll(h: Harness, mock: respx.MockRouter) -> None:
+    mock.get(STATUS).mock(
+        side_effect=[js("deploy_pending.json"), js("deploy_in_progress.json"), js("deploy_succeeded.json")]
+    )
+    sf = h.client()
+    h.run(sf.metadata.deploy_status(DID, wait=True, poll=esf.Backoff(start=5, max=7)))
+    assert sf.sleeps == [5.0, 7.0]
+
+
+def test_deploy_status_default_timeout_is_an_hour(h: Harness, mock: respx.MockRouter) -> None:
+    mock.get(STATUS).mock(return_value=js("deploy_in_progress.json"))
+    sf = h.client()
+    with pytest.raises(esf.MetadataTimeout, match="after 3600 s"):
+        h.run(sf.metadata.deploy_status(DID, wait=True, poll=esf.Backoff(start=900, max=900)))
+    assert sf.sleeps == [900.0] * 4
+
+
+# --- quick deploy and cancel ------------------------------------------------------------------
+
+
+def test_quick_deploy_posts_the_validated_id(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:
+    """Synthetic fixture ``metadata/quick_deploy_pending.json``."""
+    route = mock.post(f"{DEPLOY}/{DID}").mock(return_value=js("quick_deploy_pending.json", 201))
+    sf = h.client(recorder=rec)
+    res = h.run(sf.metadata.quick_deploy(DID))
+    assert (res.id, res.status) == ("0Afxx0000000002AAA", "Pending")
+    request = route.calls[0].request
+    assert request.method == "POST"
+    assert json.loads(request.content) == {"validatedDeployRequestId": DID}
+    assert request.headers["content-type"] == "application/json"
+    (event,) = rec.requests
+    assert event["operation"] == "metadata.quick_deploy"
+    assert event["path_template"] == "/metadata/deployRequest/:id"
+
+
+def test_quick_deploy_is_never_resent(h: Harness, mock: respx.MockRouter) -> None:
+    route = mock.post(f"{DEPLOY}/{DID}").respond(503, json=[{"errorCode": "SERVER_UNAVAILABLE"}])
+    sf = h.client()
+    with pytest.raises(esf.ServerError):
+        h.run(sf.metadata.quick_deploy(DID))
+    assert route.call_count == 1
+
+
+def test_quick_deploy_validates_the_id(h: Harness, mock: respx.MockRouter) -> None:
+    route = mock.post(url__startswith=DEPLOY)
+    sf = h.client()
+    with pytest.raises(ValueError):
+        h.run(sf.metadata.quick_deploy("../limits"))
+    assert not route.called
+
+
+def test_cancel_deploy_patches_canceling(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:
+    """Synthetic fixture ``metadata/deploy_canceling.json``."""
+    route = mock.patch(f"{DEPLOY}/{DID}").mock(return_value=js("deploy_canceling.json", 202))
+    sf = h.client(recorder=rec)
+    res = h.run(sf.metadata.cancel_deploy(DID))
+    assert (res.id, res.status, res.done) == (DID, "Canceling", False)
+    assert json.loads(route.calls[0].request.content) == {"deployResult": {"status": "Canceling"}}
+    (event,) = rec.requests
+    assert event["operation"] == "metadata.cancel_deploy"
+    assert event["method"] == "PATCH"
+
+
+def test_cancel_deploy_while_finalizing_raises(h: Harness, mock: respx.MockRouter) -> None:
+    """Synthetic fixture ``metadata/cancel_finalizing.json``: the refusal from API 65.0 (V85)."""
+    route = mock.patch(f"{DEPLOY}/{DID}").mock(return_value=js("cancel_finalizing.json", 400))
+    sf = h.client()
+    with pytest.raises(esf.DeployNotCancelable) as ei:
+        h.run(sf.metadata.cancel_deploy(DID))
+    err = ei.value
+    assert isinstance(err, esf.RequestError)
+    assert (err.job_id, err.state) == (DID, "FinalizingDeploy")
+    assert err.error_code == "INVALID_ID_FIELD"
+    assert err.status == 400
+    assert err.operation == "metadata.cancel_deploy"
+    assert err.retryable is False
+    assert err.docs_url is not None
+    assert err.docs_url.endswith("#deploynotcancelable")
+    assert route.call_count == 1
+
+
+def test_cancel_deploy_finalizing_status_raises(h: Harness, mock: respx.MockRouter) -> None:
+    """Synthetic fixture ``metadata/deploy_finalizing.json``: a 2xx answer that is still finalizing."""
+    mock.patch(f"{DEPLOY}/{DID}").mock(return_value=js("deploy_finalizing.json", 202))
+    sf = h.client()
+    with pytest.raises(esf.DeployNotCancelable) as ei:
+        h.run(sf.metadata.cancel_deploy(DID))
+    assert (ei.value.job_id, ei.value.state, ei.value.status) == (DID, "FinalizingDeploy", 202)
+
+
+def test_cancel_deploy_other_errors_are_unchanged(h: Harness, mock: respx.MockRouter) -> None:
+    route = mock.patch(f"{DEPLOY}/{DID}").respond(
+        404, json=[{"errorCode": "NOT_FOUND", "message": "The requested resource does not exist"}]
+    )
+    sf = h.client()
+    with pytest.raises(esf.NotFound):
+        h.run(sf.metadata.cancel_deploy(DID))
+    route.respond(503, json=[{"errorCode": "SERVER_UNAVAILABLE", "message": "finalizing maintenance"}])
+    with pytest.raises(esf.ServerError):  # not a RequestError: never DeployNotCancelable
+        h.run(sf.metadata.cancel_deploy(DID))
+    assert route.call_count == 2  # the cancel is never resent
 
 
 def test_deploy_status_read_is_retried(h: Harness, mock: respx.MockRouter) -> None:
@@ -435,7 +546,7 @@ def test_retrieve_polls_then_fetches_the_zip_once(h: Harness, mock: respx.MockRo
     assert types == [("ApexClass", ["Invoice", "Missing"]), ("CustomObject", ["*"])]
     assert "authorization" not in route.calls[0].request.headers
     assert session_of(route.calls[0].request) == "AT-initial-0001"
-    assert sf.sleeps == [1.0]
+    assert sf.sleeps == [2.0]
     with zipfile.ZipFile(io.BytesIO(res.zip_file)) as zf:
         assert "classes/Invoice.cls" in zf.namelist()
     assert res.id == RID
@@ -578,6 +689,14 @@ def test_retrieve_times_out(h: Harness, mock: respx.MockRouter) -> None:
     with pytest.raises(esf.MetadataTimeout) as ei:
         h.run(sf.metadata.retrieve({"ApexClass": ["*"]}, timeout=3))
     assert (ei.value.job_id, ei.value.state) == (RID, "InProgress")
+
+
+def test_retrieve_uses_poll(h: Harness, mock: respx.MockRouter) -> None:
+    mock.post(SOAP).mock(side_effect=[xml("retrieve_started.json")] + [xml("retrieve_in_progress.json")] * 10)
+    sf = h.client()
+    with pytest.raises(esf.MetadataTimeout):
+        h.run(sf.metadata.retrieve({"ApexClass": ["*"]}, poll=esf.Backoff(start=4, max=4), timeout=10))
+    assert sf.sleeps == [4.0, 4.0, 2.0]
 
 
 def test_retrieve_start_is_not_resent_but_polls_are(h: Harness, mock: respx.MockRouter) -> None:

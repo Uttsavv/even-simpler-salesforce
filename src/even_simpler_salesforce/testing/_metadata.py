@@ -2,7 +2,10 @@
 
 Deployments finish at once: ``deploy()`` returns ``Pending`` like the real client and the
 first ``deploy_status()`` returns the final result, ``Succeeded`` unless the test scripted
-another outcome with ``fake.on_deploy(...)``. The deployed zip is kept, so
+another outcome with ``fake.on_deploy(...)``. ``quick_deploy()`` of a succeeded validation
+starts a deployment that succeeds the same way. ``cancel_deploy()`` returns ``Canceling`` and
+the deployment ends ``Canceled``; script a refusal with
+``fake.fail_next("metadata.cancel_deploy", esf.DeployNotCancelable(...))``. The deployed zip is kept, so
 ``fake.deployed_zip(job.id)`` shows what the code under test sent.
 
 Retrieve, ``list_metadata`` and ``describe_metadata`` read components seeded with
@@ -22,20 +25,20 @@ from xml.sax.saxutils import escape
 
 from .._sync.api.metadata import (
     _ZIP_MAGIC,  # pyright: ignore[reportPrivateUsage]
-    DEFAULT_TIMEOUT,
-    _Clock,  # pyright: ignore[reportPrivateUsage]
     _extract,  # pyright: ignore[reportPrivateUsage]
     _prepare_source,  # pyright: ignore[reportPrivateUsage]
 )
-from ..core.http import check_record_id
+from ..config import Backoff
 from ..core.metadata import (
     NS_METADATA,
+    deploy_request_path,
     list_metadata_envelope,
     metadata_soap_path,
     package_types,
     safe_member,
 )
-from ..errors import NotFound
+from ..core.poll import DEFAULT_TIMEOUT, PollClock
+from ..errors import NotFound, RequestError
 from ..models import (
     DeployOptions,
     DeployResult,
@@ -173,19 +176,84 @@ class FakeMetadata:
             path="metadata/deployRequest",
         )
 
-    def deploy_status(
-        self, deploy_id: str, *, wait: bool = False, timeout: float = DEFAULT_TIMEOUT
-    ) -> DeployResult:
-        """The final result of a fake deployment (the fake finishes deployments at once)."""
-        check_record_id(deploy_id)
-        if wait:
-            _Clock(timeout)  # same timeout check as the client
+    def _find(self, deploy_id: str) -> str:
+        for key in self._state.deployments:
+            if key[:15] == deploy_id[:15]:
+                return key
+        raise _not_found(deploy_id)
+
+    def quick_deploy(self, validated_id: str) -> DeployResult:
+        """Start a deployment of a succeeded validation (``check_only=True``) of this fake.
+
+        Raises:
+            NotFound: no deployment with this id.
+            RequestError: the deployment is not a succeeded validation.
+        """
+        path = deploy_request_path(validated_id)
 
         def fn() -> DeployResult:
-            for key, (_, _, result) in self._state.deployments.items():
-                if key[:15] == deploy_id[:15]:
-                    return result
-            raise _not_found(deploy_id)
+            data, options, validated = self._state.deployments[self._find(validated_id)]
+            if not (validated.check_only and validated.status == "Succeeded"):
+                raise RequestError(
+                    f"deployment {validated_id} is not a succeeded validation",
+                    status=400,
+                    operation="metadata.quick_deploy",
+                )
+            deploy_id = self._state.new_id("DeployRequest")
+            final = dataclasses.replace(validated, id=deploy_id, check_only=False)
+            self._state.deployments[deploy_id] = (data, dataclasses.replace(options, check_only=False), final)
+            return DeployResult(id=deploy_id, status="Pending")
+
+        return self._state.run(
+            self._who,
+            "metadata.quick_deploy",
+            None,
+            {"validated_id": validated_id},
+            fn,
+            method="POST",
+            path=path,
+        )
+
+    def cancel_deploy(self, deploy_id: str) -> DeployResult:
+        """Return ``Canceling``; the next ``deploy_status()`` reports ``Canceled``.
+
+        Raises:
+            NotFound: no deployment with this id.
+        """
+        path = deploy_request_path(deploy_id)
+
+        def fn() -> DeployResult:
+            key = self._find(deploy_id)
+            data, options, result = self._state.deployments[key]
+            canceled = DeployResult(id=result.id, status="Canceled", done=True, check_only=result.check_only)
+            self._state.deployments[key] = (data, options, canceled)
+            return DeployResult(id=result.id, status="Canceling", check_only=result.check_only)
+
+        return self._state.run(
+            self._who,
+            "metadata.cancel_deploy",
+            None,
+            {"id": deploy_id},
+            fn,
+            method="PATCH",
+            path=path,
+        )
+
+    def deploy_status(
+        self,
+        deploy_id: str,
+        *,
+        wait: bool = False,
+        poll: Backoff | None = None,
+        timeout: float = DEFAULT_TIMEOUT,
+    ) -> DeployResult:
+        """The final result of a fake deployment (the fake finishes deployments at once)."""
+        path = deploy_request_path(deploy_id)
+        if wait:
+            PollClock(timeout, poll)  # same argument check as the client
+
+        def fn() -> DeployResult:
+            return self._state.deployments[self._find(deploy_id)][2]
 
         return self._state.run(
             self._who,
@@ -194,7 +262,7 @@ class FakeMetadata:
             {"id": deploy_id, "wait": wait},
             fn,
             method="GET",
-            path=f"metadata/deployRequest/{deploy_id}",
+            path=path,
         )
 
     # --- retrieve, list, describe -------------------------------------------------------
@@ -239,11 +307,12 @@ class FakeMetadata:
         package: str | bytes | Mapping[str, Iterable[str]],
         *,
         extract_to: str | os.PathLike[str] | None = None,
+        poll: Backoff | None = None,
         timeout: float = DEFAULT_TIMEOUT,
     ) -> RetrieveResult:
         """A zip of the seeded components that ``package`` names, built at once."""
         package_types(package)  # validate before the call is recorded
-        _Clock(timeout)
+        PollClock(timeout, poll)
         result = self._state.run(
             self._who,
             "metadata.retrieve",
@@ -317,7 +386,6 @@ def _not_found(deploy_id: str) -> NotFound:
         f"no deployment with id {deploy_id}",
         error_code="NOT_FOUND",
         status=404,
-        operation="metadata.deploy_status",
     )
 
 
@@ -333,21 +401,35 @@ class AsyncFakeMetadata:
         """See :meth:`FakeMetadata.deploy`."""
         return self._inner.deploy(source, options=options)
 
+    async def quick_deploy(self, validated_id: str) -> DeployResult:
+        """See :meth:`FakeMetadata.quick_deploy`."""
+        return self._inner.quick_deploy(validated_id)
+
+    async def cancel_deploy(self, deploy_id: str) -> DeployResult:
+        """See :meth:`FakeMetadata.cancel_deploy`."""
+        return self._inner.cancel_deploy(deploy_id)
+
     async def deploy_status(
-        self, deploy_id: str, *, wait: bool = False, timeout: float = DEFAULT_TIMEOUT
+        self,
+        deploy_id: str,
+        *,
+        wait: bool = False,
+        poll: Backoff | None = None,
+        timeout: float = DEFAULT_TIMEOUT,
     ) -> DeployResult:
         """See :meth:`FakeMetadata.deploy_status`."""
-        return self._inner.deploy_status(deploy_id, wait=wait, timeout=timeout)
+        return self._inner.deploy_status(deploy_id, wait=wait, poll=poll, timeout=timeout)
 
     async def retrieve(
         self,
         package: str | bytes | Mapping[str, Iterable[str]],
         *,
         extract_to: str | os.PathLike[str] | None = None,
+        poll: Backoff | None = None,
         timeout: float = DEFAULT_TIMEOUT,
     ) -> RetrieveResult:
         """See :meth:`FakeMetadata.retrieve`."""
-        return self._inner.retrieve(package, extract_to=extract_to, timeout=timeout)
+        return self._inner.retrieve(package, extract_to=extract_to, poll=poll, timeout=timeout)
 
     async def list_metadata(self, metadata_type: str, *, folder: str | None = None) -> list[FileProperties]:
         """See :meth:`FakeMetadata.list_metadata`."""

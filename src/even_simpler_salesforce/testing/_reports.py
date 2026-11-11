@@ -2,7 +2,8 @@
 
 Reports are scripted, not run: ``fake.on_report(report_id, result)`` gives the body a run
 returns, and ``fake.on_dashboard(dashboard_id, body)`` the dashboard results. An asynchronous
-run finishes at once, so ``instance()`` returns without waiting.
+run finishes at once, so ``instance()`` returns without waiting. ``recent()`` lists the scripted
+reports, the last scripted first.
 """
 
 from __future__ import annotations
@@ -12,10 +13,13 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, cast
 
+from ..config import Backoff
+from ..core.poll import DEFAULT_TIMEOUT, PollClock
 from ..core.reports import (
     dashboard_path,
     instance_path,
     instances_path,
+    recent_reports_path,
     report_describe_path,
     report_path,
     run_body,
@@ -34,6 +38,7 @@ __all__ = [
 ]
 
 _INSTANCE_PREFIX = "0LG"  # key prefix of report instance ids
+_RECENT_LIMIT = 200  # GET analytics/reports lists at most 200 reports
 
 Filters = Sequence[Mapping[str, Any]]
 ResultSpec = Mapping[str, Any] | ReportResult | Callable[..., Any] | BaseException
@@ -56,6 +61,18 @@ class ReportScript:
     result: ResultSpec
     describe: Mapping[str, Any] | None = None
     runs: int = 0
+
+    def name(self) -> str:
+        """``reportMetadata.name`` of the describe or the result body, else the report id."""
+        result: Any = self.result.raw if isinstance(self.result, ReportResult) else self.result
+        for source in (self.describe, result):
+            if not isinstance(source, Mapping):
+                continue
+            meta: Any = cast("Mapping[str, Any]", source).get("reportMetadata")
+            name: Any = cast("Mapping[str, Any]", meta).get("name") if isinstance(meta, Mapping) else None
+            if isinstance(name, str):
+                return name
+        return self.report_id
 
     def answer(self, filters: list[dict[str, Any]] | None, include_details: bool) -> dict[str, Any]:
         """The run body for one call."""
@@ -116,6 +133,26 @@ class FakeReports:
         self._state = state
         self._who = who
         self.dashboards = FakeDashboards(state, who)
+
+    def recent(self) -> list[dict[str, Any]]:
+        """The scripted reports, the last scripted first, at most 200 (no run is counted)."""
+        path = recent_reports_path()
+
+        def fn() -> list[dict[str, Any]]:
+            base = f"/services/data/v{self._state.api_version}/{path}"
+            scripts: list[ReportScript] = list(self._state.reports.values())
+            return [
+                {
+                    "id": s.report_id,
+                    "name": s.name(),
+                    "url": f"{base}/{s.report_id}",
+                    "describeUrl": f"{base}/{s.report_id}/describe",
+                    "instancesUrl": f"{base}/{s.report_id}/instances",
+                }
+                for s in reversed(scripts[-_RECENT_LIMIT:])
+            ]
+
+        return self._state.run(self._who, "reports.recent", None, {}, fn, method="GET", path=path)
 
     def describe(self, report_id: str) -> dict[str, Any]:
         """The scripted ``describe`` body, else the ``reportMetadata`` of the scripted result."""
@@ -186,18 +223,15 @@ class FakeReports:
         report_id: str,
         instance_id: str,
         *,
-        timeout: float = 600.0,
-        poll_interval: float = 2.0,
+        poll: Backoff | None = None,
+        timeout: float = DEFAULT_TIMEOUT,
     ) -> ReportResult:
         """The results of a run started with :meth:`run_async` (it has already finished).
 
         Raises:
             NotFound: no run with these ids, as Salesforce answers ``404``.
         """
-        if not timeout > 0:
-            raise ValueError("timeout must be > 0 seconds")
-        if not poll_interval > 0:
-            raise ValueError("poll_interval must be > 0 seconds")
+        PollClock(timeout, poll)  # same argument check as the client
         path = instance_path(report_id, instance_id)
 
         def fn() -> ReportResult:
@@ -285,6 +319,10 @@ class AsyncFakeReports:
         self._inner = inner
         self.dashboards = AsyncFakeDashboards(inner.dashboards)
 
+    async def recent(self) -> list[dict[str, Any]]:
+        """See :meth:`FakeReports.recent`."""
+        return self._inner.recent()
+
     async def describe(self, report_id: str) -> dict[str, Any]:
         """See :meth:`FakeReports.describe`."""
         return self._inner.describe(report_id)
@@ -302,10 +340,15 @@ class AsyncFakeReports:
         return self._inner.run_async(report_id, filters, include_details=include_details)
 
     async def instance(
-        self, report_id: str, instance_id: str, *, timeout: float = 600.0, poll_interval: float = 2.0
+        self,
+        report_id: str,
+        instance_id: str,
+        *,
+        poll: Backoff | None = None,
+        timeout: float = DEFAULT_TIMEOUT,
     ) -> ReportResult:
         """See :meth:`FakeReports.instance`."""
-        return self._inner.instance(report_id, instance_id, timeout=timeout, poll_interval=poll_interval)
+        return self._inner.instance(report_id, instance_id, poll=poll, timeout=timeout)
 
 
 class AsyncFakeDashboards:

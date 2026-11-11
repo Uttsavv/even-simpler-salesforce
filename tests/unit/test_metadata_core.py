@@ -278,3 +278,66 @@ def test_parse_list_and_describe_defaults() -> None:
 def test_status_sets_are_documented_values() -> None:
     assert "SucceededPartial" in md.DEPLOY_STATUSES
     assert {"Pending", "InProgress", "Succeeded", "Failed"} == md.RETRIEVE_STATUSES
+
+
+# --- quick deploy and cancel ------------------------------------------------------------------
+# Quick deploy: https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_rest_deploy_recentvalidation.htm
+# Cancel: https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_rest_deploy_cancel.htm
+
+DID = "0Afxx0000000001AAA"
+
+
+def test_deploy_request_bodies() -> None:
+    assert md.deploy_request_path(DID) == f"metadata/deployRequest/{DID}"
+    assert md.quick_deploy_body(DID) == {"validatedDeployRequestId": DID}
+    assert md.cancel_deploy_body() == {"deployResult": {"status": "Canceling"}}
+    with pytest.raises(ValueError):
+        md.deploy_request_path("../limits")
+    with pytest.raises(ValueError):
+        md.quick_deploy_body("nope")
+
+
+FINALIZING = "The deployment can't be canceled because it's in the finalizing stage."
+
+
+@pytest.mark.parametrize(
+    ("exc", "refused"),
+    [
+        (esf.RequestError(FINALIZING, error_code="INVALID_ID_FIELD", status=400), True),
+        (esf.Conflict("Finalizing deploy in progress", status=409), True),
+        (
+            esf.RequestError(
+                "two errors", errors=[esf.ErrorDetail("X", "other"), esf.ErrorDetail("Y", FINALIZING)]
+            ),
+            True,
+        ),
+        (esf.RequestError("invalid id", error_code="INVALID_ID_FIELD", status=400), False),
+        (esf.NotFound("no deployment", status=404), False),
+        (esf.ServerError("finalizing maintenance", status=503), False),
+    ],
+)
+def test_cancel_refused(exc: esf.SalesforceError, refused: bool) -> None:
+    assert md.cancel_refused(exc) is refused
+
+
+def test_not_cancelable_keeps_the_details() -> None:
+    cause = RuntimeError("inner")
+    exc = esf.RequestError(
+        FINALIZING, error_code="INVALID_ID_FIELD", status=400, operation="metadata.cancel_deploy"
+    )
+    exc.__cause__ = cause
+    new = md.not_cancelable(exc, DID)
+    assert type(new) is esf.DeployNotCancelable
+    assert (new.job_id, new.state) == (DID, "FinalizingDeploy")
+    assert (new.message, new.error_code, new.status, new.operation) == (
+        FINALIZING,
+        "INVALID_ID_FIELD",
+        400,
+        "metadata.cancel_deploy",
+    )
+    assert new.retryable is False
+    assert new.docs_url is not None
+    assert new.docs_url.endswith("#deploynotcancelable")
+    assert new.__cause__ is cause
+    clone = pickle.loads(pickle.dumps(new))
+    assert (type(clone), clone.job_id) == (esf.DeployNotCancelable, DID)

@@ -12,7 +12,7 @@ The org enforces a few rules so error examples have something to hit:
 - a ``Lead`` with ``Country`` but no ``Street`` fails the validation rule
   ``[ADDR_REQUIRED] Street is required when Country is set`` (``FIELD_CUSTOM_VALIDATION_EXCEPTION``);
 - custom fields other than ``External_Id__c`` / ``Score__c`` don't exist (``INVALID_FIELD``);
-- objects other than Lead, Account, Contact, Opportunity, User and the Files objects
+- objects other than Lead, Account, Contact, Opportunity, User, Report and the Files objects
   (ContentVersion, ContentDocument, ContentDocumentLink, Attachment) don't exist (``INVALID_TYPE``);
 - platform events (``*__e``) are accepted and kept in :attr:`FakeOrg.events`;
 - the Partner SOAP endpoint answers ``convertLead`` and ``merge``;
@@ -26,8 +26,11 @@ The org enforces a few rules so error examples have something to hit:
 
 Metadata API: a multipart ``POST metadata/deployRequest`` stores the zip; the first
 ``GET metadata/deployRequest/{id}`` reports it done (``Failed`` when an Apex class in it contains
-``Broken``). The SOAP endpoint ``/services/Soap/m/{v}`` answers ``retrieve`` (done at once),
-``checkRetrieveStatus``, ``listMetadata`` and ``describeMetadata`` over :data:`APEX_CLASSES`.
+``Broken``). ``POST metadata/deployRequest/{id}`` with ``validatedDeployRequestId`` quick-deploys
+a succeeded validation; ``PATCH`` with ``deployResult.status=Canceling`` cancels a deployment,
+which then reports ``Canceled``. The SOAP endpoint ``/services/Soap/m/{v}`` answers
+``retrieve`` (done at once), ``checkRetrieveStatus``, ``listMetadata`` and ``describeMetadata``
+over :data:`APEX_CLASSES`.
 
 Files: a multipart ``POST sobjects/ContentVersion`` stores the bytes and creates the
 ContentDocument (plus a ContentDocumentLink for ``FirstPublishLocationId``);
@@ -82,6 +85,7 @@ PREFIXES = {
     "ContentDocument": "069",
     "ContentDocumentLink": "06A",
     "Attachment": "00P",
+    "Report": "00O",
 }
 TOOLING_PREFIXES = {"ApexClass": "01p", "TraceFlag": "7tf", "DebugLevel": "7dl", "ApexLog": "07L"}
 _DEBUG = re.compile(r"System\.debug\(\s*'((?:[^'\\]|\\.)*)'\s*\)")
@@ -195,6 +199,7 @@ class FakeOrg:
         self.apex_logs: dict[str, str] = {}  # ApexLog id -> body
         self.jobs: dict[str, dict[str, Any]] = {}
         self.deploys: dict[str, tuple[bytes, dict[str, Any]]] = {}  # id -> (zip, deployOptions)
+        self.canceled: set[str] = set()  # deployments canceled with PATCH
         self.retrieves: dict[str, list[tuple[str, list[str]]]] = {}  # id -> package types
         self._seed()
 
@@ -218,6 +223,15 @@ class FakeOrg:
             rid = f"01p8d{next(self.ids):010d}AAA"
             self.tooling["ApexClass"][rid] = {"Id": rid, "Name": name, "Status": "Active"}
         self._store("User", {"Username": "integration@acme.example", "LastName": "Integration"})
+        self._store(
+            "Report",
+            {
+                "Id": "00Oxx0000000001AAA",
+                "Name": "Open Opportunities",
+                "DeveloperName": "Open_Opportunities",
+                "FolderName": "Sales Reports",
+            },
+        )
         accounts = [self._store("Account", {"Name": n}) for n in ("Acme", "Globex", "Initech")]
         for i, last in enumerate(("Doe", "Roe", "Poe")):
             self._store(
@@ -809,6 +823,10 @@ class FakeOrg:
                 return self._deploy(request)
             if len(parts) == 3 and method == "GET":
                 return self._json(self._deploy_status(parts[2]))
+            if len(parts) == 3 and method == "POST":
+                return self._quick_deploy(parts[2], self._body(request) or {})
+            if len(parts) == 3 and method == "PATCH":
+                return self._cancel_deploy(parts[2], self._body(request) or {})
         if rest == "graphql" and method == "POST":
             return self._json(self._graphql(self._body(request) or {}))
         if parts[0] == "jobs" and len(parts) >= 2 and parts[1] in ("ingest", "query"):
@@ -1609,10 +1627,33 @@ class FakeOrg:
         result = {"id": rid, "status": "Pending", "done": False, "checkOnly": bool(options.get("checkOnly"))}
         return self._json({"id": rid, "deployOptions": options, "deployResult": result}, 201)
 
+    def _quick_deploy(self, vid: str, body: dict[str, Any]) -> httpx.Response:
+        if body.get("validatedDeployRequestId") != vid:
+            raise Rejected("INVALID_INPUT", "validatedDeployRequestId must match the URL")
+        validated = self._deploy_status(vid)
+        if not (validated["deployOptions"].get("checkOnly") and validated["deployResult"]["success"]):
+            raise Rejected("INVALID_ID_FIELD", "This deployment is not a successful validation")
+        data, options = self.deploys[vid]
+        rid = f"0Afxx{next(self.ids):010d}AAA"
+        self.deploys[rid] = (data, {**options, "checkOnly": False})
+        result = {"id": rid, "status": "Pending", "done": False, "checkOnly": False}
+        return self._json({"id": rid, "validatedDeployRequestId": vid, "deployResult": result}, 201)
+
+    def _cancel_deploy(self, rid: str, body: dict[str, Any]) -> httpx.Response:
+        if body != {"deployResult": {"status": "Canceling"}}:
+            raise Rejected("INVALID_INPUT", "unsupported deployRequest PATCH body")
+        self._deploy_status(rid)  # 404 for an unknown id
+        self.canceled.add(rid)
+        result = {"id": rid, "status": "Canceling", "done": False}
+        return self._json({"id": rid, "deployResult": result}, 202)
+
     def _deploy_status(self, rid: str) -> dict[str, Any]:
         if rid not in self.deploys:
             raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
         data, options = self.deploys[rid]
+        if rid in self.canceled:
+            result = {"id": rid, "status": "Canceled", "done": True, "success": False}
+            return {"id": rid, "deployOptions": options, "deployResult": result}
         with zipfile.ZipFile(io.BytesIO(data)) as zf:
             classes = {
                 n: zf.read(n).decode()

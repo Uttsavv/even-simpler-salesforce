@@ -1,0 +1,41 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Metadata API Developer Guide; response shape assumed to match POST metadata/deployRequest (V86): https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_rest_deploy_recentvalidation.htm",
+  "body": {
+    "id": "0Afxx0000000002AAA",
+    "validatedDeployRequestId": "0Afxx0000000001AAA",
+    "deployOptions": {
+      "checkOnly": false,
+      "ignoreWarnings": false,
+      "purgeOnDelete": false,
+      "allowMissingFiles": false,
+      "autoUpdatePackage": false,
+      "singlePackage": true,
+      "rollbackOnError": true,
+      "testLevel": "NoTestRun",
+      "runTests": null
+    },
+    "deployResult": {
+      "id": "0Afxx0000000002AAA",
+      "checkOnly": false,
+      "createdBy": "005xx0000000001AAA",
+      "createdByName": "Ada Admin",
+      "createdDate": "2026-11-11T10:00:00.000+0000",
+      "ignoreWarnings": false,
+      "rollbackOnError": true,
+      "runTestsEnabled": false,
+      "numberComponentErrors": 0,
+      "numberComponentsDeployed": 0,
+      "numberComponentsTotal": 0,
+      "numberTestErrors": 0,
+      "numberTestsCompleted": 0,
+      "numberTestsTotal": 0,
+      "errorMessage": null,
+      "errorStatusCode": null,
+      "details": null,
+      "status": "Pending",
+      "done": false,
+      "success": false
+    }
+  }
+}
