@@ -4,17 +4,19 @@
 
 from __future__ import annotations
 
-import time
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any, cast
 
+from ...config import Backoff
 from ...core.http import RequestSpec
+from ...core.poll import DEFAULT_TIMEOUT, PollClock
 from ...core.reports import (
     dashboard_path,
     instance_path,
     instance_status,
     instances_path,
     parse_instance,
+    recent_reports_path,
     report_describe_path,
     report_path,
     run_body,
@@ -29,12 +31,6 @@ if TYPE_CHECKING:
 __all__ = ["Dashboards", "Reports"]
 
 Filters = Sequence[Mapping[str, Any]]
-
-DEFAULT_TIMEOUT = 600.0
-"""Default seconds ``instance()`` waits for an asynchronous run."""
-
-DEFAULT_POLL_INTERVAL = 2.0
-"""Default seconds between two status calls in ``instance()``."""
 
 
 def _object(raw: Any, what: str, operation: str) -> dict[str, Any]:
@@ -57,6 +53,28 @@ class Reports:
     def __init__(self, client: Salesforce) -> None:
         self._sf = client
         self.dashboards = Dashboards(client)
+
+    def recent(self) -> list[dict[str, Any]]:
+        """``GET analytics/reports``: up to 200 reports the user viewed most recently.
+
+        This is not a list of every report. To find all reports, query the ``Report`` object:
+        ``sf.query("SELECT Id, Name, DeveloperName, FolderName FROM Report")``.
+
+        Returns:
+            One dict per report, as Salesforce sends it: ``id``, ``name``, ``url``,
+            ``describeUrl`` and ``instancesUrl``.
+
+        Example:
+            for report in sf.reports.recent():
+                print(report["id"], report["name"])
+        """
+        raw = self._sf._send(  # pyright: ignore[reportPrivateUsage]
+            RequestSpec("GET", recent_reports_path(), idempotent=True, operation="reports.recent")
+        )
+        body = raw.json()
+        if not isinstance(body, list) or not all(isinstance(r, dict) for r in cast("list[Any]", body)):
+            raise UnexpectedResponse("unexpected recent reports response", operation="reports.recent")
+        return cast("list[dict[str, Any]]", body)
 
     def describe(self, report_id: str) -> dict[str, Any]:
         """``GET analytics/reports/{id}/describe``: the report metadata.
@@ -148,8 +166,8 @@ class Reports:
         report_id: str,
         instance_id: str,
         *,
+        poll: Backoff | None = None,
         timeout: float = DEFAULT_TIMEOUT,
-        poll_interval: float = DEFAULT_POLL_INTERVAL,
     ) -> ReportResult:
         """Wait for an asynchronous run and return its results.
 
@@ -159,23 +177,24 @@ class Reports:
         Args:
             report_id: Id of the report.
             instance_id: Id of the instance, from :meth:`run_async`.
-            timeout: Seconds to wait before raising :class:`ReportTimeout`.
-            poll_interval: Seconds between two status calls.
+            poll: How long to wait between status calls. Defaults to ``esf.Backoff()``
+                (2 s, doubling up to 30 s).
+            timeout: Seconds to wait before raising :class:`ReportTimeout` (an hour by
+                default).
 
         Raises:
             ReportRunFailed: the run ended with status ``"Error"``.
             ReportTimeout: the run didn't finish within ``timeout``. It keeps running in
                 Salesforce.
             UnexpectedResponse: Salesforce sent a status this library doesn't know.
+
+        Example:
+            result = sf.reports.instance(run.report_id, run.id, poll=esf.Backoff(start=5))
         """
-        if not timeout > 0:
-            raise ValueError("timeout must be > 0 seconds")
-        if not poll_interval > 0:
-            raise ValueError("poll_interval must be > 0 seconds")
+        clock = PollClock(timeout, poll)
         spec = RequestSpec(
             "GET", instance_path(report_id, instance_id), idempotent=True, operation="reports.instance"
         )
-        started, slept = time.monotonic(), 0.0
         while True:
             raw = self._sf._send(spec)  # pyright: ignore[reportPrivateUsage]
             body = _object(raw.json(), "report instance", "reports.instance")
@@ -191,8 +210,8 @@ class Reports:
                     status=raw.status,
                     request_id=raw.request_id,
                 )
-            left = timeout - max(time.monotonic() - started, slept)
-            if left <= 0:
+            delay = clock.next_delay()
+            if delay is None:
                 raise ReportTimeout(
                     f"report run {instance_id} is still {status} after {timeout:g} s; "
                     "it keeps running in Salesforce",
@@ -201,9 +220,7 @@ class Reports:
                     run_status=status,
                     operation="reports.instance",
                 )
-            delay = min(poll_interval, left)
             self._sf._transport.sleep(delay)  # pyright: ignore[reportPrivateUsage]
-            slept += delay
 
 
 class Dashboards:

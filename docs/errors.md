@@ -238,7 +238,8 @@ SalesforceError
 │   ├── Conflict                   409 / 412 / 428
 │   ├── Gone                       410
 │   ├── RequestTooLarge            414 / 431
-│   └── UnsupportedApiVersion      UNSUPPORTED_API_VERSION, or API_VERSION_TOO_OLD (raised locally)
+│   ├── UnsupportedApiVersion      UNSUPPORTED_API_VERSION, or API_VERSION_TOO_OLD (raised locally)
+│   └── DeployNotCancelable        cancel_deploy() refused: the deployment is finalizing; .job_id, .state
 ├── RecordError                    DML rejected by the org
 │   ├── ValidationRuleFailed       FIELD_CUSTOM_VALIDATION_EXCEPTION (validation rule, Flow, addError())
 │   ├── RequiredFieldMissing       REQUIRED_FIELD_MISSING
@@ -519,6 +520,14 @@ A Metadata API deployment failed, was canceled or deployed only some components.
 and per failed Apex test, with the file and line. `exc.result` holds the full `DeployResult`.
 If `check_only=True`, Salesforce saved nothing. See
 [Metadata API](guides/metadata.md#handle-a-failed-deployment).
+
+### DeployNotCancelable
+
+`sf.metadata.cancel_deploy()` asked Salesforce to cancel a deployment, and Salesforce refused
+because the deployment is already in the `FinalizingDeploy` stage. From API 65.0 a finalizing
+deployment can't be canceled. It finishes on its own: wait for it with
+`sf.metadata.deploy_status(exc.job_id, wait=True)`. See
+[Metadata API](guides/metadata.md#cancel-a-deployment).
 
 ### RetrieveFailed
 

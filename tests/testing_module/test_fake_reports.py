@@ -86,8 +86,7 @@ def test_run_async_and_instance() -> None:
         fake.reports.instance("00Oxx0000000002AAA", inst.id)
     with pytest.raises(ValueError, match="timeout"):
         fake.reports.instance(REPORT, inst.id, timeout=0)
-    with pytest.raises(ValueError, match="poll_interval"):
-        fake.reports.instance(REPORT, inst.id, poll_interval=0)
+    assert fake.reports.instance(REPORT, inst.id, poll=esf.Backoff(start=5), timeout=60).raw
 
 
 def test_instance_without_attributes() -> None:
@@ -131,14 +130,53 @@ def test_async_fake() -> None:
     fake.on_dashboard(DASHBOARD, load_fixture("reports/dashboard.json"))
 
     async def go() -> None:
+        assert [r["id"] for r in await fake.reports.recent()] == [REPORT]
         assert (await fake.reports.describe(REPORT))["reportMetadata"]["reportFormat"] == "MATRIX"
         assert len((await fake.reports.run(REPORT)).rows()) == 3
         inst = await fake.reports.run_async(REPORT, include_details=False)
-        assert (await fake.reports.instance(REPORT, inst.id)).rows() == []
+        assert (await fake.reports.instance(REPORT, inst.id, poll=esf.Backoff(), timeout=60)).rows() == []
         assert (await fake.reports.dashboards.get(DASHBOARD))["statusUrl"]
         assert (await fake.reports.dashboards.refresh(DASHBOARD))["id"] == DASHBOARD
 
     asyncio.run(go())
+
+
+def test_recent_lists_scripted_reports() -> None:
+    fake = FakeSalesforce()
+    assert fake.reports.recent() == []
+    fake.on_report(REPORT, load_fixture("reports/tabular_run.json"))
+    fake.on_report("00Oxx0000000002AAA", esf.ReportResult(load_fixture("reports/summary_two_level_run.json")))
+    fake.on_report(
+        "00Oxx0000000003AAA",
+        lambda filters, details: {},
+        describe={"reportMetadata": {"name": "Scripted describe"}},
+    )
+    fake.on_report("00Oxx0000000004AAA", esf.Forbidden("no access"))
+    recent = fake.reports.recent()
+    assert [(r["id"], r["name"]) for r in recent] == [
+        ("00Oxx0000000004AAA", "00Oxx0000000004AAA"),  # no name to read: the id
+        ("00Oxx0000000003AAA", "Scripted describe"),
+        ("00Oxx0000000002AAA", "Pipeline by Stage and Type"),
+        (REPORT, "Open Opportunities"),
+    ]
+    assert recent[-1] == {
+        "id": REPORT,
+        "name": "Open Opportunities",
+        "url": f"/services/data/v68.0/analytics/reports/{REPORT}",
+        "describeUrl": f"/services/data/v68.0/analytics/reports/{REPORT}/describe",
+        "instancesUrl": f"/services/data/v68.0/analytics/reports/{REPORT}/instances",
+    }
+    assert fake.calls[-1].operation == "reports.recent"
+    assert all(s.runs == 0 for s in fake._state.reports.values())  # pyright: ignore[reportPrivateUsage]
+
+
+def test_recent_lists_at_most_200() -> None:
+    fake = FakeSalesforce()
+    for n in range(205):
+        fake.on_report(f"00Oxx{n:010d}AAA", {})
+    recent = fake.reports.recent()
+    assert len(recent) == 200
+    assert recent[0]["id"] == "00Oxx0000000204AAA"
 
 
 def test_views_share_reports() -> None:

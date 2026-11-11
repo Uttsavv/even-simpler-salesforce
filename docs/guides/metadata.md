@@ -48,11 +48,13 @@ folder raises `ValueError`, and the client sends nothing.
 
 ## Wait for a deployment
 
-`deploy_status(id, wait=True)` polls until the deployment is done. The delay between polls
-starts at 1 second and doubles up to 10 seconds.
+`deploy_status(id, wait=True)` polls until the deployment is done. The waits between polls
+follow `poll`, an `esf.Backoff`: by default 2 seconds, doubling up to 30 seconds. The call
+waits at most `timeout` seconds, an hour by default. Bulk jobs and report runs wait the same
+way.
 
 ```python
-result = await sf.metadata.deploy_status(job.id, wait=True, timeout=1800)
+result = await sf.metadata.deploy_status(job.id, wait=True, poll=esf.Backoff(start=5, max=60), timeout=1800)
 print(result.done, result.success)  # True True
 ```
 
@@ -108,6 +110,47 @@ job = await sf.metadata.deploy("src", options=options)
 | `allow_missing_files` | `False` | Deploy even if files in `package.xml` are missing. |
 | `auto_update_package` | `False` | Add files that `package.xml` doesn't list. |
 | `single_package` | `True` | `package.xml` is at the root of the zip. Set `False` only for a zip with one folder per package. |
+
+## Deploy a validated deployment
+
+A validation (`check_only=True`) runs the Apex tests but saves nothing. If it succeeded, you can
+deploy the same components later without running the tests again. Salesforce calls this a
+quick deploy. Pass the id of the validation to `quick_deploy()`.
+
+```python
+check = await sf.metadata.deploy(
+    "src", options=esf.DeployOptions(check_only=True, test_level="RunLocalTests")
+)
+validated = await sf.metadata.deploy_status(check.id, wait=True)
+validated.raise_for_errors()
+
+job = await sf.metadata.quick_deploy(validated.id)
+result = await sf.metadata.deploy_status(job.id, wait=True)
+print(result.status, result.check_only)  # Succeeded False
+```
+
+`quick_deploy()` starts a new deployment with its own id. Salesforce accepts a validation only
+if it succeeded and ran Apex tests, and if no other deployment ran in the org since. It refuses
+any other id with an `esf.RequestError`.
+
+## Cancel a deployment
+
+`cancel_deploy()` asks Salesforce to stop a deployment that is still running. The cancel runs
+in Salesforce: the call returns with status `Canceling`. Wait with `deploy_status()` until the
+status is `Canceled`.
+
+```python
+job = await sf.metadata.deploy("src")
+try:
+    await sf.metadata.cancel_deploy(job.id)
+except esf.DeployNotCancelable:
+    pass  # already finalizing: it finishes on its own
+result = await sf.metadata.deploy_status(job.id, wait=True)
+print(result.status)  # Canceled
+```
+
+From API 65.0, Salesforce can't cancel a deployment that has reached the `FinalizingDeploy`
+stage. The call then raises `esf.DeployNotCancelable`, and the deployment finishes on its own.
 
 ## Retrieve metadata
 
@@ -184,8 +227,14 @@ def test_retrieve(esf_fake: FakeSalesforce) -> None:
     assert [p.full_name for p in result.file_properties] == ["Hello"]
 ```
 
-The operation names for `fail_next()` are `"metadata.deploy"`, `"metadata.deploy_status"`,
-`"metadata.retrieve"`, `"metadata.list"` and `"metadata.describe"`. See
+`quick_deploy()` accepts a fake validation that succeeded. `cancel_deploy()` returns
+`Canceling`, and the next `deploy_status()` returns `Canceled`. To test the refusal of a
+finalizing deployment, use
+`fake.fail_next("metadata.cancel_deploy", esf.DeployNotCancelable(...))`.
+
+The operation names for `fail_next()` are `"metadata.deploy"`, `"metadata.quick_deploy"`,
+`"metadata.cancel_deploy"`, `"metadata.deploy_status"`, `"metadata.retrieve"`,
+`"metadata.list"` and `"metadata.describe"`. See
 [Testing](../testing.md).
 
 ## How it works
@@ -193,13 +242,18 @@ The operation names for `fail_next()` are `"metadata.deploy"`, `"metadata.deploy
 - `deploy()` sends `POST /services/data/vXX.X/metadata/deployRequest` with a multipart body: a
   `json` part with `deployOptions` and a `file` part with the zip. The client streams the zip.
 - `deploy_status()` sends `GET metadata/deployRequest/{id}?includeDetails=true`.
+- `quick_deploy()` sends `POST metadata/deployRequest/{id}` with the body
+  `{"validatedDeployRequestId": id}`. It is a `POST` on purpose: Salesforce documents that a
+  `PATCH` with this body starts a new deployment.
+- `cancel_deploy()` sends `PATCH metadata/deployRequest/{id}` with the body
+  `{"deployResult": {"status": "Canceling"}}`.
 - Retrieve, `list_metadata()` and `describe_metadata()` have no REST resource. They use the
   SOAP Metadata API at `/services/Soap/m/XX.X` with your OAuth access token. You never see the
   SOAP part.
 - `retrieve()` starts a job with `retrieve`, then polls `checkRetrieveStatus` without the zip.
   When the job is done, one more call gets the zip.
-- The client never resends `deploy()` or `retrieve()` after the request may have reached
-  Salesforce, so a timeout can't start a second job. Status polls, `list_metadata()` and
+- The client never resends `deploy()`, `quick_deploy()`, `cancel_deploy()` or `retrieve()`
+  after the request may have reached Salesforce, so a timeout can't start a second job. Status polls, `list_metadata()` and
   `describe_metadata()` are reads. The client resends them like a `GET`.
 - Salesforce deletes the zip of a retrieve once it has returned it. For this reason the client
   never resends the call that gets the zip.
@@ -212,5 +266,3 @@ The operation names for `fail_next()` are `"metadata.deploy"`, `"metadata.deploy
 - A retrieve zip arrives in one response, base64-encoded, and the client holds it in memory.
   Retrieve large orgs in parts.
 - `retrieve()` gets unpackaged components only. It doesn't retrieve a managed package by name.
-- The client doesn't cancel a deployment, and it doesn't deploy a validated deployment by id
-  ("quick deploy").

@@ -288,6 +288,12 @@ rest_endpoints:
   # Reports and Dashboards REST API (sf.reports). Paths are built by core/reports.py, so the
   # code scan can't see them (dynamic). Read 2026-11-11 from search excerpts only; the pages
   # return 403 to non-browser clients (V65-V68).
+  - path: analytics/reports
+    methods: [GET]
+    used_by: "sf.reports.recent (up to 200 recently viewed reports; all reports need SOQL on Report)"
+    dynamic: true
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/sforce_analytics_rest_api_recentreportslist.htm
+    checked: null
   - path: "analytics/reports/{}"
     methods: [GET, POST]
     used_by: "sf.reports.run (?includeDetails=; POST with reportMetadata.reportFilters; read, resent)"
@@ -325,11 +331,16 @@ rest_endpoints:
     checked: null
     # Part names, the 39 MB zip limit and the response shape read 2026-11-11 from search excerpts (V70)
   - path: "metadata/deployRequest/{}"
-    methods: [GET]
-    used_by: "sf.metadata.deploy_status() (?includeDetails=true; polled with wait=True)"
+    methods: [GET, POST, PATCH]
+    used_by: "sf.metadata.deploy_status() (GET ?includeDetails=true; polled with wait=True); sf.metadata.quick_deploy() (POST validatedDeployRequestId; starts a deployment; never resent); sf.metadata.cancel_deploy() (PATCH deployResult.status=Canceling; never resent)"
+    dynamic: true
     docs: https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_rest_deploy_checkstatus.htm
     checked: null
-    # DeployResult status values (V71)
+    # Path built by core/metadata.py deploy_request_path(). DeployResult status values (V71).
+    # Quick deploy: https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_rest_deploy_recentvalidation.htm
+    #   (the docs warn that PATCH there starts a new deployment; response shape V86).
+    # Cancel: https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_rest_deploy_cancel.htm
+    #   From API 65.0 a FinalizingDeploy deployment can't be canceled -> DeployNotCancelable (V85).
   - path: "/services/Soap/m/{}"
     methods: [POST]
     used_by: "sf.metadata.retrieve() (retrieve + checkRetrieveStatus), list_metadata() (listMetadata), describe_metadata() (describeMetadata); SOAP Metadata API, SessionHeader = OAuth token"

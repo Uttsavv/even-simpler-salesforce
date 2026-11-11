@@ -152,6 +152,7 @@ def test_classes_with_extras_are_the_expected_ones() -> None:
         "BulkJobFailed": ["job_id", "state", "error_message"],
         "BulkJobTimeout": ["job_id", "state"],
         "DeployFailed": ["job_id", "state", "result"],
+        "DeployNotCancelable": ["job_id", "state"],
         "DuplicateDetected": ["duplicates"],
         "GraphQLError": ["graphql_errors", "data"],
         "MetadataTimeout": ["job_id", "state"],

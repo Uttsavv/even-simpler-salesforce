@@ -63,6 +63,28 @@ print(meta["reportMetadata"]["reportFormat"])  # SUMMARY
 print(meta["reportMetadata"]["detailColumns"])  # ['ACCOUNT_NAME', 'OPPORTUNITY_NAME', 'AMOUNT']
 ```
 
+## Find a report
+
+`recent()` lists the reports the user viewed most recently, at most 200. Each entry has the
+`id` and `name` of the report.
+
+```python
+for report in await sf.reports.recent():
+    print(report["id"], report["name"])
+# 00Oxx0000000001AAA Open Opportunities
+# 00Oxx0000000002AAA Pipeline by Stage and Type
+```
+
+`recent()` doesn't list every report. To find any report by name or folder, query the `Report`
+object with SOQL.
+
+```python
+report = await sf.query_one(
+    "SELECT Id, Name, FolderName FROM Report WHERE DeveloperName = {}", "Open_Opportunities"
+)
+print(report["Id"], report["FolderName"])  # 00Oxx0000000001AAA Sales Reports
+```
+
 ## Run a slow report
 
 A synchronous run must finish within the API timeout of Salesforce. For a slow report, start
@@ -75,8 +97,14 @@ result = await sf.reports.instance(run.report_id, run.id, timeout=300)
 print(len(result.rows()))  # 3
 ```
 
-`instance()` asks Salesforce for the status every `poll_interval` seconds, 2 by default. It
-returns when the status is `Success`.
+`instance()` asks Salesforce for the status until it is `Success`. The waits between two
+calls follow `poll`, an `esf.Backoff`: by default 2 seconds, doubling up to 30 seconds. It
+waits at most `timeout` seconds, an hour by default. Bulk jobs and Metadata API jobs wait the
+same way.
+
+```python
+result = await sf.reports.instance(run.report_id, run.id, poll=esf.Backoff(start=5, max=60), timeout=1800)
+```
 
 | Outcome | What `instance()` does |
 |---|---|
@@ -173,6 +201,7 @@ follows.
 
 ## How it works
 
+- `recent()` sends `GET analytics/reports`.
 - `run()` sends `GET analytics/reports/{id}?includeDetails=true`. With `filters`, it sends a
   `POST` with the body `{"reportMetadata": {"reportFilters": [...]}}`.
 - A run reads data. The client resends it after a timeout or a `5xx`, even as a `POST`.

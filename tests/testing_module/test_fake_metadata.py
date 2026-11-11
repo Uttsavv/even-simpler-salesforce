@@ -116,6 +116,54 @@ def test_deploy_status_errors() -> None:
         fake.metadata.deploy(ZIP)
 
 
+def test_quick_deploy_of_a_validation() -> None:
+    fake = FakeSalesforce()
+    validation = fake.metadata.deploy(ZIP, options=esf.DeployOptions(check_only=True))
+    assert fake.metadata.deploy_status(validation.id, wait=True, poll=esf.Backoff(start=5)).success
+    job = fake.metadata.quick_deploy(validation.id)
+    assert job.status == "Pending"
+    assert job.id != validation.id
+    result = fake.metadata.deploy_status(job.id)
+    assert (result.id, result.success, result.check_only) == (job.id, True, False)
+    assert fake.deployed_zip(job.id) == ZIP
+    call = fake.calls[-2]
+    assert (call.operation, call.args) == ("metadata.quick_deploy", {"validated_id": validation.id})
+
+
+def test_quick_deploy_refusals() -> None:
+    fake = FakeSalesforce()
+    with pytest.raises(esf.NotFound):
+        fake.metadata.quick_deploy("0Afxx0000000009AAA")
+    with pytest.raises(ValueError):
+        fake.metadata.quick_deploy("bad id")
+    not_validation = fake.metadata.deploy(ZIP)
+    with pytest.raises(esf.RequestError, match="not a succeeded validation") as ei:
+        fake.metadata.quick_deploy(not_validation.id)
+    assert ei.value.operation == "metadata.quick_deploy"
+    fake.on_deploy(esf.DeployResult("0Af", "Failed", done=True, check_only=True))
+    failed = fake.metadata.deploy(ZIP, options=esf.DeployOptions(check_only=True))
+    with pytest.raises(esf.RequestError, match="not a succeeded validation"):
+        fake.metadata.quick_deploy(failed.id)
+
+
+def test_cancel_deploy() -> None:
+    fake = FakeSalesforce()
+    job = fake.metadata.deploy(ZIP)
+    canceling = fake.metadata.cancel_deploy(job.id)
+    assert (canceling.id, canceling.status, canceling.done) == (job.id, "Canceling", False)
+    final = fake.metadata.deploy_status(job.id, wait=True)
+    assert (final.status, final.done, final.failed) == ("Canceled", True, True)
+    assert fake.calls[-2].operation == "metadata.cancel_deploy"
+    with pytest.raises(esf.NotFound):
+        fake.metadata.cancel_deploy("0Afxx0000000009AAA")
+    fake.fail_next(
+        "metadata.cancel_deploy",
+        esf.DeployNotCancelable("finalizing", job_id=job.id, state="FinalizingDeploy"),
+    )
+    with pytest.raises(esf.DeployNotCancelable):
+        fake.metadata.cancel_deploy(job.id)
+
+
 def test_retrieve_list_and_describe(tmp_path: Path) -> None:
     fake = FakeSalesforce()
     fake.add_metadata(
@@ -188,9 +236,14 @@ def test_async_fake_metadata(tmp_path: Path) -> None:
     async def main() -> None:
         fake = AsyncFakeSalesforce()
         fake.add_metadata("ApexClass", "A", {"classes/A.cls": "public class A {}"})
-        job = await fake.metadata.deploy(ZIP)
-        assert (await fake.metadata.deploy_status(job.id, wait=True)).success
-        result = await fake.metadata.retrieve({"ApexClass": ["*"]}, extract_to=tmp_path)
+        job = await fake.metadata.deploy(ZIP, options=esf.DeployOptions(check_only=True))
+        assert (await fake.metadata.deploy_status(job.id, wait=True, poll=esf.Backoff())).success
+        quick = await fake.metadata.quick_deploy(job.id)
+        assert (await fake.metadata.cancel_deploy(quick.id)).status == "Canceling"
+        assert (await fake.metadata.deploy_status(quick.id)).status == "Canceled"
+        result = await fake.metadata.retrieve(
+            {"ApexClass": ["*"]}, extract_to=tmp_path, poll=esf.Backoff(), timeout=60
+        )
         assert (tmp_path / "package.xml").exists()
         assert result.file_properties[0].full_name == "A"
         assert [p.full_name for p in await fake.metadata.list_metadata("ApexClass")] == ["A"]

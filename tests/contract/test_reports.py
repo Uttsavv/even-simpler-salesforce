@@ -83,6 +83,129 @@ def test_run_without_filters_is_a_get(h: Harness, mock: respx.MockRouter, rec: R
     assert event["path_template"] == "/analytics/reports/:id"
 
 
+def _money(amount: float) -> dict[str, Any]:
+    return {"amount": amount, "currency": None}
+
+
+def test_rows_of_a_summary_report_with_two_groupings(h: Harness, mock: respx.MockRouter) -> None:
+    """Synthetic fixture ``reports/summary_two_level_run.json``: grouped by stage, then type.
+
+    Detail rows sit in the deepest groupings (``0_0!T``); ``0!T`` holds the stage subtotal and
+    ``T!T`` the grand total (*Decode the Fact Map*).
+    """
+    mock.get(RUN_URL).respond(json=load_fixture("reports/summary_two_level_run.json"))
+    sf = h.client()
+    result = h.run(sf.reports.run(REPORT))
+    assert result.format == "SUMMARY"
+    assert result.rows() == [
+        {
+            "STAGE_NAME": "Prospecting",
+            "TYPE": "New Business",
+            "OPPORTUNITY_NAME": "Acme - 200 units",
+            "AMOUNT": _money(1000.0),
+        },
+        {
+            "STAGE_NAME": "Prospecting",
+            "TYPE": "New Business",
+            "OPPORTUNITY_NAME": "Hooli expansion",
+            "AMOUNT": _money(300.0),
+        },
+        {
+            "STAGE_NAME": "Prospecting",
+            "TYPE": "Existing Business",
+            "OPPORTUNITY_NAME": "Initech pilot",
+            "AMOUNT": _money(500.0),
+        },
+        {
+            "STAGE_NAME": "Closed Won",
+            "TYPE": "Existing Business",
+            "OPPORTUNITY_NAME": "Globex renewal",
+            "AMOUNT": _money(2500.0),
+        },
+    ]
+    assert result.summary_rows() == [
+        {"STAGE_NAME": "Prospecting", "s!AMOUNT": _money(1800.0), "RowCount": 3},
+        {"STAGE_NAME": "Prospecting", "TYPE": "New Business", "s!AMOUNT": _money(1300.0), "RowCount": 2},
+        {"STAGE_NAME": "Prospecting", "TYPE": "Existing Business", "s!AMOUNT": _money(500.0), "RowCount": 1},
+        {"STAGE_NAME": "Closed Won", "s!AMOUNT": _money(2500.0), "RowCount": 1},
+        {"STAGE_NAME": "Closed Won", "TYPE": "Existing Business", "s!AMOUNT": _money(2500.0), "RowCount": 1},
+        {"s!AMOUNT": _money(4300.0), "RowCount": 4},
+    ]
+
+
+def test_rows_of_a_matrix_report_with_row_and_column_groupings(h: Harness, mock: respx.MockRouter) -> None:
+    """Synthetic fixture ``reports/matrix_two_level_run.json``: rows grouped by stage and type,
+    columns by close month. Empty cells (``0_1!0``, ``1_0!1``, ``1!1``) are left out of the
+    fact map, so the helpers skip them.
+    """
+    mock.get(RUN_URL).respond(json=load_fixture("reports/matrix_two_level_run.json"))
+    sf = h.client()
+    result = h.run(sf.reports.run(REPORT))
+    assert result.format == "MATRIX"
+    assert [
+        (r["STAGE_NAME"], r["TYPE"], r["CLOSE_DATE"], r["OPPORTUNITY_NAME"], r["AMOUNT"])
+        for r in result.rows()
+    ] == [
+        ("Prospecting", "New Business", "2026-10-01", "Acme - 200 units", _money(1000.0)),
+        ("Prospecting", "New Business", "2026-11-01", "Hooli expansion", _money(300.0)),
+        ("Prospecting", "Existing Business", "2026-11-01", "Initech pilot", _money(500.0)),
+        ("Closed Won", "Existing Business", "2026-10-01", "Globex renewal", _money(2500.0)),
+    ]
+    assert list(result.rows()[0]) == ["STAGE_NAME", "TYPE", "CLOSE_DATE", "OPPORTUNITY_NAME", "AMOUNT"]
+    oct_, nov = "2026-10-01", "2026-11-01"
+    summary = [
+        (s.get("STAGE_NAME"), s.get("TYPE"), s.get("CLOSE_DATE"), s["s!AMOUNT"]["amount"], s["RowCount"])
+        for s in result.summary_rows()
+    ]
+    assert summary == [
+        ("Prospecting", None, oct_, 1000.0, 1),
+        ("Prospecting", None, nov, 800.0, 2),
+        ("Prospecting", None, None, 1800.0, 3),
+        ("Prospecting", "New Business", oct_, 1000.0, 1),
+        ("Prospecting", "New Business", nov, 300.0, 1),
+        ("Prospecting", "New Business", None, 1300.0, 2),
+        ("Prospecting", "Existing Business", nov, 500.0, 1),
+        ("Prospecting", "Existing Business", None, 500.0, 1),
+        ("Closed Won", None, oct_, 2500.0, 1),
+        ("Closed Won", None, None, 2500.0, 1),
+        ("Closed Won", "Existing Business", oct_, 2500.0, 1),
+        ("Closed Won", "Existing Business", None, 2500.0, 1),
+        (None, None, oct_, 3500.0, 2),
+        (None, None, nov, 800.0, 2),
+        (None, None, None, 4300.0, 4),
+    ]
+    # a subtotal or total has no keys for the groupings it sums over
+    assert set(result.summary_rows()[-1]) == {"s!AMOUNT", "RowCount"}
+    assert set(result.summary_rows()[2]) == {"STAGE_NAME", "s!AMOUNT", "RowCount"}
+
+
+def test_recent_lists_recently_viewed_reports(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:
+    """Synthetic fixture ``reports/recent.json``: *Report List*, ``GET analytics/reports``
+    (up to 200 recently viewed reports):
+    https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/sforce_analytics_rest_api_recentreportslist.htm
+    """
+    route = mock.get(f"{DATA}/analytics/reports").respond(json=load_fixture("reports/recent.json"))
+    sf = h.client(recorder=rec)
+    reports = h.run(sf.reports.recent())
+    assert [(r["id"], r["name"]) for r in reports] == [
+        (REPORT, "Open Opportunities"),
+        ("00Oxx0000000002AAA", "Pipeline by Stage and Type"),
+    ]
+    assert reports[0]["instancesUrl"].endswith(f"/analytics/reports/{REPORT}/instances")
+    assert route.calls[0].request.url.params == httpx.QueryParams()
+    (event,) = rec.requests
+    assert event["operation"] == "reports.recent"
+    assert event["path_template"] == "/analytics/reports"
+
+
+@pytest.mark.parametrize("body", [{"reports": []}, ["not a report"]])
+def test_recent_rejects_unexpected_bodies(h: Harness, mock: respx.MockRouter, body: Any) -> None:
+    mock.get(f"{DATA}/analytics/reports").respond(json=body)
+    sf = h.client()
+    with pytest.raises(esf.UnexpectedResponse, match="recent reports"):
+        h.run(sf.reports.recent())
+
+
 def test_run_with_filters_posts_report_metadata(h: Harness, mock: respx.MockRouter) -> None:
     """Synthetic: Execute Sync with ``POST`` and ``reportMetadata.reportFilters`` in the body."""
     route = mock.post(RUN_URL).respond(json=load_fixture("reports/summary_run.json"))
@@ -154,7 +277,7 @@ def test_instance_polls_until_success(h: Harness, mock: respx.MockRouter, rec: R
         ]
     )
     sf = h.client(recorder=rec)
-    result = h.run(sf.reports.instance(REPORT, INSTANCE, poll_interval=3))
+    result = h.run(sf.reports.instance(REPORT, INSTANCE, poll=esf.Backoff(start=3, max=3)))
     assert route.call_count == 3
     assert sf.sleeps == [3, 3]
     assert len(result.rows()) == 3
@@ -179,7 +302,7 @@ def test_instance_times_out(h: Harness, mock: respx.MockRouter) -> None:
     route = mock.get(INSTANCE_URL).respond(json=load_fixture("reports/instance_running.json"))
     sf = h.client()
     with pytest.raises(esf.ReportTimeout) as ei:
-        h.run(sf.reports.instance(REPORT, INSTANCE, timeout=5, poll_interval=2))
+        h.run(sf.reports.instance(REPORT, INSTANCE, timeout=5, poll=esf.Backoff(start=2, max=2)))
     assert sf.sleeps == [2, 2, 1]
     assert route.call_count == 4
     assert ei.value.run_status == "Running"
@@ -198,13 +321,30 @@ def test_instance_unknown_status_is_not_polled(h: Harness, mock: respx.MockRoute
     assert route.call_count == 1
 
 
-@pytest.mark.parametrize(
-    ("kw", "match"), [({"timeout": 0}, "timeout"), ({"poll_interval": 0}, "poll_interval")]
-)
-def test_instance_rejects_bad_arguments(h: Harness, kw: dict[str, float], match: str) -> None:
+def test_instance_default_poll_is_backoff(h: Harness, mock: respx.MockRouter) -> None:
+    """Without ``poll`` the waits follow ``esf.Backoff()``: 2 s, doubling up to 30 s."""
+    running = httpx.Response(200, json=load_fixture("reports/instance_running.json"))
+    mock.get(INSTANCE_URL).mock(
+        side_effect=[running] * 6 + [httpx.Response(200, json=load_fixture("reports/instance_success.json"))]
+    )
     sf = h.client()
-    with pytest.raises(ValueError, match=match):
-        h.run(sf.reports.instance(REPORT, INSTANCE, **kw))
+    h.run(sf.reports.instance(REPORT, INSTANCE))
+    assert sf.sleeps == [2, 4, 8, 16, 30, 30]
+
+
+def test_instance_default_timeout_is_an_hour(h: Harness, mock: respx.MockRouter) -> None:
+    mock.get(INSTANCE_URL).respond(json=load_fixture("reports/instance_running.json"))
+    sf = h.client()
+    with pytest.raises(esf.ReportTimeout, match="after 3600 s"):
+        h.run(sf.reports.instance(REPORT, INSTANCE, poll=esf.Backoff(start=600, max=600)))
+    assert sum(sf.sleeps) == 3600
+
+
+@pytest.mark.parametrize("timeout", [0, -1])
+def test_instance_rejects_bad_timeout(h: Harness, timeout: float) -> None:
+    sf = h.client()
+    with pytest.raises(ValueError, match="timeout"):
+        h.run(sf.reports.instance(REPORT, INSTANCE, timeout=timeout))
 
 
 def test_bad_ids_are_rejected(h: Harness) -> None:
