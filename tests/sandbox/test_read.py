@@ -134,8 +134,10 @@ def test_malformed_query_is_classified(sb: Driver) -> None:
 
 def test_not_found_and_invalid_type(sb: Driver) -> None:
     sf = sb.client()
+    # A well-formed id that doesn't exist: the last 3 characters are the case checksum of the
+    # first 15, so "...AAA" would be rejected earlier as MALFORMED_ID (HTTP 400).
     with pytest.raises(esf.NotFound) as nf:
-        sb.run(sf.sobject("Lead").get("00Q000000000000AAA"))
+        sb.run(sf.sobject("Lead").get("00Q000000000000EAA"))
     assert nf.value.status == 404
     with pytest.raises((esf.InvalidType, esf.NotFound)) as it:
         sb.run(sf.sobject("EsfNoSuchObject__c").describe(cached=False))
