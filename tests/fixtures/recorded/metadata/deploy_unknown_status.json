@@ -1,0 +1,29 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Metadata API Developer Guide: https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_rest_deploy_checkstatus.htm",
+  "body": {
+    "id": "0Afxx0000000001AAA",
+    "deployResult": {
+      "id": "0Afxx0000000001AAA",
+      "checkOnly": false,
+      "createdBy": "005xx0000000001AAA",
+      "createdByName": "Ada Admin",
+      "createdDate": "2026-11-11T10:00:00.000+0000",
+      "ignoreWarnings": false,
+      "rollbackOnError": true,
+      "runTestsEnabled": false,
+      "numberComponentErrors": 0,
+      "numberComponentsDeployed": 0,
+      "numberComponentsTotal": 0,
+      "numberTestErrors": 0,
+      "numberTestsCompleted": 0,
+      "numberTestsTotal": 0,
+      "errorMessage": null,
+      "errorStatusCode": null,
+      "details": null,
+      "status": "Teleporting",
+      "done": false,
+      "success": false
+    }
+  }
+}

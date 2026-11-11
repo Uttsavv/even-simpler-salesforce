@@ -1,0 +1,5 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Metadata API Developer Guide: SOAP error handling, https://developer.salesforce.com/docs/atlas.en-us.api.meta/api/sforce_api_concepts_errorhandling.htm",
+  "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:sf=\"http://soap.sforce.com/2006/04/metadata\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"><soapenv:Body><soapenv:Fault><faultcode>sf:INVALID_TYPE</faultcode><faultstring>INVALID_TYPE: Unknown type: ApexKlass</faultstring><detail><sf:UnexpectedErrorFault xsi:type=\"sf:UnexpectedErrorFault\"><sf:exceptionCode>INVALID_TYPE</sf:exceptionCode><sf:exceptionMessage>Unknown type: ApexKlass</sf:exceptionMessage></sf:UnexpectedErrorFault></detail></soapenv:Fault></soapenv:Body></soapenv:Envelope>"
+}

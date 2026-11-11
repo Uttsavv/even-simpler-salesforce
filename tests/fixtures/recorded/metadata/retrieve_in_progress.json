@@ -1,0 +1,5 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Metadata API Developer Guide: https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_checkretrievestatus.htm",
+  "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns=\"http://soap.sforce.com/2006/04/metadata\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"><soapenv:Body><checkRetrieveStatusResponse><result><done>false</done><id>09Sxx0000000001AAA</id><status>InProgress</status><success>false</success></result></checkRetrieveStatusResponse></soapenv:Body></soapenv:Envelope>"
+}
