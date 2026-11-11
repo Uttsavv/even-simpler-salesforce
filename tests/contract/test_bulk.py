@@ -720,7 +720,7 @@ def test_ingest_from_path_keeps_memory_flat(h: Harness, tmp_path: Path) -> None:
     sf = _org_client(h, org)
     peak = _peak(lambda: h.run(sf.bulk.ingest("Lead", "insert", rows=path)))
     assert org.uploaded > size - len(block)
-    assert peak < 4 * 1024 * 1024, f"peak {peak} bytes for a {size}-byte file"
+    assert peak < 2 * 1024 * 1024, f"peak {peak} bytes for a {size}-byte file"
 
 
 def test_ingest_from_rows_keeps_memory_flat(h: Harness) -> None:
@@ -735,12 +735,13 @@ def test_ingest_from_rows_keeps_memory_flat(h: Harness) -> None:
 
     peak = _peak(lambda: h.run(sf.bulk.ingest("Lead", "insert", rows=rows())))
     assert org.uploaded > n * 100
-    assert peak < 4 * 1024 * 1024, f"peak {peak} bytes for {org.uploaded} uploaded bytes"
+    # The spooled temporary file keeps its first 1 MiB in memory before it moves to disk.
+    assert peak < 3 * 1024 * 1024, f"peak {peak} bytes for {org.uploaded} uploaded bytes"
 
 
 def test_query_results_keep_memory_flat(h: Harness) -> None:
-    """A 24 MiB result page is parsed as it streams in."""
-    size = 24 * 1024 * 1024
+    """A 12 MiB result page is parsed as it streams in."""
+    size = 12 * 1024 * 1024
     org = (_AsyncOrg if h.is_async else _SyncOrg)(result_bytes=size)
     sf = _org_client(h, org)
     count = [0]
@@ -760,4 +761,4 @@ def test_query_results_keep_memory_flat(h: Harness) -> None:
 
     peak = _peak(run)
     assert count[0] > size // 100
-    assert peak < 4 * 1024 * 1024, f"peak {peak} bytes for a {size}-byte result"
+    assert peak < 2 * 1024 * 1024, f"peak {peak} bytes for a {size}-byte result"
