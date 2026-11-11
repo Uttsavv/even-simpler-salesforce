@@ -27,7 +27,7 @@ import pytest
 from even_simpler_salesforce import errors as E
 from even_simpler_salesforce.core.classify import classify
 from even_simpler_salesforce.core.http import RawResponse, RequestSpec
-from even_simpler_salesforce.models import BatchResult, RecordResult, UsageSnapshot
+from even_simpler_salesforce.models import BatchResult, DeployResult, RecordResult, UsageSnapshot
 
 ERROR_CLASSES: list[type[E.SalesforceError]] = [
     obj
@@ -92,6 +92,7 @@ EXTRA_SAMPLES: dict[str, Any] = {
     "graphql_errors": ({"message": "bad field", "path": ["uiapi"]},),
     "data": {"uiapi": {"query": {"Lead": None}}},
     "fault_code": "sf:INVALID_ID",
+    "result": DeployResult("0Afxx0000000001AAA", "Failed", done=True, error_message="boom"),
 }
 
 BASE_ATTRS = (
@@ -146,13 +147,16 @@ def test_classes_with_extras_are_the_expected_ones() -> None:
         "ApexError": ["body"],
         "BudgetExceeded": ["usage"],
         "BulkJobFailed": ["job_id", "state", "error_message"],
+        "DeployFailed": ["job_id", "state", "result"],
         "DuplicateDetected": ["duplicates"],
         "GraphQLError": ["graphql_errors", "data"],
+        "MetadataTimeout": ["job_id", "state"],
         "MultipleMatches": ["matches"],
         "OAuthError": ["error", "error_description"],
         "PartialFailure": ["results"],
         "RefreshFailed": ["ambiguous"],
         "RequestLimitExceeded": ["retry_after"],
+        "RetrieveFailed": ["job_id", "state"],
         "SoapFault": ["fault_code"],
     }
 
