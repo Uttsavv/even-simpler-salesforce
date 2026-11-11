@@ -54,6 +54,7 @@ from ._files import AsyncFakeFiles, FakeFiles
 from ._graphql import GraphQLMatch, GraphQLScript, add_graphql_script, fake_graphql, fake_graphql_iter
 from ._state import FakeCall, FakeRequest, FakeState, Match, QueryScript, RowsSpec, Who, _sobject_of
 from ._tooling import AsyncFakeTooling, FakeTooling, set_anonymous_script, set_completions
+from ._ui import AsyncFakeUi, FakeUi, ListView, add_list_view
 
 __all__ = [
     "AsyncFakeActions",
@@ -336,6 +337,29 @@ class _FakeControls:
             self._state.describes[check_sobject(sobject)] = dict(describe)
 
     # --- data -----------------------------------------------------------------------
+
+    def set_list_view(
+        self,
+        sobject: str,
+        api_name: str,
+        *,
+        label: str | None = None,
+        where: Callable[[dict[str, Any]], bool] | None = None,
+        fields: Sequence[str] | None = None,
+    ) -> ListView:
+        """Add a list view that ``ui.list_views`` lists and ``ui.list_records`` reads.
+
+        Args:
+            sobject: The object of the list view.
+            api_name: List view API name, like ``"AllOpenLeads"``.
+            label: The label; defaults to ``api_name``.
+            where: Selects the records: ``(record) -> bool``. ``None`` selects all of them.
+            fields: Fields of each record in ``list_records``; ``None`` returns every field.
+
+        Example:
+            fake.set_list_view("Lead", "OpenLeads", where=lambda r: r.get("Status") == "Open")
+        """
+        return add_list_view(self._state, sobject, api_name, label, where, fields)
 
     def add(self, sobject: str, data: Mapping[str, Any]) -> str:
         """Seed one record without recording a call. Returns its id (``data["Id"]`` if given)."""
@@ -1030,6 +1054,7 @@ class FakeSalesforce(_FakeControls):
         self.tooling = FakeTooling(self._state, self._who)
         self.composite = FakeComposite(self._state, self._who)
         self.bulk = FakeBulk(self._state, self._who)
+        self.ui = FakeUi(self._state, self._who)
 
     @classmethod
     def _view(
@@ -1051,6 +1076,7 @@ class FakeSalesforce(_FakeControls):
         view.tooling = FakeTooling(state, who)
         view.composite = FakeComposite(state, who)
         view.bulk = FakeBulk(state, who)
+        view.ui = FakeUi(state, who)
         return view
 
     def __repr__(self) -> str:
@@ -1659,6 +1685,7 @@ class AsyncFakeSalesforce(_FakeControls):
         self.tooling = AsyncFakeTooling(inner.tooling)
         self.composite = AsyncFakeComposite(inner.composite)
         self.bulk = AsyncFakeBulk(inner.bulk)
+        self.ui = AsyncFakeUi(inner.ui)
 
     @property
     def instance_url(self) -> str:

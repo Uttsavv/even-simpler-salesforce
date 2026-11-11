@@ -45,6 +45,7 @@ from .api.platform_events import PlatformEvents
 from .api.soap import merge as _merge
 from .api.sobject import SObject
 from .api.tooling import Tooling
+from .api.ui import Ui
 from .auth_runtime import AuthRuntime
 from .token_store import InMemoryTokenStore
 from .transport import Transport
@@ -210,6 +211,7 @@ class Salesforce:
         self.tooling = Tooling(self)
         self.composite = Composite(self)
         self.bulk = Bulk(self)
+        self.ui = Ui(self)
 
     @classmethod
     def _child(
@@ -344,14 +346,24 @@ class Salesforce:
         return self._describe("sobjects", "global", cached, None)
 
     def _describe(
-        self, path: str, what: str, cached: bool, sobject: str | None, *, base: str = ""
+        self,
+        path: str,
+        what: str,
+        cached: bool,
+        sobject: str | None,
+        operation: str | None = None,
+        *,
+        base: str = "",
     ) -> dict[str, Any]:
         # Callers get their own copy: the cached dict is shared by the whole family.
         # ``base="tooling/"`` describes a Tooling API object (own path, cache key and operation).
+        # ``operation`` names other cached metadata reads (sf.ui); it defaults to the describe ones.
         t = self._transport
         tok = self._runtime.token()
         key = t.describe_key(tok, self._runtime.key, base + what)
-        op = ("tooling." if base else "") + ("sobject.describe" if sobject else "describe_global")
+        op = operation or (
+            ("tooling." if base else "") + ("sobject.describe" if sobject else "describe_global")
+        )
         path = base + path
         if not cached:
             return copy.deepcopy(self._describe_fetch(path, key, False, sobject, op))

@@ -32,6 +32,13 @@ Paths are relative to `/services/data/vXX.X/` unless they start with `/services/
 | `search` | GET | sf.search (?q= SOSL) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_search.htm) |  |
 | `parameterizedSearch` | POST | sf.parameterized_search | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_search_parameterized.htm) |  |
 | `graphql` | POST | sf.graphql, sf.graphql_iter (body {query, variables}; errors[] on 200 OK) | [docs](https://developer.salesforce.com/docs/platform/graphql/guide/requests-and-responses.html) |  |
+| `ui-api/records/{}` | GET | sf.ui.record() (fields, layoutTypes, modes) | [docs](https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_record_get.htm) |  |
+| `ui-api/object-info/{}` | GET | sf.ui.object_info() (describe cache; If-Modified-Since, V62) | [docs](https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_object_info.htm) |  |
+| `ui-api/object-info/{}/picklist-values/{}` | GET | sf.ui.picklist_values() (describe cache) | [docs](https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_picklist_values_collection.htm) |  |
+| `ui-api/record-defaults/create/{}` | GET | sf.ui.create_defaults() (recordTypeId) | [docs](https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_record_defaults_create.htm) |  |
+| `ui-api/record-defaults/clone/{}` | GET | sf.ui.clone_defaults() | [docs](https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_record_defaults_clone.htm) |  |
+| `ui-api/list-info/{}` | GET | sf.ui.list_views() (V60) | [docs](https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_lists_object_get.htm) |  |
+| `ui-api/list-records/{}/{}` | GET | sf.ui.list_records() (pageSize 1-2,000, pageToken) | [docs](https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_list_views_records.htm) |  |
 | `limits` | GET | sf.limits | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_limits.htm) |  |
 | `sobjects` | GET | sf.describe_global() (If-Modified-Since → 304) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_describeGlobal.htm) |  |
 | `sobjects/{}` | GET | sobject.metadata() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_sobject_basic_info.htm) |  |
@@ -121,6 +128,7 @@ Behaviour relied on:
 | Upsert by external id | `id`, `created`, `201 = created, 204/200 = updated`, `300 = list of matching URLs` |
 | Limits | `{name: {Max, Remaining, ...}}` |
 | GraphQL | `data`, `errors[]: message, locations, path, extensions.ErrorType`, `connections: edges[].node, pageInfo {hasNextPage, endCursor}` |
+| UI API | `record: apiName, id, fields {Name: {value, displayValue}}, childRelationships, recordTypeId`, `list-records: records, count, nextPageToken`, `picklist-values: picklistFieldValues {field: {values, defaultValue, controllerValues}}`, `errors: REST error body` |
 | REST error body | `list of {message, errorCode or statusCode, fields}`, `extras such as duplicateResult` |
 | OAuth error body | `error`, `error_description` |
 

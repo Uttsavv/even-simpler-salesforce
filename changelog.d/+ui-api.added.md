@@ -1,0 +1,1 @@
+New `sf.ui` reads the Salesforce User Interface API: `record()`, `object_info()`, `picklist_values()`, `create_defaults()`, `clone_defaults()`, `list_views()` and `list_records()`. Object info and picklist values are served from the describe cache, and `FakeSalesforce` has a matching `fake.ui` with `set_list_view()`.

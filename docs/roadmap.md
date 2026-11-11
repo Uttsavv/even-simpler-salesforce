@@ -2,12 +2,11 @@
 
 0.1 covers authentication, records, queries, sObject Collections and raw requests. 0.2 adds
 [Files](guides/files.md). 0.3 adds [Bulk API 2.0](guides/bulk.md), [Tooling](guides/tooling.md),
-[GraphQL](guides/graphql.md) and [Composite](guides/composite.md). The API areas below come in
-later releases.
+[GraphQL](guides/graphql.md) and [Composite](guides/composite.md). 0.4 adds the
+[UI API](guides/ui.md). The API areas below come in later releases.
 
 | Area | Release | What's planned |
 |---|---|---|
-| UI API | 0.4 | Records with layout information, list views and picklist values. |
 | Reports and dashboards | 0.4 | Run reports and read dashboards. |
 | Metadata API | 0.4 | Metadata API operations. |
 | Pub/Sub API | 0.5 | Subscribe and publish over gRPC (`[pubsub]` extra). |

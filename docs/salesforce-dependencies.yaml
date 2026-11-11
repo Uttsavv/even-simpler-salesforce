@@ -57,6 +57,49 @@ rest_endpoints:
     docs: https://developer.salesforce.com/docs/platform/graphql/guide/requests-and-responses.html
     checked: null
     # Read 2026-11-10 from search excerpts only (the page returns 403 to non-browser clients) (V50, V51)
+  - path: "ui-api/records/{}"
+    methods: [GET]
+    used_by: "sf.ui.record() (fields, layoutTypes, modes)"
+    dynamic: true  # built by core/ui.py, not a literal in the area code
+    docs: https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_record_get.htm
+    checked: null
+  - path: "ui-api/object-info/{}"
+    methods: [GET]
+    used_by: "sf.ui.object_info() (describe cache; If-Modified-Since, V62)"
+    dynamic: true  # built by core/ui.py, not a literal in the area code
+    docs: https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_object_info.htm
+    checked: null
+  - path: "ui-api/object-info/{}/picklist-values/{}"
+    methods: [GET]
+    used_by: "sf.ui.picklist_values() (describe cache)"
+    dynamic: true  # built by core/ui.py, not a literal in the area code
+    docs: https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_picklist_values_collection.htm
+    checked: null
+  - path: "ui-api/record-defaults/create/{}"
+    methods: [GET]
+    used_by: "sf.ui.create_defaults() (recordTypeId)"
+    dynamic: true  # built by core/ui.py, not a literal in the area code
+    docs: https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_record_defaults_create.htm
+    checked: null
+  - path: "ui-api/record-defaults/clone/{}"
+    methods: [GET]
+    used_by: "sf.ui.clone_defaults()"
+    dynamic: true  # built by core/ui.py, not a literal in the area code
+    docs: https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_record_defaults_clone.htm
+    checked: null
+  - path: "ui-api/list-info/{}"
+    methods: [GET]
+    used_by: "sf.ui.list_views() (V60)"
+    dynamic: true  # built by core/ui.py, not a literal in the area code
+    docs: https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_lists_object_get.htm
+    checked: null
+  - path: "ui-api/list-records/{}/{}"
+    methods: [GET]
+    used_by: "sf.ui.list_records() (pageSize 1-2,000, pageToken)"
+    dynamic: true  # built by core/ui.py, not a literal in the area code
+    docs: https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_list_views_records.htm
+    checked: null
+    # UI API pages read 2026-11-11 from search excerpts only (403 to non-browser clients) (V60-V64)
   - path: limits
     methods: [GET]
     used_by: sf.limits
@@ -368,6 +411,8 @@ response_shapes:
     fields: ["{name: {Max, Remaining, ...}}"]
   - resource: GraphQL
     fields: [data, "errors[]: message, locations, path, extensions.ErrorType", "connections: edges[].node, pageInfo {hasNextPage, endCursor}"]
+  - resource: UI API
+    fields: ["record: apiName, id, fields {Name: {value, displayValue}}, childRelationships, recordTypeId", "list-records: records, count, nextPageToken", "picklist-values: picklistFieldValues {field: {values, defaultValue, controllerValues}}", "errors: REST error body"]
   - resource: REST error body
     fields: ["list of {message, errorCode or statusCode, fields}", "extras such as duplicateResult"]
   - resource: OAuth error body

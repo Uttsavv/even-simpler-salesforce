@@ -48,6 +48,7 @@ implementation. They have the methods of the real clients for these areas:
 - [GraphQL](guides/graphql.md), with scripted answers
 - [Tooling API](guides/tooling.md), including anonymous Apex
 - [Bulk API 2.0](guides/bulk.md): ingest jobs apply their rows at once; queries return the rows of `on_query()`
+- [UI API](guides/ui.md)
 - `request`, `limits` and `usage`
 - `with_auth` and `tagged`
 
@@ -198,6 +199,38 @@ arguments:
 The fake checks the query and `path` of `graphql_iter()` like the real client. Each page is
 one `"graphql"` call in `calls`.
 
+## UI API
+
+`fake.ui` builds UI API responses from the fake's records and describes, so you don't script
+them. Add list views with `set_list_view()`.
+
+```python
+def test_open_leads_view(esf_fake: FakeSalesforce) -> None:
+    esf_fake.add("Lead", {"LastName": "Lovelace", "Company": "Engines", "Status": "Open"})
+    esf_fake.add("Lead", {"LastName": "Hopper", "Company": "Navy", "Status": "Closed"})
+    esf_fake.set_list_view("Lead", "OpenLeads", where=lambda r: r["Status"] == "Open")
+
+    page = esf_fake.ui.list_records("Lead", "OpenLeads")
+    assert [r["fields"]["LastName"]["value"] for r in page["records"]] == ["Lovelace"]
+    assert esf_fake.ui.list_views("Lead")["lists"][0]["apiName"] == "OpenLeads"
+```
+
+The fake answers each method this way:
+
+| Method | Built from |
+|---|---|
+| `record()` | the stored record; `fields` must exist on the object, else `InvalidField` |
+| `object_info()` | the describe from `set_describe()`, or one made from the records |
+| `picklist_values()` | the active `picklistValues` of each picklist field in the describe |
+| `create_defaults()` | the `defaultValue` of each field in the describe |
+| `clone_defaults()` | the stored record without its id and system fields |
+| `list_views()`, `list_records()` | the views from `set_list_view()`; `__Recent` returns every record |
+
+`set_list_view(sobject, api_name, *, label=None, where=None, fields=None)` replaces a view
+with the same name. `where` takes a copy of each record and returns `True` to select it.
+`fields` limits the fields of each record in `list_records()`. `displayValue` is always
+`None`, because the fake has no formatting rules. `layout_types` returns every stored field.
+
 ## Inject errors
 
 `fail_next()` makes the next call of an operation raise. `reject()` rejects record writes row by
@@ -239,6 +272,7 @@ def test_partial_failure(esf_fake: FakeSalesforce) -> None:
 - `"apex.get"`, `"apex.post"` and the other Apex REST methods
 - `"limits"`
 - `"graphql"`
+- `"ui.record"`, `"ui.object_info"`, `"ui.list_records"` and the other UI API methods
 - `"raw"`, or the name you pass as `operation=`
 - `"*"` for any operation
 

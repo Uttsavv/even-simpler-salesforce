@@ -1,0 +1,30 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Salesforce User Interface API Developer Guide (Get a Record; Record response body); no org recording yet",
+  "body": {
+    "apiName": "Lead",
+    "childRelationships": {},
+    "eTag": "a1b2c3",
+    "fields": {
+      "Name": {
+        "displayValue": null,
+        "value": "Ada Lovelace"
+      },
+      "Status": {
+        "displayValue": "Open - Not Contacted",
+        "value": "Open - Not Contacted"
+      },
+      "AnnualRevenue": {
+        "displayValue": "$1,500,000.00",
+        "value": 1500000
+      }
+    },
+    "id": "00Qxx0000000001AAA",
+    "lastModifiedById": "005xx0000000001AAA",
+    "lastModifiedDate": "2026-11-10T09:30:00.000Z",
+    "recordTypeId": "012000000000000AAA",
+    "recordTypeInfo": null,
+    "systemModstamp": "2026-11-10T09:30:00.000Z",
+    "weakEtag": 1762767000000
+  }
+}

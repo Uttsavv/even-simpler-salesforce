@@ -280,6 +280,7 @@ class FakeState:
         }
         self.scripts: list[QueryScript] = []
         self.graphql_scripts: list[Any] = []  # GraphQLScript (testing/_graphql.py), newest first
+        self.list_views: dict[str, dict[str, Any]] = {}  # ListView (testing/_ui.py) by object, name
         self.handlers: list[_Handler] = []
         self.action_handlers: list[_ActionHandler] = []
         self.action_describes: dict[tuple[str, str], dict[str, Any]] = {}

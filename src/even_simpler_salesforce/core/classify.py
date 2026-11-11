@@ -82,7 +82,9 @@ _STATUS_MAP: dict[int, type[E.SalesforceError]] = {
 
 _RETRYABLE_STATUS = frozenset({500, 502, 503, 504})
 # Operations on an sObject *type* (no record id): NOT_FOUND there means the type doesn't exist.
-_TYPE_OPS = frozenset({"sobject.describe", "sobject.metadata", "sobject.updated", "sobject.deleted"})
+_TYPE_OPS = frozenset(
+    {"sobject.describe", "sobject.metadata", "sobject.updated", "sobject.deleted", "ui.object_info"}
+)
 
 
 def _as_str_tuple(value: Any) -> tuple[str, ...]:
