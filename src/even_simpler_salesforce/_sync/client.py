@@ -42,6 +42,7 @@ from .api.leads import Leads
 from .api.platform_events import PlatformEvents
 from .api.soap import merge as _merge
 from .api.sobject import SObject
+from .api.ui import Ui
 from .auth_runtime import AuthRuntime
 from .token_store import InMemoryTokenStore
 from .transport import Transport
@@ -204,6 +205,7 @@ class Salesforce:
         self.leads = Leads(self)
         self.platform_events = PlatformEvents(self)
         self.files = Files(self)
+        self.ui = Ui(self)
 
     @classmethod
     def _child(
@@ -337,18 +339,24 @@ class Salesforce:
         """``GET sobjects``: list of sObjects, served from the describe cache when fresh."""
         return self._describe("sobjects", "global", cached, None)
 
-    def _describe(self, path: str, what: str, cached: bool, sobject: str | None) -> dict[str, Any]:
+    def _describe(
+        self, path: str, what: str, cached: bool, sobject: str | None, operation: str | None = None
+    ) -> dict[str, Any]:
         # Callers get their own copy: the cached dict is shared by the whole family.
+        # ``operation`` names other cached metadata reads (sf.ui); it defaults to the describe ones.
         t = self._transport
         tok = self._runtime.token()
         key = t.describe_key(tok, self._runtime.key, what)
+        op = operation or ("sobject.describe" if sobject else "describe_global")
         if not cached:
-            return copy.deepcopy(self._describe_fetch(path, key, False, sobject))
+            return copy.deepcopy(self._describe_fetch(path, key, False, sobject, op))
         # Single flight: concurrent misses for one key wait for the first fetch, then hit the cache.
         with t.single_flight(key):
-            return copy.deepcopy(self._describe_fetch(path, key, True, sobject))
+            return copy.deepcopy(self._describe_fetch(path, key, True, sobject, op))
 
-    def _describe_fetch(self, path: str, key: str, cached: bool, sobject: str | None) -> Any:
+    def _describe_fetch(
+        self, path: str, key: str, cached: bool, sobject: str | None, operation: str
+    ) -> Any:
         t = self._transport
         cfg = t.describe_cache
         cached_value: Any = t.cache.get(key) if cached else None
@@ -367,7 +375,7 @@ class Salesforce:
                 "GET",
                 path,
                 headers=headers,
-                operation="sobject.describe" if sobject else "describe_global",
+                operation=operation,
                 sobject=sobject,
                 allow_not_modified=bool(headers),
             )

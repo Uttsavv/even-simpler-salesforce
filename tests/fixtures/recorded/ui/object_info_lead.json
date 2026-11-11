@@ -1,0 +1,49 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Salesforce User Interface API Developer Guide (Get Object Metadata; Object Info response body); no org recording yet",
+  "body": {
+    "apiName": "Lead",
+    "label": "Lead",
+    "labelPlural": "Leads",
+    "keyPrefix": "00Q",
+    "createable": true,
+    "updateable": true,
+    "defaultRecordTypeId": "012000000000000AAA",
+    "eTag": "d4e5f6",
+    "fields": {
+      "Name": {
+        "apiName": "Name",
+        "dataType": "String",
+        "label": "Full Name",
+        "required": false
+      },
+      "Status": {
+        "apiName": "Status",
+        "dataType": "Picklist",
+        "label": "Lead Status",
+        "required": true
+      },
+      "LeadSource": {
+        "apiName": "LeadSource",
+        "dataType": "Picklist",
+        "label": "Lead Source",
+        "required": false
+      }
+    },
+    "recordTypeInfos": {
+      "012000000000000AAA": {
+        "available": true,
+        "defaultRecordTypeMapping": true,
+        "master": true,
+        "name": "Master",
+        "recordTypeId": "012000000000000AAA"
+      }
+    },
+    "childRelationships": [],
+    "dependentFields": {},
+    "themeInfo": {
+      "color": "F88962",
+      "iconUrl": "https://acme.my.salesforce.com/img/icon/t4v35/standard/lead_120.png"
+    }
+  }
+}

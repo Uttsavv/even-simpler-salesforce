@@ -1,0 +1,10 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Salesforce User Interface API Developer Guide (Status Codes and Error Responses); no org recording yet",
+  "body": [
+    {
+      "errorCode": "ILLEGAL_QUERY_PARAMETER_VALUE",
+      "message": "recordId should be a valid record ID: 003R000000"
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Salesforce User Interface API Developer Guide (Get Values for All Picklist Fields of a Record Type; Picklist Values Collection); no org recording yet",
+  "body": {
+    "eTag": "0a1b2c",
+    "picklistFieldValues": {
+      "LeadSource": {
+        "controllerValues": {},
+        "defaultValue": null,
+        "eTag": "e1",
+        "url": "/services/data/v68.0/ui-api/object-info/Lead/picklist-values/012000000000000AAA/LeadSource",
+        "values": [
+          {
+            "attributes": null,
+            "label": "Web",
+            "validFor": [],
+            "value": "Web"
+          },
+          {
+            "attributes": null,
+            "label": "Partner Referral",
+            "validFor": [],
+            "value": "Partner Referral"
+          }
+        ]
+      },
+      "Status": {
+        "controllerValues": {},
+        "defaultValue": {
+          "attributes": null,
+          "label": "Open - Not Contacted",
+          "validFor": [],
+          "value": "Open - Not Contacted"
+        },
+        "eTag": "e2",
+        "url": "/services/data/v68.0/ui-api/object-info/Lead/picklist-values/012000000000000AAA/Status",
+        "values": [
+          {
+            "attributes": null,
+            "label": "Open - Not Contacted",
+            "validFor": [],
+            "value": "Open - Not Contacted"
+          },
+          {
+            "attributes": null,
+            "label": "Working - Contacted",
+            "validFor": [],
+            "value": "Working - Contacted"
+          }
+        ]
+      }
+    }
+  }
+}

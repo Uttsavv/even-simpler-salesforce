@@ -1,0 +1,37 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Salesforce User Interface API Developer Guide (Get Default Values to Clone a Record; Record Defaults response body); no org recording yet",
+  "body": {
+    "layout": {
+      "id": "00hxx0000000001AAA",
+      "layoutType": "Full",
+      "mode": "Create",
+      "objectApiName": "Lead",
+      "sections": []
+    },
+    "objectInfos": {
+      "Lead": {
+        "apiName": "Lead",
+        "label": "Lead"
+      }
+    },
+    "record": {
+      "apiName": "Lead",
+      "childRelationships": {},
+      "eTag": null,
+      "fields": {
+        "LastName": {
+          "displayValue": null,
+          "value": "Lovelace"
+        },
+        "Company": {
+          "displayValue": null,
+          "value": "Analytical Engines"
+        }
+      },
+      "id": null,
+      "recordTypeId": "012000000000000AAA",
+      "recordTypeInfo": null
+    }
+  }
+}

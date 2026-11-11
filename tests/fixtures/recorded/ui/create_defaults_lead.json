@@ -1,0 +1,37 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Salesforce User Interface API Developer Guide (Get Default Values to Create a Record; Record Defaults response body); no org recording yet",
+  "body": {
+    "layout": {
+      "id": "00hxx0000000001AAA",
+      "layoutType": "Full",
+      "mode": "Create",
+      "objectApiName": "Lead",
+      "sections": []
+    },
+    "objectInfos": {
+      "Lead": {
+        "apiName": "Lead",
+        "label": "Lead"
+      }
+    },
+    "record": {
+      "apiName": "Lead",
+      "childRelationships": {},
+      "eTag": null,
+      "fields": {
+        "Status": {
+          "displayValue": "Open - Not Contacted",
+          "value": "Open - Not Contacted"
+        },
+        "OwnerId": {
+          "displayValue": null,
+          "value": "005xx0000000001AAA"
+        }
+      },
+      "id": null,
+      "recordTypeId": "012000000000000AAA",
+      "recordTypeInfo": null
+    }
+  }
+}
