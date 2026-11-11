@@ -18,7 +18,9 @@ The org enforces a few rules so error examples have something to hit:
 - the Partner SOAP endpoint answers ``convertLead`` and ``merge``;
 - ``POST graphql`` answers ``uiapi { query { <Object>(first:, after:) { edges { node { ... } }
   pageInfo { ... } } } }`` over the stored records (no filters), with ``{value}`` fields and
-  cursors ``v1:<offset>``. An unknown field gets ``200 OK`` with a ``ValidationError``.
+  cursors ``v1:<offset>``. An unknown field gets ``200 OK`` with a ``ValidationError``;
+- ``GET ui-api/...`` answers records, object info, picklist values, create and clone defaults,
+  and the list views ``AllOpenLeads`` and ``MyUnreadLeads`` of Lead (``pageToken`` = offset).
 
 Files: a multipart ``POST sobjects/ContentVersion`` stores the bytes and creates the
 ContentDocument (plus a ContentDocumentLink for ``FirstPublishLocationId``);
@@ -74,6 +76,10 @@ _LIMIT = re.compile(r"\bLIMIT\s+(\d+)", re.I)
 _GQL_CONN = re.compile(r"\buiapi\s*\{\s*query\s*\{\s*(?P<obj>\w+)\s*(?:\((?P<args>[^)]*)\))?\s*\{", re.S)
 _GQL_FIRST = re.compile(r"\bfirst\s*:\s*(?:(\d+)|\$(\w+))")
 GQL_FIELDS = {"Name", "FirstName", "LastName", "Company", "Email", "Status", "Phone", "Country", "Street"}
+UI_COMPACT = {"Lead": ["Name", "Company", "Email", "Phone", "Status"]}
+UI_STATUSES = ["Open", "Working", "Closed - Not Converted"]
+UI_LISTS = {"AllOpenLeads": ("All Open Leads", "Open"), "MyUnreadLeads": ("My Unread Leads", None)}
+UI_MASTER = "012000000000000AAA"
 _SUBQUERY = re.compile(r"\(\s*SELECT\s+(?P<fields>[^()]+?)\s+FROM\s+(?P<rel>\w+)\s*\)", re.I)
 
 
@@ -589,12 +595,112 @@ class FakeOrg:
             return self._actions(request, parts[1:])
         if rest == "graphql" and method == "POST":
             return self._json(self._graphql(self._body(request) or {}))
+        if parts[0] == "ui-api" and method == "GET":
+            return self._json(self._ui(parts[1:], params, version))
         if parts[0] == "sobjects" and len(parts) == 2 and parts[1].endswith("__e") and method == "POST":
             return self._json(self._publish(parts[1], self._body(request) or {}), 201)
         if parts[0] == "composite" and len(parts) >= 2 and parts[1] == "sobjects":
             return self._collections(request, method, parts[2:], params)
         if parts[0] == "sobjects":
             return self._sobjects(request, method, parts[1:], params, version)
+        raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+
+    # --- UI API ---------------------------------------------------------------------------
+
+    def _find(self, rid: str) -> tuple[str, dict[str, Any]]:
+        for sobject, recs in self.records.items():
+            if rid in recs:
+                return sobject, recs[rid]
+        raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+
+    def _ui_record(self, sobject: str, rec: dict[str, Any], fields: list[str]) -> dict[str, Any]:
+        def field(f: str) -> dict[str, Any]:
+            value = _value(sobject, rec, f)
+            return {"displayValue": value if f == "Status" else None, "value": value}
+
+        return {
+            "apiName": sobject,
+            "childRelationships": {},
+            "fields": {f: field(f) for f in fields},
+            "id": rec.get("Id"),
+            "recordTypeId": UI_MASTER,
+        }
+
+    def _object_info(self, sobject: str) -> dict[str, Any]:
+        self._known(sobject)
+        types = {"Status": "Picklist", "LeadSource": "Picklist", "Email": "Email", "Phone": "Phone"}
+        names = ["Name", "FirstName", "LastName", "Company", "Email", "Phone", "Status", "LeadSource"]
+        return {
+            "apiName": sobject,
+            "label": sobject,
+            "defaultRecordTypeId": UI_MASTER,
+            "recordTypeInfos": {UI_MASTER: {"master": True, "name": "Master", "recordTypeId": UI_MASTER}},
+            "fields": {n: {"apiName": n, "dataType": types.get(n, "String"), "label": n} for n in names},
+            "childRelationships": [],
+        }
+
+    def _ui(self, parts: list[str], params: dict[str, str], version: str) -> dict[str, Any]:
+        kind, args = parts[0], parts[1:]
+        if kind == "records":
+            sobject, rec = self._find(args[0])
+            if "fields" in params:
+                fields = [f.split(".", 1)[1] for f in params["fields"].split(",")]
+                for f in fields:
+                    if f not in GQL_FIELDS | CUSTOM_FIELDS | {"Id"}:
+                        raise Rejected("INVALID_FIELD", f"No such column '{f}' on entity '{sobject}'")
+            elif params.get("layoutTypes") == "Compact":
+                fields = UI_COMPACT.get(sobject, ["Name"])
+            else:
+                fields = [k for k in rec if k not in ("CreatedDate", "LastModifiedDate")]
+            return self._ui_record(sobject, rec, fields)
+        if kind == "object-info" and len(args) == 1:
+            return self._object_info(args[0])
+        if kind == "object-info" and len(args) == 3 and args[1] == "picklist-values":
+            self._known(args[0])
+            entry = [{"attributes": None, "label": v, "validFor": [], "value": v} for v in UI_STATUSES]
+            web = [{"attributes": None, "label": "Web", "validFor": [], "value": "Web"}]
+            return {
+                "picklistFieldValues": {
+                    "Status": {"controllerValues": {}, "defaultValue": entry[0], "values": entry},
+                    "LeadSource": {"controllerValues": {}, "defaultValue": None, "values": web},
+                }
+            }
+        defaults = {"layout": {"layoutType": "Full", "mode": "Create", "sections": []}}
+        if kind == "record-defaults" and args[0] == "create":
+            info = self._object_info(args[1])
+            new = {"Id": None, "Status": "Open", "OwnerId": USER_ID}
+            record = self._ui_record(args[1], new, ["Status", "OwnerId"])
+            return {**defaults, "objectInfos": {args[1]: info}, "record": record}
+        if kind == "record-defaults" and args[0] == "clone":
+            sobject, rec = self._find(args[1])
+            keep = [k for k in rec if k not in ("Id", "CreatedDate", "LastModifiedDate")]
+            record = self._ui_record(sobject, {**rec, "Id": None}, keep)
+            return {**defaults, "objectInfos": {sobject: self._object_info(sobject)}, "record": record}
+        if kind == "list-info":
+            self._known(args[0])
+            base = f"/services/data/v{version}/ui-api/list-info/{args[0]}"
+            lists = [
+                {"apiName": n, "label": label, "url": f"{base}/{n}"}
+                for n, (label, _) in (UI_LISTS.items() if args[0] == "Lead" else [])
+            ]
+            return {"count": len(lists), "lists": lists, "nextPageToken": None, "objectApiName": args[0]}
+        if kind == "list-records":
+            sobject, view = args
+            self._known(sobject)
+            if view not in UI_LISTS or sobject != "Lead":
+                raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+            status = UI_LISTS[view][1]
+            rows = [r for r in self.records[sobject].values() if status is None or r.get("Status") == status]
+            size = int(params.get("pageSize", 50))
+            start = int(params.get("pageToken", 0))
+            page = rows[start : start + size]
+            end = start + len(page)
+            return {
+                "count": len(page),
+                "currentPageToken": str(start),
+                "nextPageToken": str(end) if end < len(rows) else None,
+                "records": [self._ui_record(sobject, r, ["Name", "Status"]) for r in page],
+            }
         raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
 
     @staticmethod

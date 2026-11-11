@@ -36,6 +36,7 @@ nav = [
     { "Apex REST" = "guides/apex.md" },
     { "Files" = "guides/files.md" },
     { "GraphQL" = "guides/graphql.md" },
+    { "UI API" = "guides/ui.md" },
     { "Raw requests" = "guides/requests.md" },
     { "Lead convert and merge" = "guides/leads.md" },
     { "Platform events" = "guides/platform-events.md" },
