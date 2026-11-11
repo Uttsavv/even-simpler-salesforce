@@ -123,8 +123,33 @@ The client calls any other callable, such as a dataclass, with the fields of the
 keyword arguments. It leaves out `attributes`. So a dataclass must declare every field that the
 query returns.
 
-Install Pydantic with the `[pydantic]` extra. Its `Decimal` and `datetime` fields are the
-easiest way to get exact numbers and real datetimes back.
+Install Pydantic with the `[pydantic]` extra. Its `datetime` fields give you real datetimes
+back. A `Decimal` field gives you a `Decimal`, but the client parses every JSON number as a
+`float` first. A Number field can have up to
+[18 digits](https://help.salesforce.com/s/articleView?id=000386249&type=1), more than a `float`
+holds exactly. So a value with more than 15 significant digits can come back rounded. Values
+that you send as `Decimal` stay exact.
+
+## Write a model back
+
+Send only the fields you changed. Make a model for the changes with every field optional. Then
+dump it with `by_alias=True` and `exclude_unset=True`.
+
+```python
+class LeadChanges(BaseModel):
+    status: str | None = Field(default=None, alias="Status")
+    rating: str | None = Field(default=None, alias="Rating")
+
+
+changes = LeadChanges(Status="Working")
+body = changes.model_dump(by_alias=True, exclude_unset=True)
+print(body)  # {'Status': 'Working'}
+await leads.update(lead_id, body)
+```
+
+`by_alias=True` gives the Salesforce field names. `exclude_unset=True` leaves out the fields you
+didn't set, so Salesforce keeps their values. Without it, the body has `"Rating": None`. The
+client sends that as JSON `null`, which clears the field.
 
 ## Update only if unchanged
 
