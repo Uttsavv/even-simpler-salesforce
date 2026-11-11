@@ -6,7 +6,7 @@ import re
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
-from typing import Any
+from typing import Any, cast
 
 from .. import errors as E
 from .graphql import graphql_error
@@ -222,6 +222,14 @@ def _is_action_results(body: Any) -> bool:
     return all(isinstance(item, Mapping) and "isSuccess" in item for item in body)  # pyright: ignore[reportUnknownVariableType]
 
 
+def _is_tree_errors(body: Any) -> bool:
+    """An sObject Tree error response: ``{"hasErrors": true, "results": [...]}``."""
+    if not isinstance(body, Mapping):
+        return False
+    m = cast("Mapping[str, Any]", body)
+    return m.get("hasErrors") is True and isinstance(m.get("results"), list)
+
+
 def _as_apex_error(err: E.SalesforceError, body: Any) -> E.SalesforceError:
     """Apex REST (§8.3): whatever the class returned is an :class:`ApexError` with ``.body``.
 
@@ -299,18 +307,22 @@ def classify(
     - ``apex.*``: errors become :class:`ApexError` carrying the decoded body (§8.3).
     - ``graphql``: a body with an ``errors`` array is a :class:`GraphQLError`, even with
       ``200 OK`` (§9.6).
+    - ``composite.tree``: a 400 whose body has ``hasErrors`` and ``results`` is returned to the
+      area as success; it raises the typed error of the first failed record itself (§9.4).
     """
     if spec.operation == "graphql":
         gql = graphql_error(resp, spec)
         if gql is not None:
             return gql
     err = _classify(resp, spec, error_tags)
-    if err is None or not spec.operation.startswith(("actions.", "apex.")):
+    if err is None or not spec.operation.startswith(("actions.", "apex.", "composite.tree")):
         return err
     # _classify already turned a body that isn't JSON into UnexpectedResponse.
     body: Any = None if isinstance(err, E.UnexpectedResponse) else resp.json()
     if spec.operation.startswith("actions."):
         return None if resp.status == 400 and _is_action_results(body) else err
+    if spec.operation == "composite.tree":
+        return None if resp.status == 400 and _is_tree_errors(body) else err
     return _as_apex_error(err, body)
 
 

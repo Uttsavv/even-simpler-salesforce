@@ -8,9 +8,11 @@
 ``__all__`` is the SemVer-covered public surface. Everything else is private.
 """
 
+from ._async.api.bulk import AsyncIngestJob
 from ._async.client import AsyncSalesforce
 from ._async.token_store import AsyncInMemoryTokenStore
 from ._async.transport import AsyncFileStream
+from ._sync.api.bulk import IngestJob
 from ._sync.client import Salesforce
 from ._sync.token_store import InMemoryTokenStore
 from ._sync.transport import FileStream
@@ -27,9 +29,10 @@ from .auth import (
     WebServerFlow,
 )
 from .cache import Cache, MemoryCache
-from .config import Budget, DescribeCacheConfig, RetryPolicy, Timeouts
+from .config import Backoff, Budget, DescribeCacheConfig, RetryPolicy, Timeouts
 from .context import call_context
 from .core.actions import Action
+from .core.composite import Reference
 from .core.cursor import Cursor
 from .core.records import flatten
 from .core.soql import soql, soql_identifier, soql_like, sosl_term
@@ -38,6 +41,7 @@ from .errors import (
     AuthError,
     BudgetExceeded,
     BulkJobFailed,
+    BulkJobTimeout,
     Conflict,
     ConnectError,
     DuplicateDetected,
@@ -82,8 +86,14 @@ from .errors import (
 )
 from .models import (
     ActionResult,
+    AnonymousResult,
     BatchResult,
+    BulkFailure,
+    BulkJobInfo,
+    BulkJobState,
+    CompositeResult,
     FileLink,
+    GraphResult,
     LeadConvert,
     LeadConvertResult,
     Limit,
@@ -93,6 +103,7 @@ from .models import (
     QueryPlanNote,
     QueryResult,
     RecordResult,
+    SubrequestResult,
     UpsertResult,
     UsageSnapshot,
 )
@@ -106,20 +117,28 @@ class EsfDeprecationWarning(DeprecationWarning):
 __all__ = [
     "Action",
     "ActionResult",
+    "AnonymousResult",
     "ApexError",
     "AsyncFileStream",
     "AsyncInMemoryTokenStore",
+    "AsyncIngestJob",
     "AsyncSalesforce",
     "AsyncTokenStore",
     "Auth",
     "AuthError",
     "AuthStart",
+    "Backoff",
     "BatchResult",
     "Budget",
     "BudgetExceeded",
+    "BulkFailure",
     "BulkJobFailed",
+    "BulkJobInfo",
+    "BulkJobState",
+    "BulkJobTimeout",
     "Cache",
     "ClientCredentials",
+    "CompositeResult",
     "Conflict",
     "ConnectError",
     "Cursor",
@@ -135,8 +154,10 @@ __all__ = [
     "FlowFailed",
     "Forbidden",
     "Gone",
+    "GraphResult",
     "GraphQLError",
     "InMemoryTokenStore",
+    "IngestJob",
     "InvalidField",
     "InvalidPicklistValue",
     "InvalidReference",
@@ -162,6 +183,7 @@ __all__ = [
     "RecordError",
     "RecordResult",
     "RecordSaveBlocked",
+    "Reference",
     "RefreshFailed",
     "RequestError",
     "RequestLimitExceeded",
@@ -178,6 +200,7 @@ __all__ = [
     "StaticToken",
     "StorageLimitExceeded",
     "StringTooLong",
+    "SubrequestResult",
     "Timeouts",
     "Token",
     "TokenConflict",

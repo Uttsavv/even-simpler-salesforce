@@ -2,19 +2,27 @@
 
 from __future__ import annotations
 
+import copy
 import re
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Generic, TypeVar
+from enum import Enum
+from typing import Any, Generic, TypeVar, cast
 
 from .core.cursor import Cursor
 from .core.http import check_record_id
-from .errors import ErrorDetail, PartialFailure
+from .errors import ErrorDetail, PartialFailure, SalesforceError, UnexpectedResponse
 
 __all__ = [
     "ActionResult",
+    "AnonymousResult",
     "BatchResult",
+    "CompositeResult",
+    "GraphResult",
+    "BulkFailure",
+    "BulkJobInfo",
+    "BulkJobState",
     "LeadConvert",
     "LeadConvertResult",
     "FileLink",
@@ -25,6 +33,7 @@ __all__ = [
     "QueryPlanNote",
     "QueryResult",
     "RecordResult",
+    "SubrequestResult",
     "UpsertResult",
     "UsageSnapshot",
 ]
@@ -375,3 +384,219 @@ class PublishResult:
     id: str | None = None
     uuid: str | None = None
     errors: tuple[ErrorDetail, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class AnonymousResult:
+    """Outcome of ``sf.tooling.execute_anonymous(code)``. Anonymous Apex can't return values.
+
+    Check ``compiled`` first: ``success`` is ``False`` for code that did not compile too.
+
+    Attributes:
+        compiled: Whether the code compiled.
+        success: Whether the code compiled and ran without an unhandled exception.
+        compile_problem: Why compilation failed, else ``None``.
+        exception_message: The unhandled exception, else ``None``.
+        exception_stack_trace: Its stack trace, else ``None``.
+        line: Line of the compile problem or exception, else ``None``.
+        column: Column of the compile problem or exception, else ``None``.
+        log: The debug log of the run with ``capture_log=True`` (``System.debug`` output), else
+            ``None``. Also ``None`` when the client could not find or read the log.
+    """
+
+    compiled: bool
+    success: bool
+    compile_problem: str | None = None
+    exception_message: str | None = None
+    exception_stack_trace: str | None = None
+    line: int | None = None
+    column: int | None = None
+    log: str | None = None
+
+
+# Error codes Salesforce gives subrequests that didn't fail themselves: they were rolled back or
+# skipped because another subrequest failed.
+_HALTED = frozenset({"PROCESSING_HALTED", "BATCH_PROCESSING_HALTED", "ALL_OR_NONE_OPERATION_ROLLED_BACK"})
+
+
+@dataclass(frozen=True, slots=True)
+class SubrequestResult:
+    """Outcome of one subrequest of a Composite, Composite Graph or Batch request.
+
+    Attributes:
+        reference_id: The subrequest's reference id (the client's name for it in a Batch).
+        status: HTTP status of the subrequest (``httpStatusCode`` or ``statusCode``).
+        body: Decoded body of the subrequest: the record for a get, the query page for a
+            query, ``{"id": ..., "success": true, ...}`` for a create, ``None`` for 204.
+        headers: Response headers of the subrequest, such as ``Location``.
+        error: The typed error for a failed subrequest (§8), else ``None``.
+    """
+
+    reference_id: str | None
+    status: int
+    body: Any = None
+    headers: Mapping[str, str] = field(default_factory=lambda: {})
+    error: SalesforceError | None = None
+
+    @property
+    def ok(self) -> bool:
+        """Whether the subrequest succeeded."""
+        return self.error is None
+
+    @property
+    def halted(self) -> bool:
+        """Whether Salesforce skipped or rolled back this subrequest because another one failed."""
+        return self.error is not None and self.error.error_code in _HALTED
+
+    @property
+    def errors(self) -> tuple[ErrorDetail, ...]:
+        """The error entries of a failed subrequest (empty when it succeeded)."""
+        return self.error.errors if self.error is not None else ()
+
+
+@dataclass(frozen=True, slots=True)
+class CompositeResult:
+    """Results of a Composite or Batch request, one per subrequest, in the order you added them.
+
+    Index it by position or by reference id: ``result[0]``, ``result["acc"]``. A failed
+    subrequest doesn't raise; call :meth:`raise_for_errors`.
+
+    Attributes:
+        results: One :class:`SubrequestResult` per subrequest.
+        operation: ``"composite.send"``, ``"composite.batch"`` or ``"composite.graph"``.
+    """
+
+    results: list[SubrequestResult]
+    operation: str | None = None
+
+    def __iter__(self) -> Iterator[SubrequestResult]:
+        return iter(self.results)
+
+    def __len__(self) -> int:
+        return len(self.results)
+
+    def __getitem__(self, key: int | str) -> SubrequestResult:
+        if isinstance(key, str):
+            for r in self.results:
+                if r.reference_id == key:
+                    return r
+            raise KeyError(key)
+        return self.results[key]
+
+    @property
+    def succeeded(self) -> list[SubrequestResult]:
+        """Subrequests that succeeded."""
+        return [r for r in self.results if r.ok]
+
+    @property
+    def failed(self) -> list[SubrequestResult]:
+        """Subrequests that failed, including the ones Salesforce halted or rolled back."""
+        return [r for r in self.results if not r.ok]
+
+    def raise_for_errors(self) -> None:
+        """Raise the typed error of the first subrequest that caused a failure.
+
+        Subrequests that Salesforce only halted or rolled back (``PROCESSING_HALTED``) don't
+        pick the class: the real cause does, for example :class:`ValidationRuleFailed`. The
+        exception's ``.errors`` holds the error entries of every failed subrequest.
+        """
+        failed = self.failed
+        if not failed:
+            return
+        primary = next((r for r in failed if not r.halted), failed[0])
+        exc = copy.copy(cast(SalesforceError, primary.error))
+        exc.errors = tuple(d for r in failed for d in r.errors)
+        raise exc
+
+
+@dataclass(frozen=True, slots=True)
+class GraphResult:
+    """Outcome of one graph of a Composite Graph request.
+
+    A graph is atomic: if one subrequest fails, Salesforce rolls back the whole graph, and
+    only that graph.
+
+    Attributes:
+        graph_id: The graph's id.
+        ok: ``isSuccessful`` from Salesforce.
+        results: The graph's subrequest results.
+    """
+
+    graph_id: str
+    ok: bool
+    results: CompositeResult
+
+    def raise_for_errors(self) -> None:
+        """Raise the typed error of the subrequest that made this graph fail."""
+        self.results.raise_for_errors()
+        if not self.ok:
+            raise UnexpectedResponse(f"graph {self.graph_id!r} failed without error details")
+
+
+class BulkJobState(str, Enum):
+    """State of a Bulk API 2.0 job (*Job States*, Bulk API 2.0 Developer Guide).
+
+    ``JobComplete``, ``Failed`` and ``Aborted`` are final: the job doesn't change after them.
+    The values equal the strings Salesforce sends, so ``state == "JobComplete"`` also works.
+    """
+
+    OPEN = "Open"
+    UPLOAD_COMPLETE = "UploadComplete"
+    IN_PROGRESS = "InProgress"
+    JOB_COMPLETE = "JobComplete"
+    FAILED = "Failed"
+    ABORTED = "Aborted"
+
+    @property
+    def is_final(self) -> bool:
+        """Whether the job has finished: ``JobComplete``, ``Failed`` or ``Aborted``."""
+        return self in (BulkJobState.JOB_COMPLETE, BulkJobState.FAILED, BulkJobState.ABORTED)
+
+
+@dataclass(frozen=True, slots=True)
+class BulkJobInfo:
+    """Status of a Bulk API 2.0 job, from the latest status call.
+
+    Attributes:
+        id: Job id (``750...``). For an ingest split over several jobs, the id of the first one.
+        operation: ``insert``, ``update``, ``upsert``, ``delete``, ``hardDelete``, ``query`` or
+            ``queryAll``.
+        sobject: The object of the job.
+        state: The job state.
+        api_version: The API version that created the job. Results are read with it.
+        records_processed: ``numberRecordsProcessed``.
+        records_failed: ``numberRecordsFailed`` (ingest jobs only).
+        created_date: When the job was created.
+        system_modstamp: When Salesforce last changed the job.
+        total_processing_ms: ``totalProcessingTime`` in milliseconds, if Salesforce sent it.
+        error_message: ``errorMessage`` of a failed job.
+        raw: The job info as Salesforce sent it. Empty for an ingest split over several jobs.
+    """
+
+    id: str
+    operation: str | None
+    sobject: str | None
+    state: BulkJobState
+    api_version: str
+    records_processed: int = 0
+    records_failed: int = 0
+    created_date: datetime | None = None
+    system_modstamp: datetime | None = None
+    total_processing_ms: int | None = None
+    error_message: str | None = None
+    raw: Mapping[str, Any] = field(default_factory=lambda: {}, repr=False, compare=False)
+
+
+@dataclass(frozen=True, slots=True)
+class BulkFailure:
+    """One row of the failed-results CSV of a Bulk ingest job.
+
+    Attributes:
+        error: The parsed ``sf__Error`` column: status code, message and fields.
+        id: ``sf__Id``: the record id, if Salesforce reported one.
+        fields: The other columns, as you uploaded them.
+    """
+
+    error: ErrorDetail
+    id: str | None = None
+    fields: Mapping[str, str] = field(default_factory=lambda: {})

@@ -19,15 +19,29 @@ The org enforces a few rules so error examples have something to hit:
 - ``POST graphql`` answers ``uiapi { query { <Object>(first:, after:) { edges { node { ... } }
   pageInfo { ... } } } }`` over the stored records (no filters), with ``{value}`` fields and
   cursors ``v1:<offset>``. An unknown field gets ``200 OK`` with a ``ValidationError``.
+- ``composite``, ``composite/graph``, ``composite/batch`` and ``composite/tree/{sobject}`` run
+  their subrequests against the same records, resolving ``@{ref.field}`` references.
 
 Files: a multipart ``POST sobjects/ContentVersion`` stores the bytes and creates the
 ContentDocument (plus a ContentDocumentLink for ``FirstPublishLocationId``);
 ``GET .../VersionData`` and ``GET sobjects/Attachment/{id}/Body`` return the bytes.
+
+Tooling API (``tooling/...``): ``ApexClass``, ``TraceFlag``, ``DebugLevel`` and ``ApexLog``
+records; ``executeAnonymous`` fails to compile code containing ``System debug``, throws for
+``1 / 0`` and, while a ``USER_DEBUG`` trace flag exists, writes an ``ApexLog`` with one
+``USER_DEBUG`` line per ``System.debug('...')``.
+Bulk API 2.0: an ingest job is processed when the client closes it (``PATCH state=UploadComplete``)
+and is ``JobComplete`` from then on; its rows go through the same create, update, upsert and
+delete rules as REST. A query job runs the SOQL above and serves the rows as CSV pages of
+``BULK_PAGE`` rows with ``Sforce-Locator`` and ``resultPages``.
 """
 
 from __future__ import annotations
 
+import copy
+import csv
 import gzip
+import io
 import itertools
 import json
 import re
@@ -57,9 +71,12 @@ PREFIXES = {
     "ContentDocumentLink": "06A",
     "Attachment": "00P",
 }
+TOOLING_PREFIXES = {"ApexClass": "01p", "TraceFlag": "7tf", "DebugLevel": "7dl", "ApexLog": "07L"}
+_DEBUG = re.compile(r"System\.debug\(\s*'((?:[^'\\]|\\.)*)'\s*\)")
 CUSTOM_FIELDS = {"External_Id__c", "Score__c"}
 CHILD_RELATIONSHIPS = {"Contacts": ("Contact", "AccountId"), "Opportunities": ("Opportunity", "AccountId")}
 PARENT_RELATIONSHIPS = {"ContentDocument": ("ContentDocument", "ContentDocumentId")}
+BULK_PAGE = 200  # rows per Bulk query result page
 CHILD_PAGE = 2  # tiny on purpose, so ``expand_children`` has something to follow
 
 _SOAP = re.compile(r"^/services/Soap/u/\d+\.\d$")
@@ -145,6 +162,9 @@ class FakeOrg:
         self.describe_modified = _now() - timedelta(days=3)
         self.events: list[tuple[str, dict[str, Any]]] = []
         self.blobs: dict[str, bytes] = {}
+        self.tooling: dict[str, dict[str, dict[str, Any]]] = {name: {} for name in TOOLING_PREFIXES}
+        self.apex_logs: dict[str, str] = {}  # ApexLog id -> body
+        self.jobs: dict[str, dict[str, Any]] = {}
         self._seed()
 
     # --- data ------------------------------------------------------------------------
@@ -163,6 +183,9 @@ class FakeOrg:
         return rec
 
     def _seed(self) -> None:
+        for name in ("OrderService", "OrderServiceTest", "LeadScoring"):
+            rid = f"01p8d{next(self.ids):010d}AAA"
+            self.tooling["ApexClass"][rid] = {"Id": rid, "Name": name, "Status": "Active"}
         self._store("User", {"Username": "integration@acme.example", "LastName": "Integration"})
         accounts = [self._store("Account", {"Name": n}) for n in ("Acme", "Globex", "Initech")]
         for i, last in enumerate(("Doe", "Roe", "Poe")):
@@ -335,6 +358,142 @@ class FakeOrg:
 
     def _was_deleted(self, rid: str) -> bool:
         return any(d[1] == rid for d in self.deleted)
+
+    # --- Bulk API 2.0 --------------------------------------------------------------------
+
+    def _csv(self, rows: list[dict[str, Any]], columns: list[str]) -> bytes:
+        buf = io.StringIO()
+        w = csv.writer(buf, lineterminator="\n")
+        w.writerow(columns)
+        for r in rows:
+            w.writerow(
+                [
+                    "" if r.get(c) is None else str(r[c]).lower() if isinstance(r[c], bool) else r[c]
+                    for c in columns
+                ]
+            )
+        return buf.getvalue().encode()
+
+    def _csv_response(self, data: bytes, headers: dict[str, str] | None = None) -> httpx.Response:
+        h = {"content-type": "text/csv", "sforce-limit-info": f"api-usage={self.api_used}/{API_MAX}"}
+        return httpx.Response(200, headers={**h, **(headers or {})}, content=data)
+
+    def _run_ingest(self, job: dict[str, Any]) -> None:
+        info = job["info"]
+        delim = {"COMMA": ",", "TAB": "\t", "PIPE": "|", "SEMICOLON": ";", "CARET": "^", "BACKQUOTE": "`"}
+        reader = csv.DictReader(
+            io.StringIO(job["data"].decode("utf-8-sig"), newline=""), delimiter=delim[info["columnDelimiter"]]
+        )
+        columns = list(reader.fieldnames or [])
+        ok: list[dict[str, Any]] = []
+        failed: list[dict[str, Any]] = []
+        sobject, op = info["object"], info["operation"]
+        for row in reader:
+            data = {k: (None if v == "#N/A" else v) for k, v in row.items() if v != ""}
+            try:
+                if op == "insert":
+                    rid, created = self.create(sobject, data)["Id"], True
+                elif op == "upsert":
+                    field = info["externalIdFieldName"]
+                    rid, created = self.upsert(sobject, field, str(data.pop(field, "")), data)
+                elif op == "update":
+                    rid, created = str(data.pop("Id", "")), False
+                    self.update(sobject, rid, data)
+                else:
+                    rid, created = str(data.get("Id", "")), False
+                    self.delete(sobject, rid)
+                ok.append({"sf__Id": rid, "sf__Created": "true" if created else "false", **row})
+            except Rejected as exc:
+                error = f"{exc.code}:{exc.message}:{','.join(exc.fields)} --"
+                failed.append({"sf__Id": row.get("Id", ""), "sf__Error": error, **row})
+        job["ok"] = self._csv(ok, ["sf__Id", "sf__Created", *columns])
+        job["failed"] = self._csv(failed, ["sf__Id", "sf__Error", *columns])
+        info.update(
+            state="JobComplete",
+            numberRecordsProcessed=len(ok) + len(failed),
+            numberRecordsFailed=len(failed),
+            totalProcessingTime=42,
+        )
+
+    def _bulk(
+        self,
+        request: httpx.Request,
+        method: str,
+        kind: str,
+        parts: list[str],
+        params: dict[str, str],
+        version: str,
+    ) -> httpx.Response:
+        if not parts and method == "POST":
+            body = self._body(request) or {}
+            jid = f"7508d{next(self.ids):010d}AAA"
+            info = {
+                "id": jid,
+                "object": body.get("object"),
+                "state": "Open",
+                "apiVersion": float(version),
+                "contentType": "CSV",
+                "lineEnding": body.get("lineEnding", "LF"),
+                "columnDelimiter": body.get("columnDelimiter", "COMMA"),
+                "operation": body["operation"],
+                "createdDate": "2026-11-10T10:00:00.000+0000",
+                "systemModstamp": "2026-11-10T10:00:00.000+0000",
+            }
+            if "externalIdFieldName" in body:
+                info["externalIdFieldName"] = body["externalIdFieldName"]
+            job: dict[str, Any] = {"info": info, "data": b""}
+            if kind == "query":
+                result = self.query(body["query"], 10**9, version)
+                fields = _split_top(_FIELD_LIST.match(body["query"]).group("fields"))  # type: ignore[union-attr]
+                info["object"] = result["records"][0]["attributes"]["type"] if result["records"] else None
+                rows = [{f: self._dotted(r, f) for f in fields} for r in result["records"]]
+                job.update(rows=rows, fields=fields)
+                info["state"] = "UploadComplete"
+            self.jobs[jid] = job
+            return self._json(dict(info))
+        job = self.jobs.get(parts[0]) if parts else None
+        if job is None:
+            raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+        info = job["info"]
+        rest = parts[1:]
+        if kind == "ingest" and rest == ["batches"] and method == "PUT":
+            job["data"] += request.content
+            return httpx.Response(201)
+        if kind == "ingest" and not rest and method == "PATCH":
+            state = (self._body(request) or {}).get("state")
+            if state == "Aborted":
+                info["state"] = "Aborted"
+                return self._json(dict(info))
+            info["state"] = "UploadComplete"
+            reply = dict(info)
+            self._run_ingest(job)
+            return self._json(reply)
+        if not rest:
+            if kind == "query":
+                info.update(state="JobComplete", numberRecordsProcessed=len(job["rows"]))
+            return self._json(dict(info))
+        if kind == "ingest":
+            names = {"successfulResults": "ok", "failedResults": "failed"}
+            return self._csv_response(job.get(names.get(rest[0], ""), b"sf__Id\n"))
+        if rest == ["results"]:
+            start = int(params.get("locator") or 0)
+            size = int(params.get("maxRecords") or BULK_PAGE)
+            page = job["rows"][start : start + size]
+            nxt = str(start + size) if start + size < len(job["rows"]) else "null"
+            return self._csv_response(self._csv(page, job["fields"]), {"sforce-locator": nxt})
+        if rest == ["resultPages"]:
+            base = f"/services/data/v{version}/jobs/query/{info['id']}"
+            starts = list(range(0, max(len(job["rows"]), 1), BULK_PAGE))
+            urls = [{"resultUrl": f"{base}/results?locator={n}&maxRecords={BULK_PAGE}"} for n in starts]
+            return self._json({"resultPages": urls, "nextRecordsUrl": None, "done": True})
+        raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+
+    @staticmethod
+    def _dotted(rec: dict[str, Any], field: str) -> Any:
+        value: Any = rec
+        for part in field.split("."):
+            value = value.get(part) if isinstance(value, dict) else None
+        return value
 
     # --- query -----------------------------------------------------------------------
 
@@ -585,12 +744,18 @@ class FakeOrg:
             return self._json(
                 {"sObjects": [{"name": n, "count": len(self.records.get(n, {}))} for n in names if n]}
             )
+        if parts[0] == "tooling":
+            return self._tooling(request, method, parts[1:], params, version)
         if parts[0] == "actions":
             return self._actions(request, parts[1:])
         if rest == "graphql" and method == "POST":
             return self._json(self._graphql(self._body(request) or {}))
+        if parts[0] == "jobs" and len(parts) >= 2 and parts[1] in ("ingest", "query"):
+            return self._bulk(request, method, parts[1], parts[2:], params, version)
         if parts[0] == "sobjects" and len(parts) == 2 and parts[1].endswith("__e") and method == "POST":
             return self._json(self._publish(parts[1], self._body(request) or {}), 201)
+        if rest == "composite" or (parts[0] == "composite" and parts[1] in ("graph", "batch", "tree")):
+            return self._composite(request, version, parts[1:])
         if parts[0] == "composite" and len(parts) >= 2 and parts[1] == "sobjects":
             return self._collections(request, method, parts[2:], params)
         if parts[0] == "sobjects":
@@ -673,6 +838,122 @@ class FakeOrg:
             "errors": [],
         }
 
+    # --- composite --------------------------------------------------------------------
+
+    def _sub(self, request: httpx.Request, version: str, method: str, url: str, body: Any) -> tuple[int, Any]:
+        """Run one subrequest through :meth:`_data`; returns ``(status, decoded body)``."""
+        url = url if url.startswith("/") else f"/services/data/{url}"
+        sub = httpx.Request(method, INSTANCE + url, headers=dict(request.headers), json=body)
+        sub.headers.pop("content-encoding", None)
+        m = _DATA.match(sub.url.path)
+        try:
+            resp = self._data(sub, m.group("v") if m else version, m.group("rest").rstrip("/") if m else "")
+        except Rejected as exc:
+            return exc.status, exc.body()
+        return resp.status_code, (json.loads(resp.content) if resp.content else None)
+
+    def _run(self, request: httpx.Request, version: str, items: list[Any], all_or_none: bool) -> list[Any]:
+        ref = re.compile(r"@\{(\w+)\.([^{}]+)\}")
+        done: dict[str, Any] = {}
+
+        def lookup(m: re.Match[str]) -> str:
+            value: Any = done.get(m.group(1))
+            for name, index in re.findall(r"(\w+)|\[(\d+)\]", m.group(2)):
+                value = value[name] if name else value[int(index)]
+            return str(value)
+
+        def resolve(value: Any) -> Any:
+            if isinstance(value, str):
+                return ref.sub(lookup, value)
+            if isinstance(value, dict):
+                return {k: resolve(v) for k, v in value.items()}
+            if isinstance(value, list):
+                return [resolve(v) for v in value]
+            return value
+
+        snapshot = copy.deepcopy(self.records)
+        out: list[dict[str, Any]] = []
+        failed = False
+        for item in items:
+            if failed and all_or_none:
+                status, body = 400, [{"errorCode": "PROCESSING_HALTED", "message": "halted"}]
+            else:
+                status, body = self._sub(
+                    request, version, item["method"], resolve(item["url"]), resolve(item.get("body"))
+                )
+            failed = failed or status >= 400
+            done[item["referenceId"]] = body
+            out.append(
+                {
+                    "body": body,
+                    "httpHeaders": {},
+                    "httpStatusCode": status,
+                    "referenceId": item["referenceId"],
+                }
+            )
+        if failed and all_or_none:
+            self.records = snapshot
+            rolled = [{"errorCode": "PROCESSING_HALTED", "message": "rolled back"}]
+            for r in out:
+                if r["httpStatusCode"] < 400:
+                    r.update(body=rolled, httpStatusCode=400)
+        return out
+
+    def _composite(self, request: httpx.Request, version: str, parts: list[str]) -> httpx.Response:
+        body = self._body(request)
+        if not parts:
+            items = body["compositeRequest"]
+            return self._json({"compositeResponse": self._run(request, version, items, body["allOrNone"])})
+        if parts[0] == "graph":
+            graphs = []
+            for g in body["graphs"]:
+                results = self._run(request, version, g["compositeRequest"], True)
+                ok = all(r["httpStatusCode"] < 400 for r in results)
+                graphs.append(
+                    {
+                        "graphId": g["graphId"],
+                        "graphResponse": {"compositeResponse": results},
+                        "isSuccessful": ok,
+                    }
+                )
+            return self._json({"graphs": graphs})
+        if parts[0] == "batch":
+            results = []
+            for item in body["batchRequests"]:
+                status, result = self._sub(
+                    request, version, item["method"], item["url"], item.get("richInput")
+                )
+                results.append({"statusCode": status, "result": result})
+            return self._json({"hasErrors": any(r["statusCode"] >= 400 for r in results), "results": results})
+        snapshot = copy.deepcopy(self.records)
+        created: list[dict[str, Any]] = []
+        current = [""]
+
+        def make(row: dict[str, Any], parent: tuple[str, str] | None) -> None:
+            sobject, ref = row["attributes"]["type"], row["attributes"]["referenceId"]
+            current[0] = ref
+            data = {k: v for k, v in row.items() if k != "attributes" and not isinstance(v, dict)}
+            if parent is not None:
+                data.setdefault(f"{parent[0]}Id", parent[1])
+            self._known(sobject)
+            rid = self.create(sobject, data)["Id"]
+            created.append({"referenceId": ref, "id": rid})
+            for value in row.values():
+                if isinstance(value, dict) and "records" in value:
+                    for kid in value["records"]:
+                        make(kid, (sobject, rid))
+
+        try:
+            for root in body["records"]:
+                make(root, None)
+        except Rejected as exc:
+            self.records = snapshot
+            errors = [{"statusCode": exc.code, "message": exc.message, "fields": exc.fields}]
+            return self._json(
+                {"hasErrors": True, "results": [{"referenceId": current[0], "errors": errors}]}, 400
+            )
+        return self._json({"hasErrors": False, "results": created}, 201)
+
     def _sobjects(
         self, request: httpx.Request, method: str, parts: list[str], params: dict[str, str], version: str
     ) -> httpx.Response:
@@ -710,6 +991,12 @@ class FakeOrg:
                 {"name": "LastName", "type": "string", "length": 80},
                 *({"name": f, "type": "string", "custom": True} for f in sorted(CUSTOM_FIELDS)),
             ]
+            if sobject == "Account":  # a compound address, for the Bulk page
+                fields.append({"name": "BillingAddress", "type": "address"})
+                fields += [
+                    {"name": f"Billing{p}", "type": "string", "compoundFieldName": "BillingAddress"}
+                    for p in ("Street", "City", "State", "PostalCode", "Country")
+                ]
             return self._json(
                 {"name": sobject, "label": sobject, "createable": True, "fields": fields},
                 headers={"last-modified": format_datetime(self.describe_modified, usegmt=True)},
@@ -867,6 +1154,95 @@ class FakeOrg:
                         ],
                     )
         return results
+
+    # --- Tooling API (synthetic) -----------------------------------------------------
+
+    def _tooling(
+        self, request: httpx.Request, method: str, parts: list[str], params: dict[str, str], version: str
+    ) -> httpx.Response:
+        if parts == ["query"]:
+            m = _FIELD_LIST.match(params["q"])
+            name = m.group("obj") if m else ""
+            if name not in self.tooling:
+                raise Rejected("INVALID_TYPE", f"sObject type '{name}' is not supported.")
+            rows = list(self.tooling[name].values())
+            for field, lit in _EQ.findall(m.group("tail") if m else ""):
+                if field in ("Name", "DeveloperName", "TracedEntityId", "LogUserId"):
+                    rows = [r for r in rows if r.get(field) == _literal(lit)]
+            if name == "ApexLog":  # the client asks ORDER BY StartTime DESC
+                rows.reverse()
+            recs = [{"attributes": {"type": name, "url": ""}, **r} for r in rows]
+            return self._json({"size": len(recs), "totalSize": len(recs), "done": True, "records": recs})
+        if parts == ["executeAnonymous"]:
+            return self._json(self._anonymous(params["anonymousBody"]))
+        if parts == ["runTestsAsynchronous"] and method == "POST":
+            return self._json(f"7078d{next(self.ids):010d}")
+        if parts == ["completions"]:
+            return self._json({"publicDeclarations": {"System": {"Math": [{"name": "abs"}], "String": []}}})
+        if len(parts) == 4 and parts[1] == "ApexLog" and parts[3] == "Body":
+            body = self.apex_logs.get(parts[2])
+            if body is None:
+                raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+            return httpx.Response(200, headers={"content-type": "text/plain"}, content=body.encode())
+        if parts[0] == "sobjects" and len(parts) >= 2 and parts[1] in self.tooling:
+            store = self.tooling[parts[1]]
+            if len(parts) == 2 and method == "POST":
+                rid = f"{TOOLING_PREFIXES[parts[1]]}8d{next(self.ids):010d}AAA"
+                store[rid] = {"Id": rid, **(self._body(request) or {})}
+                return self._json({"id": rid, "success": True, "errors": []}, 201)
+            rec = store.get(parts[2]) if len(parts) == 3 else None
+            if rec is None:
+                raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+            if method == "DELETE":
+                del store[parts[2]]
+                return self._json(None, 204)
+            if method == "PATCH":
+                rec.update(self._body(request) or {})
+                return self._json(None, 204)
+            return self._json({"attributes": {"type": parts[1]}, **rec})
+        raise Rejected("NOT_FOUND", "The requested resource does not exist", status=404)
+
+    def _anonymous(self, code: str) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "line": -1,
+            "column": -1,
+            "compiled": True,
+            "success": True,
+            "compileProblem": None,
+            "exceptionMessage": None,
+            "exceptionStackTrace": None,
+        }
+        if "System debug" in code:
+            col = code.index("System debug") + 8
+            return {
+                **result,
+                "compiled": False,
+                "success": False,
+                "line": 1,
+                "column": col,
+                "compileProblem": "Unexpected token 'debug'.",
+            }
+        if "1 / 0" in code:
+            result.update(
+                success=False,
+                line=1,
+                column=1,
+                exceptionMessage="System.MathException: Divide by 0",
+                exceptionStackTrace="AnonymousBlock: line 1, column 1",
+            )
+        if any(f.get("LogType") == "USER_DEBUG" for f in self.tooling["TraceFlag"].values()):
+            rid = f"07L8d{next(self.ids):010d}AAA"
+            start = _now().strftime("%Y-%m-%dT%H:%M:%S.000+0000")
+            self.tooling["ApexLog"][rid] = {
+                "Id": rid,
+                "LogUserId": USER_ID,
+                "Operation": "/services/data/v68.0/tooling/executeAnonymous/",
+                "StartTime": start,
+            }
+            lines = ["68.0 APEX_CODE,DEBUG", "Execute Anonymous: " + code.splitlines()[0]]
+            lines += [f"12:00:00.0 (1)|USER_DEBUG|[1]|DEBUG|{msg}" for msg in _DEBUG.findall(code)]
+            self.apex_logs[rid] = "\n".join(lines) + "\n"
+        return result
 
     # --- org automation (synthetic) -------------------------------------------------
 

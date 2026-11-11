@@ -37,6 +37,13 @@ KNOWN_PREFIXES: dict[str, str] = {
     "Campaign": "701",
     "Contract": "800",
     "Order": "801",
+    # Tooling API objects
+    "ApexClass": "01p",
+    "ApexTrigger": "01q",
+    "ApexLog": "07L",
+    "AsyncApexJob": "707",
+    "DebugLevel": "7dl",
+    "TraceFlag": "7tf",
 }
 
 

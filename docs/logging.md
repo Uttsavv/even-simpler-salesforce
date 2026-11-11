@@ -193,6 +193,7 @@ Don't put personal data in custom paths. Paths you pass to `sf.request()` appear
 | `sf.auth.refreshed` | a token was acquired or refreshed | `token_key_hash`, `flow`, `duration_ms`, `rotated` (new refresh token), `proactive`, `initial` (first token, not a refresh) |
 | `sf.auth.reauth_required` | a refresh token is dead (`invalid_grant`) | `token_key_hash` |
 | `sf.usage.threshold` | a [budget](usage-and-budgets.md#budgets) threshold was crossed | `threshold`, `fraction`, `used`, `max` |
+| `sf.bulk.job` | a [Bulk API 2.0](guides/bulk.md) job changed state or progress | `job_id`, `operation`, `sobject`, `state`, `records_processed`, `records_failed` |
 | `sf.debug.attempt` | each HTTP attempt, only with `ESF_DEBUG=2` | `method`, `path_template` (not the URL: paths can carry external id values), `status`, `request_headers` / `response_headers` (`Authorization` and cookies redacted), `elapsed_ms` |
 
 The `reason` of `sf.retry` and each entry of `retry_reasons` take one of these values:

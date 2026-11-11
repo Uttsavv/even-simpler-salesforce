@@ -1,0 +1,50 @@
+{
+  "synthetic": true,
+  "source": "hand-written (synthetic) from the Salesforce REST API Developer Guide, Composite (Send Multiple Requests Using Composite) and Composite Request Body; no org recording yet",
+  "body": {
+    "compositeResponse": [
+      {
+        "body": {
+          "id": "001xx0000000001AAA",
+          "success": true,
+          "errors": []
+        },
+        "httpHeaders": {
+          "Location": "/services/data/v68.0/sobjects/Account/001xx0000000001AAA"
+        },
+        "httpStatusCode": 201,
+        "referenceId": "acc"
+      },
+      {
+        "body": {
+          "id": "003xx0000000001AAA",
+          "success": true,
+          "errors": []
+        },
+        "httpHeaders": {
+          "Location": "/services/data/v68.0/sobjects/Contact/003xx0000000001AAA"
+        },
+        "httpStatusCode": 201,
+        "referenceId": "Contact2"
+      },
+      {
+        "body": {
+          "totalSize": 1,
+          "done": true,
+          "records": [
+            {
+              "attributes": {
+                "type": "Contact",
+                "url": "/services/data/v68.0/sobjects/Contact/003xx0000000001AAA"
+              },
+              "Id": "003xx0000000001AAA"
+            }
+          ]
+        },
+        "httpHeaders": {},
+        "httpStatusCode": 200,
+        "referenceId": "query3"
+      }
+    ]
+  }
+}
