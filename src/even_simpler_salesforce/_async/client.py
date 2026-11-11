@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import copy
 import re
 import time
 from collections.abc import AsyncIterator, Iterable, Mapping, Sequence
@@ -18,6 +17,7 @@ from ..auth.store import AsyncTokenStore
 from ..cache import Cache, MemoryCache
 from ..config import Budget, DescribeCacheConfig, Priority, RetryPolicy, Timeouts
 from ..context import current_call_context
+from ..core import jsonlib
 from ..core.actions import Action, action_inputs, action_result_type, build_action_result
 from ..core.cursor import Cursor, decode_cursor, encode_cursor
 from ..core.http import RawResponse, RequestSpec, check_sobject
@@ -28,7 +28,7 @@ from ..errors import MultipleMatches, NotFound, SalesforceError, UnexpectedRespo
 from ..models import Limit, MergeResult, QueryPlan, QueryResult
 from ..observability.debug import DebugPrinter, debug_level
 from ..observability.events import Observer, ObserverHub
-from ..usage import UsageTracker
+from ..usage import UsageTracker, org_key
 from . import _compat
 from .api.actions import AsyncActions
 from .api.apex import AsyncApex
@@ -292,8 +292,13 @@ class AsyncSalesforce:
 
     @property
     def usage(self) -> UsageTracker:
-        """API usage tracker; ``sf.usage.snapshot()`` returns a :class:`UsageSnapshot`."""
-        return self._transport.usage
+        """API usage tracker; ``sf.usage.snapshot()`` returns a :class:`UsageSnapshot`.
+
+        The call counters are shared by the client family. The ``Sforce-Limit-Info`` values
+        and the budget guard use the org of this client's token.
+        """
+        runtime = self._runtime
+        return self._transport.usage.bound(lambda: org_key(runtime.current()))
 
     @property
     def api_version(self) -> str:
@@ -376,25 +381,33 @@ class AsyncSalesforce:
         )
         path = base + path
         if not cached:
-            return copy.deepcopy(await self._describe_fetch(path, key, False, sobject, op))
+            return (await self._describe_fetch(path, key, False, sobject, op))[1]
         # Single flight: concurrent misses for one key wait for the first fetch, then hit the cache.
         async with t.single_flight(key):
-            return copy.deepcopy(await self._describe_fetch(path, key, True, sobject, op))
+            body, data = await self._describe_fetch(path, key, True, sobject, op)
+        # The cache holds the JSON text, so each caller decodes its own private copy, outside
+        # the lock. Decoding is several times faster than deep-copying a large describe.
+        return data if data is not None else t.loads(body.encode())
 
-    async def _describe_fetch(self, path: str, key: str, cached: bool, sobject: str | None, op: str) -> Any:
+    async def _describe_fetch(
+        self, path: str, key: str, cached: bool, sobject: str | None, op: str
+    ) -> tuple[str, Any]:
+        """Return ``(json_text, parsed_or_None)``; ``parsed`` is set only for a fresh 200."""
         t = self._transport
         cfg = t.describe_cache
         cached_value: Any = t.cache.get(key) if cached else None
         entry: dict[str, Any] | None = (
-            cast("dict[str, Any]", cached_value) if isinstance(cached_value, dict) else None
+            cast("dict[str, Any]", cached_value)
+            if isinstance(cached_value, dict) and isinstance(cached_value.get("body"), str)  # pyright: ignore[reportUnknownMemberType]
+            else None
         )
         now = time.time()
         headers: dict[str, str] = {}
         if entry is not None:
-            if now - float(entry.get("fetched_at", 0)) < cfg.ttl:  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
-                return entry["data"]  # pyright: ignore[reportUnknownVariableType]
-            if cfg.revalidate and entry.get("last_modified"):  # pyright: ignore[reportUnknownMemberType]
-                headers["If-Modified-Since"] = str(entry["last_modified"])  # pyright: ignore[reportUnknownArgumentType]
+            if now - float(entry.get("fetched_at", 0)) < cfg.ttl:
+                return entry["body"], None
+            if cfg.revalidate and entry.get("last_modified"):
+                headers["If-Modified-Since"] = str(entry["last_modified"])
         raw = await self._send(
             RequestSpec(
                 "GET",
@@ -405,15 +418,19 @@ class AsyncSalesforce:
                 allow_not_modified=bool(headers),
             )
         )
+        last_modified = raw.headers.get("last-modified") or formatdate(now, usegmt=True)
+        data: Any = None
         if raw.status == 304 and entry is not None:
-            data: Any = entry["data"]
+            body: str = entry["body"]
+            last_modified = str(entry.get("last_modified") or last_modified)
         else:
             data = raw.json()
-        last_modified = raw.headers.get("last-modified") or formatdate(now, usegmt=True)
-        if raw.status == 304 and entry is not None:
-            last_modified = str(entry.get("last_modified") or last_modified)
-        t.cache.set(key, {"data": data, "last_modified": last_modified, "fetched_at": now}, cfg.stale_ttl)
-        return data
+            try:
+                body = raw.content.decode("utf-8")
+            except UnicodeDecodeError:  # pragma: no cover - Salesforce sends UTF-8 JSON
+                body = jsonlib.dumps(data).decode("utf-8")
+        t.cache.set(key, {"body": body, "last_modified": last_modified, "fetched_at": now}, cfg.stale_ttl)
+        return body, data
 
     # --- query & search ----------------------------------------------------------------
 
@@ -847,7 +864,8 @@ class AsyncSalesforce:
         if daily is not None:
             from ..core.limits import LimitInfo
 
-            self._transport.usage.observe(LimitInfo(daily.used, daily.max))
+            org = org_key(self._runtime.current())
+            self._transport.usage.observe(LimitInfo(daily.used, daily.max), org=org)
         return out
 
     def start_limits_poller(self, interval: float = MIN_LIMITS_POLL_INTERVAL) -> None:

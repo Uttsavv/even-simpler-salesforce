@@ -11,7 +11,7 @@ from pathlib import Path
 import even_simpler_salesforce as esf
 
 auth = esf.JwtBearer(
-    domain="login",  # or "test", or the My Domain URL
+    domain="login",  # or "test", the My Domain URL or an Experience Cloud site URL
     client_id=os.environ["SF_CLIENT_ID"],
     username=os.environ["SF_USERNAME"],  # the user to act as; must be pre-authorized
     private_key=Path("server.key").read_bytes(),  # PEM, str or bytes
@@ -35,7 +35,7 @@ You also need an app with a certificate and pre-authorized users.
 
 | Argument | Default | What it does |
 |---|---|---|
-| `domain` | required | token endpoint host: `"login"`, `"test"` or a My Domain URL |
+| `domain` | required | token endpoint host: `"login"`, `"test"`, a My Domain URL or an [Experience Cloud site URL](index.md#experience-cloud-sites) |
 | `client_id` | required | consumer key; sent as the JWT `iss` claim |
 | `username` | required | Salesforce username; sent as the JWT `sub` claim |
 | `private_key` | required | RSA private key in PEM format (RS256); never logged or shown by `repr(auth)` |
@@ -53,8 +53,24 @@ Salesforce checks the `aud` claim against the login host. The client infers it f
 |---|---|
 | `"login"` or a production My Domain | `https://login.salesforce.com` |
 | `"test"`, `https://test.salesforce.com` or `https://<name>--<sandbox>.sandbox.my.salesforce.com` | `https://test.salesforce.com` |
+| an Experience Cloud site URL, such as `https://acme.my.site.com/partners` or any `*.my.site.com` host | the site URL itself |
 
-Set `audience=` when this guess is wrong, for example for an Experience Cloud site URL:
+For an Experience Cloud site, the client sends the token request to the site URL. Salesforce
+expects the site URL as `aud` for site members:
+
+```python
+site = esf.JwtBearer(
+    domain="https://acme.my.site.com/partners",
+    client_id=os.environ["SF_CLIENT_ID"],
+    username="member@acme.example",
+    private_key=Path("server.key").read_bytes(),
+)
+print(site.token_url)  # https://acme.my.site.com/partners/services/oauth2/token
+print(site.aud)  # https://acme.my.site.com/partners
+```
+
+If the site has a custom domain without a path, the client can't tell it is a site. Set
+`audience=` to the site URL. Set `audience=` also for any other case where the guess is wrong:
 
 ```python
 auth = esf.JwtBearer(

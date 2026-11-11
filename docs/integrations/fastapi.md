@@ -54,7 +54,8 @@ log = logging.getLogger("app")
 
 
 def log_summary(request, fields: dict[str, Any]) -> None:
-    log.info("request.completed %s %s", request.method, request.url.path, extra=fields)
+    # %r escapes control characters, so a crafted path can't forge log lines.
+    log.info("request.completed %s %r", request.method, request.url.path, extra=fields)
 
 
 esf_app = SalesforceIntegration(

@@ -1,0 +1,1 @@
+Docs: the performance page no longer lists the Bulk CSV benchmark, which the suite skips until Bulk ships in 0.3. It also says that the client waits for `Retry-After` only on `429` and `REQUEST_LIMIT_EXCEEDED`, and that 5xx retries use backoff.

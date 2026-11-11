@@ -119,7 +119,7 @@ Behaviour relied on:
 | `Sforce-Auto-Assign` | request | assignment_rule_id= (TRUE / FALSE / rule id) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/headers_autoassign.htm) |  |
 | `Sforce-Duplicate-Rule-Header` | request | allow_save= → allowSave=true/false | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/headers_duplicaterules.htm) |  |
 | `If-Modified-Since` | request | describe revalidation, get(if_modified_since=) → 304 | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/intro_rest_conditional_requests.htm) |  |
-| `If-Unmodified-Since` | request | update/delete(if_unmodified_since=) → 412 | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/intro_rest_conditional_requests.htm) |  |
+| `If-Unmodified-Since` | request | update(if_unmodified_since=) → 412 | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/intro_rest_conditional_requests.htm) |  |
 | `Content-Encoding` | request | gzip for bodies over 64 KiB (Collections) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/intro_rest_compression.htm) |  |
 | `Sforce-Limit-Info` | response | api-usage=N/M; api-bursts=N/M → sf.usage, budgets | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/headers_api_usage.htm) |  |
 | `Sforce-Locator` | response | next Bulk query result page; the string null on the last page | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/query_get_job_results.htm) |  |

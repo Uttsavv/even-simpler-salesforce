@@ -1,0 +1,42 @@
+[
+  {
+    "rule": "unsupported",
+    "status": "todo",
+    "line": 1
+  },
+  {
+    "rule": "client-methods",
+    "status": "rewritten",
+    "line": 5
+  },
+  {
+    "rule": "sobject-attr",
+    "status": "rewritten",
+    "line": 6
+  },
+  {
+    "rule": "client-methods",
+    "status": "todo",
+    "line": 7
+  },
+  {
+    "rule": "client-methods",
+    "status": "todo",
+    "line": 8
+  },
+  {
+    "rule": "client-methods",
+    "status": "todo",
+    "line": 9
+  },
+  {
+    "rule": "client-methods",
+    "status": "todo",
+    "line": 10
+  },
+  {
+    "rule": "client-methods",
+    "status": "todo",
+    "line": 12
+  }
+]

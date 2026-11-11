@@ -251,3 +251,16 @@ def test_public_surface() -> None:
     ):
         assert name in esf.__all__
     assert issubclass(esf.EsfDeprecationWarning, DeprecationWarning)
+
+
+def test_error_detail_and_record_result_are_hashable() -> None:
+    a = esf.ErrorDetail("CODE", "msg", ("A",), {"x": 1})
+    b = esf.ErrorDetail("CODE", "msg", ("A",), {"x": 1})
+    c = esf.ErrorDetail("CODE", "msg", ("A",), {"x": 2})
+    assert a == b
+    assert hash(a) == hash(b)
+    assert a != c  # extended still counts for equality
+    assert len({a, b, c}) == 2
+    r = esf.RecordResult(False, None, None, (a,))
+    assert hash(r) == hash(esf.RecordResult(False, None, None, (b,)))
+    assert {r: 1}[esf.RecordResult(False, None, None, (b,))] == 1

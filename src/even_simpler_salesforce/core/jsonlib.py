@@ -6,7 +6,8 @@ Both backends behave identically:
   anything is sent. orjson would otherwise turn them into ``null`` and silently blank the field
   in Salesforce; the stdlib would emit ``NaN``, which is not JSON.
 - ``Decimal`` is encoded as a JSON *number* with its exact digits (never via ``float``).
-- ``datetime``/``date`` become ISO 8601 strings; ``set``/``frozenset``/``tuple`` become arrays.
+- ``datetime``, ``date`` and ``time`` become ``isoformat()`` strings;
+  ``set``/``frozenset``/``tuple`` become arrays.
 """
 
 from __future__ import annotations
@@ -34,8 +35,36 @@ class NonFiniteNumber(ValueError):
     """A NaN/Infinity value can't be sent to Salesforce."""
 
 
-def _check(obj: Any, path: str = "$") -> None:
-    """Raise :class:`NonFiniteNumber` for NaN/±Inf anywhere in ``obj``."""
+_PLAIN = (str, int, bool, type(None))  # exact types that can't hold NaN/±Inf
+
+
+def _has_nonfinite(obj: Any) -> bool:
+    """Fast walk: ``True`` if NaN/±Inf is anywhere in ``obj``. Builds no paths."""
+    if type(obj) in _PLAIN:
+        return False
+    if isinstance(obj, float):
+        return not math.isfinite(obj)
+    if isinstance(obj, decimal.Decimal):
+        return not obj.is_finite()
+    if isinstance(obj, Mapping):
+        values: Iterable[Any] = cast("Mapping[Any, Any]", obj).values()
+    elif isinstance(obj, (list, tuple, set, frozenset)):
+        values = cast("Iterable[Any]", obj)
+    else:
+        return False
+    for v in values:
+        if type(v) in _PLAIN:  # inline, so plain leaves cost no function call
+            continue
+        if type(v) is float:
+            if v - v != 0.0:  # NaN and ±Inf; finite floats give 0.0
+                return True
+        elif _has_nonfinite(v):
+            return True
+    return False
+
+
+def _raise_at(obj: Any, path: str) -> None:
+    """Slow walk, run only after :func:`_has_nonfinite` found a bad value: raise with its path."""
     if isinstance(obj, float):
         if not math.isfinite(obj):
             raise NonFiniteNumber(f"{obj!r} at {path} can't be sent to Salesforce (not valid JSON)")
@@ -44,16 +73,20 @@ def _check(obj: Any, path: str = "$") -> None:
             raise NonFiniteNumber(f"Decimal({str(obj)!r}) at {path} can't be sent to Salesforce")
     elif isinstance(obj, Mapping):
         for k, v in cast("Mapping[Any, Any]", obj).items():
-            _check(v, f"{path}.{k}")
+            _raise_at(v, f"{path}.{k}")
     elif isinstance(obj, (list, tuple, set, frozenset)):
         for i, v in enumerate(cast("Iterable[Any]", obj)):
-            _check(v, f"{path}[{i}]")
+            _raise_at(v, f"{path}[{i}]")
+
+
+def _check(obj: Any) -> None:
+    """Raise :class:`NonFiniteNumber` for NaN/±Inf anywhere in ``obj``."""
+    if _has_nonfinite(obj):
+        _raise_at(obj, "$")
 
 
 def _common_default(obj: Any) -> Any:
-    if isinstance(obj, _dt.datetime):
-        return obj.isoformat()
-    if isinstance(obj, _dt.date):
+    if isinstance(obj, (_dt.datetime, _dt.date, _dt.time)):
         return obj.isoformat()
     if isinstance(obj, (set, frozenset, tuple)):
         return list(cast("Iterable[Any]", obj))
@@ -101,7 +134,12 @@ def orjson_dumps(obj: Any) -> bytes:
     if _orjson_mod is None:  # pragma: no cover - depends on the environment
         raise ImportError("orjson is not installed; install the [speed] extra")
     _check(obj)
-    return cast(bytes, _orjson_mod.dumps(obj, default=_orjson_default))
+    # Send datetime, date and time to ``default`` too, so both backends encode them with
+    # ``isoformat()``. orjson's own encoder rejects a ``time`` with a timezone.
+    return cast(
+        bytes,
+        _orjson_mod.dumps(obj, default=_orjson_default, option=_orjson_mod.OPT_PASSTHROUGH_DATETIME),
+    )
 
 
 def orjson_loads(data: bytes | str) -> Any:

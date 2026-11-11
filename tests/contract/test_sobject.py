@@ -187,10 +187,11 @@ def test_delete(h: Harness, mock: respx.MockRouter) -> None:
     route = mock.delete(f"{DATA}/sobjects/Lead/{LEAD_ID}").respond(204)
     sf = h.client()
     assert h.run(sf.sobject("Lead").delete(LEAD_ID)) is None
-    since = datetime(2026, 1, 2, tzinfo=timezone.utc)
-    h.run(sf.sobject("Lead").delete(LEAD_ID, if_unmodified_since=since))
-    assert "If-Unmodified-Since" in route.calls.last.request.headers
-    assert route.call_count == 2
+    assert "If-Unmodified-Since" not in route.calls.last.request.headers
+    # Salesforce doesn't support conditional headers on DELETE (ADR 0012).
+    with pytest.raises(TypeError):
+        sf.sobject("Lead").delete(LEAD_ID, if_unmodified_since=datetime.now(timezone.utc))  # type: ignore[call-arg]
+    assert route.call_count == 1
 
 
 def test_metadata_updated_deleted(h: Harness, mock: respx.MockRouter) -> None:

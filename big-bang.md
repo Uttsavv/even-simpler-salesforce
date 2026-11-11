@@ -419,7 +419,7 @@ All are frozen config objects implementing the `Auth` protocol. They hold no tok
 | `TokenExchange` *(later)* | RFC 8693 exchange | | |
 | `DeviceFlow` *(later)* | CLIs and devices | | |
 
-`domain` accepts `"login"`, `"test"`, or a full `https://<mydomain>.my.salesforce.com` URL.
+`domain` accepts `"login"`, `"test"`, a full `https://<mydomain>.my.salesforce.com` URL, or an Experience Cloud site URL with a path prefix (`https://<site>.my.site.com/<prefix>`; no query, fragment, `.`/`..` or empty segments). The OAuth endpoints (authorize, token, revoke, introspect) are built under that base; `userinfo` and API calls use the token's `instance_url`. For a site base, the JWT `aud` is the site URL. `ClientCredentials` rejects a site path (documented on My Domain only).
 
 **WebServerFlow helpers** (pure + one I/O call each):
 
@@ -429,6 +429,7 @@ token = await sf.auth.exchange_code(flow, code, code_verifier=start.code_verifie
 await sf.auth.revoke(token_key)                  # POST /services/oauth2/revoke, clears store
 info  = await sf.auth.userinfo()                 # /services/oauth2/userinfo
 intro = await sf.auth.introspect(token_key)      # /services/oauth2/introspect
+token = await sf.auth.refresh()                  # forced refresh (single-flight); StaticToken → SessionExpired
 ```
 
 PKCE (S256) is on by default for `WebServerFlow`.
@@ -1348,6 +1349,7 @@ Every finding carries a stable rule id. Ids are part of the public interface (do
 | `exceptions` | simple-salesforce exceptions in `except`, `isinstance`, `raise` and the imports | 1:1: `SalesforceError` → `esf.SalesforceError`, `SalesforceResourceNotFound` → `esf.NotFound`, `SalesforceMoreThanOneRecord` → `esf.MultipleMatches`, `SalesforceRefusedRequest` → `esf.Forbidden`, `SalesforceAuthenticationFailed` → `esf.AuthError`; `import even_simpler_salesforce as esf` added once | `rewritten`; `todo` (with a suggestion) for `SalesforceExpiredSession` (§20: refresh is automatic), `SalesforceMalformedRequest`, `SalesforceGeneralError` |
 | `client-internals` | `X.sf_version` | → `X.api_version` | `rewritten` |
 | `client-internals` | `X.session_id`, `X.base_url`, `X.sf_instance`, `X.headers`, `X.session` | marker only, with the §20 replacement in the message | `todo` |
+| `client-methods` | `X.describe()`; `X.quick_search()`, `X.is_sandbox()`, `X.search(s)["searchRecords"]`, `X.limits()[k]["Remaining"]` | → `X.describe_global()`; others marker only | `rewritten`; `todo` |
 | `login` | `Salesforce(...)` / `AsyncSalesforce(...)` / `SalesforceLogin(...)` construction | marker only (auth is a design choice, §6) | `todo` |
 | `not-a-client` | a shaped site that couldn't be confirmed (§9.19.1) | case 3: rewritten like its rule; sObject-looking: marker with suggestion | `needs-review` / `todo` |
 

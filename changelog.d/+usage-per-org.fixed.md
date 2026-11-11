@@ -1,0 +1,1 @@
+Usage values from `Sforce-Limit-Info` are kept per org. A `with_auth()` child in another org no longer overwrites the parent's `api_used` and `api_max`, and the budget guard checks the org that the call goes to.

@@ -10,9 +10,19 @@
     "line": 3
   },
   {
+    "rule": "query-result",
+    "status": "todo",
+    "line": 7
+  },
+  {
     "rule": "format-soql",
     "status": "rewritten",
     "line": 7
+  },
+  {
+    "rule": "query-result",
+    "status": "todo",
+    "line": 11
   },
   {
     "rule": "format-soql",
@@ -23,5 +33,10 @@
     "rule": "format-soql",
     "status": "todo",
     "line": 15
+  },
+  {
+    "rule": "query-result",
+    "status": "todo",
+    "line": 16
   }
 ]
