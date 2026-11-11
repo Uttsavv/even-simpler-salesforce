@@ -29,24 +29,30 @@ async def soap_send(
     *,
     operation: str,
     sobject: str | None,
-    records: int,
+    records: int | None,
+    path: str | None = None,
+    idempotent: bool | None = None,
+    dml: bool = True,
 ) -> RawResponse:
-    """POST a Partner SOAP envelope through the pipeline; ``render`` gets the access token.
+    """POST a SOAP envelope through the pipeline; ``render`` gets the access token.
 
-    Never resent after it may have reached Salesforce (it writes records). A rejected session
-    (``INVALID_SESSION_ID`` fault) refreshes the token once and resends with a new envelope.
+    Never resent after it may have reached Salesforce (it writes records), unless
+    ``idempotent=True`` marks a read. A rejected session (``INVALID_SESSION_ID`` fault)
+    refreshes the token once and resends with a new envelope. ``path`` defaults to the Partner
+    endpoint; the Metadata API passes its own.
     """
     return await sf._send(  # pyright: ignore[reportPrivateUsage]
         RequestSpec(
             "POST",
-            soap_path(sf.api_version),
+            path or soap_path(sf.api_version),
             headers={"Content-Type": "text/xml; charset=UTF-8", "SOAPAction": '""', "Accept": "text/xml"},
             content_type="text/xml; charset=UTF-8",
             session_body=render,
             operation=operation,
             sobject=sobject,
             records=records,
-            dml=True,
+            dml=dml,
+            idempotent=idempotent,
             expect_json=False,
         )
     )

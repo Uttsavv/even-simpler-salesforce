@@ -8,11 +8,11 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Generic, TypeVar, cast
+from typing import Any, Generic, Literal, TypeVar, cast
 
 from .core.cursor import Cursor
 from .core.http import check_record_id
-from .errors import ErrorDetail, PartialFailure, SalesforceError, UnexpectedResponse
+from .errors import DeployFailed, ErrorDetail, PartialFailure, SalesforceError, UnexpectedResponse
 
 __all__ = [
     "ActionResult",
@@ -23,11 +23,18 @@ __all__ = [
     "BulkFailure",
     "BulkJobInfo",
     "BulkJobState",
+    "DeployMessage",
+    "DeployOptions",
+    "DeployResult",
+    "DeployTestFailure",
+    "FileProperties",
     "LeadConvert",
     "LeadConvertResult",
     "FileLink",
     "Limit",
     "MergeResult",
+    "MetadataDescribe",
+    "MetadataType",
     "PublishResult",
     "QueryPlan",
     "QueryPlanNote",
@@ -36,6 +43,8 @@ __all__ = [
     "SubrequestResult",
     "ReportInstance",
     "ReportResult",
+    "RetrieveMessage",
+    "RetrieveResult",
     "UpsertResult",
     "UsageSnapshot",
 ]
@@ -706,3 +715,289 @@ def _sub(raw: Mapping[str, Any], key: str) -> Mapping[str, Any]:
 
 def _str_or_none(value: Any) -> str | None:
     return value if isinstance(value, str) else None
+
+
+# --- Metadata API (0.4) ------------------------------------------------------------------------
+
+TestLevel = Literal["NoTestRun", "RunSpecifiedTests", "RunLocalTests", "RunAllTestsInOrg", "RunRelevantTests"]
+_TEST_LEVELS = frozenset(
+    {"NoTestRun", "RunSpecifiedTests", "RunLocalTests", "RunAllTestsInOrg", "RunRelevantTests"}
+)
+#: Deploy states that mean the deployment did not (fully) succeed.
+_DEPLOY_FAILED_STATES = frozenset({"Failed", "Canceled", "FinalizingDeployFailed", "SucceededPartial"})
+
+
+@dataclass(frozen=True, slots=True)
+class DeployOptions:
+    """Options for ``sf.metadata.deploy()`` (the Metadata API ``deployOptions``).
+
+    Attributes:
+        check_only: Validate the deployment and run tests, but save nothing.
+        rollback_on_error: Roll back everything if one component fails. ``None`` leaves it to
+            Salesforce, which requires ``True`` in production orgs.
+        ignore_warnings: Deploy even if there are warnings. If ``False``, a warning fails the
+            component.
+        test_level: Which Apex tests to run. ``None`` uses the Salesforce default.
+        run_tests: Apex test classes to run. Needs ``test_level="RunSpecifiedTests"``.
+        purge_on_delete: Delete components listed in ``destructiveChanges.xml`` at once,
+            without the Recycle Bin. Not allowed in production orgs.
+        allow_missing_files: Deploy even if files named in ``package.xml`` are missing.
+        auto_update_package: Add files that are missing from ``package.xml``.
+        single_package: ``package.xml`` is at the root of the zip file. Set ``False`` only for
+            a zip with one folder per package.
+
+    Raises:
+        ValueError: an unknown ``test_level``, or ``run_tests`` without
+            ``test_level="RunSpecifiedTests"`` (or that level without ``run_tests``).
+        TypeError: ``run_tests`` is one string instead of a list of class names.
+    """
+
+    check_only: bool = False
+    rollback_on_error: bool | None = None
+    ignore_warnings: bool = False
+    test_level: TestLevel | None = None
+    run_tests: tuple[str, ...] = ()
+    purge_on_delete: bool = False
+    allow_missing_files: bool = False
+    auto_update_package: bool = False
+    single_package: bool = True
+
+    def __post_init__(self) -> None:
+        if isinstance(self.run_tests, str):  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise TypeError("run_tests must be a list of Apex class names, not one string")
+        object.__setattr__(self, "run_tests", tuple(self.run_tests))
+        if self.test_level is not None and self.test_level not in _TEST_LEVELS:
+            raise ValueError(f"test_level must be one of {sorted(_TEST_LEVELS)}, got {self.test_level!r}")
+        if bool(self.run_tests) != (self.test_level == "RunSpecifiedTests"):
+            raise ValueError('run_tests and test_level="RunSpecifiedTests" go together')
+
+
+@dataclass(frozen=True, slots=True)
+class DeployMessage:
+    """One component of a deployment (Metadata API ``DeployMessage``).
+
+    Attributes:
+        component_type: Metadata type, e.g. ``"ApexClass"``.
+        full_name: Full name of the component, e.g. ``"Invoice"``.
+        file_name: Path of the file in the zip, e.g. ``"classes/Invoice.cls"``.
+        problem: Why the component failed, or a warning. ``None`` on success.
+        problem_type: ``"Error"`` or ``"Warning"``.
+        line: Line of the problem in the file, if Salesforce reports one.
+        column: Column of the problem in the file, if Salesforce reports one.
+    """
+
+    component_type: str | None = None
+    full_name: str | None = None
+    file_name: str | None = None
+    problem: str | None = None
+    problem_type: str | None = None
+    line: int | None = None
+    column: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DeployTestFailure:
+    """One failed Apex test method of a deployment.
+
+    Attributes:
+        class_name: The test class.
+        method_name: The test method.
+        message: The failure message.
+        stack_trace: The Apex stack trace.
+    """
+
+    class_name: str | None = None
+    method_name: str | None = None
+    message: str | None = None
+    stack_trace: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DeployResult:
+    """State of a deployment (Metadata API ``DeployResult``).
+
+    ``sf.metadata.deploy_status()`` returns it for every state, also when the deployment failed.
+    Call :meth:`raise_for_errors` to turn a failure into :class:`DeployFailed`.
+
+    Attributes:
+        id: The deployment id (``0Af...``).
+        status: ``Pending``, ``InProgress``, ``FinalizingDeploy``, ``FinalizingDeployFailed``,
+            ``Succeeded``, ``SucceededPartial``, ``Failed``, ``Canceling`` or ``Canceled``.
+        done: Whether Salesforce has finished the deployment.
+        success: Whether the deployment succeeded.
+        check_only: Whether this was a validation that saves nothing.
+        components_total: Number of components in the deployment.
+        components_deployed: Number of components deployed so far.
+        component_errors: Number of components that failed.
+        tests_total: Number of Apex tests to run.
+        tests_completed: Number of Apex tests that have run.
+        test_errors: Number of Apex tests that failed.
+        error_message: Why the whole deployment failed, if it did.
+        error_status_code: Status code for ``error_message``.
+        component_failures: The components that failed.
+        component_successes: The components that deployed.
+        test_failures: The Apex tests that failed.
+        raw: The ``deployResult`` object as Salesforce sent it.
+    """
+
+    id: str
+    status: str
+    done: bool = False
+    success: bool = False
+    check_only: bool = False
+    components_total: int = 0
+    components_deployed: int = 0
+    component_errors: int = 0
+    tests_total: int = 0
+    tests_completed: int = 0
+    test_errors: int = 0
+    error_message: str | None = None
+    error_status_code: str | None = None
+    component_failures: tuple[DeployMessage, ...] = ()
+    component_successes: tuple[DeployMessage, ...] = ()
+    test_failures: tuple[DeployTestFailure, ...] = ()
+    raw: Mapping[str, Any] = field(default_factory=lambda: {}, repr=False, compare=False)
+
+    @property
+    def failed(self) -> bool:
+        """Whether the deployment finished without fully succeeding."""
+        if self.status in _DEPLOY_FAILED_STATES:
+            return True
+        return self.done and not self.success
+
+    def raise_for_errors(self) -> None:
+        """Raise :class:`DeployFailed` if the deployment failed or deployed only some components.
+
+        Does nothing while the deployment is still running.
+        """
+        if not self.failed:
+            return
+        details: list[ErrorDetail] = []
+        if self.error_message:
+            details.append(ErrorDetail(error_code=self.error_status_code, message=self.error_message))
+        for m in self.component_failures:
+            details.append(
+                ErrorDetail(
+                    error_code=m.problem_type,
+                    message=f"{m.component_type or '?'} {m.full_name or '?'}: {m.problem or ''}".rstrip(": "),
+                    fields=(m.full_name,) if m.full_name else (),
+                    extended={"file_name": m.file_name, "line": m.line, "column": m.column},
+                )
+            )
+        for t in self.test_failures:
+            details.append(
+                ErrorDetail(
+                    error_code="TEST_FAILURE",
+                    message=f"{t.class_name or '?'}.{t.method_name or '?'}: {t.message or ''}".rstrip(": "),
+                    extended={"stack_trace": t.stack_trace},
+                )
+            )
+        first = details[0].message if details else "no details"
+        raise DeployFailed(
+            f"deployment {self.id} ended {self.status}: {first}",
+            error_code=self.error_status_code,
+            operation="metadata.deploy",
+            errors=tuple(details),
+            job_id=self.id,
+            state=self.status,
+            result=self,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class FileProperties:
+    """One metadata component of the org (Metadata API ``FileProperties``).
+
+    Attributes:
+        type: Metadata type, e.g. ``"ApexClass"``.
+        full_name: Full name, e.g. ``"Invoice"`` or ``"Account.Score__c"``.
+        file_name: Path of the file in a retrieved zip, e.g. ``"classes/Invoice.cls"``.
+        id: The component id, if it has one.
+        namespace_prefix: Namespace of a managed package, or ``None``.
+        manageable_state: ``unmanaged``, ``installed``, ``released`` and similar.
+        created_by_name: Name of the user who created it.
+        created_date: When it was created (ISO 8601 text, as sent).
+        last_modified_by_name: Name of the user who changed it last.
+        last_modified_date: When it was changed last (ISO 8601 text, as sent).
+    """
+
+    type: str
+    full_name: str
+    file_name: str | None = None
+    id: str | None = None
+    namespace_prefix: str | None = None
+    manageable_state: str | None = None
+    created_by_name: str | None = None
+    created_date: str | None = None
+    last_modified_by_name: str | None = None
+    last_modified_date: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class RetrieveMessage:
+    """A problem with one file of a retrieve, such as a component that doesn't exist.
+
+    Attributes:
+        file_name: The file the message is about.
+        problem: What went wrong.
+    """
+
+    file_name: str | None
+    problem: str
+
+
+@dataclass(frozen=True, slots=True)
+class RetrieveResult:
+    """A finished retrieve: the zip file and what is in it.
+
+    Attributes:
+        id: The retrieve job id.
+        zip_file: The zip file as bytes, with ``package.xml`` at its root.
+        file_properties: One entry per file in the zip.
+        messages: Problems with single components. The retrieve still succeeded.
+    """
+
+    id: str
+    zip_file: bytes = field(repr=False)
+    file_properties: tuple[FileProperties, ...] = ()
+    messages: tuple[RetrieveMessage, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class MetadataType:
+    """One metadata type of the org (Metadata API ``DescribeMetadataObject``).
+
+    Attributes:
+        xml_name: Type name for ``package.xml``, e.g. ``"ApexClass"``.
+        directory_name: Folder of the type in a zip, e.g. ``"classes"``.
+        suffix: File suffix, e.g. ``"cls"``, or ``None``.
+        in_folder: Components live in folders (reports, documents, email templates).
+        meta_file: Each component has a ``-meta.xml`` file beside it.
+        child_xml_names: Child types, e.g. ``CustomField`` for ``CustomObject``.
+    """
+
+    xml_name: str
+    directory_name: str | None = None
+    suffix: str | None = None
+    in_folder: bool = False
+    meta_file: bool = False
+    child_xml_names: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class MetadataDescribe:
+    """The metadata types of the org (Metadata API ``DescribeMetadataResult``).
+
+    Attributes:
+        types: The metadata types.
+        organization_namespace: The namespace of the org, or ``None``.
+        partial_save_allowed: Deployments may save some components when others fail.
+            Always ``False`` in production orgs.
+        test_required: Deployments must run Apex tests (the opposite of
+            ``partial_save_allowed``).
+    """
+
+    types: tuple[MetadataType, ...] = ()
+    organization_namespace: str | None = None
+    partial_save_allowed: bool = False
+    test_required: bool = False

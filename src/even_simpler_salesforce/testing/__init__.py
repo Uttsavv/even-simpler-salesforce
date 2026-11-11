@@ -44,6 +44,7 @@ from ._fake_org import AsyncFakeLeads, AsyncFakePlatformEvents, FakeLeads, FakeP
 from ._files import AsyncFakeFiles, AsyncFakeFileStream, FakeFiles, FakeFileStream
 from ._graphql import GraphQLScript
 from ._ids import key_prefix
+from ._metadata import AsyncFakeMetadata, FakeMetadata
 from ._reports import AsyncFakeDashboards, AsyncFakeReports, FakeDashboards, FakeReports, ReportScript
 from ._state import FakeCall, FakeRequest, QueryScript, UnscriptedCall
 from ._ui import AsyncFakeUi, FakeUi, ListView
@@ -63,6 +64,7 @@ __all__ = [
     "AsyncFakeCompositeBuilder",
     "AsyncFakeDashboards",
     "AsyncFakeLeads",
+    "AsyncFakeMetadata",
     "AsyncFakePlatformEvents",
     "AsyncFakeReports",
     "AsyncFakeFileStream",
@@ -83,6 +85,7 @@ __all__ = [
     "FakeCompositeBuilder",
     "FakeDashboards",
     "FakeLeads",
+    "FakeMetadata",
     "FakePlatformEvents",
     "FakeReports",
     "FakeFileStream",

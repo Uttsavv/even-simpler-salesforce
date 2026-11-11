@@ -312,6 +312,24 @@ rest_endpoints:
     dynamic: true
     docs: https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/analytics_api_dashboard_results_resource.htm
     checked: null
+  - path: metadata/deployRequest
+    methods: [POST]
+    used_by: "sf.metadata.deploy() (multipart: json deployOptions + file zip; never resent)"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_rest_deploy.htm
+    checked: null
+    # Part names, the 39 MB zip limit and the response shape read 2026-11-11 from search excerpts (V70)
+  - path: "metadata/deployRequest/{}"
+    methods: [GET]
+    used_by: "sf.metadata.deploy_status() (?includeDetails=true; polled with wait=True)"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_rest_deploy_checkstatus.htm
+    checked: null
+    # DeployResult status values (V71)
+  - path: "/services/Soap/m/{}"
+    methods: [POST]
+    used_by: "sf.metadata.retrieve() (retrieve + checkRetrieveStatus), list_metadata() (listMetadata), describe_metadata() (describeMetadata); SOAP Metadata API, SessionHeader = OAuth token"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_calls_intro.htm
+    checked: null
+    # Envelopes and fault shapes from memory of the Metadata WSDL; fixtures are synthetic (V72, V73)
   - path: /services/oauth2/userinfo
     methods: [GET]
     used_by: sf.auth.userinfo()

@@ -39,6 +39,7 @@ from .api.files import AsyncFiles
 from .api.graphql import graphql as _graphql
 from .api.graphql import graphql_iter as _graphql_iter
 from .api.leads import AsyncLeads
+from .api.metadata import AsyncMetadata
 from .api.platform_events import AsyncPlatformEvents
 from .api.reports import AsyncReports
 from .api.soap import merge as _merge
@@ -212,6 +213,7 @@ class AsyncSalesforce:
         self.bulk = AsyncBulk(self)
         self.ui = AsyncUi(self)
         self.reports = AsyncReports(self)
+        self.metadata = AsyncMetadata(self)
 
     @classmethod
     def _child(

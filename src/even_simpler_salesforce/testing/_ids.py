@@ -44,6 +44,8 @@ KNOWN_PREFIXES: dict[str, str] = {
     "AsyncApexJob": "707",
     "DebugLevel": "7dl",
     "TraceFlag": "7tf",
+    "DeployRequest": "0Af",  # Metadata API deployments (fake.metadata)
+    "RetrieveRequest": "09S",  # Metadata API retrieve jobs (fake.metadata)
 }
 
 

@@ -31,6 +31,8 @@ __all__ = [
     "NS_ENVELOPE",
     "NS_PARTNER",
     "NS_SOBJECT",
+    "child_text",
+    "children",
     "convert_lead_envelope",
     "is_soap_path",
     "lead_converts",
@@ -39,6 +41,7 @@ __all__ = [
     "parse_fault",
     "parse_merge_results",
     "parse_xml",
+    "soap_body",
     "soap_path",
 ]
 
@@ -201,6 +204,12 @@ def _body(root: ET.Element) -> ET.Element:
         if c.tag == f"{{{NS_ENVELOPE}}}Body":
             return c
     raise UnexpectedResponse("SOAP envelope has no Body", raw=ET.tostring(root)[:_RAW_LIMIT])
+
+
+# Shared with the Metadata API calls (core/metadata.py), which parse the same envelopes.
+soap_body = _body
+children = _children
+child_text = _text
 
 
 def parse_fault(content: bytes) -> ErrorDetail | None:

@@ -262,6 +262,9 @@ SalesforceError
 ├── GraphQLError                   GraphQL errors array; .graphql_errors, .data
 ├── ReportRunFailed                asynchronous report run ended with Error; .report_id, .instance_id
 ├── ReportTimeout                  asynchronous report run still running at timeout; .run_status
+├── DeployFailed                   Metadata API deployment failed or partly failed; .job_id, .state, .result
+├── RetrieveFailed                 Metadata API retrieve ended Failed; .job_id, .state
+├── MetadataTimeout                deployment or retrieve still running after the timeout; .job_id, .state
 ├── SoapFault                      unmapped SOAP fault (lead convert, merge); .fault_code
 └── UnexpectedResponse             HTML pages (proxies, maintenance), non-JSON bodies, unexpected shapes
 ```
@@ -498,6 +501,25 @@ Salesforce, then start a new run. See [Reports](guides/reports.md#run-a-slow-rep
 An asynchronous report run didn't finish within the `timeout` of `sf.reports.instance()`. The
 run keeps going in Salesforce. Call `instance()` again with `exc.report_id` and
 `exc.instance_id` to keep waiting. `exc.run_status` is the last status the client saw.
+### DeployFailed
+
+A Metadata API deployment failed, was canceled or deployed only some components.
+`DeployResult.raise_for_errors()` raises it. `exc.errors` has one entry per failed component
+and per failed Apex test, with the file and line. `exc.result` holds the full `DeployResult`.
+If `check_only=True`, Salesforce saved nothing. See
+[Metadata API](guides/metadata.md#handle-a-failed-deployment).
+
+### RetrieveFailed
+
+A Metadata API retrieve ended in the `Failed` state. Read `exc.message` and `exc.error_code`.
+Check the type names in your `package.xml` against `sf.metadata.describe_metadata()`.
+
+### MetadataTimeout
+
+A deployment or a retrieve was still running when the client stopped waiting. The job keeps
+running in Salesforce. To keep waiting for a deployment, call
+`sf.metadata.deploy_status(exc.job_id, wait=True)` again. To wait longer from the start, pass a
+larger `timeout=`.
 
 ### SoapFault
 

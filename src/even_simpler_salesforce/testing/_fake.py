@@ -52,6 +52,7 @@ from ._composite import AsyncFakeComposite, FakeComposite
 from ._fake_org import AsyncFakeLeads, AsyncFakePlatformEvents, FakeLeads, FakePlatformEvents, fake_merge
 from ._files import AsyncFakeFiles, FakeFiles
 from ._graphql import GraphQLMatch, GraphQLScript, add_graphql_script, fake_graphql, fake_graphql_iter
+from ._metadata import AsyncFakeMetadata, DeployOutcome, FakeMetadata, seed_component
 from ._reports import (
     AsyncFakeReports,
     FakeReports,
@@ -444,6 +445,46 @@ class _FakeControls:
         """The bytes stored for a ContentVersion (uploaded or seeded), or ``None``."""
         with self._state.lock:
             return self._state.blobs.get(content_version_id[:15])
+
+    def add_metadata(self, metadata_type: str, full_name: str, files: Mapping[str, bytes | str]) -> None:
+        """Seed one metadata component for ``metadata.retrieve``, ``list_metadata`` and ``describe_metadata``.
+
+        Does not record a call. Seeding the same type and name again replaces the component.
+
+        Args:
+            metadata_type: Type name, e.g. ``"ApexClass"``.
+            full_name: Component name, e.g. ``"Invoice"`` (``"Folder/Name"`` for folder types).
+            files: Paths in a retrieved zip and their content, e.g.
+                ``{"classes/Invoice.cls": "...", "classes/Invoice.cls-meta.xml": "..."}``.
+
+        Example:
+            fake.add_metadata("ApexClass", "Invoice", {"classes/Invoice.cls": "public class Invoice {}"})
+        """
+        seed_component(self._state, metadata_type, full_name, files)
+
+    def on_deploy(self, outcome: DeployOutcome, *, times: int | None = None) -> None:
+        """Script how the next deployments end (the default is ``Succeeded``).
+
+        Args:
+            outcome: A :class:`~even_simpler_salesforce.DeployResult` (its ``id`` is replaced
+                by the deployment's), or a callable ``(zip_bytes, options) -> DeployResult``.
+            times: Use it for at most this many deployments (``None`` = every later one).
+
+        Example:
+            fake.on_deploy(esf.DeployResult("0Af", "Failed", done=True, error_message="boom"))
+        """
+        if times is not None and times < 1:
+            raise ValueError("times must be >= 1")
+        with self._state.lock:
+            self._state.deploy_outcomes.append((outcome, times))
+
+    def deployed_zip(self, deploy_id: str) -> bytes | None:
+        """The zip that ``metadata.deploy`` sent for ``deploy_id``, or ``None``."""
+        with self._state.lock:
+            for key, (data, _, _) in self._state.deployments.items():
+                if key[:15] == deploy_id[:15]:
+                    return data
+            return None
 
     def new_id(self, sobject: str) -> str:
         """A fresh, valid-looking 18-character id with ``sobject``'s key prefix."""
@@ -1102,6 +1143,7 @@ class FakeSalesforce(_FakeControls):
         self.bulk = FakeBulk(self._state, self._who)
         self.ui = FakeUi(self._state, self._who)
         self.reports = FakeReports(self._state, self._who)
+        self.metadata = FakeMetadata(self._state, self._who)
 
     @classmethod
     def _view(
@@ -1125,6 +1167,7 @@ class FakeSalesforce(_FakeControls):
         view.bulk = FakeBulk(state, who)
         view.ui = FakeUi(state, who)
         view.reports = FakeReports(state, who)
+        view.metadata = FakeMetadata(state, who)
         return view
 
     def __repr__(self) -> str:
@@ -1735,6 +1778,7 @@ class AsyncFakeSalesforce(_FakeControls):
         self.bulk = AsyncFakeBulk(inner.bulk)
         self.ui = AsyncFakeUi(inner.ui)
         self.reports = AsyncFakeReports(inner.reports)
+        self.metadata = AsyncFakeMetadata(inner.metadata)
 
     @property
     def instance_url(self) -> str:

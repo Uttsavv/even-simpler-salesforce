@@ -295,6 +295,10 @@ class FakeState:
         self.reports: dict[str, Any] = {}  # ReportScript by report id (testing/_reports.py)
         self.report_instances: dict[str, tuple[str, dict[str, Any]]] = {}  # id -> (report id, body)
         self.dashboards: dict[str, dict[str, Any]] = {}  # dashboard results by id
+        # Metadata API (testing/_metadata.py): seeded components, deployments, scripted outcomes
+        self.metadata_components: dict[tuple[str, str], dict[str, bytes]] = {}
+        self.deployments: dict[str, tuple[bytes, Any, Any]] = {}  # id -> (zip, DeployOptions, DeployResult)
+        self.deploy_outcomes: list[tuple[Any, int | None]] = []  # (DeployOutcome, times), oldest first
         self.counter = 0
         self.closed = False
         self.debug = debug_level()

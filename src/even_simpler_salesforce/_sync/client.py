@@ -41,6 +41,7 @@ from .api.files import Files
 from .api.graphql import graphql as _graphql
 from .api.graphql import graphql_iter as _graphql_iter
 from .api.leads import Leads
+from .api.metadata import Metadata
 from .api.platform_events import PlatformEvents
 from .api.reports import Reports
 from .api.soap import merge as _merge
@@ -214,6 +215,7 @@ class Salesforce:
         self.bulk = Bulk(self)
         self.ui = Ui(self)
         self.reports = Reports(self)
+        self.metadata = Metadata(self)
 
     @classmethod
     def _child(

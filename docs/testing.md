@@ -49,6 +49,8 @@ implementation. They have the methods of the real clients for these areas:
 - [Tooling API](guides/tooling.md), including anonymous Apex
 - [Bulk API 2.0](guides/bulk.md): ingest jobs apply their rows at once; queries return the rows of `on_query()`
 - [UI API](guides/ui.md)
+- [Metadata API](guides/metadata.md#test-code-that-uses-the-metadata-api), with scripted
+  deployments and seeded components
 - `request`, `limits` and `usage`
 - `with_auth` and `tagged`
 
@@ -279,6 +281,8 @@ def test_partial_failure(esf_fake: FakeSalesforce) -> None:
 - `"limits"`
 - `"graphql"`
 - `"ui.record"`, `"ui.object_info"`, `"ui.list_records"` and the other UI API methods
+- `"metadata.deploy"`, `"metadata.deploy_status"`, `"metadata.retrieve"`, `"metadata.list"`
+  and `"metadata.describe"`
 - `"raw"`, or the name you pass as `operation=`
 - `"*"` for any operation
 

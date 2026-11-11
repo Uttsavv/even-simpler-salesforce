@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .models import BatchResult, UsageSnapshot
+    from .models import BatchResult, DeployResult, UsageSnapshot
 
 __all__ = [
     "ApexError",
@@ -23,6 +23,7 @@ __all__ = [
     "BulkJobTimeout",
     "Conflict",
     "ConnectError",
+    "DeployFailed",
     "DuplicateDetected",
     "ErrorDetail",
     "EventPublishFailed",
@@ -37,6 +38,7 @@ __all__ = [
     "InvalidType",
     "LimitError",
     "MalformedQuery",
+    "MetadataTimeout",
     "MultipleMatches",
     "NotFound",
     "OAuthError",
@@ -52,6 +54,7 @@ __all__ = [
     "RequestTimeout",
     "RequestTooLarge",
     "RequiredFieldMissing",
+    "RetrieveFailed",
     "RowLocked",
     "SalesforceError",
     "ServerError",
@@ -556,6 +559,64 @@ class ReportTimeout(SalesforceError):
         self.report_id = report_id
         self.instance_id = instance_id
         self.run_status = run_status
+
+
+class DeployFailed(SalesforceError):
+    """A Metadata API deployment failed, was canceled or deployed only some components.
+
+    Raised by ``DeployResult.raise_for_errors()``. ``.result`` holds the full
+    :class:`~even_simpler_salesforce.DeployResult`; ``.errors`` has one entry per failed
+    component and per failed Apex test.
+    """
+
+    job_id: str | None
+    state: str | None
+    result: DeployResult | None
+
+    def __init__(
+        self,
+        message: str = "",
+        *,
+        job_id: str | None = None,
+        state: str | None = None,
+        result: DeployResult | None = None,
+        **kw: Any,
+    ) -> None:
+        super().__init__(message, **kw)
+        self.job_id = job_id
+        self.state = state
+        self.result = result
+
+
+class RetrieveFailed(SalesforceError):
+    """A Metadata API retrieve ended in state ``Failed``. ``.job_id`` is the retrieve id."""
+
+    job_id: str | None
+    state: str | None
+
+    def __init__(
+        self, message: str = "", *, job_id: str | None = None, state: str | None = None, **kw: Any
+    ) -> None:
+        super().__init__(message, **kw)
+        self.job_id = job_id
+        self.state = state
+
+
+class MetadataTimeout(SalesforceError):
+    """A deployment or retrieve was still running when the client stopped waiting.
+
+    The job keeps running in Salesforce. ``.job_id`` and ``.state`` say which job and where it was.
+    """
+
+    job_id: str | None
+    state: str | None
+
+    def __init__(
+        self, message: str = "", *, job_id: str | None = None, state: str | None = None, **kw: Any
+    ) -> None:
+        super().__init__(message, **kw)
+        self.job_id = job_id
+        self.state = state
 
 
 class SoapFault(SalesforceError):

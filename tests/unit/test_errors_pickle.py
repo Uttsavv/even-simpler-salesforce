@@ -27,7 +27,7 @@ import pytest
 from even_simpler_salesforce import errors as E
 from even_simpler_salesforce.core.classify import classify
 from even_simpler_salesforce.core.http import RawResponse, RequestSpec
-from even_simpler_salesforce.models import BatchResult, RecordResult, UsageSnapshot
+from even_simpler_salesforce.models import BatchResult, DeployResult, RecordResult, UsageSnapshot
 
 ERROR_CLASSES: list[type[E.SalesforceError]] = [
     obj
@@ -95,6 +95,7 @@ EXTRA_SAMPLES: dict[str, Any] = {
     "report_id": "00Oxx0000000001AAA",
     "instance_id": "0LGxx0000000001AAA",
     "run_status": "Running",
+    "result": DeployResult("0Afxx0000000001AAA", "Failed", done=True, error_message="boom"),
 }
 
 BASE_ATTRS = (
@@ -150,8 +151,10 @@ def test_classes_with_extras_are_the_expected_ones() -> None:
         "BudgetExceeded": ["usage"],
         "BulkJobFailed": ["job_id", "state", "error_message"],
         "BulkJobTimeout": ["job_id", "state"],
+        "DeployFailed": ["job_id", "state", "result"],
         "DuplicateDetected": ["duplicates"],
         "GraphQLError": ["graphql_errors", "data"],
+        "MetadataTimeout": ["job_id", "state"],
         "MultipleMatches": ["matches"],
         "OAuthError": ["error", "error_description"],
         "PartialFailure": ["results"],
@@ -159,6 +162,7 @@ def test_classes_with_extras_are_the_expected_ones() -> None:
         "ReportRunFailed": ["report_id", "instance_id"],
         "ReportTimeout": ["report_id", "instance_id", "run_status"],
         "RequestLimitExceeded": ["retry_after"],
+        "RetrieveFailed": ["job_id", "state"],
         "SoapFault": ["fault_code"],
     }
 
