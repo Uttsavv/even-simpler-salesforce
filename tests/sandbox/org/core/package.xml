@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Package xmlns="http://soap.sforce.com/2006/04/metadata">
+    <types><members>Lead.Esf_Ext__c</members><name>CustomField</name></types>
+    <types><members>Lead.Esf_V5b_Validation</members><name>ValidationRule</name></types>
+    <types><members>ESF_Sandbox_Event__e</members><name>CustomObject</name></types>
+    <types><members>EsfSandboxV5b</members><name>ApexTrigger</name></types>
+    <types><members>EsfSandboxRest</members><members>EsfSandboxAction</members><name>ApexClass</name></types>
+    <types><members>Esf_Sandbox</members><name>PermissionSet</name></types>
+    <types><members>ChangeEvents_AccountChangeEvent</members><name>PlatformEventChannelMember</name></types>
+    <version>66.0</version>
+</Package>

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Flow xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>66.0</apiVersion>
+    <customErrors>
+        <name>Esf_Error</name>
+        <label>Esf Error</label>
+        <locationX>0</locationX>
+        <locationY>0</locationY>
+        <customErrorMessages>
+            <errorMessage>esf-sandbox: flow custom error probe</errorMessage>
+            <isFieldError>false</isFieldError>
+        </customErrorMessages>
+    </customErrors>
+    <decisions>
+        <name>Is_Esf_Flow</name>
+        <label>Is Esf Flow</label>
+        <locationX>0</locationX>
+        <locationY>0</locationY>
+        <defaultConnectorLabel>Default</defaultConnectorLabel>
+        <rules>
+            <name>Esf_Flow</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>$Record.Company</leftValueReference>
+                <operator>EqualTo</operator>
+                <rightValue><stringValue>ESF_FLOW</stringValue></rightValue>
+            </conditions>
+            <connector><targetReference>Esf_Error</targetReference></connector>
+            <label>Esf Flow</label>
+        </rules>
+    </decisions>
+    <label>ESF Sandbox V5b Flow</label>
+    <processType>AutoLaunchedFlow</processType>
+    <start>
+        <locationX>0</locationX>
+        <locationY>0</locationY>
+        <connector><targetReference>Is_Esf_Flow</targetReference></connector>
+        <object>Lead</object>
+        <recordTriggerType>Create</recordTriggerType>
+        <triggerType>RecordBeforeSave</triggerType>
+    </start>
+    <status>Active</status>
+</Flow>

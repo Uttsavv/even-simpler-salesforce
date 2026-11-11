@@ -115,6 +115,23 @@ REST API calls.
 **Risk**: if the rotation test ever fails with `invalid_grant`, Salesforce has revoked the
 chain. Log in again with `scripts/sandbox_login.py`. Nothing else in the org is changed.
 
+## Deploying the test fixtures (`scripts/sandbox_setup_org.py`)
+
+On a **dedicated** Developer Edition org or sandbox, one command deploys everything the
+optional tests need, using the library's own `sf.metadata.deploy`:
+
+```sh
+uv run python scripts/sandbox_setup_org.py              # or --check-only to validate
+```
+
+It deploys `tests/sandbox/org/core` (the `Lead.Esf_Ext__c` external id, the V5b validation
+rule and Apex trigger, the platform event `ESF_Sandbox_Event__e`, Change Data Capture on
+Account, the Apex REST class `EsfSandboxRest` and the invocable action `EsfSandboxAction`) and
+`tests/sandbox/org/extras` (a before-save Lead flow with a Custom Error and two Lead reports),
+then assigns the `Esf_Sandbox` permission set to you. It refuses to run against production.
+The fixtures make some Lead inserts fail on purpose, so never deploy them to an org people use.
+The script's docstring lists the `ESF_SANDBOX_*` variables to set afterwards.
+
 ## Pub/Sub API (0.5)
 
 `test_pubsub.py` runs only with `ESF_SANDBOX_PUBSUB=1` and the `[pubsub]` extra. It needs:

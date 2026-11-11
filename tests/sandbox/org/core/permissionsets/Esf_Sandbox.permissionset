@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
+    <classAccesses><apexClass>EsfSandboxAction</apexClass><enabled>true</enabled></classAccesses>
+    <classAccesses><apexClass>EsfSandboxRest</apexClass><enabled>true</enabled></classAccesses>
+    <fieldPermissions><editable>true</editable><field>Lead.Esf_Ext__c</field><readable>true</readable></fieldPermissions>
+    <hasActivationRequired>false</hasActivationRequired>
+    <label>ESF Sandbox</label>
+    <objectPermissions>
+        <allowCreate>true</allowCreate><allowDelete>false</allowDelete><allowEdit>false</allowEdit>
+        <allowRead>true</allowRead><modifyAllRecords>false</modifyAllRecords>
+        <object>ESF_Sandbox_Event__e</object><viewAllRecords>false</viewAllRecords>
+    </objectPermissions>
+</PermissionSet>

@@ -1,0 +1,213 @@
+{
+  "api_version": "68.0",
+  "flow": "WebServerFlow",
+  "generated_at": "2026-11-11T22:26:12+00:00",
+  "items": {
+    "V19": {
+      "dot_suffix_breaks_lookup": true,
+      "library_get_by_external_id": {
+        "error_code": "NOT_FOUND",
+        "error_codes": [
+          "NOT_FOUND"
+        ],
+        "exception": "NotFound",
+        "fields": [],
+        "message_length": 37,
+        "ok": false,
+        "status": 404
+      },
+      "library_sent_path": "/services/data/vXX.X/sobjects/Lead/Esf_Ext__c/<value>?fields=Id",
+      "library_upsert": {
+        "error": {
+          "error_code": "NOT_FOUND",
+          "error_codes": [
+            "NOT_FOUND"
+          ],
+          "exception": "NotFound",
+          "fields": [],
+          "message_length": 37,
+          "status": 404
+        }
+      },
+      "raw_get_dot_percent_encoded": {
+        "error_code": "NOT_FOUND",
+        "error_codes": [
+          "NOT_FOUND"
+        ],
+        "exception": "NotFound",
+        "fields": [],
+        "message_length": 37,
+        "ok": false,
+        "status": 404
+      },
+      "raw_sent_path": "/services/data/vXX.X/sobjects/Lead/Esf_Ext__c/<value>",
+      "sobject": "Lead",
+      "status": "recorded",
+      "value_shape": "<tag>.json"
+    },
+    "V20": {
+      "all_accepted": true,
+      "header": "Sforce-Call-Options: client=esf-verify",
+      "resources": {
+        "composite_sobjects_retrieve": {
+          "accepted": true,
+          "status": 200
+        },
+        "describe_global": {
+          "accepted": true,
+          "status": 200
+        },
+        "limits": {
+          "accepted": true,
+          "status": 200
+        },
+        "query": {
+          "accepted": true,
+          "status": 200
+        },
+        "raw_versions": {
+          "accepted": true,
+          "status": 200
+        },
+        "search": {
+          "accepted": true,
+          "status": 200
+        },
+        "sobject_describe": {
+          "accepted": true,
+          "status": 200
+        },
+        "userinfo": {
+          "accepted": true,
+          "status": 200
+        }
+      },
+      "status": "recorded",
+      "where_admins_see_it": "manual: Event Monitoring ApiTotalUsage / API event logs (CLIENT_NAME)"
+    },
+    "V3": {
+      "status": "skipped",
+      "why": "opt in with --probe-v3"
+    },
+    "V4": {
+      "access_token": {
+        "active": true,
+        "exp_minus_iat_seconds": 7200,
+        "fields": [
+          "active",
+          "client_id",
+          "exp",
+          "iat",
+          "nbf",
+          "scope",
+          "sub",
+          "token_type",
+          "username"
+        ],
+        "has_exp": true,
+        "types": {
+          "active": "bool",
+          "client_id": "str",
+          "exp": "int",
+          "iat": "int",
+          "nbf": "int",
+          "scope": "str",
+          "sub": "str",
+          "token_type": "str",
+          "username": "str"
+        }
+      },
+      "exp_present": true,
+      "refresh_token": {
+        "active": true,
+        "fields": [
+          "active",
+          "client_id",
+          "iat",
+          "nbf",
+          "scope",
+          "sub",
+          "token_type",
+          "username"
+        ],
+        "has_exp": false,
+        "types": {
+          "active": "bool",
+          "client_id": "str",
+          "iat": "int",
+          "nbf": "int",
+          "scope": "str",
+          "sub": "str",
+          "token_type": "str",
+          "username": "str"
+        }
+      },
+      "status": "recorded"
+    },
+    "V5b": {
+      "cases": {
+        "apex_add_error": {
+          "error_code": "FIELD_CUSTOM_VALIDATION_EXCEPTION",
+          "error_codes": [
+            "FIELD_CUSTOM_VALIDATION_EXCEPTION"
+          ],
+          "exception": "ValidationRuleFailed",
+          "expected_error_code": "FIELD_CUSTOM_VALIDATION_EXCEPTION",
+          "fields": [],
+          "matches_spec": true,
+          "message_length": 27,
+          "sobject": "Lead",
+          "status": 400
+        },
+        "flow_custom_error": {
+          "error_code": "FIELD_CUSTOM_VALIDATION_EXCEPTION",
+          "error_codes": [
+            "FIELD_CUSTOM_VALIDATION_EXCEPTION"
+          ],
+          "exception": "ValidationRuleFailed",
+          "expected_error_code": "FIELD_CUSTOM_VALIDATION_EXCEPTION",
+          "fields": [],
+          "matches_spec": true,
+          "message_length": 36,
+          "sobject": "Lead",
+          "status": 400
+        },
+        "trigger_exception": {
+          "error_code": "CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY",
+          "error_codes": [
+            "CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY"
+          ],
+          "exception": "RecordSaveBlocked",
+          "expected_error_code": "CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY",
+          "fields": [],
+          "matches_spec": true,
+          "message_length": 127,
+          "sobject": "Lead",
+          "status": 400
+        },
+        "validation_rule": {
+          "error_code": "FIELD_CUSTOM_VALIDATION_EXCEPTION",
+          "error_codes": [
+            "FIELD_CUSTOM_VALIDATION_EXCEPTION"
+          ],
+          "exception": "ValidationRuleFailed",
+          "expected_error_code": "FIELD_CUSTOM_VALIDATION_EXCEPTION",
+          "fields": [],
+          "matches_spec": true,
+          "message_length": 34,
+          "sobject": "Lead",
+          "status": 400
+        }
+      },
+      "status": "recorded"
+    }
+  },
+  "library_version": "0.1.0rc1",
+  "login_mode": "web_server",
+  "org": {
+    "instance_kind": "developer",
+    "org_id_prefix": "00D"
+  },
+  "python": "3.10.18",
+  "schema": 1
+}
