@@ -277,4 +277,4 @@ def test_parse_list_and_describe_defaults() -> None:
 
 def test_status_sets_are_documented_values() -> None:
     assert "SucceededPartial" in md.DEPLOY_STATUSES
-    assert md.RETRIEVE_STATUSES == {"Pending", "InProgress", "Succeeded", "Failed"}
+    assert {"Pending", "InProgress", "Succeeded", "Failed"} == md.RETRIEVE_STATUSES

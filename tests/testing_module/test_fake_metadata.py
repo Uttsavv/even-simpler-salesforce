@@ -147,7 +147,12 @@ def test_retrieve_list_and_describe(tmp_path: Path) -> None:
     describe = fake.metadata.describe_metadata()
     apex, report = describe.types
     assert apex == esf.MetadataType("ApexClass", "classes", "cls", in_folder=False, meta_file=True)
-    assert (report.xml_name, report.in_folder, report.meta_file, report.suffix) == ("Report", True, False, "report")
+    assert (report.xml_name, report.in_folder, report.meta_file, report.suffix) == (
+        "Report",
+        True,
+        False,
+        "report",
+    )
     assert [c.operation for c in fake.calls] == [
         "metadata.retrieve",
         "metadata.retrieve",
