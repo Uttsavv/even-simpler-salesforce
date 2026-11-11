@@ -111,7 +111,7 @@ def test_emit_change(d: Driver) -> None:
     d.fake.pubsub.emit_change("Account", esf.ChangeType.GAP_OVERFLOW)
     d.fake.pubsub.emit_change("Order__c", "CREATE", "a01xx0000000001AAA")
     upd, overflow = d.consume("/data/AccountChangeEvent")
-    assert upd.event_id is None
+    assert upd.event_id  # a random id, as Salesforce sends on change events too
     assert upd.change.change_type is esf.ChangeType.UPDATE
     assert upd.change.changed_fields == ("Phone", "BillingAddress.City")
     assert upd.change.nulled_fields == ("Fax",)

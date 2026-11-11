@@ -346,14 +346,15 @@ def _fastavro() -> Any:
 class Schema:
     """A parsed Avro schema: the JSON as a dict, plus fastavro's parsed form.
 
-    ``datetimes`` lists the paths of the fields the schema marks as DateTime (see
-    :func:`datetime_paths`).
+    ``datetimes`` and ``dates`` list the paths of the fields the schema marks as DateTime and
+    as Date (see :func:`datetime_paths`).
     """
 
     schema_id: str
     json: Mapping[str, Any]
     parsed: Any = field(repr=False)
     datetimes: tuple[tuple[str, ...], ...] = ()
+    dates: tuple[tuple[str, ...], ...] = ()
 
     @property
     def field_names(self) -> tuple[str, ...]:
@@ -379,19 +380,25 @@ def parse_schema(schema_id: str, schema_json: str, loads: Callable[[str], Any]) 
             f"Pub/Sub schema {schema_id} is not a valid Avro record schema: {exc}", operation=OPERATION
         ) from None
     schema = cast("dict[str, Any]", data)
-    return Schema(schema_id, schema, parsed, datetime_paths(schema))
+    return Schema(schema_id, schema, parsed, datetime_paths(schema), datetime_paths(schema, _DATE_DOC))
 
 
-# Salesforce marks field types in the Avro ``doc`` attribute, e.g. ``"CreatedDate:DateTime"``
-# or ``"Data:DateTime:00N..."`` (REST API Developer Guide, *Platform Event Schema by Event Name*).
+# Salesforce marks field types in the Avro ``doc`` attribute: ``"CreatedDate:DateTime"``,
+# ``"Data:DateTime"`` or ``"Data:DateTime:00N..."`` for DateTime fields and
+# ``"Data:DateOnly:00N..."`` for Date fields, both on a plain ``long`` of epoch milliseconds
+# with no logical type (recorded from a Developer Edition org, API v68.0: V28, V77).
 _DATETIME_DOC = re.compile(r"^[^:]*:DateTime(:|$)")
+_DATE_DOC = re.compile(r"^[^:]*:DateOnly(:|$)")
 
 
-def datetime_paths(schema: Mapping[str, Any]) -> tuple[tuple[str, ...], ...]:
-    """Paths of the fields whose ``doc`` marks them as DateTime, also inside compound fields.
+def datetime_paths(
+    schema: Mapping[str, Any], marker: re.Pattern[str] = _DATETIME_DOC
+) -> tuple[tuple[str, ...], ...]:
+    """Paths of the fields whose ``doc`` matches ``marker``, also inside compound fields.
 
-    Salesforce sends DateTime values as epoch milliseconds in a plain ``long``; the ``doc``
-    attribute is the only place that says what they are (V28).
+    Salesforce sends Date and DateTime values as epoch milliseconds in a plain ``long``; the
+    ``doc`` attribute is the only place that says what they are (V28, V77). The default marker
+    finds DateTime fields.
     """
     out: list[tuple[str, ...]] = []
 
@@ -399,7 +406,7 @@ def datetime_paths(schema: Mapping[str, Any]) -> tuple[tuple[str, ...], ...]:
         for f in fields:
             path = (*prefix, str(f["name"]))
             doc = f.get("doc")
-            if isinstance(doc, str) and _DATETIME_DOC.match(doc):
+            if isinstance(doc, str) and marker.match(doc):
                 out.append(path)
             nested = _record_fields(f.get("type"))
             if nested:
@@ -409,7 +416,7 @@ def datetime_paths(schema: Mapping[str, Any]) -> tuple[tuple[str, ...], ...]:
     return tuple(out)
 
 
-def _convert_datetimes(record: dict[str, Any], paths: tuple[tuple[str, ...], ...]) -> None:
+def _convert(record: dict[str, Any], paths: tuple[tuple[str, ...], ...], *, date_only: bool = False) -> None:
     for path in paths:
         node: Any = record
         for name in path[:-1]:
@@ -419,15 +426,17 @@ def _convert_datetimes(record: dict[str, Any], paths: tuple[tuple[str, ...], ...
             value = target.get(path[-1])
             converted = _to_datetime(value) if isinstance(value, int) else None
             if converted is not None:
-                target[path[-1]] = converted
+                # A Date is midnight UTC of that day, so the UTC date is the value.
+                target[path[-1]] = converted.date() if date_only else converted
 
 
 def decode_payload(schema: Schema, payload: bytes) -> dict[str, Any]:
     """Decode one Avro binary payload.
 
     A field becomes an aware UTC ``datetime`` when the schema marks it as DateTime (in its
-    ``doc``, or with a ``timestamp-millis`` logical type), and a ``date`` with a ``date``
-    logical type. Every other ``long`` stays an ``int``.
+    ``doc``, or with a ``timestamp-millis`` logical type), and a ``date`` when it marks it as
+    Date (``doc`` ``…:DateOnly…``, or a ``date`` logical type). Every other ``long`` stays an
+    ``int``.
 
     Raises:
         UnexpectedResponse: the payload does not match the schema. Salesforce does not validate
@@ -448,7 +457,8 @@ def decode_payload(schema: Schema, payload: bytes) -> dict[str, Any]:
             operation=OPERATION,
         )
     result = cast("dict[str, Any]", record)
-    _convert_datetimes(result, schema.datetimes)
+    _convert(result, schema.datetimes)
+    _convert(result, schema.dates, date_only=True)
     return result
 
 
