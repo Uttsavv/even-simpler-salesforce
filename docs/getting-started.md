@@ -217,6 +217,7 @@ against a sandbox, a scratch org or another edition, please
 
 ## Next steps
 
+- [Build a leads API with FastAPI](tutorial.md), step by step.
 - [Choose a login flow](authentication/index.md).
 - [Work with records](guides/records.md).
 - [Handle errors](errors.md).
