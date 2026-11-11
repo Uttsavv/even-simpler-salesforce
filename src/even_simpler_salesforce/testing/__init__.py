@@ -34,6 +34,7 @@ from ._files import AsyncFakeFiles, AsyncFakeFileStream, FakeFiles, FakeFileStre
 from ._graphql import GraphQLScript
 from ._ids import key_prefix
 from ._state import FakeCall, FakeRequest, QueryScript, UnscriptedCall
+from ._ui import AsyncFakeUi, FakeUi, ListView
 from .recorder import RecordingTransport, Redactor, ReplayMismatch, record, replay
 
 if TYPE_CHECKING:
@@ -50,6 +51,7 @@ __all__ = [
     "AsyncFakeFiles",
     "AsyncFakeSObject",
     "AsyncFakeSalesforce",
+    "AsyncFakeUi",
     "AsyncTokenStoreContract",
     "FakeActions",
     "FakeApex",
@@ -62,7 +64,9 @@ __all__ = [
     "FakeRequest",
     "FakeSObject",
     "FakeSalesforce",
+    "FakeUi",
     "GraphQLScript",
+    "ListView",
     "QueryScript",
     "RecordingTransport",
     "Redactor",
