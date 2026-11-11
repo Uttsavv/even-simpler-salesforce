@@ -195,6 +195,21 @@ Don't put personal data in custom paths. Paths you pass to `sf.request()` appear
 | `sf.usage.threshold` | a [budget](usage-and-budgets.md#budgets) threshold was crossed | `threshold`, `fraction`, `used`, `max` |
 | `sf.debug.attempt` | each HTTP attempt, only with `ESF_DEBUG=2` | `method`, `path_template` (not the URL: paths can carry external id values), `status`, `request_headers` / `response_headers` (`Authorization` and cookies redacted), `elapsed_ms` |
 
+### Pub/Sub events { #pubsub-events }
+
+[Pub/Sub](guides/pubsub.md) streams are long-lived, so they emit these events instead of
+`sf.request`. Replay ids appear as hex. Payloads and field values never appear.
+
+| Event | When | Fields |
+|---|---|---|
+| `sf.pubsub.subscribed` | a stream opens, first and after each reconnect | `topic`, `replay_preset`, `replay_id`, `resumed_from` (`store`, `memory` or `none`), `stream_no`, `batch_size`, `schema_calls` |
+| `sf.pubsub.batch` | a response with events arrives | `topic`, `events`, `pending`, `lag_ms` (now minus the commit or creation time of the newest event) |
+| `sf.pubsub.reconnect` | before each new subscribe | `topic`, `attempt`, `reason` (`idle`, `error`, `auth`, `invalid_replay` or `org_migrated`), `error_code`, `rpc_id`, `delay_ms` |
+| `sf.pubsub.closed` | the `subscribe()` block exits | `topic`, `events`, `reconnects`, `duration_ms`, `outcome`, `error_class` |
+
+The OpenTelemetry observer counts events in `esf.pubsub.events` and records `lag_ms` in the
+`esf.pubsub.lag` histogram, both with a `topic` attribute.
+
 The `reason` of `sf.retry` and each entry of `retry_reasons` take one of these values:
 `connect_error`, `timeout`, `transport_error`, `row_locked`, `rate_limited`, `http_500`,
 `http_502`, `http_503`, `http_504`.

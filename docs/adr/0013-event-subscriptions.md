@@ -83,6 +83,44 @@ keepalive replay id saved before buffered events were processed silently skips t
 - Two facts still need a sandbox before 0.5 ships: bitmap bit order (V27) and how schemas mark
   Date/DateTime fields (V28).
 
+## Implementation notes (0.5)
+
+Choices made while building 0.5, within the decision above:
+
+- **Refill rule.** The client asks for more events once at most half of `batch_size` is
+  requested or buffered. A fast consumer then rarely waits for a round trip, and the limit of
+  `batch_size` outstanding events still holds (`core.pubsub.refill`).
+- **Idle closes.** A stream that ends with no specific Pub/Sub code while nothing was pending
+  counts as an idle close: the client subscribes again at once and doesn't count an attempt.
+  An `org.migrated` or authentication code is never treated as idle (V76).
+- **Codes.** `subscription.fetch.replayid.validation.failed` maps like `replayid.corrupted`,
+  and `auth.refresh.invalid` like the other auth codes. Codes match by suffix, so a longer
+  prefix still maps.
+- **Org id.** A token without an org id (`StaticToken`) gets one `userinfo` call per token key,
+  cached in the client family's Pub/Sub state.
+- **Endpoint.** The client takes `pubsub_endpoint=` (`host:port`). A loopback endpoint uses a
+  plaintext channel. That exists only for in-process test servers; every other host uses TLS.
+- **Dates.** A `long` becomes a UTC `datetime` when its Avro `doc` matches
+  `<name>:DateTime[:…]`, or through fastavro's `timestamp-millis` and `date` logical types
+  (V28, V77).
+- **Extra fields.** `ChangeHeader.commit_number` carries `commitNumber`.
+  `UnexpectedResponse` gained `event_id` and `replay_id` for undecodable payloads.
+  `sf.pubsub.subscribed` also reports `replay_id`, `batch_size` and `schema_calls`.
+  `GetTopic` is not called.
+- **Generated stubs.** The transport builds calls from method paths through `GrpcStream` and
+  `grpc_unary` in `_compat`. `pubsub_api_pb2_grpc.py` ships for completeness, and only the
+  contract test server imports it.
+- **The fake.** `FakeSalesforce.pubsub` keeps the save points, replay keys, rejected replay
+  ids and `sf.pubsub.*` events. It has no history before the test (`"latest"` and
+  `"earliest"` both start at the first emitted event), and iteration ends when every emitted
+  event was yielded, so tests finish. `fail_next` raises from the next read, where the real
+  client surfaces stream errors.
+- **Licence.** `pubsub_api.proto` is CC0-1.0 at the pinned commit, recorded with its source in
+  `src/even_simpler_salesforce/_pubsub/NOTICE`.
+
+New verification items: V75 (trailer keys), V76 (idle close status), V77 (Date fields), V78
+(overflow events) and V79 (sandbox acceptance run).
+
 ## Sources
 
 Read in a browser on 2026-11-09 (developer.salesforce.com blocks non-browser clients):

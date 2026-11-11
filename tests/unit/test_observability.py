@@ -253,6 +253,31 @@ def test_opentelemetry_observer() -> None:
     assert all("caller" not in a and "sobject" not in a for a in labels)
 
 
+def test_otel_pubsub_metrics() -> None:
+    pytest.importorskip("opentelemetry.sdk")
+    from opentelemetry.sdk.metrics import MeterProvider
+    from opentelemetry.sdk.metrics.export import InMemoryMetricReader
+
+    reader = InMemoryMetricReader()
+    o = OpenTelemetry(meter_provider=MeterProvider(metric_readers=[reader]))
+    o.on_event(
+        esf.Event("sf.pubsub.batch", {"topic": "/event/A__e", "events": 3, "pending": 0, "lag_ms": 12.5})
+    )
+    o.on_event(
+        esf.Event("sf.pubsub.batch", {"topic": "/event/A__e", "events": 2, "pending": 0, "lag_ms": None})
+    )
+    points = {
+        m.name: list(m.data.data_points)
+        for rm in reader.get_metrics_data().resource_metrics
+        for sm in rm.scope_metrics
+        for m in sm.metrics
+    }
+    assert [p.value for p in points["esf.pubsub.events"]] == [5]
+    assert dict(points["esf.pubsub.events"][0].attributes or {}) == {"topic": "/event/A__e"}
+    assert [p.count for p in points["esf.pubsub.lag"]] == [1]
+    assert "esf.requests" not in points
+
+
 def test_otel_metric_attributes_opt_in() -> None:
     pytest.importorskip("opentelemetry.sdk")
     from opentelemetry.sdk.metrics import MeterProvider

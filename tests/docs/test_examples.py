@@ -15,7 +15,7 @@ Rules for writers of documentation pages:
   arguments (``esf_fake`` / ``esf_async_fake`` get fresh fakes, ``esf_replay`` resolves paths
   against the working directory; other names are resolved with
   ``request.getfixturevalue``). Coroutine functions are awaited.
-- ``Test*`` classes that subclass ``TokenStoreContract`` / ``AsyncTokenStoreContract`` are run
+- ``Test*`` classes that subclass a token-store or replay-store contract class are run
   with pytest in a subprocess, from a module holding the imports and definitions of every block
   of the page up to that point.
 - A block that can't run (needs a database, a real org, ...) is opted out by putting
@@ -155,15 +155,18 @@ def _run_tests(ns: dict[str, Any], before: set[str], loop: asyncio.AbstractEvent
 
 
 def _run_contracts(ns: dict[str, Any], before: set[str], sources: list[str], tmp: Path, where: str) -> None:
-    from even_simpler_salesforce.testing import AsyncTokenStoreContract, TokenStoreContract
+    from even_simpler_salesforce.testing import (
+        AsyncReplayStoreContract,
+        AsyncTokenStoreContract,
+        ReplayStoreContract,
+        TokenStoreContract,
+    )
 
+    contracts = (TokenStoreContract, AsyncTokenStoreContract, ReplayStoreContract, AsyncReplayStoreContract)
     new = [
         v
         for k, v in ns.items()
-        if k not in before
-        and k.startswith("Test")
-        and isinstance(v, type)
-        and issubclass(v, (TokenStoreContract, AsyncTokenStoreContract))
+        if k not in before and k.startswith("Test") and isinstance(v, type) and issubclass(v, contracts)
     ]
     if not new:
         return

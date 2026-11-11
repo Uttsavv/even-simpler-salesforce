@@ -12,7 +12,6 @@ later releases.
 | UI API | 0.4 | Records with layout information, list views and picklist values. |
 | Reports and dashboards | 0.4 | Run reports and read dashboards. |
 | Metadata API | 0.4 | Metadata API operations. |
-| Pub/Sub API | 0.5 | Subscribe and publish over gRPC (`[pubsub]` extra). |
 
 The full plan is in the
 [release plan](https://github.com/Uttsavv/even-simpler-salesforce/blob/main/big-bang.md#19-release-plan).
