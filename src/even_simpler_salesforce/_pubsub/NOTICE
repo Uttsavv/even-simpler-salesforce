@@ -1,0 +1,14 @@
+pubsub_api.proto
+================
+
+Source:  https://github.com/forcedotcom/pub-sub-api/blob/03d49a9c21c10ca3b55fa7ab30db6ee69250378e/pubsub_api.proto
+Commit:  03d49a9c21c10ca3b55fa7ab30db6ee69250378e
+Licence: CC0 1.0 Universal (public domain dedication), as stated in the LICENSE file of
+         forcedotcom/pub-sub-api at that commit:
+         https://github.com/forcedotcom/pub-sub-api/blob/03d49a9c21c10ca3b55fa7ab30db6ee69250378e/LICENSE
+
+The file is vendored unmodified. "Salesforce" is a trademark of Salesforce, Inc.; this project
+is not affiliated with or endorsed by Salesforce.
+
+The pubsub_api_pb2*.py and pubsub_api_pb2.pyi files next to it are generated from it with
+grpcio-tools by scripts/pubsub_proto.py.
