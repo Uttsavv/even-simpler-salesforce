@@ -48,6 +48,9 @@ Paths are relative to `/services/data/vXX.X/` unless they start with `/services/
 | `composite/sobjects` | POST, PATCH, DELETE | collections.create/update/delete() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobjects_collections.htm) |  |
 | `composite/sobjects/{}` | POST | collections.retrieve() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobjects_collections_retrieve.htm) |  |
 | `composite/sobjects/{}/{}` | PATCH | collections.upsert() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobjects_collections_upsert.htm) |  |
+| `metadata/deployRequest` | POST | sf.metadata.deploy() (multipart: json deployOptions + file zip; never resent) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_rest_deploy.htm) |  |
+| `metadata/deployRequest/{}` | GET | sf.metadata.deploy_status() (?includeDetails=true; polled with wait=True) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_rest_deploy_checkstatus.htm) |  |
+| `/services/Soap/m/{}` | POST | sf.metadata.retrieve() (retrieve + checkRetrieveStatus), list_metadata() (listMetadata), describe_metadata() (describeMetadata); SOAP Metadata API, SessionHeader = OAuth token | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_calls_intro.htm) |  |
 | `/services/oauth2/userinfo` | GET | sf.auth.userinfo() | [docs](https://help.salesforce.com/s/articleView?id=sf.remoteaccess_using_userinfo_endpoint.htm&type=5) |  |
 
 ## OAuth
