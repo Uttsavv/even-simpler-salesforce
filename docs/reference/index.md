@@ -64,6 +64,10 @@ The reasons behind the design are written down in the
 
 ::: even_simpler_salesforce.Reference
 
+::: even_simpler_salesforce._async.api.pubsub.AsyncPubSub
+
+::: even_simpler_salesforce._async.pubsub_transport.AsyncSubscription
+
 ## Login flows and tokens
 
 ::: even_simpler_salesforce.Auth
@@ -89,6 +93,16 @@ The reasons behind the design are written down in the
 ::: even_simpler_salesforce.AsyncInMemoryTokenStore
 
 ::: even_simpler_salesforce.InMemoryTokenStore
+
+## Replay stores
+
+::: even_simpler_salesforce.AsyncReplayStore
+
+::: even_simpler_salesforce.ReplayStore
+
+::: even_simpler_salesforce.AsyncInMemoryReplayStore
+
+::: even_simpler_salesforce.InMemoryReplayStore
 
 ## Query building
 
@@ -123,6 +137,12 @@ The reasons behind the design are written down in the
 ::: even_simpler_salesforce.MergeResult
 
 ::: even_simpler_salesforce.PublishResult
+
+::: even_simpler_salesforce.PubSubEvent
+
+::: even_simpler_salesforce.ChangeHeader
+
+::: even_simpler_salesforce.ChangeType
 
 ::: even_simpler_salesforce.FileLink
 
@@ -254,6 +274,12 @@ The reasons behind the design are written down in the
 ::: even_simpler_salesforce.testing.TokenStoreContract
 
 ::: even_simpler_salesforce.testing.AsyncTokenStoreContract
+
+::: even_simpler_salesforce.testing.FakePubSub
+
+::: even_simpler_salesforce.testing.ReplayStoreContract
+
+::: even_simpler_salesforce.testing.AsyncReplayStoreContract
 
 ::: even_simpler_salesforce.testing.plugin
     options:

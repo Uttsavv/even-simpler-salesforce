@@ -329,6 +329,36 @@ reports it in its `ActionResult`. `set_action_describe(kind, name, describe)` se
 `actions.describe()` returns. `on_apex` takes the same `response` values as `on_request`, and
 its path is the part after `/services/apexrest`. A call with no handler raises `UnscriptedCall`.
 
+## Fake Pub/Sub events { #pubsub }
+
+`fake.pubsub` feeds `fake.pubsub.subscribe()` without gRPC, so the `[pubsub]` extra isn't
+needed. `emit(topic, payload)` adds a platform event. `emit_change(entity, change_type,
+record_ids, changed_fields=...)` adds a change event. `fail_next(error)` makes the next read
+raise `error`.
+
+```python
+def count_orders(sf) -> int:  # code under test
+    with sf.pubsub.subscribe("/event/Order_Event__e") as events:
+        return sum(1 for _ in events)
+
+
+def test_count_orders(esf_fake: FakeSalesforce) -> None:
+    esf_fake.pubsub.emit("/event/Order_Event__e", {"Order_Number__c": "A-1"})
+    esf_fake.pubsub.emit_change("Account", "GAP_OVERFLOW")
+    assert count_orders(esf_fake) == 1
+    assert esf_fake.pubsub.emitted("/data/AccountChangeEvent")[0].change.is_overflow
+
+    esf_fake.pubsub.fail_next(esf.PubSubLimitExceeded("too many clients"))
+    try:
+        count_orders(esf_fake)
+    except esf.PubSubLimitExceeded:
+        pass
+```
+
+The fake follows the save points of a replay store, rejects an unknown replay id with
+`ReplayUnavailable`, and emits the `sf.pubsub.*` events. Unlike Salesforce, the loop ends when
+every emitted event was yielded. See [Pub/Sub API](guides/pubsub.md#test-your-code).
+
 ## Assert on calls
 
 `fake.calls` lists every call as a `FakeCall(operation, sobject, args, caller, priority, error)`.
@@ -494,6 +524,10 @@ contract. They check:
 
 See [Token stores](authentication/token-stores.md#checking-your-store-tokenstorecontract) for a
 full example.
+
+`ReplayStoreContract` and `AsyncReplayStoreContract` do the same for a Pub/Sub replay store:
+missing keys, the round trip, overwrites, keys per org and topic, persistence and concurrent
+saves. See [Pub/Sub API](guides/pubsub.md#keep-your-place-with-a-replay-store).
 
 ## Fixture format
 

@@ -54,6 +54,7 @@ def test_fake_matches_real_surface(real_cls: Any, fake_cls: Any) -> None:
     assert _compare(real.reports, fake.reports) == []
     assert _compare(real.reports.dashboards, fake.reports.dashboards) == []
     assert _compare(real.metadata, fake.metadata) == []
+    assert _compare(real.pubsub, fake.pubsub) == []
 
 
 def test_positional_values_and_single_row_helpers() -> None:

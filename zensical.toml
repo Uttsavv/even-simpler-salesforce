@@ -45,6 +45,7 @@ nav = [
     { "Lead convert and merge" = "guides/leads.md" },
     { "Platform events" = "guides/platform-events.md" },
     { "Metadata API" = "guides/metadata.md" },
+    { "Pub/Sub API" = "guides/pubsub.md" },
   ] },
   { "In production" = [
     { "Errors" = "errors.md" },

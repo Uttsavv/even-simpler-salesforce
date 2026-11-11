@@ -4,13 +4,28 @@ from __future__ import annotations
 
 import contextlib
 import contextvars
+import queue
 import threading
 import time
 from collections.abc import Callable, Generator, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, TypeVar
 
-__all__ = ["ByteGen", "Lock", "Periodic", "Semaphore", "gather_settled", "iter_bytes", "nullcontext", "sleep", "to_thread"]
+__all__ = [
+    "ByteGen",
+    "GrpcStream",
+    "Lock",
+    "Periodic",
+    "Semaphore",
+    "gather_settled",
+    "grpc_channel",
+    "grpc_close",
+    "grpc_unary",
+    "iter_bytes",
+    "nullcontext",
+    "sleep",
+    "to_thread",
+]
 
 T = TypeVar("T")
 
@@ -89,3 +104,113 @@ def iter_bytes(response: Any) -> Iterator[bytes]:
 def to_thread(fn: Callable[..., T], *args: Any) -> T:
     """Run ``fn`` in the calling thread (the sync twin of ``asyncio.to_thread``)."""
     return fn(*args)
+
+
+# --- gRPC (Pub/Sub API, §5.4) ---------------------------------------------------------------
+# The sync twin of _async/_compat.py's gRPC helpers, over the blocking grpc API. grpc is
+# imported on first use: it is an optional extra.
+
+_LOOPBACK = ("localhost:", "127.0.0.1:", "[::1]:")
+_END = object()
+
+
+def _grpc() -> Any:
+    from ..core.pubsub import missing_extra
+
+    try:
+        import grpc
+    except ImportError as exc:
+        raise missing_extra(exc) from None
+    return grpc
+
+
+def _failure(exc: Any) -> Any:
+    """``grpc.RpcError`` (also a ``grpc.Call``) -> :class:`~..core.pubsub.RpcFailure`."""
+    from ..core.pubsub import RpcFailure
+
+    code = exc.code() if callable(getattr(exc, "code", None)) else None
+    if code is None:  # pragma: no cover - every RpcError raised by grpc is a Call
+        return RpcFailure("UNKNOWN", str(exc))
+    trailers = {
+        str(k).lower(): v.decode() if isinstance(v, bytes) else str(v)
+        for k, v in exc.trailing_metadata() or ()
+    }
+    return RpcFailure(code.name, exc.details() or "", trailers)
+
+
+def grpc_channel(target: str) -> Any:
+    """A TLS channel to ``target``; a plaintext one for loopback test servers only."""
+    grpc = _grpc()
+    options = [("grpc.max_receive_message_length", 64 * 1024 * 1024)]
+    if target.startswith(_LOOPBACK):
+        return grpc.insecure_channel(target, options=options)
+    return grpc.secure_channel(target, grpc.ssl_channel_credentials(), options=options)
+
+
+def grpc_close(channel: Any) -> None:
+    channel.close()
+
+
+def grpc_unary(
+    channel: Any,
+    method: str,
+    request: Any,
+    *,
+    metadata: Sequence[tuple[str, str]],
+    response_type: Any,
+    timeout: float,
+) -> Any:
+    """One unary call; failures raise ``RpcFailure``."""
+    grpc = _grpc()
+    request_type: Any = request.__class__
+    call = channel.unary_unary(
+        method,
+        request_serializer=request_type.SerializeToString,
+        response_deserializer=response_type.FromString,
+    )
+    try:
+        return call(request, metadata=tuple(metadata), timeout=timeout)
+    except grpc.RpcError as exc:
+        raise _failure(exc) from None
+
+
+class GrpcStream:
+    """A bidirectional gRPC stream over the blocking API.
+
+    Requests go through a queue that feeds grpc's request iterator; ``read()`` blocks on the
+    response iterator. ``read()`` returns ``None`` when the server ends the stream cleanly;
+    failures raise ``RpcFailure``.
+    """
+
+    def __init__(
+        self,
+        channel: Any,
+        method: str,
+        *,
+        metadata: Sequence[tuple[str, str]],
+        request_type: Any,
+        response_type: Any,
+    ) -> None:
+        self._grpc = _grpc()
+        self._requests: queue.SimpleQueue[Any] = queue.SimpleQueue()
+        factory = channel.stream_stream(
+            method,
+            request_serializer=request_type.SerializeToString,
+            response_deserializer=response_type.FromString,
+        )
+        self._responses: Any = factory(iter(self._requests.get, _END), metadata=tuple(metadata))
+
+    def write(self, message: Any) -> None:
+        self._requests.put(message)
+
+    def read(self) -> Any:
+        try:
+            return next(self._responses)
+        except StopIteration:
+            return None
+        except self._grpc.RpcError as exc:
+            raise _failure(exc) from None
+
+    def cancel(self) -> None:
+        self._requests.put(_END)
+        self._responses.cancel()

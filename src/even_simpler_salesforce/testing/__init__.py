@@ -6,6 +6,10 @@
   back through ``httpx.MockTransport`` (see :mod:`even_simpler_salesforce.testing.recorder`).
 - :class:`TokenStoreContract` / :class:`AsyncTokenStoreContract`: a pytest suite for your own
   token store (see :mod:`even_simpler_salesforce.testing.token_store_contract`; needs pytest).
+- :class:`ReplayStoreContract` / :class:`AsyncReplayStoreContract`: the same for a Pub/Sub
+  replay store (see :mod:`even_simpler_salesforce.testing.replay_store_contract`).
+- ``fake.pubsub``: emit platform and change events in a test and consume them with
+  ``fake.pubsub.subscribe`` (:class:`FakePubSub`); no gRPC involved.
 - A pytest plugin (auto-registered) with the ``esf_fake``, ``esf_async_fake`` and
   ``esf_replay`` fixtures and the ``esf_sandbox`` marker.
 
@@ -45,13 +49,16 @@ from ._files import AsyncFakeFiles, AsyncFakeFileStream, FakeFiles, FakeFileStre
 from ._graphql import GraphQLScript
 from ._ids import key_prefix
 from ._metadata import AsyncFakeMetadata, FakeMetadata
+from ._pubsub import AsyncFakePubSub, AsyncFakeSubscription, FakePubSub, FakeSubscription
 from ._reports import AsyncFakeDashboards, AsyncFakeReports, FakeDashboards, FakeReports, ReportScript
 from ._state import FakeCall, FakeRequest, QueryScript, UnscriptedCall
 from ._ui import AsyncFakeUi, FakeUi, ListView
 from .recorder import RecordingTransport, Redactor, ReplayMismatch, record, replay
 
 if TYPE_CHECKING:
+    from . import replay_store_contract as replay_store_contract
     from . import token_store_contract as token_store_contract
+    from .replay_store_contract import AsyncReplayStoreContract, ReplayStoreContract
     from .token_store_contract import AsyncTokenStoreContract, TokenStoreContract
 
 __all__ = [
@@ -67,6 +74,8 @@ __all__ = [
     "AsyncFakeMetadata",
     "AsyncFakePlatformEvents",
     "AsyncFakeReports",
+    "AsyncFakePubSub",
+    "AsyncFakeSubscription",
     "AsyncFakeFileStream",
     "AsyncFakeFiles",
     "AsyncFakeGraphBuilder",
@@ -74,6 +83,7 @@ __all__ = [
     "AsyncFakeSObject",
     "AsyncFakeSalesforce",
     "AsyncFakeUi",
+    "AsyncReplayStoreContract",
     "AsyncTokenStoreContract",
     "FakeActions",
     "FakeApex",
@@ -88,6 +98,7 @@ __all__ = [
     "FakeMetadata",
     "FakePlatformEvents",
     "FakeReports",
+    "FakePubSub",
     "FakeFileStream",
     "FakeFiles",
     "FakeGraphBuilder",
@@ -96,10 +107,12 @@ __all__ = [
     "FakeSObject",
     "FakeSalesforce",
     "FakeUi",
+    "FakeSubscription",
     "GraphQLScript",
     "ListView",
     "QueryScript",
     "RecordingTransport",
+    "ReplayStoreContract",
     "Redactor",
     "ReplayMismatch",
     "ReportScript",
@@ -108,16 +121,25 @@ __all__ = [
     "key_prefix",
     "record",
     "replay",
+    "replay_store_contract",
     "token_store_contract",
 ]
 
-_LAZY = {"AsyncTokenStoreContract", "TokenStoreContract", "token_store_contract"}
+# The contract suites import pytest, so they load on first access.
+_LAZY = {
+    "AsyncTokenStoreContract": "token_store_contract",
+    "TokenStoreContract": "token_store_contract",
+    "token_store_contract": "token_store_contract",
+    "AsyncReplayStoreContract": "replay_store_contract",
+    "ReplayStoreContract": "replay_store_contract",
+    "replay_store_contract": "replay_store_contract",
+}
 
 
 def __getattr__(name: str) -> Any:
     if name in _LAZY:
         import importlib
 
-        mod = importlib.import_module(f"{__name__}.token_store_contract")
-        return mod if name == "token_store_contract" else getattr(mod, name)
+        mod = importlib.import_module(f"{__name__}.{_LAZY[name]}")
+        return mod if name == _LAZY[name] else getattr(mod, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

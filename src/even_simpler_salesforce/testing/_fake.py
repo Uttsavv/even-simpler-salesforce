@@ -53,6 +53,7 @@ from ._fake_org import AsyncFakeLeads, AsyncFakePlatformEvents, FakeLeads, FakeP
 from ._files import AsyncFakeFiles, FakeFiles
 from ._graphql import GraphQLMatch, GraphQLScript, add_graphql_script, fake_graphql, fake_graphql_iter
 from ._metadata import AsyncFakeMetadata, DeployOutcome, FakeMetadata, seed_component
+from ._pubsub import AsyncFakePubSub, FakePubSub
 from ._reports import (
     AsyncFakeReports,
     FakeReports,
@@ -1144,6 +1145,7 @@ class FakeSalesforce(_FakeControls):
         self.ui = FakeUi(self._state, self._who)
         self.reports = FakeReports(self._state, self._who)
         self.metadata = FakeMetadata(self._state, self._who)
+        self.pubsub = FakePubSub(self._state, self._who)
 
     @classmethod
     def _view(
@@ -1168,6 +1170,7 @@ class FakeSalesforce(_FakeControls):
         view.ui = FakeUi(state, who)
         view.reports = FakeReports(state, who)
         view.metadata = FakeMetadata(state, who)
+        view.pubsub = FakePubSub(state, who)
         return view
 
     def __repr__(self) -> str:
@@ -1779,6 +1782,7 @@ class AsyncFakeSalesforce(_FakeControls):
         self.ui = AsyncFakeUi(inner.ui)
         self.reports = AsyncFakeReports(inner.reports)
         self.metadata = AsyncFakeMetadata(inner.metadata)
+        self.pubsub = AsyncFakePubSub(inner.pubsub)
 
     @property
     def instance_url(self) -> str:

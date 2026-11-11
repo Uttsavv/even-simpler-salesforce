@@ -10,10 +10,12 @@
 
 from ._async.api.bulk import AsyncIngestJob
 from ._async.client import AsyncSalesforce
+from ._async.replay_store import AsyncInMemoryReplayStore, AsyncReplayStore
 from ._async.token_store import AsyncInMemoryTokenStore
 from ._async.transport import AsyncFileStream
 from ._sync.api.bulk import IngestJob
 from ._sync.client import Salesforce
+from ._sync.replay_store import InMemoryReplayStore, ReplayStore
 from ._sync.token_store import InMemoryTokenStore
 from ._sync.transport import FileStream
 from ._version import __version__
@@ -64,10 +66,13 @@ from .errors import (
     NotFound,
     OAuthError,
     PartialFailure,
+    PubSubError,
+    PubSubLimitExceeded,
     ReauthorizationRequired,
     RecordError,
     RecordSaveBlocked,
     RefreshFailed,
+    ReplayUnavailable,
     ReportRunFailed,
     ReportTimeout,
     RequestError,
@@ -97,6 +102,8 @@ from .models import (
     BulkFailure,
     BulkJobInfo,
     BulkJobState,
+    ChangeHeader,
+    ChangeType,
     CompositeResult,
     DeployMessage,
     DeployOptions,
@@ -112,6 +119,7 @@ from .models import (
     MetadataDescribe,
     MetadataType,
     PublishResult,
+    PubSubEvent,
     QueryPlan,
     QueryPlanNote,
     QueryResult,
@@ -137,8 +145,10 @@ __all__ = [
     "AnonymousResult",
     "ApexError",
     "AsyncFileStream",
+    "AsyncInMemoryReplayStore",
     "AsyncInMemoryTokenStore",
     "AsyncIngestJob",
+    "AsyncReplayStore",
     "AsyncSalesforce",
     "AsyncTokenStore",
     "Auth",
@@ -154,6 +164,8 @@ __all__ = [
     "BulkJobState",
     "BulkJobTimeout",
     "Cache",
+    "ChangeHeader",
+    "ChangeType",
     "ClientCredentials",
     "CompositeResult",
     "Conflict",
@@ -179,6 +191,7 @@ __all__ = [
     "Gone",
     "GraphResult",
     "GraphQLError",
+    "InMemoryReplayStore",
     "InMemoryTokenStore",
     "IngestJob",
     "InvalidField",
@@ -201,6 +214,9 @@ __all__ = [
     "OAuthError",
     "Observer",
     "PartialFailure",
+    "PubSubError",
+    "PubSubEvent",
+    "PubSubLimitExceeded",
     "PublishResult",
     "QueryPlan",
     "QueryPlanNote",
@@ -215,6 +231,8 @@ __all__ = [
     "ReportResult",
     "ReportRunFailed",
     "ReportTimeout",
+    "ReplayStore",
+    "ReplayUnavailable",
     "RequestError",
     "RequestLimitExceeded",
     "RequestTimeout",

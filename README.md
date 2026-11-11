@@ -126,12 +126,16 @@ with esf.Salesforce(auth) as sf:
   `ESF_DEBUG=1` output.
 - **Testing:** `FakeSalesforce` / `AsyncFakeSalesforce`, a recorder and replayer for redacted
   traffic, and a pytest plugin.
-- **CLI:** `esf whoami`, `esf limits`, `esf query`, `esf describe`, `esf request` and `esf generate models`.
+- **CLI:** `esf whoami`, `esf limits`, `esf query`, `esf describe`, `esf request`,
+  `esf generate models` and `esf generate actions`.
+- **More API areas:** Files (streamed uploads and downloads), invocable actions and Apex REST,
+  lead convert and merge, platform events, Bulk API 2.0, Tooling (including anonymous Apex),
+  GraphQL, Composite, UI API, reports and dashboards, the Metadata API, and Pub/Sub
+  subscriptions with Change Data Capture decoding (`[pubsub]` extra).
+- **Integrations:** FastAPI and Flask (`[fastapi]`, `[flask]` extras).
 
-Composite, GraphQL, Bulk API 2.0, files, invocable actions, Apex REST helpers, lead convert and
-merge, Tooling, UI API, reports, Metadata and Pub/Sub are planned for later 0.x releases; see the
-[documentation](https://uttsavv.github.io/even-simpler-salesforce/). Until then, `sf.request()`
-can call any REST resource.
+For anything else, `sf.request()` can call any REST resource. See the
+[documentation](https://uttsavv.github.io/even-simpler-salesforce/) for each area.
 
 ## Documentation
 

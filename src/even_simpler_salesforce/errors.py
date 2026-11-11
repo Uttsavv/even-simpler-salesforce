@@ -43,12 +43,15 @@ __all__ = [
     "NotFound",
     "OAuthError",
     "PartialFailure",
+    "PubSubError",
+    "PubSubLimitExceeded",
     "ReauthorizationRequired",
     "RecordError",
     "RecordSaveBlocked",
     "RefreshFailed",
     "ReportRunFailed",
     "ReportTimeout",
+    "ReplayUnavailable",
     "RequestError",
     "RequestLimitExceeded",
     "RequestTimeout",
@@ -422,6 +425,14 @@ class RequestLimitExceeded(LimitError):
         self.retry_after = retry_after
 
 
+class PubSubLimitExceeded(LimitError):
+    """A Pub/Sub API allocation was hit (gRPC ``RESOURCE_EXHAUSTED``).
+
+    ``error_code`` holds the Pub/Sub error code, for example one that ends in
+    ``concurrent.client.limit.exceeded``, and ``request_id`` the ``rpcId``.
+    """
+
+
 class BudgetExceeded(LimitError):
     """Raised by the library's own budget guard. ``.usage`` holds the current snapshot."""
 
@@ -628,6 +639,30 @@ class MetadataTimeout(SalesforceError):
         self.state = state
 
 
+class PubSubError(SalesforceError):
+    """A Pub/Sub API (gRPC) error with no more specific class.
+
+    ``error_code`` is the Pub/Sub ``error-code`` trailer, or the gRPC status name when there is
+    none. ``request_id`` is the ``rpcId`` that Salesforce Support asks for. ``operation`` is
+    ``"pubsub.subscribe"``, ``path`` is the topic and ``status`` is ``None``.
+    """
+
+
+class ReplayUnavailable(PubSubError):
+    """Salesforce rejected the replay id a subscription tried to resume from.
+
+    This happens when the id is older than the retention window (72 hours) or does not belong
+    to the topic. ``replay_id`` holds the rejected id. Pass ``on_invalid_replay="latest"`` or
+    ``"earliest"`` to ``sf.pubsub.subscribe()`` to resubscribe instead.
+    """
+
+    replay_id: bytes | None
+
+    def __init__(self, message: str = "", *, replay_id: bytes | None = None, **kw: Any) -> None:
+        super().__init__(message, **kw)
+        self.replay_id = replay_id
+
+
 class SoapFault(SalesforceError):
     """A SOAP fault that could not be mapped to a more specific class."""
 
@@ -639,4 +674,23 @@ class SoapFault(SalesforceError):
 
 
 class UnexpectedResponse(SalesforceError):
-    """HTML pages (proxy, maintenance), non-JSON bodies or schema surprises."""
+    """HTML pages (proxy, maintenance), non-JSON bodies or schema surprises.
+
+    For a Pub/Sub event that does not decode against its schema, ``event_id`` and
+    ``replay_id`` identify the event; both are ``None`` otherwise.
+    """
+
+    event_id: str | None = None
+    replay_id: bytes | None = None
+
+    def __init__(
+        self,
+        message: str = "",
+        *,
+        event_id: str | None = None,
+        replay_id: bytes | None = None,
+        **kw: Any,
+    ) -> None:
+        super().__init__(message, **kw)
+        self.event_id = event_id
+        self.replay_id = replay_id

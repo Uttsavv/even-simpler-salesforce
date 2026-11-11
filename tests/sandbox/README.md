@@ -115,6 +115,19 @@ REST API calls.
 **Risk**: if the rotation test ever fails with `invalid_grant`, Salesforce has revoked the
 chain. Log in again with `scripts/sandbox_login.py`. Nothing else in the org is changed.
 
+## Pub/Sub API (0.5)
+
+`test_pubsub.py` runs only with `ESF_SANDBOX_PUBSUB=1` and the `[pubsub]` extra. It needs:
+
+- a platform event `ESF_Sandbox_Event__e` with a text field `Message__c` (or set
+  `ESF_SANDBOX_PUBSUB_EVENT=<Event__e>.<Field__c>`);
+- Change Data Capture on Account (*Setup → Change Data Capture*).
+
+It publishes tagged events, receives them from `replay="earliest"`, forces a disconnect and
+checks that the client resumes without losing an event, then restarts from a replay store. The
+CDC test updates a tagged Account and checks the decoded `changed_fields`. Run it with `-s` to
+print the schemas and raw bitmaps (evidence for V27 and V28).
+
 ## `scripts/verify_sandbox.py` (§21 evidence)
 
 ```sh

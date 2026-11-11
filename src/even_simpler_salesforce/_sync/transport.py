@@ -56,6 +56,7 @@ from . import _compat
 if TYPE_CHECKING:
     from ..auth.token import Token
     from .auth_runtime import AuthRuntime
+    from .pubsub_transport import PubSubTransport
 
 __all__ = ["DEFAULT_USER_AGENT", "FileStream", "Transport"]
 
@@ -240,6 +241,7 @@ class Transport:
         http2: bool,
         debug: int,
         client_name: str | None = None,
+        pubsub_endpoint: str | None = None,
     ) -> None:
         self.api_version = api_version
         if http_client is None:
@@ -289,6 +291,9 @@ class Transport:
         self.rng = random.Random()
         self.closed = False
         self.poller: _compat.Periodic | None = None
+        #: Pub/Sub API (gRPC) state, created by the first subscription (§9.16).
+        self.pubsub_endpoint = pubsub_endpoint
+        self.pubsub: PubSubTransport | None = None
         usage.bind(self.emit)
 
     # --- helpers ---------------------------------------------------------------------
@@ -372,6 +377,9 @@ class Transport:
         if self.poller is not None:
             self.poller.stop()
             self.poller = None
+        if self.pubsub is not None:
+            pubsub, self.pubsub = self.pubsub, None
+            pubsub.close()
         if not self.closed:
             self.closed = True
             if self.owns_http:

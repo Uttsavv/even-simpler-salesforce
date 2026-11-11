@@ -57,6 +57,6 @@ publish the event twice. If you get `EventPublishUnavailable`, retry the publish
 
 ## Limitations
 
-- Publishing only. To subscribe, use the Pub/Sub API, planned for 0.5.
+- Publishing only. To subscribe, use the [Pub/Sub API](pubsub.md).
 - `ok=True` means queued, not delivered. Salesforce can still fail a queued event later. It
   reports that failure on the `/event/AsyncOperationEvent` channel, not to the publisher.

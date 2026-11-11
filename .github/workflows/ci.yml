@@ -61,6 +61,17 @@ jobs:
             exit 1
           fi
 
+  pubsub-proto:
+    name: vendored Pub/Sub proto and stubs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --all-extras --group dev
+      - run: uv run --with grpcio-tools==1.85.1 python scripts/pubsub_proto.py --check
+
   secrets:
     name: no secrets in source, fixtures or docs
     runs-on: ubuntu-latest
@@ -154,7 +165,7 @@ jobs:
         with:
           python-version: "3.10"
       - run: uv sync --all-extras --group dev
-      - run: uv pip install "httpx==0.27.*"
+      - run: uv pip install "httpx==0.27.*" "grpcio==1.85.1" "protobuf==7.35.1" "fastavro==1.12.*"
       - run: uv run --no-sync python -c "import httpx; print('httpx', httpx.__version__)"
       - run: uv run --no-sync pytest tests/unit tests/contract -m "not sandbox"
 

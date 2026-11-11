@@ -23,6 +23,7 @@ from ..context import current_call_context
 from ..core.actions import Action, action_inputs, action_result_type, build_action_result
 from ..core.cursor import Cursor, decode_cursor, encode_cursor
 from ..core.http import RawResponse, RequestSpec, check_sobject
+from ..core.pubsub import check_endpoint
 from ..core.records import apply_model, parse_query_plans
 from ..core.soql import soql_values
 from ..errors import MultipleMatches, NotFound, SalesforceError, UnexpectedResponse
@@ -43,6 +44,7 @@ from .api.graphql import graphql_iter as _graphql_iter
 from .api.leads import Leads
 from .api.metadata import Metadata
 from .api.platform_events import PlatformEvents
+from .api.pubsub import PubSub
 from .api.reports import Reports
 from .api.soap import merge as _merge
 from .api.sobject import SObject
@@ -140,6 +142,9 @@ class Salesforce:
         http2: Enable HTTP/2 on the owned client (needs the ``[http2]`` extra).
         client_name: Sent as ``Sforce-Call-Options: client=<name>`` on every API call so admins
             can attribute API usage to this integration (letters, digits, ``_ . : -``; max 64).
+        pubsub_endpoint: ``host:port`` of the Pub/Sub API for ``sf.pubsub``. Defaults to
+            ``api.pubsub.salesforce.com:443``; use ``api.deu.pubsub.salesforce.com:443`` to keep
+            data in transit in the EU.
     """
 
     def __init__(
@@ -164,6 +169,7 @@ class Salesforce:
         log_soql: Literal["hash", "redacted"] = "hash",
         http2: bool = False,
         client_name: str | None = None,
+        pubsub_endpoint: str | None = None,
     ) -> None:
         for tag, cls in (error_tags or {}).items():
             if not (isinstance(cls, type) and issubclass(cls, SalesforceError)):  # pyright: ignore[reportUnnecessaryIsInstance]
@@ -194,6 +200,7 @@ class Salesforce:
             http2=http2,
             debug=level,
             client_name=client_name,
+            pubsub_endpoint=check_endpoint(pubsub_endpoint) if pubsub_endpoint is not None else None,
         )
         self._store: TokenStore = store if store is not None else InMemoryTokenStore()
         self._runtime = AuthRuntime(auth, self._transport, self._store, instance_url=instance_url)
@@ -216,6 +223,7 @@ class Salesforce:
         self.ui = Ui(self)
         self.reports = Reports(self)
         self.metadata = Metadata(self)
+        self.pubsub = PubSub(self)
 
     @classmethod
     def _child(

@@ -74,6 +74,8 @@ _SNAPSHOT = UsageSnapshot(
 # Sample value for every subclass-specific keyword argument (by parameter name).
 EXTRA_SAMPLES: dict[str, Any] = {
     "ambiguous": True,
+    "event_id": "5e4b3c2a-1d0e-4f9a-8b7c-6d5e4f3a2b1c",
+    "replay_id": b"\x00\x00\x00\x00\x00\x01\x02\x03",
     "error": "invalid_client",
     "error_description": "client secret is wrong",
     "matches": ("/services/data/v1/sobjects/Lead/a", "/services/data/v1/sobjects/Lead/b"),
@@ -161,9 +163,11 @@ def test_classes_with_extras_are_the_expected_ones() -> None:
         "RefreshFailed": ["ambiguous"],
         "ReportRunFailed": ["report_id", "instance_id"],
         "ReportTimeout": ["report_id", "instance_id", "run_status"],
+        "ReplayUnavailable": ["replay_id"],
         "RequestLimitExceeded": ["retry_after"],
         "RetrieveFailed": ["job_id", "state"],
         "SoapFault": ["fault_code"],
+        "UnexpectedResponse": ["event_id", "replay_id"],
     }
 
 
