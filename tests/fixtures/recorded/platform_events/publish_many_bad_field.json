@@ -1,0 +1,64 @@
+{
+  "esf_fixture": 1,
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/composite/sobjects",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "allOrNone": false,
+          "records": [
+            {
+              "attributes": {
+                "type": "ESF_Sandbox_Event__e"
+              },
+              "Message__c": "esf-sandbox 1"
+            },
+            {
+              "attributes": {
+                "type": "ESF_Sandbox_Event__e"
+              },
+              "Bogus__c": "y"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=232/15000"
+        },
+        "json": [
+          {
+            "id": "e00000000000001AAA",
+            "success": true,
+            "errors": [
+              {
+                "statusCode": "OPERATION_ENQUEUED",
+                "message": "24f526db-6823-40ce-99dd-b09372b09b1b",
+                "fields": []
+              }
+            ]
+          },
+          {
+            "success": false,
+            "errors": [
+              {
+                "statusCode": "INVALID_FIELD",
+                "message": "No such column 'Bogus__c' on sobject of type ESF_Sandbox_Event__e",
+                "fields": []
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

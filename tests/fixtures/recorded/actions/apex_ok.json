@@ -1,0 +1,46 @@
+{
+  "esf_fixture": 1,
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/actions/custom/apex/EsfSandboxAction",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "inputs": [
+            {
+              "name": "esf"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=203/15000"
+        },
+        "json": [
+          {
+            "actionName": "EsfSandboxAction",
+            "errors": null,
+            "expectedError": false,
+            "invocationId": null,
+            "isSuccess": true,
+            "outcome": null,
+            "outputValues": {
+              "greeting": "hello esf"
+            },
+            "sortOrder": 0,
+            "version": 1
+          }
+        ]
+      }
+    }
+  ]
+}

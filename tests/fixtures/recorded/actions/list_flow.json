@@ -1,14 +1,339 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Salesforce Actions Developer Guide, Invoking Actions and Flow Actions pages; no org recording yet",
-  "body": {
-    "actions": [
-      {
-        "label": "Assign Lead",
-        "name": "Assign_Lead",
-        "type": "FLOW",
-        "url": "/services/data/v68.0/actions/custom/flow/Assign_Lead"
+  "esf_fixture": 1,
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/actions/custom/flow",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=201/15000"
+        },
+        "json": {
+          "actions": [
+            {
+              "label": "ESF Sandbox Action Flow",
+              "name": "Esf_Sandbox_Action_Flow",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/Esf_Sandbox_Action_Flow"
+            },
+            {
+              "label": "Extract Promotion Key Value",
+              "name": "OfferMgmt__ExtractPromotionKeyValue",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/OfferMgmt__ExtractPromotionKeyValue"
+            },
+            {
+              "label": "Generate Offer Brief",
+              "name": "OfferMgmt__GenerateOfferBrief",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/OfferMgmt__GenerateOfferBrief"
+            },
+            {
+              "label": "Generate Promotion Brief",
+              "name": "OfferMgmt__GeneratePromotionBrief",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/OfferMgmt__GeneratePromotionBrief"
+            },
+            {
+              "label": "Offer Management: Get Brief Grounding Data",
+              "name": "OfferMgmt__GetBriefGroundingData",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/OfferMgmt__GetBriefGroundingData"
+            },
+            {
+              "label": "Add Case Comment",
+              "name": "SvcCopilotTmpl__AddCaseComment",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/SvcCopilotTmpl__AddCaseComment"
+            },
+            {
+              "label": "Cancel Order",
+              "name": "SvcCopilotTmpl__CancelOrder",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/SvcCopilotTmpl__CancelOrder"
+            },
+            {
+              "label": "Check Rep Availability for Routing",
+              "name": "SvcCopilotTmpl__CheckRepAvailability",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/SvcCopilotTmpl__CheckRepAvailability"
+            },
+            {
+              "label": "Close Case",
+              "name": "SvcCopilotTmpl__CloseCase",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/SvcCopilotTmpl__CloseCase"
+            },
+            {
+              "label": "Create Case",
+              "name": "SvcCopilotTmpl__CreateCase",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/SvcCopilotTmpl__CreateCase"
+            },
+            {
+              "label": "Create Case with Enhanced Data",
+              "name": "SvcCopilotTmpl__CreateCaseEnhancedData",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/SvcCopilotTmpl__CreateCaseEnhancedData"
+            },
+            {
+              "label": "Finalize Delivery Time",
+              "name": "SvcCopilotTmpl__FinalizeDeliveryTime",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/SvcCopilotTmpl__FinalizeDeliveryTime"
+            },
+            {
+              "label": "Finalize Reservation",
+              "name": "SvcCopilotTmpl__FinalizeReservation",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/SvcCopilotTmpl__FinalizeReservation"
+            },
+            {
+              "label": "Get Available Time Slots",
+              "name": "SvcCopilotTmpl__GetAvailableTimeSlots",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/SvcCopilotTmpl__GetAvailableTimeSlots"
+            },
+            {
+              "label": "Get Case By Case Number",
+              "name": "SvcCopilotTmpl__GetCaseByCaseNumber",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/SvcCopilotTmpl__GetCaseByCaseNumber"
+            },
+            {
+              "label": "Get Case By Verified Case Number",
+              "name": "SvcCopilotTmpl__GetCaseByVrfyCaseNbr",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/SvcCopilotTmpl__GetCaseByVrfyCaseNbr"
+            },
+            {
+              "label": "Get Cases For Contact",
+              "name": "SvcCopilotTmpl__GetCasesForContact",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/SvcCopilotTmpl__GetCasesForContact"
+            },
+            {
+              "label": "Get Cases For Verified Contact",
+              "name": "SvcCopilotTmpl__GetCasesVrfyCtct",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/SvcCopilotTmpl__GetCasesVrfyCtct"
+            },
+            {
+              "label": "Get Delivery Time Slots",
+              "name": "SvcCopilotTmpl__GetDeliveryTimeSlots",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/SvcCopilotTmpl__GetDeliveryTimeSlots"
+            },
+            {
+              "label": "Get Order By Order Number",
+              "name": "SvcCopilotTmpl__GetOrderByOrderNumber",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/SvcCopilotTmpl__GetOrderByOrderNumber"
+            },
+            {
+              "label": "Get Orders By Contact",
+              "name": "SvcCopilotTmpl__GetOrdersByContact",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/SvcCopilotTmpl__GetOrdersByContact"
+            },
+            {
+              "label": "Get User Contact",
+              "name": "SvcCopilotTmpl__GetUserContact",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/SvcCopilotTmpl__GetUserContact"
+            },
+            {
+              "label": "Identify Customer By Email",
+              "name": "SvcCopilotTmpl__IdentifyCustomer",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/SvcCopilotTmpl__IdentifyCustomer"
+            },
+            {
+              "label": "Reset Password",
+              "name": "SvcCopilotTmpl__ResetPassword",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/SvcCopilotTmpl__ResetPassword"
+            },
+            {
+              "label": "Reset Secure Password",
+              "name": "SvcCopilotTmpl__ResetScrPassword",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/SvcCopilotTmpl__ResetScrPassword"
+            },
+            {
+              "label": "Send Verification Code",
+              "name": "SvcCopilotTmpl__SendVerificationCode",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/SvcCopilotTmpl__SendVerificationCode"
+            },
+            {
+              "label": "Update Customer Contact Record",
+              "name": "SvcCopilotTmpl__UpdateContactRcd",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/SvcCopilotTmpl__UpdateContactRcd"
+            },
+            {
+              "label": "Update Verified Contact",
+              "name": "SvcCopilotTmpl__UpdateVrfyCtct",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/SvcCopilotTmpl__UpdateVrfyCtct"
+            },
+            {
+              "label": "Verify Code",
+              "name": "SvcCopilotTmpl__VerifyCode",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/SvcCopilotTmpl__VerifyCode"
+            },
+            {
+              "label": "Create Summary Document",
+              "name": "fsc_tearsheet_agent__CreateSummaryDoc",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/fsc_tearsheet_agent__CreateSummaryDoc"
+            },
+            {
+              "label": "RRA DataCloud Entity Search Dynamic Flow",
+              "name": "industries_rra__AIRR_DC_Dynamic",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/industries_rra__AIRR_DC_Dynamic"
+            },
+            {
+              "label": "Create Quote",
+              "name": "revcloud_self_serve__Create_Quote",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/revcloud_self_serve__Create_Quote"
+            },
+            {
+              "label": "Get Product Information",
+              "name": "revcloud_self_serve__GetProductInfo",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/revcloud_self_serve__GetProductInfo"
+            },
+            {
+              "label": "Search Price Products",
+              "name": "revcloud_self_serve__findPrdctsPricing",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/revcloud_self_serve__findPrdctsPricing"
+            },
+            {
+              "label": "Get Partner Open Opportunities",
+              "name": "revcloud_self_serve__getPartnerOpps",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/revcloud_self_serve__getPartnerOpps"
+            },
+            {
+              "label": "Recurrence Schedule Flow",
+              "name": "runtime_industries_recurrence__Schdlr",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/runtime_industries_recurrence__Schdlr"
+            },
+            {
+              "label": "Create Sales Contact Record",
+              "name": "sales_sfa_flows__CreateSalesContact",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/sales_sfa_flows__CreateSalesContact"
+            },
+            {
+              "label": "Create Sales Lead Record",
+              "name": "sales_sfa_flows__CreateSalesLead",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/sales_sfa_flows__CreateSalesLead"
+            },
+            {
+              "label": "Create Sales Person Account Record",
+              "name": "sales_sfa_flows__CreateSalesPA",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/sales_sfa_flows__CreateSalesPA"
+            },
+            {
+              "label": "Get Related Record Details for a Voice Call",
+              "name": "setup_service_plan__VCRelatedRecord",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/setup_service_plan__VCRelatedRecord"
+            },
+            {
+              "label": "Deploy Data Kit Components",
+              "name": "sfdatakit__DeployDataKitComponents",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/sfdatakit__DeployDataKitComponents"
+            },
+            {
+              "label": "Field Service Mobile: Generate Pre Work Brief",
+              "name": "sfdc_fieldservice__GenPreWorkBrief",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/sfdc_fieldservice__GenPreWorkBrief"
+            },
+            {
+              "label": "Mine Utterances for Guided Troubleshooting",
+              "name": "sfdc_fieldservice__MineUtterances",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/sfdc_fieldservice__MineUtterances"
+            },
+            {
+              "label": "Field Service Mobile: Modifiable Pre-Work Brief",
+              "name": "sfdc_fieldservice__ModifyPWB",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/sfdc_fieldservice__ModifyPWB"
+            },
+            {
+              "label": "Check Flow API Name",
+              "name": "standard_approvals__ChkFlowApiName",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/standard_approvals__ChkFlowApiName"
+            },
+            {
+              "label": "Process Simple Approval",
+              "name": "standard_approvals__ProcSimpleAppvl",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/standard_approvals__ProcSimpleAppvl"
+            },
+            {
+              "label": "Request Flow Activation",
+              "name": "standard_approvals__RqstFlowActv",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/standard_approvals__RqstFlowActv"
+            },
+            {
+              "label": "Update Flow Definition Version Status",
+              "name": "standard_approvals__UpdtFlowDefVer",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/standard_approvals__UpdtFlowDefVer"
+            },
+            {
+              "label": "Get CI Details",
+              "name": "svc_itom_intelligence__GetCmdbCiDtls",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/svc_itom_intelligence__GetCmdbCiDtls"
+            },
+            {
+              "label": "Search CIs",
+              "name": "svc_itom_intelligence__SearchCiGrnd",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/svc_itom_intelligence__SearchCiGrnd"
+            },
+            {
+              "label": "Delete CI",
+              "name": "svc_itom_intelligence__SoftDelCmdbCi",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/svc_itom_intelligence__SoftDelCmdbCi"
+            },
+            {
+              "label": "Update CI",
+              "name": "svc_itom_intelligence__UpdateCmdbCi",
+              "type": "FLOW",
+              "url": "/services/data/v68.0/actions/custom/flow/svc_itom_intelligence__UpdateCmdbCi"
+            }
+          ]
+        }
       }
-    ]
-  }
+    }
+  ]
 }

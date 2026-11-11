@@ -1,10 +1,28 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Apex Developer Guide, Exposing Apex Classes as REST Web Services; no org recording yet",
-  "body": [
+  "esf_fixture": 1,
+  "interactions": [
     {
-      "errorCode": "NOT_FOUND",
-      "message": "Could not find a match for URL"
+      "request": {
+        "method": "GET",
+        "path": "/services/apexrest/esf-sandbox-nope/x",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8"
+        },
+        "json": [
+          {
+            "errorCode": "NOT_FOUND",
+            "message": "Could not find a match for URL"
+          }
+        ]
+      }
     }
   ]
 }

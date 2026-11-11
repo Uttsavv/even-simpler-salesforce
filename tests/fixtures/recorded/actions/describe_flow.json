@@ -1,49 +1,147 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Salesforce Actions Developer Guide, Invoking Actions and Flow Actions pages; no org recording yet",
-  "body": {
-    "description": "Assigns a lead to a region queue",
-    "label": "Assign Lead",
-    "name": "Assign_Lead",
-    "type": "FLOW",
-    "category": "Flow",
-    "inputs": [
-      {
-        "name": "leadId",
-        "label": "Lead Id",
-        "type": "STRING",
-        "required": true,
-        "description": "The lead",
-        "maxOccurs": 1,
-        "sobjectType": null,
-        "picklistValues": null
+  "esf_fixture": 1,
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/actions/custom/flow/Esf_Sandbox_Action_Flow",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
       },
-      {
-        "name": "region",
-        "label": "Region",
-        "type": "STRING",
-        "required": false,
-        "description": null,
-        "maxOccurs": 1,
-        "sobjectType": null,
-        "picklistValues": null
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=210/15000"
+        },
+        "json": {
+          "allowsTransactionControl": false,
+          "capabilityTypes": null,
+          "category": null,
+          "configurationEditor": null,
+          "description": null,
+          "genericTypes": null,
+          "hasCallout": false,
+          "iconId": null,
+          "iconName": null,
+          "inputs": [
+            {
+              "apexClass": null,
+              "bytelength": 0,
+              "configuration": false,
+              "defaultValue": null,
+              "description": null,
+              "label": "name",
+              "maxOccurs": 1,
+              "name": "name",
+              "picklistValues": null,
+              "placeholderText": null,
+              "required": false,
+              "sObjectType": null,
+              "setupReferenceType": null,
+              "toolingType": null,
+              "type": "STRING"
+            }
+          ],
+          "label": "ESF Sandbox Action Flow",
+          "methodDescription": "Executes the action.",
+          "methodLabel": "Execute.",
+          "methodName": "Execute.",
+          "name": "Esf_Sandbox_Action_Flow",
+          "outputs": [
+            {
+              "additionalAttributes": null,
+              "apexClass": null,
+              "description": null,
+              "label": "greeting",
+              "maxOccurs": 1,
+              "name": "greeting",
+              "picklistValues": null,
+              "sobjectType": null,
+              "type": "STRING"
+            },
+            {
+              "additionalAttributes": null,
+              "apexClass": null,
+              "description": "The current status of the flow interview.",
+              "label": "Flow Interview Status",
+              "maxOccurs": 1,
+              "name": "Flow__InterviewStatus",
+              "picklistValues": [
+                {
+                  "active": true,
+                  "defaultValue": false,
+                  "label": "Created",
+                  "validFor": null,
+                  "value": "Created"
+                },
+                {
+                  "active": true,
+                  "defaultValue": false,
+                  "label": "Started",
+                  "validFor": null,
+                  "value": "Started"
+                },
+                {
+                  "active": true,
+                  "defaultValue": false,
+                  "label": "Finished",
+                  "validFor": null,
+                  "value": "Finished"
+                },
+                {
+                  "active": true,
+                  "defaultValue": false,
+                  "label": "Error",
+                  "validFor": null,
+                  "value": "Error"
+                },
+                {
+                  "active": true,
+                  "defaultValue": false,
+                  "label": "Waiting",
+                  "validFor": null,
+                  "value": "Waiting"
+                },
+                {
+                  "active": true,
+                  "defaultValue": false,
+                  "label": "NeedsCommit",
+                  "validFor": null,
+                  "value": "NeedsCommit"
+                },
+                {
+                  "active": true,
+                  "defaultValue": false,
+                  "label": "Paused",
+                  "validFor": null,
+                  "value": "Paused"
+                }
+              ],
+              "sobjectType": null,
+              "type": "PICKLIST"
+            },
+            {
+              "additionalAttributes": null,
+              "apexClass": null,
+              "description": "GUID of the flow interview.",
+              "label": "Flow Interview GUID",
+              "maxOccurs": 1,
+              "name": "Flow__InterviewGuid",
+              "picklistValues": null,
+              "sobjectType": null,
+              "type": "STRING"
+            }
+          ],
+          "standard": false,
+          "systemGeneratedOuput": false,
+          "targetEntityName": null,
+          "type": "FLOW"
+        }
       }
-    ],
-    "outputs": [
-      {
-        "name": "assignedTo",
-        "label": "Assigned To",
-        "type": "STRING",
-        "required": false,
-        "maxOccurs": 1
-      },
-      {
-        "name": "Flow__InterviewStatus",
-        "label": "Interview Status",
-        "type": "PICKLIST",
-        "required": false,
-        "maxOccurs": 1
-      }
-    ]
-  }
+    }
+  ]
 }

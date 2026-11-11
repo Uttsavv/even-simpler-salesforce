@@ -1,8 +1,9 @@
 """Platform event publishing (§9.10), for both clients.
 
-Every response here is **synthetic** (``tests/fixtures/recorded/platform_events``), hand-written
-from the Platform Events Developer Guide because no sandbox recording exists yet (V36 in
-big-bang.md §21):
+Responses in ``tests/fixtures/recorded/platform_events`` are recorded from a Developer Edition
+org (API v68.0, 2026-11-12, V36 in big-bang.md §21): ``publish*.json`` and ``publish_many*.json``.
+``publish_limit.json`` and ``publish_unavailable.json`` stay **synthetic**: a test org can't
+produce them on demand. Sources:
 
 - Publish with Salesforce APIs (``POST sobjects/{Event__e}``; a queued event returns
   ``OPERATION_ENQUEUED`` with the event UUID in ``errors``):
@@ -23,21 +24,21 @@ import respx
 import even_simpler_salesforce as esf
 
 from ..conftest import DATA, Harness, Recorder
-from ..fixtures import load_fixture
+from ..fixtures import load_fixture, load_response
 
-EVENT = "Order_Event__e"
-UUID = "5e4b3c2a-1d0e-4f9a-8b7c-6d5e4f3a2b1c"
+EVENT = "ESF_Sandbox_Event__e"
+UUID = "6dc846c4-d286-4dd7-b8a8-6266d1e79674"  # EventUuid in the recorded publish.json
 
 
 def test_publish_returns_uuid(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:
-    """Synthetic fixture ``platform_events/publish.json``."""
-    route = mock.post(f"{DATA}/sobjects/{EVENT}").respond(
-        201, json=load_fixture("platform_events/publish.json")
-    )
+    """Recorded: HTTP 201, ``success: true`` and one ``OPERATION_ENQUEUED`` entry (the UUID)."""
+    status, body = load_response("platform_events/publish.json")
+    assert status == 201
+    route = mock.post(f"{DATA}/sobjects/{EVENT}").respond(status, json=body)
     sf = h.client(recorder=rec)
-    res = h.run(sf.platform_events.publish(EVENT, {"Order_Number__c": "42"}))
-    assert res == esf.PublishResult(ok=True, id="e00xx0000000001AAA", uuid=UUID)
-    assert json.loads(route.calls[0].request.content) == {"Order_Number__c": "42"}
+    res = h.run(sf.platform_events.publish(EVENT, {"Message__c": "esf-sandbox probe"}))
+    assert res == esf.PublishResult(ok=True, id="e00000000000001AAA", uuid=UUID)
+    assert json.loads(route.calls[0].request.content) == {"Message__c": "esf-sandbox probe"}
     assert rec.requests[0]["operation"] == "platform_events.publish"
     assert rec.requests[0]["sobject"] == EVENT
 
@@ -71,6 +72,7 @@ def test_publish_unavailable_is_retryable_class(h: Harness, mock: respx.MockRout
 
 
 def test_publish_known_record_error_keeps_class(h: Harness, mock: respx.MockRouter) -> None:
+    """Synthetic body: a code with its own class keeps it."""
     mock.post(f"{DATA}/sobjects/{EVENT}").respond(
         400,
         json=[{"errorCode": "REQUIRED_FIELD_MISSING", "message": "missing", "fields": ["Order_Number__c"]}],
@@ -78,6 +80,28 @@ def test_publish_known_record_error_keeps_class(h: Harness, mock: respx.MockRout
     sf = h.client()
     with pytest.raises(esf.RequiredFieldMissing):
         h.run(sf.platform_events.publish(EVENT, {}))
+
+
+@pytest.mark.parametrize(
+    ("fixture", "cls", "code"),
+    [
+        ("publish_bad_field.json", esf.InvalidField, "INVALID_FIELD"),
+        ("publish_too_long.json", esf.StringTooLong, "STRING_TOO_LONG"),
+    ],
+)
+def test_publish_recorded_field_errors(
+    h: Harness, mock: respx.MockRouter, fixture: str, cls: type[esf.SalesforceError], code: str
+) -> None:
+    """Recorded: an unknown field and a too-long value are HTTP 400 REST error lists."""
+    status, body = load_response(f"platform_events/{fixture}")
+    assert status == 400
+    mock.post(f"{DATA}/sobjects/{EVENT}").respond(status, json=body)
+    sf = h.client()
+    with pytest.raises(cls) as ei:
+        h.run(sf.platform_events.publish(EVENT, {"Message__c": "x"}))
+    assert type(ei.value) is cls
+    assert ei.value.error_code == code
+    assert ei.value.status == 400
 
 
 def test_publish_success_false_in_2xx_body_raises(h: Harness, mock: respx.MockRouter) -> None:
@@ -109,24 +133,38 @@ def test_publish_rejects_names_without_event_suffix(h: Harness, mock: respx.Mock
 
 
 def test_publish_many_goes_through_collections(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:
-    """Synthetic fixture ``platform_events/publish_many.json``: one queued, one over the limit."""
-    route = mock.post(f"{DATA}/composite/sobjects").respond(
-        200, json=load_fixture("platform_events/publish_many.json")
-    )
+    """Recorded ``publish_many_bad_field.json``: HTTP 200, one event queued, one unknown field."""
+    status, body = load_response("platform_events/publish_many_bad_field.json")
+    assert status == 200
+    route = mock.post(f"{DATA}/composite/sobjects").respond(status, json=body)
     sf = h.client(recorder=rec)
     batch = h.run(
-        sf.platform_events.publish_many(EVENT, [{"Order_Number__c": "1"}, {"Order_Number__c": "2"}])
+        sf.platform_events.publish_many(EVENT, [{"Message__c": "esf-sandbox 1"}, {"Bogus__c": "y"}])
     )
     assert [r.ok for r in batch] == [True, False]
-    assert batch[0].uuid == UUID
+    assert batch[0].uuid == "24f526db-6823-40ce-99dd-b09372b09b1b"
     assert batch[0].errors == ()
-    assert batch[1].errors[0].error_code == "LIMIT_EXCEEDED"
+    assert batch[1].uuid is None
+    assert batch[1].errors[0].error_code == "INVALID_FIELD"
     assert batch.sobject == EVENT
     body = json.loads(route.calls[0].request.content)
-    assert body["records"][0] == {"attributes": {"type": EVENT}, "Order_Number__c": "1"}
+    assert body["records"][0] == {"attributes": {"type": EVENT}, "Message__c": "esf-sandbox 1"}
     assert rec.requests[0]["records_failed"] == 1
     with pytest.raises(esf.PartialFailure):
         batch.raise_for_errors()
+
+
+def test_publish_many_all_queued(h: Harness, mock: respx.MockRouter) -> None:
+    """Recorded ``publish_many.json``: each row has its own ``OPERATION_ENQUEUED`` UUID."""
+    status, body = load_response("platform_events/publish_many.json")
+    mock.post(f"{DATA}/composite/sobjects").respond(status, json=body)
+    sf = h.client()
+    batch = h.run(sf.platform_events.publish_many(EVENT, [{"Message__c": "1"}, {"Message__c": "2"}]))
+    assert [(r.ok, r.uuid) for r in batch] == [
+        (True, "bed40404-2b79-4e50-8587-4c4daf9c75d6"),
+        (True, "82511e3d-0bf3-4b10-ab3f-2a5ba4510cfd"),
+    ]
+    assert not batch.failed
 
 
 def test_publish_many_partial_chunk_failure_converts_results(h: Harness, mock: respx.MockRouter) -> None:

@@ -365,11 +365,11 @@ def test_publish_result_moves_enqueued_to_uuid() -> None:
 
 
 def test_parse_publish() -> None:
-    """Synthetic fixture ``platform_events/publish.json``."""
+    """Recorded fixture ``platform_events/publish.json`` (V36)."""
     r = events.parse_publish(load_fixture("platform_events/publish.json"))
     assert r.ok
-    assert r.id == "e00xx0000000001AAA"
-    assert r.uuid
+    assert r.id == "e00000000000001AAA"
+    assert r.uuid == "6dc846c4-d286-4dd7-b8a8-6266d1e79674"
     assert r.errors == ()
     assert events.parse_publish({"success": True}) == esf.PublishResult(ok=True)
     with pytest.raises(esf.UnexpectedResponse):
