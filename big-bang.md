@@ -414,7 +414,7 @@ All are frozen config objects implementing the `Auth` protocol. They hold no tok
 |---|---|---|---|
 | `WebServerFlow` | A human user logged in via the browser; app holds their refresh token | `domain`, `client_id`, `client_secret` (optional for PKCE public clients), `redirect_uri`, `scopes`, `token_key` (**required**: one per Salesforce identity), `refresh_ahead=None`, `expiry="unknown"\|"introspect"` | Refresh token grant |
 | `ClientCredentials` | The app acting as its integration user | `domain` (**must be My Domain**), `client_id`, `client_secret` | Re-request a token (no refresh token issued) |
-| `JwtBearer` | Server-to-server with a certificate | `domain`, `client_id`, `username`, `private_key`, `audience` (`login`/`test`/custom) | Re-sign and re-request |
+| `JwtBearer` | Server-to-server with a certificate | `domain`, `client_id`, `username`, `private_key`, `private_key_passphrase=None` (encrypted PEM; decrypted locally, never logged), `audience` (`login`/`test`/custom) | Re-sign and re-request |
 | `StaticToken` | Tests, scripts, tokens obtained elsewhere | `access_token`, `instance_url` | None: a 401 raises `SessionExpired` |
 | `TokenExchange` *(later)* | RFC 8693 exchange | | |
 | `DeviceFlow` *(later)* | CLIs and devices | | |

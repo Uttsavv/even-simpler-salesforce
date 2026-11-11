@@ -290,6 +290,81 @@ def test_jwt_assertion_decodes(rsa_keys: tuple[bytes, bytes]) -> None:
     assert a.token_key.startswith("jwt_bearer:")
 
 
+PASSPHRASE = "correct horse battery staple"
+
+
+def _encrypted_pem(fmt: str) -> tuple[bytes, bytes]:
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    private_format = {
+        "pkcs8": serialization.PrivateFormat.PKCS8,
+        "traditional": serialization.PrivateFormat.TraditionalOpenSSL,
+    }[fmt]
+    priv = key.private_bytes(
+        serialization.Encoding.PEM,
+        private_format,
+        serialization.BestAvailableEncryption(PASSPHRASE.encode()),
+    )
+    pub = key.public_key().public_bytes(
+        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+    return priv, pub
+
+
+@pytest.mark.parametrize("fmt", ["pkcs8", "traditional"])
+@pytest.mark.parametrize("as_bytes", [False, True])
+def test_jwt_encrypted_key_with_passphrase(fmt: str, as_bytes: bool) -> None:
+    import jwt
+
+    priv, pub = _encrypted_pem(fmt)
+    a = esf.JwtBearer(
+        domain=INSTANCE,
+        client_id="cid",
+        username="u@x.com",
+        private_key=priv if as_bytes else priv.decode(),
+        private_key_passphrase=PASSPHRASE.encode() if as_bytes else PASSPHRASE,
+    )
+    tok = a.token_form(None)["assertion"]
+    assert (
+        jwt.decode(tok, pub, algorithms=["RS256"], audience="https://login.salesforce.com")["sub"]
+        == "u@x.com"
+    )
+    for text in (repr(a), str(a)):
+        assert PASSPHRASE not in text
+        assert "PRIVATE" not in text
+        assert "passphrase" not in text
+        assert "signing_key" not in text
+
+
+def test_jwt_encrypted_key_errors_never_show_secrets(rsa_keys: tuple[bytes, bytes]) -> None:
+    priv, _ = _encrypted_pem("pkcs8")
+    plain, _ = rsa_keys
+
+    def make(key: bytes, passphrase: str | None) -> esf.JwtBearer:
+        return esf.JwtBearer(
+            domain=INSTANCE, client_id="cid", username="u", private_key=key, private_key_passphrase=passphrase
+        )
+
+    cases = [
+        (priv, None, "pass private_key_passphrase"),
+        (priv, "wrong passphrase", "wrong private_key_passphrase"),
+        (plain, PASSPHRASE, "isn't an encrypted PEM key"),
+        (b"not a key", PASSPHRASE, "not a PEM private key"),
+    ]
+    for key, passphrase, expected in cases:
+        with pytest.raises(ValueError, match=expected) as ei:
+            make(key, passphrase)
+        assert ei.value.__cause__ is None
+        assert ei.value.__context__ is None or ei.value.__suppress_context__
+        text = str(ei.value) + repr(ei.value)
+        assert "PRIVATE" not in text
+        assert PASSPHRASE not in text
+        if passphrase:
+            assert passphrase not in text
+
+
 @pytest.mark.parametrize(
     ("domain", "audience", "aud"),
     [
