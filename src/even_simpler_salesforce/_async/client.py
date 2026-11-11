@@ -32,6 +32,7 @@ from . import _compat
 from .api.actions import AsyncActions
 from .api.apex import AsyncApex
 from .api.auth_api import AsyncAuthApi
+from .api.bulk import AsyncBulk
 from .api.collections import AsyncCollections
 from .api.composite import AsyncComposite
 from .api.files import AsyncFiles
@@ -206,6 +207,7 @@ class AsyncSalesforce:
         self.files = AsyncFiles(self)
         self.tooling = AsyncTooling(self)
         self.composite = AsyncComposite(self)
+        self.bulk = AsyncBulk(self)
 
     @classmethod
     def _child(

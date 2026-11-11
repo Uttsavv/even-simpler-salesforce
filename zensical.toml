@@ -38,6 +38,7 @@ nav = [
     { "Files" = "guides/files.md" },
     { "GraphQL" = "guides/graphql.md" },
     { "Tooling API" = "guides/tooling.md" },
+    { "Bulk API 2.0" = "guides/bulk.md" },
     { "Raw requests" = "guides/requests.md" },
     { "Lead convert and merge" = "guides/leads.md" },
     { "Platform events" = "guides/platform-events.md" },

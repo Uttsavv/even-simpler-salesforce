@@ -47,6 +47,7 @@ from ..models import (
 )
 from ..observability.events import Observer, ObserverHub
 from ..usage import UsageTracker
+from ._bulk import AsyncFakeBulk, FakeBulk
 from ._composite import AsyncFakeComposite, FakeComposite
 from ._fake_org import AsyncFakeLeads, AsyncFakePlatformEvents, FakeLeads, FakePlatformEvents, fake_merge
 from ._files import AsyncFakeFiles, FakeFiles
@@ -1028,6 +1029,7 @@ class FakeSalesforce(_FakeControls):
         self.files = FakeFiles(self._state, self._who)
         self.tooling = FakeTooling(self._state, self._who)
         self.composite = FakeComposite(self._state, self._who)
+        self.bulk = FakeBulk(self._state, self._who)
 
     @classmethod
     def _view(
@@ -1048,6 +1050,7 @@ class FakeSalesforce(_FakeControls):
         view.files = FakeFiles(state, who)
         view.tooling = FakeTooling(state, who)
         view.composite = FakeComposite(state, who)
+        view.bulk = FakeBulk(state, who)
         return view
 
     def __repr__(self) -> str:
@@ -1655,6 +1658,7 @@ class AsyncFakeSalesforce(_FakeControls):
         self.files = AsyncFakeFiles(inner.files)
         self.tooling = AsyncFakeTooling(inner.tooling)
         self.composite = AsyncFakeComposite(inner.composite)
+        self.bulk = AsyncFakeBulk(inner.bulk)
 
     @property
     def instance_url(self) -> str:

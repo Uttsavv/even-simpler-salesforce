@@ -49,6 +49,7 @@ def test_fake_matches_real_surface(real_cls: Any, fake_cls: Any) -> None:
     assert _compare(real.files, fake.files) == []
     assert _compare(real.tooling, fake.tooling) == []
     assert _compare(real.tooling.sobject("ApexClass"), fake.tooling.sobject("ApexClass")) == []
+    assert _compare(real.bulk, fake.bulk) == []
 
 
 def test_positional_values_and_single_row_helpers() -> None:

@@ -30,6 +30,10 @@ The reasons behind the design are written down in the
 
 ::: even_simpler_salesforce.AsyncFileStream
 
+::: even_simpler_salesforce._async.api.bulk.AsyncBulk
+
+::: even_simpler_salesforce.AsyncIngestJob
+
 ::: even_simpler_salesforce._async.api.auth_api.AsyncAuthApi
 
 ::: even_simpler_salesforce._async.api.actions.AsyncActions
@@ -125,6 +129,11 @@ The reasons behind the design are written down in the
 ::: even_simpler_salesforce.SubrequestResult
 
 ::: even_simpler_salesforce.GraphResult
+::: even_simpler_salesforce.BulkJobState
+
+::: even_simpler_salesforce.BulkJobInfo
+
+::: even_simpler_salesforce.BulkFailure
 
 ::: even_simpler_salesforce.QueryPlan
 
@@ -143,6 +152,8 @@ The reasons behind the design are written down in the
 ::: even_simpler_salesforce.Budget
 
 ::: even_simpler_salesforce.DescribeCacheConfig
+
+::: even_simpler_salesforce.Backoff
 
 ::: even_simpler_salesforce.Cache
 
@@ -208,6 +219,9 @@ The reasons behind the design are written down in the
 ::: even_simpler_salesforce.testing.FakeComposite
 
 ::: even_simpler_salesforce.testing.AsyncFakeComposite
+::: even_simpler_salesforce.testing.FakeBulk
+
+::: even_simpler_salesforce.testing.AsyncFakeBulk
 
 ::: even_simpler_salesforce.testing.key_prefix
 

@@ -256,14 +256,13 @@ SalesforceError
 │   └── BudgetExceeded             the library's own budget guard; .usage
 ├── ServerError                    420 and 5xx, SERVER_UNAVAILABLE
 ├── PartialFailure                 some records or chunks failed; .results
-├── BulkJobFailed                  Bulk 2.0 job failed; .job_id, .state, .error_message   (used from 0.3)
+├── BulkJobFailed                  Bulk 2.0 job failed or was aborted; .job_id, .state, .error_message
+├── BulkJobTimeout                 Bulk 2.0 job not finished within wait(timeout=); .job_id, .state
 ├── ApexError                      APEX_ERROR, or an error from an Apex REST class; .body
 ├── GraphQLError                   GraphQL errors array; .graphql_errors, .data
 ├── SoapFault                      unmapped SOAP fault (lead convert, merge); .fault_code
 └── UnexpectedResponse             HTML pages (proxies, maintenance), non-JSON bodies, unexpected shapes
 ```
-
-`BulkJobFailed` exists now to keep the hierarchy stable. Nothing raises it yet.
 
 ## Troubleshooting
 
@@ -463,7 +462,15 @@ row.
 
 ### BulkJobFailed
 
-A Bulk API 2.0 job ended in the `Failed` state. Read `exc.error_message`.
+A Bulk API 2.0 job ended in the `Failed` or `Aborted` state. `exc.state` says which, and
+`exc.error_message` gives the reason from Salesforce. If an ingest job failed, read
+`job.unprocessed_records()`. If a query selects a compound field such as `BillingAddress`,
+`exc.hint` names its component fields. See [Bulk API 2.0](guides/bulk.md).
+
+### BulkJobTimeout
+
+A Bulk API 2.0 job didn't finish within the `timeout` of `wait()`. The job keeps running in
+Salesforce. Call `wait()` again with a longer `timeout`, or call `job.abort()` to stop it.
 
 ### ApexError
 

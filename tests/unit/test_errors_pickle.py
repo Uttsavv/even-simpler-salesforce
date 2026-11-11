@@ -146,6 +146,7 @@ def test_classes_with_extras_are_the_expected_ones() -> None:
         "ApexError": ["body"],
         "BudgetExceeded": ["usage"],
         "BulkJobFailed": ["job_id", "state", "error_message"],
+        "BulkJobTimeout": ["job_id", "state"],
         "DuplicateDetected": ["duplicates"],
         "GraphQLError": ["graphql_errors", "data"],
         "MultipleMatches": ["matches"],

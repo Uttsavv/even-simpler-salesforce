@@ -1,12 +1,12 @@
 # Roadmap
 
 0.1 covers authentication, records, queries, sObject Collections and raw requests. 0.2 adds
-[Files](guides/files.md). 0.3 adds [GraphQL](guides/graphql.md). The API areas below come in
+[Files](guides/files.md). 0.3 adds [Bulk API 2.0](guides/bulk.md), [Tooling](guides/tooling.md),
+[GraphQL](guides/graphql.md) and [Composite](guides/composite.md). The API areas below come in
 later releases.
 
 | Area | Release | What's planned |
 |---|---|---|
-| Bulk API 2.0 | 0.3 | Ingest and query jobs, chunked uploads and `BulkJobFailed`. |
 | UI API | 0.4 | Records with layout information, list views and picklist values. |
 | Reports and dashboards | 0.4 | Run reports and read dashboards. |
 | Metadata API | 0.4 | Metadata API operations. |
@@ -19,4 +19,4 @@ The full plan is in the
 
 Call the REST resource yourself with [`sf.request()`](guides/requests.md). You still get
 authentication, token refresh, typed errors, usage tracking and logging.
-For example, `await sf.request("GET", "jobs/ingest")` lists Bulk API 2.0 ingest jobs.
+For example, `await sf.request("GET", "tooling/sobjects")` lists the Tooling API objects.

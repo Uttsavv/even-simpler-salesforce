@@ -34,6 +34,7 @@ from . import _compat
 from .api.actions import Actions
 from .api.apex import Apex
 from .api.auth_api import AuthApi
+from .api.bulk import Bulk
 from .api.collections import Collections
 from .api.composite import Composite
 from .api.files import Files
@@ -208,6 +209,7 @@ class Salesforce:
         self.files = Files(self)
         self.tooling = Tooling(self)
         self.composite = Composite(self)
+        self.bulk = Bulk(self)
 
     @classmethod
     def _child(
