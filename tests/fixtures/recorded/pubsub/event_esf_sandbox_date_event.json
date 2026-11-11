@@ -1,0 +1,14 @@
+{
+ "_note": "Recorded 2026-11-12 from a Developer Edition org (API v68.0) by a raw gRPC probe; ids, org id, user and record names redacted. Published with Day__c=2026-11-12, When__c=2026-11-12T10:30:00Z.",
+ "topic": "/event/ESF_Sandbox_Date_Event__e",
+ "id": "8ab30389-d72b-480f-bb23-4307ce5d9835",
+ "schema_id": "FGbRCtImpt16IGPTdv2cnw",
+ "headers": [],
+ "record": {
+  "CreatedDate": 1794437345334,
+  "CreatedById": "005xx0000000001AAA",
+  "Day__c": 1794441600000,
+  "Message__c": "esf-sandbox-0000aaaa-date",
+  "When__c": 1794479400000
+ }
+}

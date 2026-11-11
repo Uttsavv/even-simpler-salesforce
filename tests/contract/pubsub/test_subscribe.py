@@ -1,6 +1,8 @@
 """``sf.pubsub.subscribe`` against an in-process gRPC server, for both clients (§9.16, D31).
 
-Every server response is **synthetic** (see ``_server.py``). Sources, read 2026-11-09 (ADR 0013):
+The responses here are **synthetic** (see ``_server.py``), shaped like the recordings in
+``tests/fixtures/recorded/pubsub``; ``test_recorded.py`` replays the recordings themselves. Sources,
+read 2026-11-09 (ADR 0013):
 
 - Subscribe RPC and flow control:
   https://developer.salesforce.com/docs/platform/pub-sub-api/references/methods/subscribe-rpc.html
@@ -119,7 +121,7 @@ def test_change_event_header_and_bitmaps(ps: PubSubHarness) -> None:
     (ev,) = ps.consume("/data/AccountChangeEvent", n=1)
     ch = ev.change
     assert ch is not None
-    assert ev.event_id is None
+    assert ev.event_id == "cdc-uuid-1"  # passed through: Salesforce sets it on change events too
     assert ev.schema_id == ACCOUNT_SCHEMA_ID
     assert ch.entity_name == "Account"
     assert ch.change_type is esf.ChangeType.UPDATE
@@ -169,12 +171,25 @@ def test_undecodable_payload_raises_unexpected_response(ps: PubSubHarness, rec: 
     assert rec.named("sf.pubsub.closed")[0]["outcome"] == "error"
 
 
-def test_unknown_schema_raises_not_found(ps: PubSubHarness) -> None:
+def test_empty_event_id_is_none(ps: PubSubHarness) -> None:
+    ev = order(1)
+    ev.event.id = ""
+    ps.server.script(sends(batch(ev)))
+    (got,) = ps.consume(n=1)
+    assert got.event_id is None
+
+
+def test_unavailable_schema_reconnects_then_raises(ps: PubSubHarness) -> None:
+    # Salesforce answers GetSchema for an unknown id with UNAVAILABLE / schema.api.unavailable
+    # (recorded), so the client treats it as transient and resubscribes until attempts run out.
     ps.server.schemas.clear()
-    ps.server.script(sends(batch(order(1))))
-    with pytest.raises(esf.NotFound) as ei:
+    ps.server.script(*[sends(batch(order(1)))] * 3)
+    with pytest.raises(esf.PubSubError) as ei:
         ps.consume(n=1)
-    assert ei.value.error_code == "sfdc.platform.eventbus.grpc.schema.not.found"
+    assert type(ei.value) is esf.PubSubError
+    assert ei.value.error_code == "sfdc.platform.eventbus.grpc.schema.api.unavailable"
+    assert ei.value.request_id
+    assert len(ps.server.schema_calls) == 3
 
 
 def test_static_token_without_org_id_calls_userinfo_once(ps: PubSubHarness, mock: respx.MockRouter) -> None:

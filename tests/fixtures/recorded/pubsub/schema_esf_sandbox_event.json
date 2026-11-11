@@ -1,0 +1,31 @@
+{
+ "_note": "Recorded 2026-11-12 from a Developer Edition org (API v68.0) by a raw gRPC probe; ids, org id, user and record names redacted.",
+ "topic": "/event/ESF_Sandbox_Event__e",
+ "schema_id": "GFkHSnd3EAgVRPeInnUiOw",
+ "schema": {
+  "type": "record",
+  "name": "ESF_Sandbox_Event__e",
+  "namespace": "com.sforce.eventbus",
+  "fields": [
+   {
+    "name": "CreatedDate",
+    "type": "long",
+    "doc": "CreatedDate:DateTime"
+   },
+   {
+    "name": "CreatedById",
+    "type": "string",
+    "doc": "CreatedBy:EntityId"
+   },
+   {
+    "name": "Message__c",
+    "type": [
+     "null",
+     "string"
+    ],
+    "doc": "Data:Text:00Nxx0000000010",
+    "default": null
+   }
+  ]
+ }
+}

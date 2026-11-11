@@ -1,0 +1,205 @@
+{
+ "_note": "Recorded 2026-11-12 from a Developer Edition org (API v68.0) by a raw gRPC probe; ids, org id, user and record names redacted. Volatile trailers (date, content-length, server timing) are dropped from 'trailers' but listed in 'trailer_keys'.",
+ "errors": {
+  "subscribe_unknown_topic": {
+   "status": "NOT_FOUND",
+   "details": "The topic information for org core/prod/00Dxx0000000001AAA and topic /event/No_Such_Event__e not found. Ensure the topic name is correct and that the topic exists. rpcId: 0c4285e8dad5a34b4948ac4ae7681466",
+   "trailers": {
+    "error-code": "sfdc.platform.eventbus.grpc.topic.not.found",
+    "rpc-id": "0c4285e8dad5a34b4948ac4ae7681466",
+    "type": "Subscribe",
+    "x-sfdc-request-id": "0c4285e8dad5a34b4948ac4ae7681466",
+    "x-request-id": "0c4285e8dad5a34b4948ac4ae7681466"
+   },
+   "trailer_keys": [
+    "date",
+    "content-length",
+    "error-code",
+    "rpc-id",
+    "type",
+    "server",
+    "x-sfdc-request-id",
+    "x-request-id",
+    "x-sfdc-edge-cache"
+   ]
+  },
+  "subscribe_bad_replay": {
+   "status": "INVALID_ARGUMENT",
+   "details": "The Replay ID validation failed. Ensure that the Replay ID is valid. rpcId: aeb1155cc16cbf68e0086c08bc8dd061",
+   "trailers": {
+    "error-code": "sfdc.platform.eventbus.grpc.subscription.fetch.replayid.corrupted",
+    "rpc-id": "aeb1155cc16cbf68e0086c08bc8dd061",
+    "type": "Subscribe",
+    "x-sfdc-request-id": "aeb1155cc16cbf68e0086c08bc8dd061",
+    "x-request-id": "aeb1155cc16cbf68e0086c08bc8dd061"
+   },
+   "trailer_keys": [
+    "date",
+    "content-length",
+    "error-code",
+    "rpc-id",
+    "type",
+    "server",
+    "x-sfdc-request-id",
+    "x-request-id",
+    "x-sfdc-edge-cache"
+   ]
+  },
+  "subscribe_old_replay": {
+   "status": "INVALID_ARGUMENT",
+   "details": "The Replay ID validation failed. Ensure that the Replay ID is valid. rpcId: 63bb13a1b7beaa1498a66851530771e8",
+   "trailers": {
+    "error-code": "sfdc.platform.eventbus.grpc.subscription.fetch.replayid.corrupted",
+    "rpc-id": "63bb13a1b7beaa1498a66851530771e8",
+    "type": "Subscribe",
+    "x-sfdc-request-id": "63bb13a1b7beaa1498a66851530771e8",
+    "x-request-id": "63bb13a1b7beaa1498a66851530771e8"
+   },
+   "trailer_keys": [
+    "date",
+    "content-length",
+    "error-code",
+    "rpc-id",
+    "type",
+    "server",
+    "x-sfdc-request-id",
+    "x-request-id",
+    "x-sfdc-edge-cache"
+   ]
+  },
+  "subscribe_bad_token": {
+   "status": "UNAUTHENTICATED",
+   "details": "An authentication exception occurred. Provide valid authentication via metadata headers. rpcId: 7227751159733c818d94af83b78d46f3",
+   "trailers": {
+    "error-code": "sfdc.platform.eventbus.grpc.service.auth.error",
+    "rpc-id": "7227751159733c818d94af83b78d46f3",
+    "type": "Subscribe",
+    "x-sfdc-request-id": "7227751159733c818d94af83b78d46f3",
+    "x-request-id": "7227751159733c818d94af83b78d46f3"
+   },
+   "trailer_keys": [
+    "date",
+    "content-length",
+    "error-code",
+    "rpc-id",
+    "type",
+    "server",
+    "x-sfdc-request-id",
+    "x-request-id",
+    "x-sfdc-edge-cache"
+   ]
+  },
+  "subscribe_no_tenant": {
+   "status": "UNAUTHENTICATED",
+   "details": "The auth headers value for key tenantid is invalid. Provide valid auth headers. The auth headers can't be blank. rpcId: 2ba3e7051470c715126ff1fdb24f7397",
+   "trailers": {
+    "error-code": "sfdc.platform.eventbus.grpc.service.auth.headers.invalid",
+    "rpc-id": "2ba3e7051470c715126ff1fdb24f7397",
+    "type": "Base",
+    "x-sfdc-request-id": "2ba3e7051470c715126ff1fdb24f7397",
+    "x-request-id": "2ba3e7051470c715126ff1fdb24f7397"
+   },
+   "trailer_keys": [
+    "date",
+    "content-length",
+    "error-code",
+    "rpc-id",
+    "type",
+    "server",
+    "x-sfdc-request-id",
+    "x-request-id",
+    "x-sfdc-edge-cache"
+   ]
+  },
+  "subscribe_num_requested_0": {
+   "status": "INVALID_ARGUMENT",
+   "details": "The requested number of events in a fetch request must be greater than zero. rpcId: 6a6ee991e0dce5691931311b1a7f49bb",
+   "trailers": {
+    "error-code": "sfdc.platform.eventbus.grpc.subscription.fetch.requested.events.invalid",
+    "rpc-id": "6a6ee991e0dce5691931311b1a7f49bb",
+    "type": "Subscribe",
+    "x-sfdc-request-id": "6a6ee991e0dce5691931311b1a7f49bb",
+    "x-request-id": "6a6ee991e0dce5691931311b1a7f49bb"
+   },
+   "trailer_keys": [
+    "date",
+    "content-length",
+    "error-code",
+    "rpc-id",
+    "type",
+    "server",
+    "x-sfdc-request-id",
+    "x-request-id",
+    "x-sfdc-edge-cache"
+   ]
+  },
+  "subscribe_bad_topic_syntax": {
+   "status": "PERMISSION_DENIED",
+   "details": "An error occurred while getting the metadata for org core/prod/00Dxx0000000001AAA and topic no-slash. Ensure the credentials and topic name are correct. rpcId: 1b8bdfd068fe5523448a264eab5d22e9",
+   "trailers": {
+    "error-code": "sfdc.platform.eventbus.grpc.topic.meta.permission",
+    "rpc-id": "1b8bdfd068fe5523448a264eab5d22e9",
+    "type": "Subscribe",
+    "x-sfdc-request-id": "1b8bdfd068fe5523448a264eab5d22e9",
+    "x-request-id": "1b8bdfd068fe5523448a264eab5d22e9"
+   },
+   "trailer_keys": [
+    "date",
+    "content-length",
+    "error-code",
+    "rpc-id",
+    "type",
+    "server",
+    "x-sfdc-request-id",
+    "x-request-id",
+    "x-sfdc-edge-cache"
+   ]
+  },
+  "get_schema_unknown": {
+   "status": "UNAVAILABLE",
+   "details": "The schema information for org core/prod/00Dxx0000000001AAA and schema ID AAAAAAAAAAAAAAAAAAAAAA is unavailable. rpcId: bf3bd6c7fb1fe80887e99d5a02ad3176",
+   "trailers": {
+    "error-code": "sfdc.platform.eventbus.grpc.schema.api.unavailable",
+    "rpc-id": "bf3bd6c7fb1fe80887e99d5a02ad3176",
+    "type": "GetSchema",
+    "x-sfdc-request-id": "bf3bd6c7fb1fe80887e99d5a02ad3176",
+    "x-request-id": "bf3bd6c7fb1fe80887e99d5a02ad3176"
+   },
+   "trailer_keys": [
+    "date",
+    "content-length",
+    "error-code",
+    "rpc-id",
+    "type",
+    "x-envoy-upstream-service-time",
+    "server",
+    "x-sfdc-request-id",
+    "x-request-id",
+    "x-sfdc-edge-cache"
+   ]
+  },
+  "get_topic_unknown": {
+   "status": "NOT_FOUND",
+   "details": "The topic information for org core/prod/00Dxx0000000001AAA and topic /event/No_Such_Event__e not found. Ensure the topic name is correct and that the topic exists. rpcId: 7121cec19d5e015ec54f1feff7ab32ad",
+   "trailers": {
+    "error-code": "sfdc.platform.eventbus.grpc.topic.not.found",
+    "rpc-id": "7121cec19d5e015ec54f1feff7ab32ad",
+    "type": "GetTopic",
+    "x-sfdc-request-id": "7121cec19d5e015ec54f1feff7ab32ad",
+    "x-request-id": "7121cec19d5e015ec54f1feff7ab32ad"
+   },
+   "trailer_keys": [
+    "date",
+    "content-length",
+    "error-code",
+    "rpc-id",
+    "type",
+    "x-envoy-upstream-service-time",
+    "server",
+    "x-sfdc-request-id",
+    "x-request-id",
+    "x-sfdc-edge-cache"
+   ]
+  }
+ }
+}
