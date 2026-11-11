@@ -10,7 +10,6 @@ later releases.
 | Bulk API 2.0 | 0.3 | Ingest and query jobs, chunked uploads and `BulkJobFailed`. |
 | Tooling API | 0.3 | Tooling queries and requests, including anonymous Apex. |
 | UI API | 0.4 | Records with layout information, list views and picklist values. |
-| Reports and dashboards | 0.4 | Run reports and read dashboards. |
 | Metadata API | 0.4 | Metadata API operations. |
 | Pub/Sub API | 0.5 | Subscribe and publish over gRPC (`[pubsub]` extra). |
 

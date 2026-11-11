@@ -48,6 +48,11 @@ Paths are relative to `/services/data/vXX.X/` unless they start with `/services/
 | `composite/sobjects` | POST, PATCH, DELETE | collections.create/update/delete() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobjects_collections.htm) |  |
 | `composite/sobjects/{}` | POST | collections.retrieve() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobjects_collections_retrieve.htm) |  |
 | `composite/sobjects/{}/{}` | PATCH | collections.upsert() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobjects_collections_upsert.htm) |  |
+| `analytics/reports/{}` | GET, POST | sf.reports.run (?includeDetails=; POST with reportMetadata.reportFilters; read, resent) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/sforce_analytics_rest_api_getreportrundata.htm) |  |
+| `analytics/reports/{}/describe` | GET | sf.reports.describe | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/sforce_analytics_rest_api_getbasic_reportmetadata.htm) |  |
+| `analytics/reports/{}/instances` | POST | sf.reports.run_async (creates a report instance; never resent) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/sforce_analytics_rest_api_instances_summaryasync.htm) |  |
+| `analytics/reports/{}/instances/{}` | GET | sf.reports.instance (polled; status New, Running, Success or Error) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/sforce_analytics_rest_api_instances_resource.htm) |  |
+| `analytics/dashboards/{}` | GET, PUT | sf.reports.dashboards.get (GET), sf.reports.dashboards.refresh (PUT; never resent) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/analytics_api_dashboard_results_resource.htm) |  |
 | `/services/oauth2/userinfo` | GET | sf.auth.userinfo() | [docs](https://help.salesforce.com/s/articleView?id=sf.remoteaccess_using_userinfo_endpoint.htm&type=5) |  |
 
 ## OAuth
@@ -102,6 +107,8 @@ Behaviour relied on:
 | Upsert by external id | `id`, `created`, `201 = created, 204/200 = updated`, `300 = list of matching URLs` |
 | Limits | `{name: {Max, Remaining, ...}}` |
 | GraphQL | `data`, `errors[]: message, locations, path, extensions.ErrorType`, `connections: edges[].node, pageInfo {hasNextPage, endCursor}` |
+| Report run / report instance | `attributes`, `allData`, `hasDetailRows`, `factMap {'<row>!<col>': {aggregates[], rows[].dataCells[]}}`, `groupingsDown/groupingsAcross.groupings[] {key, value, groupings}`, `reportMetadata {reportFormat, detailColumns, aggregates, groupingsDown, groupingsAcross}`, `attributes.status (instances)` |
+| Dashboard results / refresh | `dashboardMetadata`, `componentData[] {componentId, reportResult, status.refreshStatus}`, `statusUrl` |
 | REST error body | `list of {message, errorCode or statusCode, fields}`, `extras such as duplicateResult` |
 | OAuth error body | `error`, `error_description` |
 

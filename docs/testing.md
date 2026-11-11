@@ -196,6 +196,13 @@ arguments:
 The fake checks the query and `path` of `graphql_iter()` like the real client. Each page is
 one `"graphql"` call in `calls`.
 
+## Script reports and dashboards
+
+`on_report(report_id, result)` sets the body that `sf.reports.run()` returns for a report. An
+asynchronous run finishes at once, so `instance()` returns without waiting.
+`on_dashboard(dashboard_id, body)` sets the body of `sf.reports.dashboards.get()`. See
+[Reports and dashboards](guides/reports.md#test-code-that-uses-reports).
+
 ## Inject errors
 
 `fail_next()` makes the next call of an operation raise. `reject()` rejects record writes row by

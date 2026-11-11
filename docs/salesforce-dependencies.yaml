@@ -138,6 +138,39 @@ rest_endpoints:
     used_by: collections.upsert()
     docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobjects_collections_upsert.htm
     checked: null
+  # Reports and Dashboards REST API (sf.reports). Paths are built by core/reports.py, so the
+  # code scan can't see them (dynamic). Read 2026-11-11 from search excerpts only; the pages
+  # return 403 to non-browser clients (V65-V68).
+  - path: "analytics/reports/{}"
+    methods: [GET, POST]
+    used_by: "sf.reports.run (?includeDetails=; POST with reportMetadata.reportFilters; read, resent)"
+    dynamic: true
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/sforce_analytics_rest_api_getreportrundata.htm
+    checked: null
+  - path: "analytics/reports/{}/describe"
+    methods: [GET]
+    used_by: sf.reports.describe
+    dynamic: true
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/sforce_analytics_rest_api_getbasic_reportmetadata.htm
+    checked: null
+  - path: "analytics/reports/{}/instances"
+    methods: [POST]
+    used_by: "sf.reports.run_async (creates a report instance; never resent)"
+    dynamic: true
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/sforce_analytics_rest_api_instances_summaryasync.htm
+    checked: null
+  - path: "analytics/reports/{}/instances/{}"
+    methods: [GET]
+    used_by: "sf.reports.instance (polled; status New, Running, Success or Error)"
+    dynamic: true
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/sforce_analytics_rest_api_instances_resource.htm
+    checked: null
+  - path: "analytics/dashboards/{}"
+    methods: [GET, PUT]
+    used_by: "sf.reports.dashboards.get (GET), sf.reports.dashboards.refresh (PUT; never resent)"
+    dynamic: true
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/analytics_api_dashboard_results_resource.htm
+    checked: null
   - path: /services/oauth2/userinfo
     methods: [GET]
     used_by: sf.auth.userinfo()
@@ -265,6 +298,10 @@ response_shapes:
     fields: ["{name: {Max, Remaining, ...}}"]
   - resource: GraphQL
     fields: [data, "errors[]: message, locations, path, extensions.ErrorType", "connections: edges[].node, pageInfo {hasNextPage, endCursor}"]
+  - resource: Report run / report instance
+    fields: [attributes, allData, hasDetailRows, "factMap {'<row>!<col>': {aggregates[], rows[].dataCells[]}}", "groupingsDown/groupingsAcross.groupings[] {key, value, groupings}", "reportMetadata {reportFormat, detailColumns, aggregates, groupingsDown, groupingsAcross}", "attributes.status (instances)"]
+  - resource: Dashboard results / refresh
+    fields: [dashboardMetadata, "componentData[] {componentId, reportResult, status.refreshStatus}", statusUrl]
   - resource: REST error body
     fields: ["list of {message, errorCode or statusCode, fields}", "extras such as duplicateResult"]
   - resource: OAuth error body

@@ -23,6 +23,8 @@ The org enforces a few rules so error examples have something to hit:
 Files: a multipart ``POST sobjects/ContentVersion`` stores the bytes and creates the
 ContentDocument (plus a ContentDocumentLink for ``FirstPublishLocationId``);
 ``GET .../VersionData`` and ``GET sobjects/Attachment/{id}/Body`` return the bytes.
+
+Reports and dashboards (``analytics/...``) answer from :mod:`tests.docs._analytics`.
 """
 
 from __future__ import annotations
@@ -39,6 +41,8 @@ from typing import Any
 from urllib.parse import parse_qsl
 
 import httpx
+
+from ._analytics import analytics
 
 INSTANCE = "https://acme.my.salesforce.com"
 ORG_ID = "00Dxx0000000001EAA"
@@ -589,6 +593,8 @@ class FakeOrg:
             return self._actions(request, parts[1:])
         if rest == "graphql" and method == "POST":
             return self._json(self._graphql(self._body(request) or {}))
+        if parts[0] == "analytics" and (found := analytics(method, parts[1:], params, version)):
+            return self._json(*found)
         if parts[0] == "sobjects" and len(parts) == 2 and parts[1].endswith("__e") and method == "POST":
             return self._json(self._publish(parts[1], self._body(request) or {}), 201)
         if parts[0] == "composite" and len(parts) >= 2 and parts[1] == "sobjects":
