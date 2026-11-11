@@ -82,6 +82,7 @@ from .errors import (
 )
 from .models import (
     ActionResult,
+    AnonymousResult,
     BatchResult,
     FileLink,
     LeadConvert,
@@ -106,6 +107,7 @@ class EsfDeprecationWarning(DeprecationWarning):
 __all__ = [
     "Action",
     "ActionResult",
+    "AnonymousResult",
     "ApexError",
     "AsyncFileStream",
     "AsyncInMemoryTokenStore",

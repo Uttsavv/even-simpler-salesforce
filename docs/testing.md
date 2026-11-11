@@ -46,6 +46,7 @@ implementation. They have the methods of the real clients for these areas:
 - lead convert, merge and platform events
 - [Files](guides/files.md)
 - [GraphQL](guides/graphql.md), with scripted answers
+- [Tooling API](guides/tooling.md), including anonymous Apex
 - `request`, `limits` and `usage`
 - `with_auth` and `tagged`
 

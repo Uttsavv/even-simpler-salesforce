@@ -48,6 +48,13 @@ Paths are relative to `/services/data/vXX.X/` unless they start with `/services/
 | `composite/sobjects` | POST, PATCH, DELETE | collections.create/update/delete() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobjects_collections.htm) |  |
 | `composite/sobjects/{}` | POST | collections.retrieve() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobjects_collections_retrieve.htm) |  |
 | `composite/sobjects/{}/{}` | PATCH | collections.upsert() | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobjects_collections_upsert.htm) |  |
+| `tooling/query` | GET | sf.tooling.query, sf.tooling.query_iter (?q=); the capture_log flow of execute_anonymous | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/intro_rest_resources.htm) |  |
+| `tooling/query/{}` | GET | sf.query_more (Tooling cursors), sf.tooling.query_iter (nextRecordsUrl, absolute path) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/intro_rest_resources.htm) |  |
+| `tooling/sobjects/{}` | GET, POST, PATCH, DELETE | sf.tooling.sobject(name) methods (the sf.sobject paths with a tooling/ prefix); TraceFlag and DebugLevel in execute_anonymous(capture_log=True) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/intro_rest_resources.htm) |  |
+| `tooling/executeAnonymous/` | GET | sf.tooling.execute_anonymous (?anonymousBody=; never resent, ADR 0001) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/intro_rest_resources.htm) |  |
+| `tooling/sobjects/ApexLog/{}/Body` | GET | sf.tooling.execute_anonymous(capture_log=True) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/tooling_api_objects_apexlog.htm) |  |
+| `tooling/runTestsAsynchronous/` | POST | sf.tooling.run_tests_async | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/intro_rest_resources_testing_runner_async.htm) |  |
+| `tooling/completions` | GET | sf.tooling.completions (?type=apex\|visualforce) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/intro_rest_resources.htm) |  |
 | `/services/oauth2/userinfo` | GET | sf.auth.userinfo() | [docs](https://help.salesforce.com/s/articleView?id=sf.remoteaccess_using_userinfo_endpoint.htm&type=5) |  |
 
 ## OAuth

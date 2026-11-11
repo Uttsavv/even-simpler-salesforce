@@ -212,6 +212,7 @@ class _Locator:
     page_size: int
     soql: str
     all_rows: bool
+    tooling: bool = False  # a ``fake.tooling.query`` locator (``tooling/query/...``)
 
 
 def _norm(soql: str) -> str:
@@ -289,6 +290,7 @@ class FakeState:
         self._locator_seq = 0
         self.explain_plans: list[QueryPlan] = []
         self.events: dict[str, list[dict[str, Any]]] = {}  # published platform events
+        self.tooling: Any = None  # state of ``fake.tooling`` (testing/_tooling.py), made on first use
         self.counter = 0
         self.closed = False
         self.debug = debug_level()
@@ -773,7 +775,7 @@ class FakeState:
                 self.locators[loc_id] = loc
                 while len(self.locators) > MAX_OPEN_LOCATORS:  # bounded: oldest are dropped first
                     del self.locators[next(iter(self.locators))]
-            kind = "queryAll" if loc.all_rows else "query"
+            kind = "tooling/query" if loc.tooling else "queryAll" if loc.all_rows else "query"
             nxt = f"/services/data/v{self.api_version}/{kind}/{loc_id}-{offset + ps}"
         return chunk, loc.total, done, nxt
 

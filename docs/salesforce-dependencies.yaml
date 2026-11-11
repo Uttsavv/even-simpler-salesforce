@@ -138,6 +138,43 @@ rest_endpoints:
     used_by: collections.upsert()
     docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobjects_collections_upsert.htm
     checked: null
+  - path: tooling/query
+    methods: [GET]
+    used_by: "sf.tooling.query, sf.tooling.query_iter (?q=); the capture_log flow of execute_anonymous"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/intro_rest_resources.htm
+    checked: null
+  - path: "tooling/query/{}"
+    methods: [GET]
+    used_by: "sf.query_more (Tooling cursors), sf.tooling.query_iter (nextRecordsUrl, absolute path)"
+    dynamic: true  # the path comes from the opaque cursor, not a literal in the code
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/intro_rest_resources.htm
+    checked: null
+  - path: "tooling/sobjects/{}"
+    methods: [GET, POST, PATCH, DELETE]
+    used_by: "sf.tooling.sobject(name) methods (the sf.sobject paths with a tooling/ prefix); TraceFlag and DebugLevel in execute_anonymous(capture_log=True)"
+    dynamic: true  # prefixed at runtime by AsyncSObject(base="tooling/")
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/intro_rest_resources.htm
+    checked: null
+  - path: tooling/executeAnonymous/
+    methods: [GET]
+    used_by: "sf.tooling.execute_anonymous (?anonymousBody=; never resent, ADR 0001)"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/intro_rest_resources.htm
+    checked: null
+  - path: "tooling/sobjects/ApexLog/{}/Body"
+    methods: [GET]
+    used_by: "sf.tooling.execute_anonymous(capture_log=True)"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/tooling_api_objects_apexlog.htm
+    checked: null
+  - path: tooling/runTestsAsynchronous/
+    methods: [POST]
+    used_by: sf.tooling.run_tests_async
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/intro_rest_resources_testing_runner_async.htm
+    checked: null
+  - path: tooling/completions
+    methods: [GET]
+    used_by: "sf.tooling.completions (?type=apex|visualforce)"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/intro_rest_resources.htm
+    checked: null
   - path: /services/oauth2/userinfo
     methods: [GET]
     used_by: sf.auth.userinfo()
