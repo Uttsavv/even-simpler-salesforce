@@ -6,6 +6,7 @@ import copy
 import hashlib
 import logging
 import time
+from contextlib import AbstractAsyncContextManager
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 
@@ -131,6 +132,44 @@ class AsyncAuthRuntime:
         finally:
             self.transport.refresh_outcomes.unpin(key)
             self.transport.flush_deferred()
+
+    async def adopt_newer(self, rejected: Token, *, locked: bool = False) -> Token | None:
+        """A token newer than ``rejected`` (from memory or the store), or ``None``. Never POSTs.
+
+        With refresh-token rotation, every refresh revokes the earlier access tokens of the grant.
+        A call whose freshly refreshed token is rejected may simply have been overtaken by another
+        process's refresh; the store then already holds the replacement.
+
+        Args:
+            rejected: The token Salesforce just rejected (or, with ``locked``, the one about to
+                be sent).
+            locked: The caller holds :meth:`store_lock`. Then only the store is read, and the
+                per-key in-process lock is not taken (a refresh takes it before the store lock).
+        """
+        if not self.can_refresh:
+            return None
+        if locked:
+            return self._adopt(await self._load(), rejected)
+        async with self.transport.single_flight(self.key):
+            cur = self.transport.tokens.get(self.key)
+            if cur is not None and cur.access_token != rejected.access_token:
+                return cur  # another caller in this process refreshed meanwhile
+            # Under the store lock: a refresh in flight elsewhere finishes first, so the token
+            # adopted is the newest one, not one about to be revoked.
+            async with store_lock_async(self.store, self.key):
+                stored = await self._load()
+            return self._adopt(stored, rejected)
+
+    def store_lock(self) -> AbstractAsyncContextManager[None]:
+        """The token store's lock for this key (a no-op for stores without ``lock()``)."""
+        return store_lock_async(self.store, self.key)
+
+    def _adopt(self, stored: Token | None, rejected: Token) -> Token | None:
+        if stored is None or stored.access_token == rejected.access_token:
+            return None
+        self._check_identity(stored, rejected, "stored token")
+        self.transport.tokens[self.key] = stored
+        return stored
 
     async def force_refresh(self) -> Token:
         """Refresh now, even if the current token looks valid. Concurrent callers share one refresh.
