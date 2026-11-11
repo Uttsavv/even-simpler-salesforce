@@ -92,6 +92,9 @@ EXTRA_SAMPLES: dict[str, Any] = {
     "graphql_errors": ({"message": "bad field", "path": ["uiapi"]},),
     "data": {"uiapi": {"query": {"Lead": None}}},
     "fault_code": "sf:INVALID_ID",
+    "report_id": "00Oxx0000000001AAA",
+    "instance_id": "0LGxx0000000001AAA",
+    "run_status": "Running",
 }
 
 BASE_ATTRS = (
@@ -152,6 +155,8 @@ def test_classes_with_extras_are_the_expected_ones() -> None:
         "OAuthError": ["error", "error_description"],
         "PartialFailure": ["results"],
         "RefreshFailed": ["ambiguous"],
+        "ReportRunFailed": ["report_id", "instance_id"],
+        "ReportTimeout": ["report_id", "instance_id", "run_status"],
         "RequestLimitExceeded": ["retry_after"],
         "SoapFault": ["fault_code"],
     }

@@ -122,13 +122,25 @@ Call `get()` later to read the new data. A component is done when its `refreshSt
 ```python
 from even_simpler_salesforce.testing import FakeSalesforce
 
+
 def test_pipeline_total() -> None:
     fake = FakeSalesforce()
-    fake.on_report("00O5g00000ABCDeEAK", {
-        "reportMetadata": {"reportFormat": "TABULAR", "detailColumns": ["NAME"], "aggregates": ["RowCount"]},
-        "factMap": {"T!T": {"aggregates": [{"label": "1", "value": 1}],
-                            "rows": [{"dataCells": [{"label": "Acme", "value": "Acme"}]}]}},
-    })
+    fake.on_report(
+        "00O5g00000ABCDeEAK",
+        {
+            "reportMetadata": {
+                "reportFormat": "TABULAR",
+                "detailColumns": ["NAME"],
+                "aggregates": ["RowCount"],
+            },
+            "factMap": {
+                "T!T": {
+                    "aggregates": [{"label": "1", "value": 1}],
+                    "rows": [{"dataCells": [{"label": "Acme", "value": "Acme"}]}],
+                }
+            },
+        },
+    )
     result = fake.reports.run("00O5g00000ABCDeEAK")
     assert result.rows() == [{"NAME": "Acme"}]
     assert result.summary_rows() == [{"RowCount": 1}]
