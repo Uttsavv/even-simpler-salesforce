@@ -482,10 +482,14 @@ def test_grpc_helpers(monkeypatch: pytest.MonkeyPatch, module: str) -> None:
     import sys
 
     compat = importlib.import_module(f"even_simpler_salesforce.{module}._compat")
-    channel = compat.grpc_channel("api.pubsub.salesforce.com:443")  # TLS; connects lazily
-    closed = compat.grpc_close(channel)
-    if module == "_async":
-        asyncio.run(closed)
+    if module == "_async":  # grpc.aio channels need a running event loop
+
+        async def open_and_close() -> None:
+            await compat.grpc_close(compat.grpc_channel("api.pubsub.salesforce.com:443"))
+
+        asyncio.run(open_and_close())
+    else:
+        compat.grpc_close(compat.grpc_channel("api.pubsub.salesforce.com:443"))  # TLS; connects lazily
     monkeypatch.setitem(sys.modules, "grpc", None)
     with pytest.raises(ImportError, match=r"\[pubsub\] extra"):
         compat.grpc_channel("127.0.0.1:1")
