@@ -360,3 +360,14 @@ def test_fixture_write_failure_leaves_no_temporary_file(
     with pytest.raises(OSError, match="disk full"):
         record(tmp_path / "fx.json", httpx.MockTransport(lambda req: httpx.Response(200)))
     assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.skipif(not hasattr(__import__("os"), "getuid"), reason="POSIX file modes only")
+def test_rerecording_keeps_the_fixture_file_mode(tmp_path: Path) -> None:
+    path = tmp_path / "fx.json"
+    path.write_text("{}")
+    path.chmod(0o640)
+    t = record(path, httpx.MockTransport(lambda req: httpx.Response(200, json={"n": 1})))
+    with httpx.Client(transport=t) as c:
+        c.get("https://h/x")
+    assert path.stat().st_mode & 0o777 == 0o640

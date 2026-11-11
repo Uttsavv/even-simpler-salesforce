@@ -48,7 +48,7 @@ from ..errors import (
 )
 from ..observability.events import ObserverHub
 from ..observability.summary import record_event
-from ..usage import UsageTracker
+from ..usage import UsageTracker, org_key
 from . import _compat
 
 if TYPE_CHECKING:
@@ -328,9 +328,15 @@ class AsyncTransport:
         if token is None:
             return None
         entry: Any = self.cache.get(self.describe_key(token, runtime.key, f"sobject:{sobject}"))
-        if isinstance(entry, dict) and isinstance(entry.get("data"), dict):  # pyright: ignore[reportUnknownMemberType]
-            return cast("dict[str, Any]", entry["data"])
-        return None
+        # The describe cache holds the JSON text (``body``); decode a private copy.
+        body: Any = cast("dict[str, Any]", entry).get("body") if isinstance(entry, dict) else None
+        if not isinstance(body, str):
+            return None
+        try:
+            data: Any = self.loads(body.encode())
+        except ValueError:
+            return None
+        return cast("dict[str, Any]", data) if isinstance(data, dict) else None
 
     def emit(self, name: str, fields: Mapping[str, Any]) -> None:
         event = self.hub.emit(name, fields)
@@ -410,7 +416,6 @@ class AsyncTransport:
         pinned_key = runtime.key  # sf.auth may rebind runtime.key while this call runs
         self.refresh_outcomes.pin(pinned_key)
         try:
-            self.usage.check(priority, operation=spec.operation)
             token: Token | None = None
             retries_used = 0
             while True:
@@ -419,6 +424,9 @@ class AsyncTransport:
                 async with self.gate if self.gate is not None else _compat.nullcontext():
                     if token is None:
                         token = await runtime.token()
+                        # After the token: usage is kept per org, and a with_auth() child may
+                        # use another.
+                        self.usage.check(priority, operation=spec.operation, org=org_key(token))
                     attempts += 1
                     sent = True
                     generation = runtime.generation()
@@ -431,7 +439,7 @@ class AsyncTransport:
                         raw, err, sent = None, f.error, f.sent
                     if err is None:
                         assert raw is not None
-                        if spec.expect_json and raw.content and raw.status != 304:
+                        if raw.content and raw.status != 304 and (spec.expect_json or raw.is_json):
                             raw.json()  # raises InvalidJSONResponse inside the pipeline
                         return raw
 
@@ -599,7 +607,7 @@ class AsyncTransport:
                     await gen.aclose()
         info = parse_limit_info(response.headers.get("sforce-limit-info"))
         if info is not None:
-            self.usage.observe(info)
+            self.usage.observe(info, org=org_key(token))
         if self.debug >= 2:
             self.emit(
                 "sf.debug.attempt",
@@ -658,7 +666,7 @@ class AsyncTransport:
         caller: str | None,
         priority: str,
     ) -> None:
-        used, mx = self.usage.latest()
+        used, mx = self.usage.latest(org=org_key(runtime.current()))
         error = failure if isinstance(failure, SalesforceError) else None
         records = spec.records
         records_failed: int | None = None

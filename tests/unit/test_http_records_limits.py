@@ -19,6 +19,7 @@ from even_simpler_salesforce.core.http import (
     check_sobject,
     gzip_body,
     json_body,
+    merge_call_options,
     path_template,
     url_segment,
 )
@@ -316,3 +317,23 @@ def test_check_instance_url_rejects(url: str) -> None:
 
     with pytest.raises(ValueError, match="https://"):
         check_instance_url(url)
+
+
+@pytest.mark.parametrize(
+    ("caller", "expected"),
+    [
+        (None, "client=a"),
+        ("defaultNamespace=ns", "client=a; defaultNamespace=ns"),
+        ("x=1, y=2", "client=a; x=1; y=2"),
+        ("x=1;y=2", "client=a; x=1; y=2"),
+        ("CLIENT=b; x=1", "CLIENT=b; x=1"),
+        (" ;, ", "client=a"),
+    ],
+)
+def test_merge_call_options_separators(caller: str | None, expected: str) -> None:
+    # ADR 0012: join with "; ", split the caller's value on ";" and ",".
+    headers = {} if caller is None else {"sforce-call-options": caller, "X-Other": "1"}
+    merged = merge_call_options(headers, "client=a")
+    assert merged["Sforce-Call-Options"] == expected
+    assert "sforce-call-options" not in merged
+    assert merged.get("X-Other") == (None if caller is None else "1")

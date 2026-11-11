@@ -134,10 +134,47 @@ class AuthRuntime:
             self.transport.refresh_outcomes.unpin(key)
             self.transport.flush_deferred()
 
+    def force_refresh(self) -> Token:
+        """Refresh now, even if the current token looks valid. Concurrent callers share one refresh.
+
+        A caller that waited on the per-key lock while another caller refreshed gets that
+        refresh's result (or a copy of its error) instead of starting a second refresh.
+
+        Raises:
+            SessionExpired: the flow is ``StaticToken``, which can't be refreshed.
+        """
+        if not self.can_refresh:
+            raise SessionExpired(
+                "StaticToken can't be refreshed; create a new client with a new token",
+                error_code="INVALID_SESSION_ID",
+                operation="oauth.refresh",
+            )
+        key = self.key
+        self.transport.refresh_outcomes.pin(key)
+        entered = self._generation()
+        try:
+            with self.transport.single_flight(key):
+                if self._generation() != entered:  # a refresh finished while this call waited
+                    self._raise_shared_failure(entered)
+                    cur = self.transport.tokens.get(self.key)
+                    if cur is not None:
+                        return cur
+                # The token to replace: memory first, else the stored one, so the store's copy
+                # is not handed back as "newer" than itself.
+                stale = self.transport.tokens.get(self.key) or self._load()
+                new = self._refresh_recorded(stale, proactive=False)
+                self.transport.tokens[self.key] = new
+                return new
+        finally:
+            self.transport.refresh_outcomes.unpin(key)
+            self.transport.flush_deferred()
+
     def set_token(self, token: Token) -> Token:
         """Save ``token`` to the store and memory (used by ``exchange_code``)."""
         with self.transport.single_flight(self.key):
-            current = self._load()
+            # The store's raw record: only its version is needed, and a stored entry with a bad
+            # instance_url must not stop a new login from replacing it.
+            current = self.store.load(self.key)
             saved = self.store.save(
                 self.key, token, expected_version=current.version if current is not None else None
             )

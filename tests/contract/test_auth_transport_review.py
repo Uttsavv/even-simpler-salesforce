@@ -99,26 +99,41 @@ def test_apex_rest_401_post_is_not_resent(h: Harness, mock: respx.MockRouter, re
 
 
 @pytest.mark.parametrize(
-    "rejected",
+    ("rejected", "path"),
     [
-        pytest.param(EXPIRED, id="INVALID_SESSION_ID"),
-        pytest.param(httpx.Response(401, json={"error": "invalid_token"}), id="invalid_token"),
+        pytest.param(EXPIRED, "/services/apexrest/orders", id="INVALID_SESSION_ID"),
+        # OAuth-form rejections count only where org code can't send them (not Apex REST).
+        pytest.param(
+            httpx.Response(401, json={"error": "invalid_token"}), "sobjects/Lead", id="invalid_token"
+        ),
     ],
 )
 def test_post_with_rejected_token_refreshes_and_resends(
-    h: Harness, mock: respx.MockRouter, rejected: httpx.Response
+    h: Harness, mock: respx.MockRouter, rejected: httpx.Response, path: str
 ) -> None:
     """Salesforce rejects an expired token before running anything: a write is resent."""
 
     def handler(request: httpx.Request) -> httpx.Response:
         return rejected if bearer(request) == "AT-initial-0001" else httpx.Response(200, json={"ok": True})
 
-    api = mock.post(APEX_URL).mock(side_effect=handler)
+    url = f"{INSTANCE}{path}" if path.startswith("/") else f"{DATA}/{path}"
+    api = mock.post(url).mock(side_effect=handler)
     tok = mock.post(TOKEN_URL).respond(json=token_body("AT-2"))
     sf = h.client()
-    assert h.run(sf.request("POST", "/services/apexrest/orders", json={})) == {"ok": True}
+    assert h.run(sf.request("POST", path, json={})) == {"ok": True}
     assert [bearer(c.request) for c in api.calls] == ["AT-initial-0001", "AT-2"]
     assert tok.call_count == 1
+
+
+def test_apex_rest_invalid_token_body_post_is_not_resent(h: Harness, mock: respx.MockRouter) -> None:
+    """synthetic: an Apex class can return an OAuth-form 401 itself, after its code ran."""
+    api = mock.post(APEX_URL).respond(401, json={"error": "invalid_token"})
+    tok = mock.post(TOKEN_URL).respond(json=token_body("AT-2"))
+    sf = h.client()
+    with pytest.raises(esf.SalesforceError):
+        h.run(sf.request("POST", "/services/apexrest/orders", json={}))
+    assert api.call_count == 1
+    assert not tok.called
 
 
 def test_get_with_other_401_still_refreshes(h: Harness, mock: respx.MockRouter) -> None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import decimal
 import json
 from typing import Any
@@ -71,3 +72,43 @@ def test_loads_both_backends() -> None:
 def test_unsupported_type(dumps: Any) -> None:
     with pytest.raises(TypeError):
         dumps({"x": object()})
+
+
+@pytest.mark.parametrize("dumps", BACKENDS)
+def test_dates_and_times_use_isoformat(dumps: Any) -> None:
+    utc = dt.timezone.utc
+    values = [
+        dt.datetime(2026, 1, 2, 3, 4, 5, 600, tzinfo=utc),
+        dt.datetime(2026, 1, 2, 3, 4, 5),
+        dt.date(2026, 1, 2),
+        dt.time(13, 30),
+        dt.time(13, 30, 1, 500),
+        dt.time(13, 30, tzinfo=utc),  # orjson's own encoder rejects this one
+    ]
+    assert json.loads(dumps(values)) == [v.isoformat() for v in values]
+
+
+@pytest.mark.parametrize("dumps", BACKENDS)
+def test_clean_values_pass_the_non_finite_check(dumps: Any) -> None:
+    obj = {"a": [1, True, None, "x", 1.5, D("2"), (3,), {4}, frozenset({5})], "b": {"c": dt.date(2026, 1, 1)}}
+    assert json.loads(dumps(obj))["a"][:5] == [1, True, None, "x", 1.5]
+
+
+@pytest.mark.parametrize("dumps", BACKENDS)
+@pytest.mark.parametrize(
+    ("bad", "where"),
+    [
+        ([{"Id": "1", "x": 1.0}, {"Id": "2", "x": float("inf")}], r"inf at \$\[1\]\.x "),
+        ({"ok": {"n": 1.0}, "bad": D("NaN")}, r"Decimal\('NaN'\) at \$\.bad "),
+        ([[D("1"), "s"], [float("nan")]], r"nan at \$\[1\]\[0\] "),
+    ],
+)
+def test_error_path_after_clean_siblings(dumps: Any, bad: Any, where: str) -> None:
+    with pytest.raises(jsonlib.NonFiniteNumber, match=where):
+        dumps(bad)
+
+
+@pytest.mark.parametrize("dumps", BACKENDS)
+@pytest.mark.parametrize("value", ["x", 1, True, None, 2.5, D("1.5"), dt.date(2026, 1, 1)])
+def test_top_level_scalars(dumps: Any, value: Any) -> None:
+    assert dumps(value) == jsonlib.std_dumps(value)

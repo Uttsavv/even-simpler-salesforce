@@ -302,15 +302,20 @@ def test_error_key_outside_oauth_is_not_oauth() -> None:
 
 def test_invalid_token_401_on_any_path_names_the_token() -> None:
     """The transport resends a write after a 401 only if the error says the token was refused."""
-    apex = RequestSpec("POST", "/services/apexrest/Orders", operation="raw")
-    exc = classify(resp(401, {"error": "invalid_token", "error_description": "expired"}), apex)
+    data = RequestSpec("POST", "sobjects/Lead", operation="raw")
+    exc = classify(resp(401, {"error": "invalid_token", "error_description": "expired"}), data)
     assert type(exc) is esf.SessionExpired
     assert (exc.error_code, exc.message, exc.status) == ("invalid_token", "expired", 401)
-    bare = classify(resp(401, {"error": "invalid_token"}), apex)
+    bare = classify(resp(401, {"error": "invalid_token"}), data)
     assert bare is not None
     assert bare.message == "invalid_token"
+    # Apex REST can send this body itself after its code ran: it doesn't name the token.
+    apex = RequestSpec("POST", "/services/apexrest/Orders", operation="raw")
+    forged = classify(resp(401, {"error": "invalid_token"}), apex)
+    assert forged is not None
+    assert forged.error_code != "invalid_token"
     # Not a 401, or a REST error list: no OAuth reading.
-    other = classify(resp(400, {"error": "invalid_token"}), apex)
+    other = classify(resp(400, {"error": "invalid_token"}), data)
     assert other is not None
     assert other.error_code is None
 

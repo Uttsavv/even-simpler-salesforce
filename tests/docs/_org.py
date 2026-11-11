@@ -1556,6 +1556,10 @@ class FakeOrg:
         if call is not None and call.tag == f"{_P}merge":
             results = [self._merge(r) for r in call.findall(f"{_P}request")]
             return self._soap_reply(f"<mergeResponse>{''.join(results)}</mergeResponse>")
+        if call is not None and call.tag == f"{_P}getUserInfo":
+            return self._soap_reply(
+                f"<getUserInfoResponse><result><userId>{USER_ID}</userId></result></getUserInfoResponse>"
+            )
         return self._soap_fault("INVALID_OPERATION", "unsupported call")
 
     def _convert(self, c: ET.Element) -> str:

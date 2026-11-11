@@ -59,6 +59,37 @@ def test_describe_returns_private_copies(h: Harness, mock: respx.MockRouter) -> 
     assert h.run(sf.sobject("Lead").describe(cached=False)) == DESCRIBE
 
 
+def test_describe_cache_stores_json_text(h: Harness, mock: respx.MockRouter) -> None:
+    # A hit decodes the cached JSON text instead of deep-copying a shared dict.
+    route = mock.get(f"{DATA}/sobjects/Lead/describe").respond(json=DESCRIBE)
+    cache = esf.MemoryCache()
+    sf = h.client(cache=cache)
+    first = h.run(sf.sobject("Lead").describe())
+    second = h.run(sf.sobject("Lead").describe())
+    third = h.run(sf.sobject("Lead").describe())
+    assert first == second == third == DESCRIBE
+    assert second is not third
+    assert second["fields"] is not third["fields"]
+    second["fields"][0]["name"] = "changed"
+    assert h.run(sf.sobject("Lead").describe()) == DESCRIBE
+    assert route.call_count == 1
+    (key,) = cache._data  # pyright: ignore[reportPrivateUsage]
+    entry = cache.get(key)
+    assert isinstance(entry["body"], str)
+    assert "data" not in entry
+
+
+def test_describe_cache_ignores_unknown_entry_shape(h: Harness, mock: respx.MockRouter) -> None:
+    route = mock.get(f"{DATA}/sobjects/Lead/describe").respond(json=DESCRIBE)
+    cache = esf.MemoryCache()
+    sf = h.client(cache=cache)
+    h.run(sf.sobject("Lead").describe())
+    (key,) = cache._data  # pyright: ignore[reportPrivateUsage]
+    cache.set(key, {"data": {"name": "stale"}, "fetched_at": 9e99}, 60)  # some other writer's shape
+    assert h.run(sf.sobject("Lead").describe()) == DESCRIBE
+    assert route.call_count == 2
+
+
 def test_describe_cache_miss_is_single_flight(mock: respx.MockRouter) -> None:
     from ..conftest import Harness as _H
 

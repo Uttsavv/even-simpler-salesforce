@@ -32,6 +32,21 @@ def test_raw_request_accepts_non_json(h: Harness, mock: respx.MockRouter, rec: R
     assert rec.requests[-1]["outcome"] == "ok"
 
 
+def test_raw_request_invalid_json_is_an_error_in_the_event(
+    h: Harness, mock: respx.MockRouter, rec: Recorder
+) -> None:
+    # synthetic: a 2xx that says application/json but carries a truncated body
+    mock.get(f"{DATA}/x").mock(
+        return_value=httpx.Response(200, content=b'{"a": ', headers={"content-type": "application/json"})
+    )
+    sf = h.client(recorder=rec)
+    with pytest.raises(esf.UnexpectedResponse):
+        h.run(sf.request("GET", "x"))
+    ev = rec.requests[-1]
+    assert ev["outcome"] == "error"
+    assert ev["error_class"] == "InvalidJSONResponse"
+
+
 def test_dml_error_message_only_with_debug(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:
     body = [{"errorCode": "STRING_TOO_LONG", "message": "Name: data value too large: SECRET-VALUE"}]
     mock.patch(f"{DATA}/sobjects/Lead/{LEAD}").respond(400, json=body)

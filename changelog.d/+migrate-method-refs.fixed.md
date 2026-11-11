@@ -1,0 +1,1 @@
+`esf migrate` renames a stored `get_by_custom_id` method reference to `get_by_external_id` and marks `create` and `upsert` references for review. A `describe_layout` reference gets an `unsupported` TODO.

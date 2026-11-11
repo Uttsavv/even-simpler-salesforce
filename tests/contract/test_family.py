@@ -35,7 +35,7 @@ def test_with_auth_child_shares_transport_but_not_token(
     h.seed(store, "user:1", make_token("AT-user-1", "RT-user-1"))
     child = base.with_auth(user_auth)
     assert child._transport is base._transport
-    assert child.usage is base.usage
+    assert child.usage._s is base.usage._s  # pyright: ignore[reportPrivateUsage]
     assert child.observers is base.observers
     assert child.api_version == base.api_version == "68.0"
     h.run(base.limits())
@@ -43,6 +43,8 @@ def test_with_auth_child_shares_transport_but_not_token(
     auths = [c.request.headers["Authorization"] for c in route.calls]
     assert auths == ["Bearer AT-initial-0001", "Bearer AT-user-1"]
     assert len(rec.requests) == 2  # shared observers
+    assert child.usage.snapshot().calls_by_operation == {"limits": 2}  # shared counters
+    assert base.usage.snapshot().calls_by_operation == {"limits": 2}
     assert base.usage.snapshot().calls_by_operation == {"limits": 2}
     # Children don't close the pool.
     h.run(child.aclose() if h.is_async else child.close())
@@ -313,3 +315,26 @@ def test_owned_client_defaults(h: Harness) -> None:
     http = sf._transport.http
     assert http.timeout == httpx.Timeout(connect=1, read=2, write=3, pool=4)
     assert "gzip" in http.headers["Accept-Encoding"]
+
+
+def test_usage_and_budget_are_per_org(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:
+    # A with_auth() child in another org must not overwrite this org's usage or trip its guard.
+    other = "https://other.my.salesforce.com"
+    mock.get(LIMITS).mock(return_value=limits_with_usage(10))
+    other_route = mock.get(f"{other}/services/data/v68.0/limits").mock(return_value=limits_with_usage(95))
+    store = h.new_store()
+    base = h.client(store=store, recorder=rec, budget=esf.Budget(pause_low_priority_above=0.8))
+    h.seed(store, "org:b", make_token("AT-org-b", instance_url=other).replace(org_id="00Dxx0000000002EAA"))
+    child = base.with_auth(web_auth(token_key="org:b"))
+    h.run(base.limits())
+    h.run(child.limits())
+    assert base.usage.snapshot().api_used == 10
+    assert child.usage.snapshot().api_used == 95
+    assert rec.requests[-1]["api_used"] == 95
+    assert base.usage.snapshot().calls_by_operation == {"limits": 2}  # counters stay family-wide
+    h.run(base.tagged(priority="low").limits())  # org A at 10 %: allowed
+    assert rec.requests[-1]["api_used"] == 10
+    with pytest.raises(esf.BudgetExceeded) as ei:
+        h.run(child.tagged(priority="low").limits())  # org B at 95 %: blocked
+    assert ei.value.usage.api_used == 95
+    assert other_route.call_count == 1

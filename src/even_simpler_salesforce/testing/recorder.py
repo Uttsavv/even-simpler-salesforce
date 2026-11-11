@@ -386,7 +386,8 @@ class RecordingTransport(httpx.BaseTransport, httpx.AsyncBaseTransport):
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as fh:
                 fh.write(text)
-            os.chmod(tmp_name, 0o644)  # mkstemp makes the file 0600; fixtures are shared files
+            if self.path.exists():  # keep the mode of a fixture that is re-recorded
+                os.chmod(tmp_name, self.path.stat().st_mode & 0o7777)
             os.replace(tmp_name, self.path)
         except BaseException:
             Path(tmp_name).unlink(missing_ok=True)

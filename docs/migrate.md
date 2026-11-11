@@ -13,7 +13,8 @@ esf migrate src/ --write        # applies the rewrites and inserts markers
 
 The codemod handles the sync `simple_salesforce.Salesforce` and the async
 `simple_salesforce.aio.AsyncSalesforce`. It edits the syntax tree with libcst, so it keeps your
-comments and formatting. If you run it again on migrated code, it changes nothing.
+comments and formatting. It also keeps the encoding of each file, a byte order mark and the line
+endings. If you run it again on migrated code, it changes nothing.
 
 ## Tell it your client names
 
@@ -50,7 +51,8 @@ rules that build on it:
 - `return-value`
 - `not-a-client`
 
-In the same way, `--rules create-return` also runs `sobject-attr`.
+These rules also run as one group with `--rules`. For example, `--rules sobject-attr` also runs
+`upsert-path`, and `--rules create-return` also runs `sobject-attr`.
 
 Some sites sit inside a decorator, a default argument, a base class or a `match` subject. For
 these, the marker goes above the decorator, `def`, `class` or `match` line. The codemod writes
@@ -85,7 +87,7 @@ See [The report](#the-report) for the format.
 | `--check` | changes nothing; exit 1 if any marker or unconverted pattern remains, else 0 |
 | `--client-names a,b` | names that hold a Salesforce client (the last attribute: `sf_client` matches `self.sf_client`) |
 | `--rules r1,r2` | run only these [rules](#rules) |
-| `--exclude GLOB,...` | skip paths; `.venv`, `venv`, `site-packages`, `node_modules`, `.git`, `__pycache__`, `.tox` and `.nox` are always skipped |
+| `--exclude GLOB,...` | skip paths that match a glob: a name such as `build`, or a path such as `src/gen/*`; `.venv`, `venv`, `site-packages`, `node_modules`, `.git`, `__pycache__`, `.tox` and `.nox` are always skipped |
 
 ## Exit codes
 
@@ -159,6 +161,7 @@ Each finding has a rule id. Rule ids are stable: new rules can come, but ids nev
 | [`apexecute`](#apexecute) | rewritten, or TODO |
 | [`exceptions`](#exceptions) | rewritten, or TODO |
 | [`client-internals`](#client-internals) | rewritten, or TODO |
+| [`client-methods`](#client-methods) | rewritten, or TODO |
 | [`login`](#login) | TODO |
 | [`not-a-client`](#not-a-client) | needs review, or TODO |
 | [`unsupported`](#unsupported) | TODO |
@@ -172,7 +175,9 @@ Each finding has a rule id. Rule ids are stable: new rules can come, but ids nev
 + lead = await sf.sobject("Lead").get(lead_id)
 ```
 
-The codemod rewrites method references such as `fn = sf.Lead.create` in the same way.
+The codemod rewrites method references such as `fn = sf.Lead.create` in the same way. A
+reference to `get_by_custom_id` becomes `get_by_external_id`. References to `create` and `upsert`
+need review, because the codemod can't see their calls.
 
 An assignment to a method, such as `sf.Lead.create = fake` for monkeypatching, gets a TODO.
 `sobject()` returns a new object each time, so the patch would not stick.
@@ -271,8 +276,14 @@ keys:
 | `["totalSize"]` | `.total_size` |
 | `["done"]` | `.done` |
 
-Other keys, such as `["nextRecordsUrl"]`, get a TODO. This rule needs a confirmed client, because
-`query` is a common method name.
+Other keys, such as `["nextRecordsUrl"]`, get a TODO. If the codemod can't follow every use of
+the result, the `query()` call gets a TODO. Examples are a result that your code returns, passes
+on or assigns twice. This rule needs a confirmed client, because `query` is a common method name.
+
+simple-salesforce took `include_deleted` as the second positional argument. Here, positional values
+after the query fill `{}` placeholders. So `X.query("SELECT ...", flag)` becomes
+`X.query("SELECT ...", include_deleted=flag)`. If the query isn't a literal, the call gets a TODO,
+or a review item for `True` and `False`.
 
 ### `query-more`
 
@@ -328,6 +339,18 @@ handler. `esf.SessionExpired` means a 401 survived a refresh. A dead refresh tok
 `SalesforceMalformedRequest` splits into `RequestError`, `RecordError` and specific classes such as
 `InvalidField` and `ValidationRuleFailed`.
 
+These cases get a TODO:
+
+- A call with arguments, such as `raise SalesforceResourceNotFound(url, 404, name, content)`. The
+  error classes here take a message and keyword arguments.
+- An attribute of a caught exception that has a new name:
+
+| simple-salesforce | even-simpler-salesforce |
+|---|---|
+| `e.content` | `e.raw` |
+| `e.resource_name` | `e.sobject` |
+| `e.url` | `e.path` |
+
 ### `client-internals`
 
 | Before | After | Status |
@@ -339,6 +362,20 @@ handler. `esf.SessionExpired` means a 401 survived a refresh. A dead refresh tok
 `X.instance_url` is the instance of the current token. It is `None` before the first call. The
 access token isn't public by design. The codemod matches `session_id`, `headers` and `session` only
 on a confirmed client.
+
+### `client-methods`
+
+Some client methods changed name or result.
+
+| Before | After | Status |
+|---|---|---|
+| `X.describe()` | `X.describe_global()` | rewritten |
+| `X.quick_search(term)` | `X.parameterized_search(term)`, which returns the list of records | TODO |
+| `X.search(sosl)["searchRecords"]` | `X.search(sosl)`, which returns the list of records | TODO |
+| `X.limits()["X"]["Remaining"]`, `["Max"]` | `X.limits()["X"].remaining`, `.max` | TODO |
+| `X.is_sandbox()` | query `SELECT IsSandbox FROM Organization` | TODO |
+
+`describe()` needs a confirmed client, because `describe` is a common method name.
 
 ### `login`
 
@@ -373,6 +410,7 @@ These APIs have no replacement in 0.1, so they get a TODO with a link to the
 
 The codemod removes simple-salesforce imports that are no longer used. If code still uses a name
 from an import, the import line gets an `unsupported` TODO.
+`from simple_salesforce import *` always gets an `unsupported` TODO.
 
 ## How it finds Salesforce calls
 
