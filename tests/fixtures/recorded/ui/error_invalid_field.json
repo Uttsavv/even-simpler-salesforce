@@ -1,0 +1,35 @@
+{
+  "esf_fixture": 1,
+  "note": "recorded with esf.testing.record (tests/sandbox/test_ui_reports.py, API 68.0)",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/ui-api/records/00Q000000000001EAA",
+        "query": [
+          [
+            "fields",
+            "Lead.Esf_Nope__c"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=3122/15000"
+        },
+        "json": [
+          {
+            "errorCode": "INVALID_FIELD",
+            "message": "INVALID_FIELD: \nSELECT LastModifiedDate, Esf_Nope__c, Id, LastModifiedById\n                         ^\nERROR at Row:1:Column:26\nNo such column 'Esf_Nope__c' on entity 'Lead'. If you are attempting to use a custom field, be sure to append the '__c' after the custom field name. Please reference your WSDL or the describe call for the appropriate names."
+          }
+        ]
+      }
+    }
+  ]
+}

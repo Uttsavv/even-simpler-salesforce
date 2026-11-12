@@ -1,0 +1,30 @@
+{
+  "esf_fixture": 1,
+  "note": "recorded with esf.testing.record (tests/sandbox/test_ui_reports.py, API 68.0)",
+  "interactions": [
+    {
+      "request": {
+        "method": "PUT",
+        "path": "/services/data/v68.0/analytics/dashboards/01Z000000000001EAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=2807/15000"
+        },
+        "json": [
+          {
+            "errorCode": "FORBIDDEN",
+            "message": "You can't refresh this dashboard more than once in a minute."
+          }
+        ]
+      }
+    }
+  ]
+}

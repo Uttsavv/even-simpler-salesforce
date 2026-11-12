@@ -214,19 +214,20 @@ def test_open_leads_view(esf_fake: FakeSalesforce) -> None:
 
     page = esf_fake.ui.list_records("Lead", "OpenLeads")
     assert [r["fields"]["LastName"]["value"] for r in page["records"]] == ["Lovelace"]
-    assert esf_fake.ui.list_views("Lead")["lists"][0]["apiName"] == "OpenLeads"
+    views = esf_fake.ui.list_views("Lead")["lists"]
+    assert [v["apiName"] for v in views] == ["__Recent", "OpenLeads"]
 ```
 
 The fake answers each method this way:
 
 | Method | Built from |
 |---|---|
-| `record()` | the stored record; `fields` must exist on the object, else `InvalidField` |
-| `object_info()` | the describe from `set_describe()`, or one made from the records |
+| `record()` | the stored record; `fields` must exist on the object, else `InvalidField` (a field of another object: `RequestError` `INVALID_INPUT`) |
+| `object_info()` | the describe from `set_describe()`, or one made from the records; an unknown object raises `Forbidden` (403 `INSUFFICIENT_ACCESS`), as a real org does |
 | `picklist_values()` | the active `picklistValues` of each picklist field in the describe |
 | `create_defaults()` | the `defaultValue` of each field in the describe |
 | `clone_defaults()` | the stored record without its id and system fields |
-| `list_views()`, `list_records()` | the views from `set_list_view()`; `__Recent` returns every record |
+| `list_views()`, `list_records()` | `__Recent` first, then the views from `set_list_view()`; `__Recent` returns every record |
 
 `set_list_view(sobject, api_name, *, label=None, where=None, fields=None)` replaces a view
 with the same name. `where` takes a copy of each record and returns `True` to select it.

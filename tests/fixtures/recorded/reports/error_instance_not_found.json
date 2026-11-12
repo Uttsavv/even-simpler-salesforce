@@ -1,0 +1,29 @@
+{
+  "esf_fixture": 1,
+  "note": "recorded with esf.testing.record (tests/sandbox/test_ui_reports.py, API 68.0)",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/analytics/reports/00O000000000001EAA/instances/0LG000000000000EAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8"
+        },
+        "json": [
+          {
+            "errorCode": "NOT_FOUND",
+            "message": "We couldn’t find a report instance to match the URL of your request. To access an instance of a report run, enter a valid URL in this format: /services/data/(apiversion)/analytics/reports/(reportID)/instances/(instanceID)."
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -881,6 +881,13 @@ class FakeOrg:
 
     def _ui(self, parts: list[str], params: dict[str, str], version: str) -> dict[str, Any]:
         kind, args = parts[0], parts[1:]
+        if kind in ("object-info", "list-info") and args and args[0] not in self.records:
+            # A real org answers 403 for an unknown object here (big-bang.md §21 V61).
+            raise Rejected(
+                "INSUFFICIENT_ACCESS",
+                "You don't have access to this record. Ask your administrator for help or to request access.",
+                status=403,
+            )
         if kind == "records":
             sobject, rec = self._find(args[0])
             if "fields" in params:

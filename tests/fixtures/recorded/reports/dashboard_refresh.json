@@ -1,8 +1,27 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Salesforce Reports and Dashboards REST API Developer Guide (Get Dashboard Results, Refresh a Dashboard); no org recording yet",
-  "body": {
-    "id": "01Zxx0000000001AAA",
-    "statusUrl": "/services/data/v68.0/analytics/dashboards/01Zxx0000000001AAA/status"
-  }
+  "esf_fixture": 1,
+  "note": "recorded with esf.testing.record (tests/sandbox/test_ui_reports.py, API 68.0)",
+  "interactions": [
+    {
+      "request": {
+        "method": "PUT",
+        "path": "/services/data/v68.0/analytics/dashboards/01Z000000000001EAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=2808/15000"
+        },
+        "json": {
+          "statusUrl": "/services/data/v68.0/analytics/dashboards/01Z000000000001EAA/status"
+        }
+      }
+    }
+  ]
 }

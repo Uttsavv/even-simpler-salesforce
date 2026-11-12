@@ -8,7 +8,8 @@ https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analyti
 Instance statuses (``New``, ``Running``, ``Success``, ``Error``) are from *Instances List*:
 https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/sforce_analytics_rest_api_instances_resource.htm
 
-The report bodies below are **synthetic**.
+The report bodies come from recordings of a Developer Edition org on API 68.0
+(``tests/fixtures/recorded/reports``); the ones built in this file are synthetic.
 """
 
 from __future__ import annotations
@@ -23,8 +24,8 @@ from even_simpler_salesforce.core import reports as r
 
 from ..fixtures import load_fixture
 
-REPORT = "00Oxx0000000001AAA"
-INSTANCE = "0LGxx0000000001AAA"
+REPORT = "00O000000000001EAA"  # the masked ids in the recordings
+INSTANCE = "0LG000000000002GAA"
 
 
 def test_paths() -> None:
@@ -90,60 +91,51 @@ def test_parse_instance() -> None:
 # --- fact maps ---------------------------------------------------------------------------
 
 
-def money(x: float) -> dict[str, Any]:
-    return {"amount": x, "currency": None}
-
-
 def test_tabular_rows() -> None:
     body = load_fixture("reports/tabular_run.json")
     rows = r.detail_rows(body)
-    assert [row["OPPORTUNITY_NAME"] for row in rows] == [
-        "Acme - 200 units",
-        "Globex renewal",
-        "Initech pilot",
-    ]
-    assert set(rows[0]) == {"ACCOUNT_NAME", "OPPORTUNITY_NAME", "AMOUNT"}
-    assert r.summary_rows(body) == [{"s!AMOUNT": money(4000.0), "RowCount": 3}]
+    assert len(rows) == 5
+    assert set(rows[0]) == {"LAST_NAME", "COMPANY", "LEAD_SOURCE"}
+    assert r.summary_rows(body) == [{"RowCount": 5}]
 
 
 def test_summary_rows() -> None:
-    body = load_fixture("reports/summary_run.json")
+    body = load_fixture("reports/summary_run.json")  # grouped by created day
     rows = r.detail_rows(body)
-    assert [(row["STAGE_NAME"], row["OPPORTUNITY_NAME"]) for row in rows] == [
-        ("Prospecting", "Acme - 200 units"),
-        ("Prospecting", "Initech pilot"),
-        ("Closed Won", "Globex renewal"),
-    ]
+    assert [row["LEAD_SOURCE"] for row in rows] == ["Web", "Web", "Web", "Phone Inquiry", "Partner Referral"]
+    assert rows[0]["ANNUAL_REVENUE"] == {"amount": 1500000, "currency": None}
+    day = rows[0]["CREATED_DATE"]
     assert r.summary_rows(body) == [
-        {"STAGE_NAME": "Prospecting", "s!AMOUNT": money(1500.0), "RowCount": 2},
-        {"STAGE_NAME": "Closed Won", "s!AMOUNT": money(2500.0), "RowCount": 1},
-        {"s!AMOUNT": money(4000.0), "RowCount": 3},
+        {"CREATED_DATE": day, "s!ANNUAL_REVENUE": 7500000.0, "RowCount": 5},
+        {"s!ANNUAL_REVENUE": 7500000.0, "RowCount": 5},
     ]
 
 
-def test_matrix_rows_skip_missing_cells() -> None:
+def test_matrix_rows_with_empty_cells() -> None:
+    """Salesforce sends empty matrix cells with a zero count; the helpers also skip absent ones."""
     body = load_fixture("reports/matrix_run.json")
+    sources = [g["value"] for g in body["groupingsDown"]["groupings"]]
+    statuses = [g["value"] for g in body["groupingsAcross"]["groupings"]]
+    empty = f"{sources.index('Phone Inquiry')}!{statuses.index('Working - Contacted')}"
+    assert body["factMap"][empty]["aggregates"][0]["value"] == 0
+    assert not body["factMap"][empty]["rows"]
     rows = r.detail_rows(body)
-    assert [(row["STAGE_NAME"], row["CLOSE_DATE"], row["OPPORTUNITY_NAME"]) for row in rows] == [
-        ("Prospecting", "2026-10-01", "Acme - 200 units"),
-        ("Prospecting", "2026-11-01", "Initech pilot"),
-        ("Closed Won", "2026-10-01", "Globex renewal"),
-    ]
     summary = r.summary_rows(body)
-    keys = [(s.get("STAGE_NAME"), s.get("CLOSE_DATE"), s["RowCount"]) for s in summary]
-    assert keys == [
-        ("Prospecting", "2026-10-01", 1),
-        ("Prospecting", "2026-11-01", 1),
-        ("Prospecting", None, 2),
-        ("Closed Won", "2026-10-01", 1),  # 1!1 is absent from the fact map
-        ("Closed Won", None, 1),
-        (None, "2026-10-01", 2),
-        (None, "2026-11-01", 1),
-        (None, None, 3),
-    ]
+    assert len(rows) == 5
+    assert {"LEAD_SOURCE": "Phone Inquiry", "STATUS": "Working - Contacted", "RowCount": 0} in summary
+    del body["factMap"][empty]
+    assert r.detail_rows(body) == rows
+    assert {
+        "LEAD_SOURCE": "Phone Inquiry",
+        "STATUS": "Working - Contacted",
+        "RowCount": 0,
+    } not in r.summary_rows(body)
+    assert len(r.summary_rows(body)) == len(summary) - 1
 
 
 def _two_level() -> dict[str, Any]:
+    """A small synthetic summary body, for the malformed-body tests."""
+
     def agg(n: int) -> list[dict[str, Any]]:
         return [{"label": str(n), "value": n}]
 
@@ -266,13 +258,13 @@ def test_not_a_report() -> None:
 
 def test_report_result_properties() -> None:
     result = esf.ReportResult(load_fixture("reports/summary_run.json"))
-    assert result.report_id == "00Oxx0000000001AAA"
-    assert result.name == "Open Opportunities"
+    assert result.report_id == REPORT
+    assert result.name == "ESF Sandbox Leads Summary"
     assert result.format == "SUMMARY"
     assert result.all_data is True
     assert result.has_detail_rows is True
-    assert len(result.rows()) == 3
-    assert len(result.summary_rows()) == 3
+    assert len(result.rows()) == 5
+    assert len(result.summary_rows()) == 2
 
 
 def test_report_result_falls_back_to_metadata() -> None:

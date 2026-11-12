@@ -1,0 +1,247 @@
+{
+  "esf_fixture": 1,
+  "note": "recorded with esf.testing.record (tests/sandbox/test_ui_reports.py, API 68.0)",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/ui-api/records/00Q000000000001EAA",
+        "query": [
+          [
+            "layoutTypes",
+            "Full"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=3135/15000",
+          "etag": "\"362cc0d91d5781fb4ce23655b6fab390--gzip\""
+        },
+        "json": {
+          "apiName": "Lead",
+          "childRelationships": {},
+          "eTag": "362cc0d91d5781fb4ce23655b6fab390",
+          "fields": {
+            "AnnualRevenue": {
+              "displayValue": "$1,500,000",
+              "value": 1500000.0
+            },
+            "City": {
+              "displayValue": null,
+              "value": null
+            },
+            "Company": {
+              "displayValue": null,
+              "value": "esf-sandbox"
+            },
+            "CountryCode": {
+              "displayValue": null,
+              "value": null
+            },
+            "CreatedBy": {
+              "displayValue": "User 1",
+              "value": {
+                "apiName": "User",
+                "childRelationships": {},
+                "eTag": "7dfb2fed588ae26975c6120762b03f6f",
+                "fields": {
+                  "Id": {
+                    "displayValue": null,
+                    "value": "005000000000002AAA"
+                  },
+                  "Name": {
+                    "displayValue": null,
+                    "value": "User 1"
+                  }
+                },
+                "id": "005000000000002AAA",
+                "lastModifiedById": "005000000000002AAA",
+                "lastModifiedDate": "2026-11-11T14:34:09.000Z",
+                "recordTypeId": null,
+                "recordTypeInfo": null,
+                "systemModstamp": "2026-11-11T22:44:54.000Z",
+                "weakEtag": 1794437094000
+              }
+            },
+            "CreatedById": {
+              "displayValue": null,
+              "value": "005000000000002AAA"
+            },
+            "CreatedDate": {
+              "displayValue": "11/11/2026, 3:03 PM",
+              "value": "2026-11-11T23:03:32.000Z"
+            },
+            "CurrentGenerators__c": {
+              "displayValue": null,
+              "value": null
+            },
+            "Description": {
+              "displayValue": null,
+              "value": null
+            },
+            "Email": {
+              "displayValue": null,
+              "value": null
+            },
+            "Fax": {
+              "displayValue": null,
+              "value": null
+            },
+            "FirstName": {
+              "displayValue": null,
+              "value": null
+            },
+            "Industry": {
+              "displayValue": null,
+              "value": null
+            },
+            "LastModifiedBy": {
+              "displayValue": "User 1",
+              "value": {
+                "apiName": "User",
+                "childRelationships": {},
+                "eTag": "7dfb2fed588ae26975c6120762b03f6f",
+                "fields": {
+                  "Id": {
+                    "displayValue": null,
+                    "value": "005000000000002AAA"
+                  },
+                  "Name": {
+                    "displayValue": null,
+                    "value": "User 1"
+                  }
+                },
+                "id": "005000000000002AAA",
+                "lastModifiedById": "005000000000002AAA",
+                "lastModifiedDate": "2026-11-11T14:34:09.000Z",
+                "recordTypeId": null,
+                "recordTypeInfo": null,
+                "systemModstamp": "2026-11-11T22:44:54.000Z",
+                "weakEtag": 1794437094000
+              }
+            },
+            "LastModifiedById": {
+              "displayValue": null,
+              "value": "005000000000002AAA"
+            },
+            "LastModifiedDate": {
+              "displayValue": "11/11/2026, 3:03 PM",
+              "value": "2026-11-11T23:03:32.000Z"
+            },
+            "LastName": {
+              "displayValue": null,
+              "value": "esf-sandbox-5d9621e906af-r0"
+            },
+            "LeadSource": {
+              "displayValue": "Web",
+              "value": "Web"
+            },
+            "MobilePhone": {
+              "displayValue": null,
+              "value": null
+            },
+            "NumberOfEmployees": {
+              "displayValue": null,
+              "value": null
+            },
+            "NumberofLocations__c": {
+              "displayValue": null,
+              "value": null
+            },
+            "Owner": {
+              "displayValue": "User 2",
+              "value": {
+                "apiName": "Name",
+                "childRelationships": {},
+                "eTag": "f63adf30eb4aa325d5b183e1b38dd8da",
+                "fields": {
+                  "Id": {
+                    "displayValue": null,
+                    "value": "005000000000003AAA"
+                  },
+                  "Name": {
+                    "displayValue": null,
+                    "value": "User 2"
+                  }
+                },
+                "id": "005000000000003AAA",
+                "lastModifiedById": null,
+                "lastModifiedDate": null,
+                "recordTypeId": null,
+                "recordTypeInfo": null,
+                "systemModstamp": null,
+                "weakEtag": 0
+              }
+            },
+            "OwnerId": {
+              "displayValue": null,
+              "value": "005000000000003AAA"
+            },
+            "Phone": {
+              "displayValue": null,
+              "value": null
+            },
+            "PostalCode": {
+              "displayValue": null,
+              "value": null
+            },
+            "Primary__c": {
+              "displayValue": null,
+              "value": null
+            },
+            "ProductInterest__c": {
+              "displayValue": null,
+              "value": null
+            },
+            "Rating": {
+              "displayValue": null,
+              "value": null
+            },
+            "SICCode__c": {
+              "displayValue": null,
+              "value": null
+            },
+            "Salutation": {
+              "displayValue": null,
+              "value": null
+            },
+            "StateCode": {
+              "displayValue": null,
+              "value": null
+            },
+            "Status": {
+              "displayValue": "Open - Not Contacted",
+              "value": "Open - Not Contacted"
+            },
+            "Street": {
+              "displayValue": null,
+              "value": null
+            },
+            "Title": {
+              "displayValue": null,
+              "value": null
+            },
+            "Website": {
+              "displayValue": null,
+              "value": null
+            }
+          },
+          "id": "00Q000000000001EAA",
+          "lastModifiedById": "005000000000002AAA",
+          "lastModifiedDate": "2026-11-11T23:03:32.000Z",
+          "recordTypeId": "012000000000000AAA",
+          "recordTypeInfo": null,
+          "systemModstamp": "2026-11-11T23:03:32.000Z",
+          "weakEtag": 1794438212000
+        }
+      }
+    }
+  ]
+}

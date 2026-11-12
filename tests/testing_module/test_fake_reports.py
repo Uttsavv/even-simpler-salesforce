@@ -25,12 +25,12 @@ def test_run_and_describe() -> None:
     script = fake.on_report(REPORT, load_fixture("reports/summary_run.json"))
     assert isinstance(script, ReportScript)
     result = fake.reports.run(REPORT, STAGE)
-    assert len(result.rows()) == 3
+    assert len(result.rows()) == 5
     assert result.has_detail_rows is True
     summary = fake.reports.run(REPORT, include_details=False)
     assert summary.rows() == []
     assert summary.has_detail_rows is False
-    assert len(summary.summary_rows()) == 3
+    assert len(summary.summary_rows()) == 2
     assert script.runs == 2
     described = fake.reports.describe(REPORT)
     assert described["reportMetadata"]["reportFormat"] == "SUMMARY"
@@ -50,7 +50,7 @@ def test_callable_result_and_explicit_describe() -> None:
         return esf.ReportResult(load_fixture("reports/tabular_run.json"))
 
     fake.on_report(REPORT, answer, describe={"reportMetadata": {"id": REPORT}})
-    assert len(fake.reports.run(REPORT, STAGE, include_details=False).rows()) == 3  # callable decides
+    assert len(fake.reports.run(REPORT, STAGE, include_details=False).rows()) == 5  # callable decides
     assert seen == [(STAGE, False)]
     assert fake.reports.describe(REPORT) == {"reportMetadata": {"id": REPORT}}
 
@@ -79,7 +79,7 @@ def test_run_async_and_instance() -> None:
     result = fake.reports.instance(REPORT, inst.id)
     assert result.raw["attributes"]["status"] == "Success"
     assert result.raw["attributes"]["id"] == inst.id
-    assert len(result.rows()) == 3
+    assert len(result.rows()) == 5
     with pytest.raises(esf.NotFound):
         fake.reports.instance(REPORT, "0LGxx0000000009AAA")
     with pytest.raises(esf.NotFound):
@@ -117,8 +117,7 @@ def test_dashboards() -> None:
     body["componentData"].clear()  # a copy
     assert fake.reports.dashboards.get(DASHBOARD)["componentData"]
     refreshed = fake.reports.dashboards.refresh(DASHBOARD)
-    assert refreshed == {
-        "id": DASHBOARD,
+    assert refreshed == {  # only statusUrl, like a real org (reports/dashboard_refresh.json)
         "statusUrl": f"/services/data/v68.0/analytics/dashboards/{DASHBOARD}/status",
     }
     assert [c.operation for c in fake.calls] == ["dashboards.get", "dashboards.get", "dashboards.refresh"]
@@ -132,11 +131,13 @@ def test_async_fake() -> None:
     async def go() -> None:
         assert [r["id"] for r in await fake.reports.recent()] == [REPORT]
         assert (await fake.reports.describe(REPORT))["reportMetadata"]["reportFormat"] == "MATRIX"
-        assert len((await fake.reports.run(REPORT)).rows()) == 3
+        assert len((await fake.reports.run(REPORT)).rows()) == 5
         inst = await fake.reports.run_async(REPORT, include_details=False)
         assert (await fake.reports.instance(REPORT, inst.id, poll=esf.Backoff(), timeout=60)).rows() == []
-        assert (await fake.reports.dashboards.get(DASHBOARD))["statusUrl"]
-        assert (await fake.reports.dashboards.refresh(DASHBOARD))["id"] == DASHBOARD
+        assert (await fake.reports.dashboards.get(DASHBOARD))["attributes"]["statusUrl"]
+        assert (await fake.reports.dashboards.refresh(DASHBOARD))["statusUrl"].endswith(
+            f"/{DASHBOARD}/status"
+        )
 
     asyncio.run(go())
 
@@ -156,15 +157,16 @@ def test_recent_lists_scripted_reports() -> None:
     assert [(r["id"], r["name"]) for r in recent] == [
         ("00Oxx0000000004AAA", "00Oxx0000000004AAA"),  # no name to read: the id
         ("00Oxx0000000003AAA", "Scripted describe"),
-        ("00Oxx0000000002AAA", "Pipeline by Stage and Type"),
-        (REPORT, "Open Opportunities"),
+        ("00Oxx0000000002AAA", "ESF Sandbox Leads Summary"),
+        (REPORT, "ESF Sandbox Leads Tabular"),
     ]
     assert recent[-1] == {
         "id": REPORT,
-        "name": "Open Opportunities",
+        "name": "ESF Sandbox Leads Tabular",
         "url": f"/services/data/v68.0/analytics/reports/{REPORT}",
         "describeUrl": f"/services/data/v68.0/analytics/reports/{REPORT}/describe",
         "instancesUrl": f"/services/data/v68.0/analytics/reports/{REPORT}/instances",
+        "fieldsUrl": f"/services/data/v68.0/analytics/reports/{REPORT}/fields",
     }
     assert fake.calls[-1].operation == "reports.recent"
     assert all(s.runs == 0 for s in fake._state.reports.values())  # pyright: ignore[reportPrivateUsage]

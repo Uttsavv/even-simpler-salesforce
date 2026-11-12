@@ -1,54 +1,860 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Salesforce User Interface API Developer Guide (Get Values for All Picklist Fields of a Record Type; Picklist Values Collection); no org recording yet",
-  "body": {
-    "eTag": "0a1b2c",
-    "picklistFieldValues": {
-      "LeadSource": {
-        "controllerValues": {},
-        "defaultValue": null,
-        "eTag": "e1",
-        "url": "/services/data/v68.0/ui-api/object-info/Lead/picklist-values/012000000000000AAA/LeadSource",
-        "values": [
-          {
-            "attributes": null,
-            "label": "Web",
-            "validFor": [],
-            "value": "Web"
-          },
-          {
-            "attributes": null,
-            "label": "Partner Referral",
-            "validFor": [],
-            "value": "Partner Referral"
-          }
-        ]
+  "esf_fixture": 1,
+  "note": "recorded with esf.testing.record (tests/sandbox/test_ui_reports.py, API 68.0); trimmed: picklistFieldValues.CountryCode and .StateCode values (first 3 of each)",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/ui-api/object-info/Lead/picklist-values/012000000000000AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
       },
-      "Status": {
-        "controllerValues": {},
-        "defaultValue": {
-          "attributes": null,
-          "label": "Open - Not Contacted",
-          "validFor": [],
-          "value": "Open - Not Contacted"
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "etag": "\"0cb39ddc9cc51aadcb7bd4a0f5308d79--gzip\"",
+          "sforce-limit-info": "api-usage=3133/15000"
         },
-        "eTag": "e2",
-        "url": "/services/data/v68.0/ui-api/object-info/Lead/picklist-values/012000000000000AAA/Status",
-        "values": [
-          {
-            "attributes": null,
-            "label": "Open - Not Contacted",
-            "validFor": [],
-            "value": "Open - Not Contacted"
-          },
-          {
-            "attributes": null,
-            "label": "Working - Contacted",
-            "validFor": [],
-            "value": "Working - Contacted"
+        "json": {
+          "eTag": "0cb39ddc9cc51aadcb7bd4a0f5308d79",
+          "picklistFieldValues": {
+            "CleanStatus": {
+              "controllerValues": {},
+              "defaultValue": null,
+              "eTag": "dcc75477f78529d1253bdef1fd3c6a61",
+              "url": "/services/data/v68.0/ui-api/object-info/Lead/picklist-values/012000000000000AAA/CleanStatus",
+              "values": [
+                {
+                  "attributes": null,
+                  "label": "In Sync",
+                  "validFor": [],
+                  "value": "Matched"
+                },
+                {
+                  "attributes": null,
+                  "label": "Different",
+                  "validFor": [],
+                  "value": "Different"
+                },
+                {
+                  "attributes": null,
+                  "label": "Reviewed",
+                  "validFor": [],
+                  "value": "Acknowledged"
+                },
+                {
+                  "attributes": null,
+                  "label": "Not Found",
+                  "validFor": [],
+                  "value": "NotFound"
+                },
+                {
+                  "attributes": null,
+                  "label": "Inactive",
+                  "validFor": [],
+                  "value": "Inactive"
+                },
+                {
+                  "attributes": null,
+                  "label": "Not Compared",
+                  "validFor": [],
+                  "value": "Pending"
+                },
+                {
+                  "attributes": null,
+                  "label": "Select Match",
+                  "validFor": [],
+                  "value": "SelectMatch"
+                },
+                {
+                  "attributes": null,
+                  "label": "Skipped",
+                  "validFor": [],
+                  "value": "Skipped"
+                }
+              ]
+            },
+            "CountryCode": {
+              "controllerValues": {},
+              "defaultValue": null,
+              "eTag": "957741289bbd10a96ef738416cee5100",
+              "url": "/services/data/v68.0/ui-api/object-info/Lead/picklist-values/012000000000000AAA/CountryCode",
+              "values": [
+                {
+                  "attributes": null,
+                  "label": "Afghanistan",
+                  "validFor": [],
+                  "value": "AF"
+                },
+                {
+                  "attributes": null,
+                  "label": "Aland Islands",
+                  "validFor": [],
+                  "value": "AX"
+                },
+                {
+                  "attributes": null,
+                  "label": "Albania",
+                  "validFor": [],
+                  "value": "AL"
+                }
+              ]
+            },
+            "GeocodeAccuracy": {
+              "controllerValues": {},
+              "defaultValue": null,
+              "eTag": "3be441b70d9aea4fcb6c7b4d03fea2e2",
+              "url": "/services/data/v68.0/ui-api/object-info/Lead/picklist-values/012000000000000AAA/GeocodeAccuracy",
+              "values": [
+                {
+                  "attributes": null,
+                  "label": "Address",
+                  "validFor": [],
+                  "value": "Address"
+                },
+                {
+                  "attributes": null,
+                  "label": "Near Address",
+                  "validFor": [],
+                  "value": "NearAddress"
+                },
+                {
+                  "attributes": null,
+                  "label": "Block",
+                  "validFor": [],
+                  "value": "Block"
+                },
+                {
+                  "attributes": null,
+                  "label": "Street",
+                  "validFor": [],
+                  "value": "Street"
+                },
+                {
+                  "attributes": null,
+                  "label": "Extended Zip",
+                  "validFor": [],
+                  "value": "ExtendedZip"
+                },
+                {
+                  "attributes": null,
+                  "label": "Zip",
+                  "validFor": [],
+                  "value": "Zip"
+                },
+                {
+                  "attributes": null,
+                  "label": "Neighborhood",
+                  "validFor": [],
+                  "value": "Neighborhood"
+                },
+                {
+                  "attributes": null,
+                  "label": "City",
+                  "validFor": [],
+                  "value": "City"
+                },
+                {
+                  "attributes": null,
+                  "label": "County",
+                  "validFor": [],
+                  "value": "County"
+                },
+                {
+                  "attributes": null,
+                  "label": "State",
+                  "validFor": [],
+                  "value": "State"
+                },
+                {
+                  "attributes": null,
+                  "label": "Unknown",
+                  "validFor": [],
+                  "value": "Unknown"
+                }
+              ]
+            },
+            "Industry": {
+              "controllerValues": {},
+              "defaultValue": null,
+              "eTag": "67856b479f72afe469d1ec68544f8001",
+              "url": "/services/data/v68.0/ui-api/object-info/Lead/picklist-values/012000000000000AAA/Industry",
+              "values": [
+                {
+                  "attributes": null,
+                  "label": "Agriculture",
+                  "validFor": [],
+                  "value": "Agriculture"
+                },
+                {
+                  "attributes": null,
+                  "label": "Apparel",
+                  "validFor": [],
+                  "value": "Apparel"
+                },
+                {
+                  "attributes": null,
+                  "label": "Banking",
+                  "validFor": [],
+                  "value": "Banking"
+                },
+                {
+                  "attributes": null,
+                  "label": "Biotechnology",
+                  "validFor": [],
+                  "value": "Biotechnology"
+                },
+                {
+                  "attributes": null,
+                  "label": "Chemicals",
+                  "validFor": [],
+                  "value": "Chemicals"
+                },
+                {
+                  "attributes": null,
+                  "label": "Communications",
+                  "validFor": [],
+                  "value": "Communications"
+                },
+                {
+                  "attributes": null,
+                  "label": "Construction",
+                  "validFor": [],
+                  "value": "Construction"
+                },
+                {
+                  "attributes": null,
+                  "label": "Consulting",
+                  "validFor": [],
+                  "value": "Consulting"
+                },
+                {
+                  "attributes": null,
+                  "label": "Education",
+                  "validFor": [],
+                  "value": "Education"
+                },
+                {
+                  "attributes": null,
+                  "label": "Electronics",
+                  "validFor": [],
+                  "value": "Electronics"
+                },
+                {
+                  "attributes": null,
+                  "label": "Energy",
+                  "validFor": [],
+                  "value": "Energy"
+                },
+                {
+                  "attributes": null,
+                  "label": "Engineering",
+                  "validFor": [],
+                  "value": "Engineering"
+                },
+                {
+                  "attributes": null,
+                  "label": "Entertainment",
+                  "validFor": [],
+                  "value": "Entertainment"
+                },
+                {
+                  "attributes": null,
+                  "label": "Environmental",
+                  "validFor": [],
+                  "value": "Environmental"
+                },
+                {
+                  "attributes": null,
+                  "label": "Finance",
+                  "validFor": [],
+                  "value": "Finance"
+                },
+                {
+                  "attributes": null,
+                  "label": "Food &amp; Beverage",
+                  "validFor": [],
+                  "value": "Food &amp; Beverage"
+                },
+                {
+                  "attributes": null,
+                  "label": "Government",
+                  "validFor": [],
+                  "value": "Government"
+                },
+                {
+                  "attributes": null,
+                  "label": "Healthcare",
+                  "validFor": [],
+                  "value": "Healthcare"
+                },
+                {
+                  "attributes": null,
+                  "label": "Hospitality",
+                  "validFor": [],
+                  "value": "Hospitality"
+                },
+                {
+                  "attributes": null,
+                  "label": "Insurance",
+                  "validFor": [],
+                  "value": "Insurance"
+                },
+                {
+                  "attributes": null,
+                  "label": "Machinery",
+                  "validFor": [],
+                  "value": "Machinery"
+                },
+                {
+                  "attributes": null,
+                  "label": "Manufacturing",
+                  "validFor": [],
+                  "value": "Manufacturing"
+                },
+                {
+                  "attributes": null,
+                  "label": "Media",
+                  "validFor": [],
+                  "value": "Media"
+                },
+                {
+                  "attributes": null,
+                  "label": "Not For Profit",
+                  "validFor": [],
+                  "value": "Not For Profit"
+                },
+                {
+                  "attributes": null,
+                  "label": "Recreation",
+                  "validFor": [],
+                  "value": "Recreation"
+                },
+                {
+                  "attributes": null,
+                  "label": "Retail",
+                  "validFor": [],
+                  "value": "Retail"
+                },
+                {
+                  "attributes": null,
+                  "label": "Shipping",
+                  "validFor": [],
+                  "value": "Shipping"
+                },
+                {
+                  "attributes": null,
+                  "label": "Technology",
+                  "validFor": [],
+                  "value": "Technology"
+                },
+                {
+                  "attributes": null,
+                  "label": "Telecommunications",
+                  "validFor": [],
+                  "value": "Telecommunications"
+                },
+                {
+                  "attributes": null,
+                  "label": "Transportation",
+                  "validFor": [],
+                  "value": "Transportation"
+                },
+                {
+                  "attributes": null,
+                  "label": "Utilities",
+                  "validFor": [],
+                  "value": "Utilities"
+                },
+                {
+                  "attributes": null,
+                  "label": "Other",
+                  "validFor": [],
+                  "value": "Other"
+                }
+              ]
+            },
+            "LeadSource": {
+              "controllerValues": {},
+              "defaultValue": null,
+              "eTag": "c6b5ce1d66fff092138d560572580934",
+              "url": "/services/data/v68.0/ui-api/object-info/Lead/picklist-values/012000000000000AAA/LeadSource",
+              "values": [
+                {
+                  "attributes": null,
+                  "label": "Web",
+                  "validFor": [],
+                  "value": "Web"
+                },
+                {
+                  "attributes": null,
+                  "label": "Phone Inquiry",
+                  "validFor": [],
+                  "value": "Phone Inquiry"
+                },
+                {
+                  "attributes": null,
+                  "label": "Partner Referral",
+                  "validFor": [],
+                  "value": "Partner Referral"
+                },
+                {
+                  "attributes": null,
+                  "label": "Purchased List",
+                  "validFor": [],
+                  "value": "Purchased List"
+                },
+                {
+                  "attributes": null,
+                  "label": "Other",
+                  "validFor": [],
+                  "value": "Other"
+                }
+              ]
+            },
+            "Primary__c": {
+              "controllerValues": {},
+              "defaultValue": null,
+              "eTag": "49aeb771e77a36cb50e03bf0a4d76666",
+              "url": "/services/data/v68.0/ui-api/object-info/Lead/picklist-values/012000000000000AAA/Primary__c",
+              "values": [
+                {
+                  "attributes": null,
+                  "label": "No",
+                  "validFor": [],
+                  "value": "No"
+                },
+                {
+                  "attributes": null,
+                  "label": "Yes",
+                  "validFor": [],
+                  "value": "Yes"
+                }
+              ]
+            },
+            "ProductInterest__c": {
+              "controllerValues": {},
+              "defaultValue": null,
+              "eTag": "64abb13ab16f4398eb9714001d80609d",
+              "url": "/services/data/v68.0/ui-api/object-info/Lead/picklist-values/012000000000000AAA/ProductInterest__c",
+              "values": [
+                {
+                  "attributes": null,
+                  "label": "GC1000 series",
+                  "validFor": [],
+                  "value": "GC1000 series"
+                },
+                {
+                  "attributes": null,
+                  "label": "GC5000 series",
+                  "validFor": [],
+                  "value": "GC5000 series"
+                },
+                {
+                  "attributes": null,
+                  "label": "GC3000 series",
+                  "validFor": [],
+                  "value": "GC3000 series"
+                }
+              ]
+            },
+            "Rating": {
+              "controllerValues": {},
+              "defaultValue": null,
+              "eTag": "652318d3acd6cfa1e51cdcc046b0aa1c",
+              "url": "/services/data/v68.0/ui-api/object-info/Lead/picklist-values/012000000000000AAA/Rating",
+              "values": [
+                {
+                  "attributes": null,
+                  "label": "Hot",
+                  "validFor": [],
+                  "value": "Hot"
+                },
+                {
+                  "attributes": null,
+                  "label": "Warm",
+                  "validFor": [],
+                  "value": "Warm"
+                },
+                {
+                  "attributes": null,
+                  "label": "Cold",
+                  "validFor": [],
+                  "value": "Cold"
+                }
+              ]
+            },
+            "Salutation": {
+              "controllerValues": {},
+              "defaultValue": null,
+              "eTag": "df07f4b5ff79d6ddf939f1866b1abd12",
+              "url": "/services/data/v68.0/ui-api/object-info/Lead/picklist-values/012000000000000AAA/Salutation",
+              "values": [
+                {
+                  "attributes": null,
+                  "label": "Mr.",
+                  "validFor": [],
+                  "value": "Mr."
+                },
+                {
+                  "attributes": null,
+                  "label": "Ms.",
+                  "validFor": [],
+                  "value": "Ms."
+                },
+                {
+                  "attributes": null,
+                  "label": "Mrs.",
+                  "validFor": [],
+                  "value": "Mrs."
+                },
+                {
+                  "attributes": null,
+                  "label": "Dr.",
+                  "validFor": [],
+                  "value": "Dr."
+                },
+                {
+                  "attributes": null,
+                  "label": "Prof.",
+                  "validFor": [],
+                  "value": "Prof."
+                },
+                {
+                  "attributes": null,
+                  "label": "Mx.",
+                  "validFor": [],
+                  "value": "Mx."
+                }
+              ]
+            },
+            "StateCode": {
+              "controllerValues": {
+                "AF": 0,
+                "AX": 1,
+                "AL": 2,
+                "DZ": 3,
+                "AD": 4,
+                "AO": 5,
+                "AI": 6,
+                "AQ": 7,
+                "AG": 8,
+                "AR": 9,
+                "AM": 10,
+                "AW": 11,
+                "AU": 12,
+                "AT": 13,
+                "AZ": 14,
+                "BS": 15,
+                "BH": 16,
+                "BD": 17,
+                "BB": 18,
+                "BY": 19,
+                "BE": 20,
+                "BZ": 21,
+                "BJ": 22,
+                "BM": 23,
+                "BT": 24,
+                "BO": 25,
+                "BQ": 26,
+                "BA": 27,
+                "BW": 28,
+                "BV": 29,
+                "BR": 30,
+                "IO": 31,
+                "BN": 32,
+                "BG": 33,
+                "BF": 34,
+                "BI": 35,
+                "KH": 36,
+                "CM": 37,
+                "CA": 38,
+                "CV": 39,
+                "KY": 40,
+                "CF": 41,
+                "TD": 42,
+                "CL": 43,
+                "CN": 44,
+                "CX": 45,
+                "CC": 46,
+                "CO": 47,
+                "KM": 48,
+                "CG": 49,
+                "CD": 50,
+                "CK": 51,
+                "CR": 52,
+                "CI": 53,
+                "HR": 54,
+                "CW": 55,
+                "CY": 56,
+                "CZ": 57,
+                "DK": 58,
+                "DJ": 59,
+                "DM": 60,
+                "DO": 61,
+                "EC": 62,
+                "EG": 63,
+                "SV": 64,
+                "GQ": 65,
+                "ER": 66,
+                "EE": 67,
+                "SZ": 68,
+                "ET": 69,
+                "FK": 70,
+                "FO": 71,
+                "FJ": 72,
+                "FI": 73,
+                "FR": 74,
+                "GF": 75,
+                "PF": 76,
+                "TF": 77,
+                "GA": 78,
+                "GM": 79,
+                "GE": 80,
+                "DE": 81,
+                "GH": 82,
+                "GI": 83,
+                "GR": 84,
+                "GL": 85,
+                "GD": 86,
+                "GP": 87,
+                "GT": 88,
+                "GG": 89,
+                "GN": 90,
+                "GW": 91,
+                "GY": 92,
+                "HT": 93,
+                "HM": 94,
+                "VA": 95,
+                "HN": 96,
+                "HU": 97,
+                "IS": 98,
+                "IN": 99,
+                "ID": 100,
+                "IQ": 101,
+                "IE": 102,
+                "IM": 103,
+                "IL": 104,
+                "IT": 105,
+                "JM": 106,
+                "JP": 107,
+                "JE": 108,
+                "JO": 109,
+                "KZ": 110,
+                "KE": 111,
+                "KI": 112,
+                "KR": 113,
+                "XK": 114,
+                "KW": 115,
+                "KG": 116,
+                "LA": 117,
+                "LV": 118,
+                "LB": 119,
+                "LS": 120,
+                "LR": 121,
+                "LY": 122,
+                "LI": 123,
+                "LT": 124,
+                "LU": 125,
+                "MO": 126,
+                "MG": 127,
+                "MW": 128,
+                "MY": 129,
+                "MV": 130,
+                "ML": 131,
+                "MT": 132,
+                "MQ": 133,
+                "MR": 134,
+                "MU": 135,
+                "YT": 136,
+                "MX": 137,
+                "MD": 138,
+                "MC": 139,
+                "MN": 140,
+                "ME": 141,
+                "MS": 142,
+                "MA": 143,
+                "MZ": 144,
+                "MM": 145,
+                "NA": 146,
+                "NR": 147,
+                "NP": 148,
+                "NL": 149,
+                "NC": 150,
+                "NZ": 151,
+                "NI": 152,
+                "NE": 153,
+                "NG": 154,
+                "NU": 155,
+                "NF": 156,
+                "MK": 157,
+                "NO": 158,
+                "OM": 159,
+                "PK": 160,
+                "PS": 161,
+                "PA": 162,
+                "PG": 163,
+                "PY": 164,
+                "PE": 165,
+                "PH": 166,
+                "PN": 167,
+                "PL": 168,
+                "PT": 169,
+                "QA": 170,
+                "RE": 171,
+                "RO": 172,
+                "RU": 173,
+                "RW": 174,
+                "BL": 175,
+                "SH": 176,
+                "KN": 177,
+                "LC": 178,
+                "MF": 179,
+                "PM": 180,
+                "VC": 181,
+                "WS": 182,
+                "SM": 183,
+                "ST": 184,
+                "SA": 185,
+                "SN": 186,
+                "RS": 187,
+                "SC": 188,
+                "SL": 189,
+                "SG": 190,
+                "SX": 191,
+                "SK": 192,
+                "SI": 193,
+                "SB": 194,
+                "SO": 195,
+                "ZA": 196,
+                "GS": 197,
+                "SS": 198,
+                "ES": 199,
+                "LK": 200,
+                "SR": 201,
+                "SJ": 202,
+                "SE": 203,
+                "CH": 204,
+                "TW": 205,
+                "TJ": 206,
+                "TZ": 207,
+                "TH": 208,
+                "TL": 209,
+                "TG": 210,
+                "TK": 211,
+                "TO": 212,
+                "TT": 213,
+                "TN": 214,
+                "TR": 215,
+                "TM": 216,
+                "TC": 217,
+                "TV": 218,
+                "UG": 219,
+                "UA": 220,
+                "AE": 221,
+                "GB": 222,
+                "US": 223,
+                "UY": 224,
+                "UZ": 225,
+                "VU": 226,
+                "VE": 227,
+                "VN": 228,
+                "VG": 229,
+                "WF": 230,
+                "EH": 231,
+                "YE": 232,
+                "ZM": 233,
+                "ZW": 234
+              },
+              "defaultValue": null,
+              "eTag": "dac8f6f2bb20b531418c3b1d386f1ca7",
+              "url": "/services/data/v68.0/ui-api/object-info/Lead/picklist-values/012000000000000AAA/StateCode",
+              "values": [
+                {
+                  "attributes": null,
+                  "label": "Acre",
+                  "validFor": [
+                    30
+                  ],
+                  "value": "AC"
+                },
+                {
+                  "attributes": null,
+                  "label": "Agrigento",
+                  "validFor": [
+                    105
+                  ],
+                  "value": "AG"
+                },
+                {
+                  "attributes": null,
+                  "label": "Aguascalientes",
+                  "validFor": [
+                    137
+                  ],
+                  "value": "AG"
+                }
+              ]
+            },
+            "Status": {
+              "controllerValues": {},
+              "defaultValue": {
+                "attributes": {
+                  "converted": false,
+                  "picklistAtrributesValueType": "LeadStatus"
+                },
+                "label": "Open - Not Contacted",
+                "validFor": [],
+                "value": "Open - Not Contacted"
+              },
+              "eTag": "42c603ce3c787bd44dba2b8031e3de35",
+              "url": "/services/data/v68.0/ui-api/object-info/Lead/picklist-values/012000000000000AAA/Status",
+              "values": [
+                {
+                  "attributes": {
+                    "converted": false,
+                    "picklistAtrributesValueType": "LeadStatus"
+                  },
+                  "label": "Open - Not Contacted",
+                  "validFor": [],
+                  "value": "Open - Not Contacted"
+                },
+                {
+                  "attributes": {
+                    "converted": false,
+                    "picklistAtrributesValueType": "LeadStatus"
+                  },
+                  "label": "Working - Contacted",
+                  "validFor": [],
+                  "value": "Working - Contacted"
+                },
+                {
+                  "attributes": {
+                    "converted": true,
+                    "picklistAtrributesValueType": "LeadStatus"
+                  },
+                  "label": "Closed - Converted",
+                  "validFor": [],
+                  "value": "Closed - Converted"
+                },
+                {
+                  "attributes": {
+                    "converted": false,
+                    "picklistAtrributesValueType": "LeadStatus"
+                  },
+                  "label": "Closed - Not Converted",
+                  "validFor": [],
+                  "value": "Closed - Not Converted"
+                }
+              ]
+            }
           }
-        ]
+        }
       }
     }
-  }
+  ]
 }

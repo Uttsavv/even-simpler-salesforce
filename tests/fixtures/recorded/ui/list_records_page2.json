@@ -1,30 +1,239 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Salesforce User Interface API Developer Guide (Get List View Records with URL Parameters; List Records response body); no org recording yet",
-  "body": {
-    "count": 1,
-    "currentPageToken": "2",
-    "currentPageUrl": "/services/data/v68.0/ui-api/list-records/Lead/AllOpenLeads?pageSize=2&pageToken=2",
-    "listInfoETag": "f0e1d2",
-    "nextPageToken": null,
-    "nextPageUrl": null,
-    "previousPageToken": "0",
-    "previousPageUrl": "/services/data/v68.0/ui-api/list-records/Lead/AllOpenLeads?pageSize=2&pageToken=0",
-    "records": [
-      {
-        "apiName": "Lead",
-        "childRelationships": {},
-        "eTag": "x3",
-        "fields": {
-          "Name": {
-            "displayValue": null,
-            "value": "Grace Hopper"
-          }
+  "esf_fixture": 1,
+  "note": "recorded with esf.testing.record (tests/sandbox/test_ui_reports.py, API 68.0)",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/ui-api/list-records/Lead/AllOpenLeads",
+        "query": [
+          [
+            "pageSize",
+            "2"
+          ],
+          [
+            "pageToken",
+            "2"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=3134/15000"
         },
-        "id": "00Qxx0000000003AAA",
-        "recordTypeId": "012000000000000AAA",
-        "recordTypeInfo": null
+        "json": {
+          "count": 2,
+          "currentPageToken": "2",
+          "currentPageUrl": "/services/data/v68.0/ui-api/list-records/Lead/AllOpenLeads?pageSize=2&pageToken=2",
+          "fields": [],
+          "listInfoETag": null,
+          "listReference": {
+            "id": "00B000000000001EAA",
+            "listViewApiName": "AllOpenLeads",
+            "objectApiName": "Lead",
+            "type": "listView"
+          },
+          "nextPageToken": "4",
+          "nextPageUrl": "/services/data/v68.0/ui-api/list-records/Lead/AllOpenLeads?pageSize=2&pageToken=4",
+          "optionalFields": [],
+          "pageSize": 2,
+          "previousPageToken": "0",
+          "previousPageUrl": "/services/data/v68.0/ui-api/list-records/Lead/AllOpenLeads?pageSize=2&pageToken=0",
+          "records": [
+            {
+              "apiName": "Lead",
+              "childRelationships": {},
+              "eTag": "804ac1a70a7ff3fe5708558bbe51b18b",
+              "fields": {
+                "Company": {
+                  "displayValue": null,
+                  "value": "esf-sandbox"
+                },
+                "CreatedDate": {
+                  "displayValue": "11/11/2026, 1:02 PM",
+                  "value": "2026-11-11T21:02:26.000Z"
+                },
+                "Email": {
+                  "displayValue": null,
+                  "value": null
+                },
+                "Id": {
+                  "displayValue": null,
+                  "value": "00Q000000000005EAA"
+                },
+                "IsUnreadByOwner": {
+                  "displayValue": null,
+                  "value": true
+                },
+                "LastModifiedById": {
+                  "displayValue": null,
+                  "value": "005000000000003AAA"
+                },
+                "LastModifiedDate": {
+                  "displayValue": "11/11/2026, 1:02 PM",
+                  "value": "2026-11-11T21:02:26.000Z"
+                },
+                "Name": {
+                  "displayValue": null,
+                  "value": "esf-sandbox-3aded04d0827-coll-async-0002"
+                },
+                "Owner": {
+                  "displayValue": "User 1",
+                  "value": {
+                    "apiName": "Name",
+                    "childRelationships": {},
+                    "eTag": "3e27c24fa588950753c66514bb91a937",
+                    "fields": {
+                      "Id": {
+                        "displayValue": null,
+                        "value": "005000000000003AAA"
+                      },
+                      "Name": {
+                        "displayValue": null,
+                        "value": "User 1"
+                      },
+                      "NameOrAlias": {
+                        "displayValue": null,
+                        "value": "User 3"
+                      }
+                    },
+                    "id": "005000000000003AAA",
+                    "lastModifiedById": null,
+                    "lastModifiedDate": null,
+                    "recordTypeId": null,
+                    "recordTypeInfo": null,
+                    "systemModstamp": null,
+                    "weakEtag": 0
+                  }
+                },
+                "OwnerId": {
+                  "displayValue": null,
+                  "value": "005000000000003AAA"
+                },
+                "StateCode": {
+                  "displayValue": null,
+                  "value": null
+                },
+                "Status": {
+                  "displayValue": "Open - Not Contacted",
+                  "value": "Open - Not Contacted"
+                },
+                "SystemModstamp": {
+                  "displayValue": "11/11/2026, 1:02 PM",
+                  "value": "2026-11-11T21:02:26.000Z"
+                }
+              },
+              "id": "00Q000000000005EAA",
+              "lastModifiedById": "005000000000003AAA",
+              "lastModifiedDate": "2026-11-11T21:02:26.000Z",
+              "recordTypeId": "012000000000000AAA",
+              "recordTypeInfo": null,
+              "systemModstamp": "2026-11-11T21:02:26.000Z",
+              "weakEtag": 1794430946000
+            },
+            {
+              "apiName": "Lead",
+              "childRelationships": {},
+              "eTag": "70e5f75601fa971de853936314c30e3d",
+              "fields": {
+                "Company": {
+                  "displayValue": null,
+                  "value": "esf-sandbox"
+                },
+                "CreatedDate": {
+                  "displayValue": "11/11/2026, 1:02 PM",
+                  "value": "2026-11-11T21:02:26.000Z"
+                },
+                "Email": {
+                  "displayValue": null,
+                  "value": null
+                },
+                "Id": {
+                  "displayValue": null,
+                  "value": "00Q000000000006EAA"
+                },
+                "IsUnreadByOwner": {
+                  "displayValue": null,
+                  "value": true
+                },
+                "LastModifiedById": {
+                  "displayValue": null,
+                  "value": "005000000000003AAA"
+                },
+                "LastModifiedDate": {
+                  "displayValue": "11/11/2026, 1:02 PM",
+                  "value": "2026-11-11T21:02:26.000Z"
+                },
+                "Name": {
+                  "displayValue": null,
+                  "value": "esf-sandbox-3aded04d0827-coll-async-0003"
+                },
+                "Owner": {
+                  "displayValue": "User 1",
+                  "value": {
+                    "apiName": "Name",
+                    "childRelationships": {},
+                    "eTag": "3e27c24fa588950753c66514bb91a937",
+                    "fields": {
+                      "Id": {
+                        "displayValue": null,
+                        "value": "005000000000003AAA"
+                      },
+                      "Name": {
+                        "displayValue": null,
+                        "value": "User 1"
+                      },
+                      "NameOrAlias": {
+                        "displayValue": null,
+                        "value": "User 3"
+                      }
+                    },
+                    "id": "005000000000003AAA",
+                    "lastModifiedById": null,
+                    "lastModifiedDate": null,
+                    "recordTypeId": null,
+                    "recordTypeInfo": null,
+                    "systemModstamp": null,
+                    "weakEtag": 0
+                  }
+                },
+                "OwnerId": {
+                  "displayValue": null,
+                  "value": "005000000000003AAA"
+                },
+                "StateCode": {
+                  "displayValue": null,
+                  "value": null
+                },
+                "Status": {
+                  "displayValue": "Open - Not Contacted",
+                  "value": "Open - Not Contacted"
+                },
+                "SystemModstamp": {
+                  "displayValue": "11/11/2026, 1:02 PM",
+                  "value": "2026-11-11T21:02:26.000Z"
+                }
+              },
+              "id": "00Q000000000006EAA",
+              "lastModifiedById": "005000000000003AAA",
+              "lastModifiedDate": "2026-11-11T21:02:26.000Z",
+              "recordTypeId": "012000000000000AAA",
+              "recordTypeInfo": null,
+              "systemModstamp": "2026-11-11T21:02:26.000Z",
+              "weakEtag": 1794430946000
+            }
+          ],
+          "searchTerm": null,
+          "sortBy": "Name,Id",
+          "where": null
+        }
       }
-    ]
-  }
+    }
+  ]
 }

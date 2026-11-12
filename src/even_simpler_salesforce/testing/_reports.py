@@ -148,6 +148,7 @@ class FakeReports:
                     "url": f"{base}/{s.report_id}",
                     "describeUrl": f"{base}/{s.report_id}/describe",
                     "instancesUrl": f"{base}/{s.report_id}/instances",
+                    "fieldsUrl": f"{base}/{s.report_id}/fields",
                 }
                 for s in reversed(scripts[-_RECENT_LIMIT:])
             ]
@@ -293,13 +294,13 @@ class FakeDashboards:
         )
 
     def refresh(self, dashboard_id: str) -> dict[str, Any]:
-        """Record the refresh and return ``id`` and ``statusUrl``, like Salesforce."""
+        """Record the refresh and return ``{"statusUrl": ...}``, like Salesforce."""
         path = dashboard_path(dashboard_id)
 
         def fn() -> dict[str, Any]:
             self._body(dashboard_id)
             status = f"/services/data/v{self._state.api_version}/{path}/status"
-            return {"id": dashboard_id, "statusUrl": status}
+            return {"statusUrl": status}
 
         return self._state.run(
             self._who,
