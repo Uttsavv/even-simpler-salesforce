@@ -770,10 +770,17 @@ Every area exists on both clients with identical names. Signatures below are asy
 
 **External id values in paths** are percent-encoded as one path segment (`url_segment`: space →
 `%20`, `/` → `%2F`, `+` → `%2B`; httpx keeps them as sent). `quote_plus` is never used (it turns
-spaces into `+`, which Salesforce reads literally; simple-salesforce #801). Values containing `.`
-(e.g. ending in `.json` or `.xml`) may be read by Salesforce as a format suffix (#22): ⚠️ **VERIFY**
-in a sandbox (V19); if confirmed, `get_by_external_id`/`upsert` fall back to a SOQL lookup or the
-Collections upsert for such values.
+spaces into `+`, which Salesforce reads literally; simple-salesforce #801). A value ending in
+`.json`, `.xml` or `.html` is read by Salesforce as a response format (#22; confirmed on a v68.0
+org, V19: 404 `NOT_FOUND`, also with the dot as `%2E`; `.JSON`, `.csv`, `.htm`, `a.b` work). Format
+suffixes are documented only up to API 57.0 (*REST Resources and Requests*). For values ending in
+one of the three suffixes (matched case-insensitively), `get_by_external_id` runs
+`SELECT Id FROM {o} WHERE {field} = {value}` and then `GET sobjects/{o}/{id}` (two calls), and
+`upsert` sends one record through `PATCH composite/sobjects/{o}/{field}` with the same headers.
+Return types and errors match the path: `NotFound` (`NOT_FOUND`, 404), `MultipleMatches` (300,
+`.matches` rebuilt as record URLs; Collections reports `DUPLICATE_EXTERNAL_ID`), `InvalidField`
+when `data` also sets `field` (raised locally, as the path upsert rejects it), other DML errors
+classified as usual.
 
 **Request headers (D30).** Keyword-only arguments; `None` means the header is not sent and
 Salesforce's default applies.
@@ -803,10 +810,11 @@ runAsCurrentUser=false`); the defaults equal Salesforce's documented defaults, s
 
 **No conditional headers on delete.** The REST API Developer Guide (*Conditional Request
 Headers*) says DELETE requests don't support them. An earlier 0.1 draft accepted
-`delete(id, if_unmodified_since=)`; Salesforce would ignore the header and delete anyway, which
-is worse than not offering it. It is removed (fix). There is no atomic "delete only if unchanged"
-in REST; the records guide says so and shows a read-then-delete pattern with its race window. V25 records
-the sandbox behaviour for the test docstring.
+`delete(id, if_unmodified_since=)`; the docs suggested Salesforce would ignore the header and
+delete anyway, which is worse than not offering it. It is removed (fix). There is no atomic "delete only if unchanged"
+in REST; the records guide says so and shows a read-then-delete pattern with its race window. V25
+(sandbox): Salesforce does not ignore the header, it rejects the DELETE (500 `UNKNOWN_EXCEPTION`
+for a past date, 400 `BAD_HEADER` for a future one) and keeps the record.
 
 **Client-wide headers** (§10.2): `client_name` and `default_namespace`
 (`Sforce-Call-Options`) and `update_mru` (`Sforce-Mru`).
@@ -880,9 +888,10 @@ which validates `^[A-Za-z][A-Za-z0-9_]*(__[a-z]+)?$` (dotted paths allowed).
 - **Write headers** (D30): `create`, `update` and `upsert` take `assignment_rule_id=` and
   `duplicate_rules=` with the same types and serialisation as §9.1, sent on every chunk. The
   *Headers* pages don't limit these two headers to particular resources, and the Collections
-  example responses show `DUPLICATES_DETECTED`, but no page says Collections honours them. They
-  ship only after a sandbox check (V24); if Salesforce ignores either one, that kwarg is not added
-  and the Collections guide says so. `delete` and `retrieve` take neither.
+  example responses show `DUPLICATES_DETECTED`, but no page says Collections honours them. V24
+  (sandbox) confirmed both on create, update and upsert, so they ship (today as
+  `assignment_rule_id=` and `allow_save=`, like §9.1's current code; they move to
+  `duplicate_rules=` together with §9.1). `delete` and `retrieve` take neither.
 - Returns `BatchResult` (ordered as input): `.results: list[RecordResult(ok, id, created, errors)]`, `.ok`, `.failed`, `.raise_for_errors()` → `PartialFailure`.
 - **Failures can't go unnoticed** (simple-salesforce #817, #544, #502, #442): every
   Collections `sf.request` event carries `records_failed`, so partial failures show up in logs and
@@ -1467,7 +1476,11 @@ adds `defaultNamespace=battle`, so SOQL and records can name `botId__c` instead 
 `battle__botId__c`. Per the REST API Developer Guide (*Call Options Header*): Salesforce strips the
 prefix from response field names when this is set, and ignores it for describe calls; it is not
 supported by Bulk API 1.0. Validated as a namespace prefix (1–15 letters, digits or underscores,
-starting with a letter, no `__`; ⚠️ **VERIFY** the exact rule, V26). The docs page for each client
+starting with a letter, no `__`; *Register a Namespace for a First-Generation Managed Package*
+says "up to 15 alphanumeric characters", begins with a letter, no two consecutive underscores).
+V26: an org without a namespace accepts any `defaultNamespace` value (even `1bad`, `a__b`, 16
+characters) and ignores it, so only an org with a registered namespace can confirm the
+server-side rule; validate client-side from the docs. The docs page for each client
 option states the response-name change, because it alters dict keys.
 
 **Merging and separator (fix).** Options are joined with `"; "`, the separator in Salesforce's
