@@ -112,6 +112,27 @@ def test_parse_deploy_result_accepts_finalizing_as_in_progress() -> None:
     assert not res.failed
 
 
+def test_parse_deploy_result_accepts_one_object_instead_of_a_list() -> None:
+    """``details`` lists can arrive as a single object (no recording has one; kept for safety)."""
+    res = md.parse_deploy_result(
+        {
+            "id": "0Af000000000001AAA",
+            "deployResult": {
+                "status": "Failed",
+                "details": {
+                    "componentFailures": {
+                        "componentType": "ApexClass",
+                        "fullName": "Broken",
+                        "problem": "boom",
+                        "problemType": "Error",
+                    }
+                },
+            },
+        }
+    )
+    assert [f.full_name for f in res.component_failures] == ["Broken"]
+
+
 def test_parse_deploy_result_without_result_defaults_to_pending() -> None:
     res = md.parse_deploy_result({"id": "0Afxx0000000001AAA"})
     assert (res.status, res.done, res.failed) == ("Pending", False, False)
