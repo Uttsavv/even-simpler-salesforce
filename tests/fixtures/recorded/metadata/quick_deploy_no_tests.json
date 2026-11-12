@@ -1,0 +1,34 @@
+{
+  "esf_fixture": 1,
+  "source": "recorded 2026-11-11 with esf.testing.record from a Developer Edition org (API v68.0); quick deploy of a validation made with NoTestRun",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/metadata/deployRequest/0Af000000000001CAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "validatedDeployRequestId": "0Af000000000001CAA"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1555/15000"
+        },
+        "json": [
+          {
+            "message": "Source validate did not run tests in the org",
+            "errorCode": "INVALID_ID_FIELD"
+          }
+        ]
+      }
+    }
+  ]
+}

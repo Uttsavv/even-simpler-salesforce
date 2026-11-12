@@ -1,0 +1,288 @@
+{
+  "esf_fixture": 1,
+  "source": "recorded 2026-11-11 with esf.testing.record from a Developer Edition org (API v68.0); cancel_deploy of a deployment that had already succeeded",
+  "interactions": [
+    {
+      "request": {
+        "method": "PATCH",
+        "path": "/services/data/v68.0/metadata/deployRequest/0Af000000000001CAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "deployResult": {
+            "status": "Canceling"
+          }
+        }
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1528/15000"
+        },
+        "json": {
+          "deployOptions": null,
+          "deployResult": {
+            "canceledBy": null,
+            "canceledByName": null,
+            "checkOnly": true,
+            "completedDate": "2026-11-11T22:53:09.000+0000",
+            "createdBy": "005000000000002",
+            "createdByName": "<redacted>",
+            "createdDate": "2026-11-11T22:53:08.000+0000",
+            "deployExtensionResults": [],
+            "details": {
+              "componentFailures": [],
+              "componentSuccesses": [
+                {
+                  "changed": false,
+                  "columnNumber": null,
+                  "componentType": "ApexClass",
+                  "created": false,
+                  "createdDate": "2026-11-11T22:53:08.000+0000",
+                  "deleted": false,
+                  "fileName": "classes/EsfSandboxActionTest.cls",
+                  "fullName": "EsfSandboxActionTest",
+                  "id": "01p000000000003AAA",
+                  "lineNumber": null,
+                  "problem": null,
+                  "problemType": null,
+                  "success": true
+                },
+                {
+                  "changed": true,
+                  "columnNumber": null,
+                  "componentType": "",
+                  "created": false,
+                  "createdDate": "2026-11-11T22:53:09.000+0000",
+                  "deleted": false,
+                  "fileName": "package.xml",
+                  "fullName": "package.xml",
+                  "id": null,
+                  "lineNumber": null,
+                  "problem": null,
+                  "problemType": null,
+                  "success": true
+                }
+              ],
+              "retrieveResult": null,
+              "runTestResult": {
+                "apexLogId": null,
+                "codeCoverage": [
+                  {
+                    "id": "01q000000000004AAA",
+                    "locationsCovered": [],
+                    "locationsNotCovered": [
+                      {
+                        "line": 3
+                      },
+                      {
+                        "line": 4
+                      },
+                      {
+                        "line": 5
+                      },
+                      {
+                        "line": 6
+                      },
+                      {
+                        "line": 7
+                      },
+                      {
+                        "line": 8
+                      }
+                    ],
+                    "name": "EsfSandboxV5b",
+                    "namespace": null,
+                    "numLocations": 6,
+                    "numLocationsNotCovered": 6,
+                    "type": "Trigger"
+                  },
+                  {
+                    "id": "01p000000000005AAA",
+                    "locationsCovered": [],
+                    "locationsNotCovered": [
+                      {
+                        "line": 5
+                      },
+                      {
+                        "line": 12
+                      },
+                      {
+                        "line": 13
+                      },
+                      {
+                        "line": 14
+                      },
+                      {
+                        "line": 15
+                      },
+                      {
+                        "line": 16
+                      },
+                      {
+                        "line": 18
+                      },
+                      {
+                        "line": 19
+                      },
+                      {
+                        "line": 20
+                      },
+                      {
+                        "line": 21
+                      },
+                      {
+                        "line": 25
+                      },
+                      {
+                        "line": 26
+                      },
+                      {
+                        "line": 27
+                      },
+                      {
+                        "line": 28
+                      },
+                      {
+                        "line": 29
+                      }
+                    ],
+                    "name": "EsfSandboxRest",
+                    "namespace": null,
+                    "numLocations": 15,
+                    "numLocationsNotCovered": 15,
+                    "type": "Class"
+                  },
+                  {
+                    "id": "01p000000000006AAA",
+                    "locationsCovered": [
+                      {
+                        "line": 14
+                      },
+                      {
+                        "line": 15
+                      },
+                      {
+                        "line": 16
+                      },
+                      {
+                        "line": 17
+                      },
+                      {
+                        "line": 20
+                      },
+                      {
+                        "line": 21
+                      },
+                      {
+                        "line": 22
+                      },
+                      {
+                        "line": 24
+                      }
+                    ],
+                    "locationsNotCovered": [
+                      {
+                        "line": 18
+                      }
+                    ],
+                    "name": "EsfSandboxAction",
+                    "namespace": null,
+                    "numLocations": 9,
+                    "numLocationsNotCovered": 1,
+                    "type": "Class"
+                  }
+                ],
+                "codeCoverageWarnings": [
+                  {
+                    "id": "01q000000000004AAA",
+                    "message": "Test coverage of selected Apex Trigger is 0%, at least 1% test coverage is required",
+                    "name": "EsfSandboxV5b",
+                    "namespace": null
+                  },
+                  {
+                    "id": "01q000000000004AAA",
+                    "message": "Average test coverage across all Apex Classes and Triggers is 26%, at least 75% test coverage is required.",
+                    "name": null,
+                    "namespace": ""
+                  }
+                ],
+                "failures": [],
+                "flowCoverage": [
+                  {
+                    "elementsNotCovered": [
+                      "set_greeting",
+                      "is_fail",
+                      "create_bad_lead"
+                    ],
+                    "flowId": "301000000000007",
+                    "flowName": "Esf_Sandbox_Action_Flow",
+                    "flowNamespace": null,
+                    "numElements": 3,
+                    "numElementsNotCovered": 3,
+                    "processType": "AutoLaunchedFlow"
+                  },
+                  {
+                    "elementsNotCovered": [
+                      "esf_error",
+                      "is_esf_flow"
+                    ],
+                    "flowId": "301000000000008",
+                    "flowName": "Esf_Sandbox_V5b_Flow",
+                    "flowNamespace": null,
+                    "numElements": 2,
+                    "numElementsNotCovered": 2,
+                    "processType": "AutoLaunchedFlow"
+                  }
+                ],
+                "flowCoverageWarnings": [],
+                "numFailures": 0,
+                "numTestsRun": 1,
+                "successes": [
+                  {
+                    "id": "01p000000000003AAA",
+                    "methodName": "greets",
+                    "name": "EsfSandboxActionTest",
+                    "namespace": null,
+                    "seeAllData": null,
+                    "testCategory": null,
+                    "time": 35.0
+                  }
+                ],
+                "totalTime": 58.0
+              }
+            },
+            "done": true,
+            "errorMessage": null,
+            "errorStatusCode": null,
+            "id": "0Af000000000001CAA",
+            "ignoreWarnings": false,
+            "lastModifiedDate": "2026-11-11T22:53:09.000+0000",
+            "notifications": [],
+            "numberComponentErrors": 0,
+            "numberComponentsDeployed": 1,
+            "numberComponentsTotal": 1,
+            "numberFiles": 3,
+            "numberTestErrors": 0,
+            "numberTestsCompleted": 1,
+            "numberTestsTotal": 1,
+            "rollbackOnError": false,
+            "runTestsEnabled": true,
+            "startDate": "2026-11-11T22:53:08.000+0000",
+            "stateDetail": null,
+            "status": "Succeeded",
+            "success": true,
+            "zipSize": 829
+          },
+          "id": "0Af000000000001CAA",
+          "validatedDeployRequestId": null
+        }
+      }
+    }
+  ]
+}

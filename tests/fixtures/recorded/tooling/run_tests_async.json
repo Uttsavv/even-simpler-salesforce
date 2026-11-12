@@ -1,0 +1,29 @@
+{
+  "esf_fixture": 1,
+  "source": "recorded 2026-11-11 with esf.testing.record from a Developer Edition org (API v68.0)",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/tooling/runTestsAsynchronous/",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "classids": "01p000000000001AAA"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1208/15000"
+        },
+        "json": "707000000000002"
+      }
+    }
+  ]
+}

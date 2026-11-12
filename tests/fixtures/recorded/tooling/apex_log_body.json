@@ -1,5 +1,0 @@
-{
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Tooling API Developer Guide and the ExecuteAnonymousResult reference; no org recording yet (big-bang.md \u00a721 V17, V23, V45-V47)",
-  "body": "68.0 APEX_CODE,DEBUG\n00:00:03.1 (1)|USER_DEBUG|[1]|DEBUG|hello\n"
-}

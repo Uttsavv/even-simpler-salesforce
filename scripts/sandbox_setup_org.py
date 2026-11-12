@@ -28,7 +28,8 @@ logged-in user. The main folders:
 - pubsub: the platform event ``ESF_Sandbox_Date_Event__e`` and Date/DateTime fields on Account
   (V77), plus the ``Esf_Sandbox_PubSub`` permission set;
 - reports: a matrix Lead report in the ``Esf_Sandbox_Reports`` folder and a dashboard on the
-  summary report in ``Esf_Sandbox_Dashboards`` (V60-V69).
+  summary report in ``Esf_Sandbox_Dashboards`` (V60-V69);
+- tooling: the Apex test class ``EsfSandboxActionTest`` (V46, V86).
 
 It refuses to run against a production org: ``Organization.IsSandbox`` must be true or the
 org must be a Developer Edition. The fixtures change org behaviour on purpose (Leads with

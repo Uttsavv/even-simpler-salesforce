@@ -1,41 +1,76 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Metadata API Developer Guide: https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_rest_deploy.htm",
-  "body": {
-    "id": "0Afxx0000000001AAA",
-    "validatedDeployRequestId": null,
-    "deployOptions": {
-      "checkOnly": false,
-      "ignoreWarnings": false,
-      "purgeOnDelete": false,
-      "allowMissingFiles": false,
-      "autoUpdatePackage": false,
-      "singlePackage": true,
-      "rollbackOnError": true,
-      "testLevel": "NoTestRun",
-      "runTests": null
-    },
-    "deployResult": {
-      "id": "0Afxx0000000001AAA",
-      "checkOnly": false,
-      "createdBy": "005xx0000000001AAA",
-      "createdByName": "Ada Admin",
-      "createdDate": "2026-11-11T10:00:00.000+0000",
-      "ignoreWarnings": false,
-      "rollbackOnError": true,
-      "runTestsEnabled": false,
-      "numberComponentErrors": 0,
-      "numberComponentsDeployed": 0,
-      "numberComponentsTotal": 0,
-      "numberTestErrors": 0,
-      "numberTestsCompleted": 0,
-      "numberTestsTotal": 0,
-      "errorMessage": null,
-      "errorStatusCode": null,
-      "details": null,
-      "status": "Pending",
-      "done": false,
-      "success": false
+  "esf_fixture": 1,
+  "source": "recorded 2026-11-11 with esf.testing.record from a Developer Edition org (API v68.0); check-only deploy of one Apex test class (POST metadata/deployRequest)",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/metadata/deployRequest",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "multipart/form-data; boundary=\"esf-98049841fe80837dc5b369618b9d12a9\""
+        },
+        "base64": "LS1lc2YtOTgwNDk4NDFmZTgwODM3ZGM1YjM2OTYxOGI5ZDEyYTkNCkNvbnRlbnQtRGlzcG9zaXRpb246IGZvcm0tZGF0YTsgbmFtZT0ianNvbiINCkNvbnRlbnQtVHlwZTogYXBwbGljYXRpb24vanNvbg0KDQp7ImRlcGxveU9wdGlvbnMiOnsiY2hlY2tPbmx5Ijp0cnVlLCJpZ25vcmVXYXJuaW5ncyI6ZmFsc2UsInB1cmdlT25EZWxldGUiOmZhbHNlLCJhbGxvd01pc3NpbmdGaWxlcyI6ZmFsc2UsImF1dG9VcGRhdGVQYWNrYWdlIjpmYWxzZSwic2luZ2xlUGFja2FnZSI6dHJ1ZSwidGVzdExldmVsIjoiUnVuU3BlY2lmaWVkVGVzdHMiLCJydW5UZXN0cyI6WyJFc2ZTYW5kYm94U2xvd1Rlc3QiXX19DQotLWVzZi05ODA0OTg0MWZlODA4MzdkYzViMzY5NjE4YjlkMTJhOQ0KQ29udGVudC1EaXNwb3NpdGlvbjogZm9ybS1kYXRhOyBuYW1lPSJmaWxlIjsgZmlsZW5hbWU9ImRlcGxveS56aXAiDQpDb250ZW50LVR5cGU6IGFwcGxpY2F0aW9uL3ppcA0KDQpQSwMEFAAAAAAA8SJsXaonJaLKAAAAygAAAAsAAABwYWNrYWdlLnhtbDw/eG1sIHZlcnNpb249IjEuMCIgZW5jb2Rpbmc9IlVURi04Ij8+PFBhY2thZ2UgeG1sbnM9Imh0dHA6Ly9zb2FwLnNmb3JjZS5jb20vMjAwNi8wNC9tZXRhZGF0YSI+PHR5cGVzPjxtZW1iZXJzPkVzZlNhbmRib3hTbG93VGVzdDwvbWVtYmVycz48bmFtZT5BcGV4Q2xhc3M8L25hbWU+PC90eXBlcz48dmVyc2lvbj42Ni4wPC92ZXJzaW9uPjwvUGFja2FnZT5QSwMEFAAAAAAA8SJsXeqgf7nVAAAA1QAAAB4AAABjbGFzc2VzL0VzZlNhbmRib3hTbG93VGVzdC5jbHNASXNUZXN0IHByaXZhdGUgY2xhc3MgRXNmU2FuZGJveFNsb3dUZXN0IHsgQElzVGVzdCBzdGF0aWMgdm9pZCBzbG93KCkgeyBMb25nIHQgPSBTeXN0ZW0uY3VycmVudFRpbWVNaWxsaXMoKTsgd2hpbGUgKExpbWl0cy5nZXRDcHVUaW1lKCkgPCA4MDAwICYmIFN5c3RlbS5jdXJyZW50VGltZU1pbGxpcygpIC0gdCA8IDIwMDAwKSB7fSBTeXN0ZW0uYXNzZXJ0KHRydWUpOyB9IH1QSwMEFAAAAAAA8SJsXXBfUN6hAAAAoQAAACcAAABjbGFzc2VzL0VzZlNhbmRib3hTbG93VGVzdC5jbHMtbWV0YS54bWw8P3htbCB2ZXJzaW9uPSIxLjAiIGVuY29kaW5nPSJVVEYtOCI/PjxBcGV4Q2xhc3MgeG1sbnM9Imh0dHA6Ly9zb2FwLnNmb3JjZS5jb20vMjAwNi8wNC9tZXRhZGF0YSI+PGFwaVZlcnNpb24+NjYuMDwvYXBpVmVyc2lvbj48c3RhdHVzPkFjdGl2ZTwvc3RhdHVzPjwvQXBleENsYXNzPlBLAQIUAxQAAAAAAPEibF2qJyWiygAAAMoAAAALAAAAAAAAAAAAAACAAQAAAABwYWNrYWdlLnhtbFBLAQIUAxQAAAAAAPEibF3qoH+51QAAANUAAAAeAAAAAAAAAAAAAACAAfMAAABjbGFzc2VzL0VzZlNhbmRib3hTbG93VGVzdC5jbHNQSwECFAMUAAAAAADxImxdcF9Q3qEAAAChAAAAJwAAAAAAAAAAAAAAgAEEAgAAY2xhc3Nlcy9Fc2ZTYW5kYm94U2xvd1Rlc3QuY2xzLW1ldGEueG1sUEsFBgAAAAADAAMA2gAAAOoCAAAAAA0KLS1lc2YtOTgwNDk4NDFmZTgwODM3ZGM1YjM2OTYxOGI5ZDEyYTktLQ0K"
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1594/15000"
+        },
+        "json": {
+          "deployOptions": {
+            "allowMissingFiles": false,
+            "autoUpdatePackage": false,
+            "checkOnly": true,
+            "ignoreWarnings": false,
+            "performRetrieve": false,
+            "purgeOnDelete": false,
+            "rollbackOnError": false,
+            "runTests": [
+              "EsfSandboxSlowTest"
+            ],
+            "singlePackage": true,
+            "testLevel": "RunSpecifiedTests"
+          },
+          "deployResult": {
+            "canceledBy": null,
+            "canceledByName": null,
+            "checkOnly": true,
+            "completedDate": null,
+            "createdBy": null,
+            "createdByName": null,
+            "createdDate": null,
+            "deployExtensionResults": null,
+            "details": null,
+            "done": false,
+            "errorMessage": null,
+            "errorStatusCode": null,
+            "id": "0Af000000000001CAA",
+            "ignoreWarnings": false,
+            "lastModifiedDate": null,
+            "notifications": null,
+            "numberComponentErrors": null,
+            "numberComponentsDeployed": null,
+            "numberComponentsTotal": null,
+            "numberFiles": null,
+            "numberTestErrors": null,
+            "numberTestsCompleted": null,
+            "numberTestsTotal": null,
+            "rollbackOnError": false,
+            "runTestsEnabled": false,
+            "startDate": null,
+            "stateDetail": null,
+            "status": "Pending",
+            "success": false,
+            "zipSize": null
+          },
+          "id": "0Af000000000001CAA",
+          "validatedDeployRequestId": null
+        }
+      }
     }
-  }
+  ]
 }

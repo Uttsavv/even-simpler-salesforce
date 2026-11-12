@@ -1,0 +1,29 @@
+{
+  "esf_fixture": 1,
+  "source": "recorded 2026-11-11 with esf.testing.record from a Developer Edition org (API v68.0); anonymousBody of 20,000 characters; the request query is shortened in this file",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/tooling/executeAnonymous/",
+        "query": [
+          [
+            "anonymousBody",
+            "System.debug(1);//xxxx... (20000 characters in total; shortened here)"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 431,
+        "headers": {
+          "content-type": "text/html;charset=iso-8859-1"
+        },
+        "text": "<html>\n<head>\n<meta http-equiv=\"Content-Type\" content=\"text/html;charset=ISO-8859-1\"/>\n<title>Error 431 Request Header Fields Too Large</title>\n</head>\n<body>\n<h2>HTTP ERROR 431 Request Header Fields Too Large</h2>\n<table>\n<tr><th>URI:</th><td>"
+      }
+    }
+  ]
+}

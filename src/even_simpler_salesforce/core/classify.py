@@ -81,6 +81,9 @@ _STATUS_MAP: dict[int, type[E.SalesforceError]] = {
 }
 
 _RETRYABLE_STATUS = frozenset({500, 502, 503, 504})
+# Statuses the web tier sends with an HTML or plain-text page (V45: a long executeAnonymous URL
+# got 414 "URI Too Long" or 431 "Request Header Fields Too Large", both text/html).
+_TOO_LARGE_STATUS = frozenset({414, 431})
 # Operations on an sObject *type* (no record id): NOT_FOUND there means the type doesn't exist.
 _TYPE_OPS = frozenset(
     {"sobject.describe", "sobject.metadata", "sobject.updated", "sobject.deleted", "ui.object_info"}
@@ -365,6 +368,12 @@ def _classify(
             parsed = False
 
     if not parsed and resp.content:
+        if status in _TOO_LARGE_STATUS:
+            # The web tier answers an oversized URL or header block with an HTML page (414,
+            # 431) before Salesforce sees the request. The status alone says what went wrong.
+            return E.RequestTooLarge(
+                f"HTTP {status}: the request URL or headers are too large", raw=raw, **common
+            )
         return E.UnexpectedResponse(
             f"non-JSON response (HTTP {status}, {resp.content_type or 'no content-type'})",
             raw=raw,

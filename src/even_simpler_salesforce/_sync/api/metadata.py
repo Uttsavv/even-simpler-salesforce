@@ -247,14 +247,15 @@ class Metadata:
 
         Salesforce accepts a validation for quick deploy only when it succeeded, ran Apex tests
         (not ``NoTestRun``), and no other deployment ran in the org since. It refuses others
-        with a :class:`RequestError`.
+        with a :class:`RequestError` (``INVALID_ID_FIELD``).
 
         Args:
             validated_id: Id of a deployment made with ``DeployOptions(check_only=True)``
                 (``0Af...``).
 
         Returns:
-            The new deployment, usually with status ``Pending``.
+            The new deployment with status ``Pending`` (Salesforce answers with the new id and
+            no ``deployResult`` yet).
 
         Raises:
             ValueError: an invalid id.
@@ -286,8 +287,9 @@ class Metadata:
         Sends ``PATCH metadata/deployRequest/{id}`` with
         ``{"deployResult": {"status": "Canceling"}}``. The cancel runs in Salesforce: the result
         usually has status ``Canceling``. Wait with ``deploy_status(id, wait=True)`` until it is
-        ``Canceled``. The client never resends this request once it may have reached
-        Salesforce; call it again if it timed out.
+        ``Canceled``. A deployment that had already finished comes back unchanged, with its
+        final status (Salesforce answers ``202`` either way). The client never resends this
+        request once it may have reached Salesforce; call it again if it timed out.
 
         Args:
             deploy_id: The id from :meth:`deploy` or :meth:`quick_deploy` (``0Af...``).

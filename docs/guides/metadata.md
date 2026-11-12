@@ -68,7 +68,10 @@ with `exc.job_id` to keep waiting.
 ## Handle a failed deployment
 
 `deploy_status()` returns a failed deployment like any other. Call `raise_for_errors()` to raise
-`esf.DeployFailed` when the deployment failed, was canceled or deployed only some components.
+`esf.DeployFailed` when the deployment failed, was canceled, deployed only some components or
+ran Apex tests that failed. The last case matters in sandboxes and Developer Edition orgs: with
+`rollback_on_error` off, Salesforce reports such a deployment as `Succeeded`, and `result.failed`
+is still `True`.
 
 ```python
 Path("src/classes/Broken.cls").write_text("public class Broken {\n")
@@ -131,13 +134,14 @@ print(result.status, result.check_only)  # Succeeded False
 
 `quick_deploy()` starts a new deployment with its own id. Salesforce accepts a validation only
 if it succeeded and ran Apex tests, and if no other deployment ran in the org since. It refuses
-any other id with an `esf.RequestError`.
+any other id with an `esf.RequestError` whose `error_code` is `INVALID_ID_FIELD`.
 
 ## Cancel a deployment
 
 `cancel_deploy()` asks Salesforce to stop a deployment that is still running. The cancel runs
 in Salesforce: the call returns with status `Canceling`. Wait with `deploy_status()` until the
-status is `Canceled`.
+status is `Canceled`. A deployment that has already finished comes back unchanged, with its
+final status.
 
 ```python
 job = await sf.metadata.deploy("src")

@@ -1,10 +1,98 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Metadata API Developer Guide: https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_rest_deploy.htm",
-  "body": [
+  "esf_fixture": 1,
+  "source": "recorded 2026-11-11 with esf.testing.record from a Developer Edition org (API v68.0); deploy of an empty zip: accepted (201), then Failed",
+  "interactions": [
     {
-      "message": "Unable to read the zip file",
-      "errorCode": "INVALID_INPUT"
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/metadata/deployRequest/0Af000000000001CAA",
+        "query": [
+          [
+            "includeDetails",
+            "true"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1844/15000"
+        },
+        "json": {
+          "deployOptions": null,
+          "deployResult": {
+            "canceledBy": null,
+            "canceledByName": null,
+            "checkOnly": false,
+            "completedDate": "2026-11-11T22:55:02.000+0000",
+            "createdBy": "005000000000002",
+            "createdByName": "<redacted>",
+            "createdDate": "2026-11-11T22:55:01.000+0000",
+            "deployExtensionResults": [],
+            "details": {
+              "componentFailures": [
+                {
+                  "changed": false,
+                  "columnNumber": null,
+                  "componentType": "",
+                  "created": false,
+                  "createdDate": "2026-11-11T22:55:02.000+0000",
+                  "deleted": false,
+                  "fileName": "package.xml",
+                  "fullName": "package.xml",
+                  "id": null,
+                  "lineNumber": null,
+                  "problem": "No package.xml found",
+                  "problemType": "Error",
+                  "success": false
+                }
+              ],
+              "componentSuccesses": [],
+              "retrieveResult": null,
+              "runTestResult": {
+                "apexLogId": null,
+                "codeCoverage": [],
+                "codeCoverageWarnings": [],
+                "failures": [],
+                "flowCoverage": [],
+                "flowCoverageWarnings": [],
+                "numFailures": 0,
+                "numTestsRun": 0,
+                "successes": [],
+                "totalTime": 0.0
+              }
+            },
+            "done": true,
+            "errorMessage": null,
+            "errorStatusCode": null,
+            "id": "0Af000000000001CAA",
+            "ignoreWarnings": false,
+            "lastModifiedDate": "2026-11-11T22:55:02.000+0000",
+            "notifications": [],
+            "numberComponentErrors": 0,
+            "numberComponentsDeployed": 0,
+            "numberComponentsTotal": 0,
+            "numberFiles": 0,
+            "numberTestErrors": 0,
+            "numberTestsCompleted": 0,
+            "numberTestsTotal": 0,
+            "rollbackOnError": false,
+            "runTestsEnabled": false,
+            "startDate": "2026-11-11T22:55:02.000+0000",
+            "stateDetail": null,
+            "status": "Failed",
+            "success": false,
+            "zipSize": 0
+          },
+          "id": "0Af000000000001CAA",
+          "validatedDeployRequestId": null
+        }
+      }
     }
   ]
 }

@@ -1,0 +1,240 @@
+{
+  "esf_fixture": 1,
+  "source": "recorded 2026-11-11 with esf.testing.record from a Developer Edition org (API v68.0); trimmed: the org returned 109 components; kept apex:page and apex:outputText",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/tooling/completions",
+        "query": [
+          [
+            "type",
+            "visualforce"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1347/15000"
+        },
+        "json": {
+          "completions": {
+            "apex:page": {
+              "simple": false,
+              "attribs": {
+                "action": {
+                  "type": "ApexPages.Action"
+                },
+                "apiVersion": {
+                  "type": "double"
+                },
+                "applyBodyTag": {
+                  "type": "Boolean",
+                  "values": [
+                    "true",
+                    "false"
+                  ]
+                },
+                "applyHtmlTag": {
+                  "type": "Boolean",
+                  "values": [
+                    "true",
+                    "false"
+                  ]
+                },
+                "cache": {
+                  "type": "Boolean",
+                  "values": [
+                    "true",
+                    "false"
+                  ]
+                },
+                "contentType": {
+                  "type": "String"
+                },
+                "controller": {
+                  "type": "String"
+                },
+                "cspHeader": {
+                  "type": "Boolean",
+                  "values": [
+                    "true",
+                    "false"
+                  ]
+                },
+                "deferLastCommandUntilReady": {
+                  "type": "Boolean",
+                  "values": [
+                    "true",
+                    "false"
+                  ]
+                },
+                "docType": {
+                  "type": "String"
+                },
+                "expires": {
+                  "type": "Integer"
+                },
+                "extensions": {
+                  "type": "String"
+                },
+                "id": {
+                  "type": "String"
+                },
+                "label": {
+                  "type": "String"
+                },
+                "language": {
+                  "type": "String"
+                },
+                "lightningStylesheets": {
+                  "type": "Boolean",
+                  "values": [
+                    "true",
+                    "false"
+                  ]
+                },
+                "manifest": {
+                  "type": "String"
+                },
+                "name": {
+                  "type": "String"
+                },
+                "pageStyle": {
+                  "type": "String"
+                },
+                "readOnly": {
+                  "type": "Boolean",
+                  "values": [
+                    "true",
+                    "false"
+                  ]
+                },
+                "recordSetVar": {
+                  "type": "String"
+                },
+                "renderAs": {
+                  "type": "String"
+                },
+                "rendered": {
+                  "type": "Boolean",
+                  "values": [
+                    "true",
+                    "false"
+                  ]
+                },
+                "setup": {
+                  "type": "Boolean",
+                  "values": [
+                    "true",
+                    "false"
+                  ]
+                },
+                "showChat": {
+                  "type": "Boolean",
+                  "values": [
+                    "true",
+                    "false"
+                  ]
+                },
+                "showHeader": {
+                  "type": "Boolean",
+                  "values": [
+                    "true",
+                    "false"
+                  ]
+                },
+                "showQuickActionVfHeader": {
+                  "type": "Boolean",
+                  "values": [
+                    "true",
+                    "false"
+                  ]
+                },
+                "sidebar": {
+                  "type": "Boolean",
+                  "values": [
+                    "true",
+                    "false"
+                  ]
+                },
+                "standardController": {
+                  "type": "String"
+                },
+                "standardStylesheets": {
+                  "type": "Boolean",
+                  "values": [
+                    "true",
+                    "false"
+                  ]
+                },
+                "tabStyle": {
+                  "type": "String"
+                },
+                "title": {
+                  "type": "String"
+                },
+                "wizard": {
+                  "type": "Boolean",
+                  "values": [
+                    "true",
+                    "false"
+                  ]
+                }
+              }
+            },
+            "apex:outputText": {
+              "simple": false,
+              "attribs": {
+                "dir": {
+                  "type": "String"
+                },
+                "escape": {
+                  "type": "Boolean",
+                  "values": [
+                    "true",
+                    "false"
+                  ]
+                },
+                "id": {
+                  "type": "String"
+                },
+                "label": {
+                  "type": "String"
+                },
+                "lang": {
+                  "type": "String"
+                },
+                "rendered": {
+                  "type": "Boolean",
+                  "values": [
+                    "true",
+                    "false"
+                  ]
+                },
+                "style": {
+                  "type": "String"
+                },
+                "styleClass": {
+                  "type": "String"
+                },
+                "title": {
+                  "type": "String"
+                },
+                "value": {
+                  "type": "Object"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
