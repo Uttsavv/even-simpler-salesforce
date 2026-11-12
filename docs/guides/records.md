@@ -154,8 +154,10 @@ client sends that as JSON `null`, which clears the field.
 ## Update only if unchanged
 
 Pass `if_unmodified_since=` to `update`. If the record changed after that time, the call raises
-`esf.Conflict` and changes nothing. `delete` takes no such option, because Salesforce ignores
-conditional headers on `DELETE`. You can also pass `if_modified_since=` to `get`.
+`esf.Conflict` and changes nothing. `delete` takes no such option, because Salesforce doesn't
+support conditional headers on `DELETE`: it rejects the request (`500 UNKNOWN_EXCEPTION`, or
+`400 BAD_HEADER` for a future date) and deletes nothing. You can also pass
+`if_modified_since=` to `get`.
 If the record hasn't changed since then, `get` returns `None`.
 
 ```python
@@ -287,6 +289,18 @@ If a value fails the check, the client raises `ValueError` and sends nothing.
 The client percent-encodes an external id value as one path segment. For example, a space
 becomes `%20`, `/` becomes `%2F` and `+` becomes `%2B`. If the value matches several records,
 Salesforce returns `300 Multiple Choices`. The client raises this as `esf.MultipleMatches`.
+
+Salesforce reads a path that ends in `.json`, `.xml` or `.html` as a response format, so
+`sobjects/{o}/{field}/{value}` can't find a value such as `invoice-7.json`. For a value that
+ends like that (in any letter case), the client works around it:
+
+- `get_by_external_id` finds the id with `SELECT Id ... WHERE field = value`, then reads the
+  record with `GET sobjects/{o}/{id}`. That is two API calls instead of one.
+- `upsert` sends the same upsert as one record through `PATCH composite/sobjects/{o}/{field}`.
+
+The results and errors are the same as for other values: `esf.NotFound` when no record has the
+value, `esf.MultipleMatches` (with `.matches`) when several do, `esf.InvalidField` when `data`
+also sets the external id field. Other values, `.csv` or `a.b` for example, use the path.
 
 ### Describe cache
 

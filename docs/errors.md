@@ -390,8 +390,13 @@ The URL or the headers are over 16,384 bytes. To read many records by id, use
 
 ### UnsupportedApiVersion
 
-The org doesn't offer the configured `api_version`, or a feature needs a newer one. Set
-`api_version=` on the client.
+A feature needs a newer `api_version` than the client has (`error_code`
+`"API_VERSION_TOO_OLD"`, raised before sending), or Salesforce sent `UNSUPPORTED_API_VERSION`.
+Set `api_version=` on the client.
+
+A version newer than the org's release (for example `69.0` on a `68.0` org) gives
+`esf.NotFound` with `error_code` `"NOT_FOUND"` on every call, not this error. Compare
+`api_version=` with the versions `sf.request("GET", "/services/data/")` lists.
 
 ### RecordError
 

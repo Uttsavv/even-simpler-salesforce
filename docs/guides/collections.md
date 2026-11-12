@@ -49,6 +49,24 @@ await sf.collections.upsert(
 )
 ```
 
+## Assignment and duplicate rules
+
+`create`, `update` and `upsert` take `assignment_rule_id=` and `allow_save=`, with the same
+values as [single-record writes](records.md#assignment-and-duplicate-rules). The client sends
+them on every chunk. `assignment_rule_id=False` stops the org's active assignment rule from
+running; `allow_save=True` saves rows despite a duplicate-rule alert.
+
+```python
+await sf.collections.create(
+    [{"LastName": "Lovelace", "Company": "Analytical Engines"}],
+    sobject="Lead",
+    assignment_rule_id=False,
+    allow_save=True,
+)
+```
+
+In an update, a key set to `None` clears the field. A key you leave out keeps its value.
+
 ## Delete records
 
 Pass the record ids.
@@ -198,9 +216,9 @@ a thread pool of the same size. `capture()` and `call_context()` still apply ins
 
 | Method | REST call | Chunk size | Returns |
 |---|---|---|---|
-| `create(rows, *, sobject=None, all_or_none=False, concurrency=None)` | `POST composite/sobjects` | 200 | `BatchResult[RecordResult]` |
-| `update(sobject, rows, *, all_or_none=False, concurrency=None)` | `PATCH composite/sobjects` | 200 | `BatchResult[RecordResult]` |
-| `upsert(sobject, field, rows, *, all_or_none=False, concurrency=None)` | `PATCH composite/sobjects/{o}/{field}` | 200 | `BatchResult[RecordResult]` |
+| `create(rows, *, sobject=None, all_or_none=False, concurrency=None, assignment_rule_id=None, allow_save=None)` | `POST composite/sobjects` | 200 | `BatchResult[RecordResult]` |
+| `update(sobject, rows, *, all_or_none=False, concurrency=None, assignment_rule_id=None, allow_save=None)` | `PATCH composite/sobjects` | 200 | `BatchResult[RecordResult]` |
+| `upsert(sobject, field, rows, *, all_or_none=False, concurrency=None, assignment_rule_id=None, allow_save=None)` | `PATCH composite/sobjects/{o}/{field}` | 200 | `BatchResult[RecordResult]` |
 | `delete(ids, *, all_or_none=False, concurrency=None)` | `DELETE composite/sobjects?ids=` | 200 | `BatchResult[RecordResult]` |
 | `retrieve(sobject, ids, fields, *, concurrency=None)` | `POST composite/sobjects/{o}` | 2,000 | `list[dict \| None]` |
 
