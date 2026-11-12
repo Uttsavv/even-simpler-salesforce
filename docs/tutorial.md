@@ -293,16 +293,19 @@ Use the same key on every worker of your app. Keep it as secret as your client s
 +    return {"records": [clean(r) for r in page.records], "next_cursor": page.cursor}
 ```
 
-👉 **Get the first page, then the next one**
+👉 **Get the first page, then the next one if `next_cursor` isn't `null`**
 
 ```sh
 curl localhost:8000/leads
 curl "localhost:8000/leads?cursor=<the next_cursor of the first page>"
 ```
 
-`page_size=200` asks for small pages, so you see a cursor with fewer leads in your org. On the last
-page, `next_cursor` is `null`. If a caller sends a changed cursor, your API answers `400` with the
-code `salesforce_invalid_cursor`.
+`page_size=200` asks for the smallest page that Salesforce allows. If your org has 200 matching
+leads or fewer, the first page is also the last one. Then `next_cursor` is `null`, and there is no
+second request to make. The same code pages through the leads when your org has more of them.
+
+If a caller sends a changed cursor, your API answers `400` with the code
+`salesforce_invalid_cursor`.
 
 ## Update a lead
 
@@ -367,7 +370,10 @@ class LeadChange(LeadPatch):
 @app.patch("/leads")
 async def update_leads(changes: list[LeadChange], sf: SF) -> dict[str, Any]:
     rows = [change.model_dump(exclude_unset=True) for change in changes]
-    results = await sf.collections.update("Lead", rows)
+    try:
+        results = await sf.collections.update("Lead", rows)
+    except esf.PartialFailure as exc:
+        results = exc.results  # a whole chunk failed, but the other chunks were saved
     return {
         "updated": [r.id for r in results.succeeded],
         "failed": [
@@ -403,6 +409,11 @@ curl -X PATCH localhost:8000/leads -H 'Content-Type: application/json' -d '[
 One row failed, and Salesforce still saved the other row. The client doesn't raise for a failed
 row. It returns one result per row, in the order you sent them. If you want an error instead,
 call `results.raise_for_errors()`.
+
+A whole chunk can also fail, for example after a timeout. Then the client raises
+`esf.PartialFailure`, and its `results` still holds one result per row. The route catches it, so
+the caller learns which rows Salesforce saved. [Collections](guides/collections.md#handle-a-failed-chunk)
+explains the outcomes.
 
 ## Convert a lead
 
