@@ -1,0 +1,1 @@
+Bulk API 2.0: `failed_results()` now splits the space-separated field list that Salesforce writes in `sf__Error` (`...:LastName Company --`), and `parallel_downloads` works at API 59.0–62.0, where `resultPages` answers with `resultChunks`/`resultLink`. A query that uses `FIELDS(STANDARD)` on an object with compound fields gets a hint saying so.
