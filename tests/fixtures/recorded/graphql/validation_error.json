@@ -1,22 +1,46 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Salesforce GraphQL API Developer Guide (Request and Response Structure, Status Codes and Error Responses, Paginate with Record Connections); no org recording yet",
-  "body": {
-    "data": null,
-    "errors": [
-      {
-        "message": "Validation error of type FieldUndefined: Field 'Nmae' in type 'Lead' is undefined @ 'uiapi/query/Lead/edges/node/Nmae'",
-        "locations": [
-          {
-            "line": 1,
-            "column": 62
-          }
-        ],
-        "path": null,
-        "extensions": {
-          "ErrorType": "ValidationError"
+  "esf_fixture": 1,
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/graphql",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "query": "query { uiapi { query { Lead(first: 1) { edges { node { Id Nmae { value } } } } } } }"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1675/15000"
+        },
+        "json": {
+          "data": {},
+          "errors": [
+            {
+              "extensions": {
+                "ErrorType": "ValidationError"
+              },
+              "locations": [
+                {
+                  "column": 60,
+                  "line": 1
+                }
+              ],
+              "message": "Validation error (FieldUndefined@[uiapi/query/Lead/edges/node/Nmae]) : Field &#39;Nmae&#39; in type &#39;Lead&#39; is undefined",
+              "paths": []
+            }
+          ],
+          "extensions": {}
         }
       }
-    ]
-  }
+    }
+  ]
 }

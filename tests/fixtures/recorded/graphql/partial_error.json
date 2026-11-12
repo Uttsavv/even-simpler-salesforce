@@ -1,65 +1,67 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Salesforce GraphQL API Developer Guide (Request and Response Structure, Status Codes and Error Responses, Paginate with Record Connections); no org recording yet",
-  "body": {
-    "data": {
-      "uiapi": {
-        "query": {
-          "Lead": {
-            "edges": [
-              {
-                "node": {
-                  "Id": "00Qxx0000000001AAA",
-                  "Name": {
-                    "value": "Ada Lovelace"
-                  }
-                }
-              }
-            ],
-            "pageInfo": {
-              "hasNextPage": false,
-              "endCursor": "djE6MQ=="
-            }
-          },
-          "Account": null
-        }
-      }
-    },
-    "errors": [
-      {
-        "message": "Account is not supported by UI API",
-        "locations": [
-          {
-            "line": 1,
-            "column": 120
-          }
-        ],
-        "path": [
-          "uiapi",
-          "query",
-          "Account"
-        ],
-        "extensions": {
-          "ErrorType": "DataFetchingException"
+  "esf_fixture": 1,
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/graphql",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "query": "query { uiapi { ok: query { Lead(first: 1) { edges { node { Id } } } } bad: query { Lead(first: 2001) { edges { node { Id } } } } } }"
         }
       },
-      {
-        "message": "Second problem",
-        "locations": [
-          {
-            "line": 2,
-            "column": 3
-          }
-        ],
-        "path": [
-          "uiapi",
-          "query",
-          "Account"
-        ],
-        "extensions": {
-          "ErrorType": "DataFetchingException"
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1683/15000"
+        },
+        "json": {
+          "data": {
+            "uiapi": {
+              "ok": {
+                "Lead": {
+                  "edges": [
+                    {
+                      "node": {
+                        "Id": "00Q000000000001EAA"
+                      }
+                    }
+                  ]
+                }
+              },
+              "bad": {
+                "Lead": null
+              }
+            }
+          },
+          "errors": [
+            {
+              "extensions": {
+                "ErrorType": "DataFetchingException"
+              },
+              "locations": [
+                {
+                  "column": 85,
+                  "line": 1
+                }
+              ],
+              "message": "Exception while fetching data (/uiapi/bad/Lead) : You have paginated maximum allowed number of records without using upperBound, to go further please provide upperBound",
+              "paths": [
+                "uiapi",
+                "bad",
+                "Lead"
+              ]
+            }
+          ],
+          "extensions": {}
         }
       }
-    ]
-  }
+    }
+  ]
 }

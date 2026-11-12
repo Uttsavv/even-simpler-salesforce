@@ -1,21 +1,106 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Salesforce REST API Developer Guide, sObject Tree (Create Nested Records); no org recording yet",
-  "body": {
-    "hasErrors": true,
-    "results": [
-      {
-        "referenceId": "ref1",
-        "errors": [
-          {
-            "statusCode": "INVALID_EMAIL_ADDRESS",
-            "message": "Email: invalid email address: not-an-email",
-            "fields": [
-              "Email"
-            ]
-          }
-        ]
+  "esf_fixture": 1,
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/composite/tree/Lead",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "records": [
+            {
+              "attributes": {
+                "referenceId": "good",
+                "type": "Lead"
+              },
+              "LastName": "LastName 1",
+              "Company": "esf-sandbox"
+            },
+            {
+              "attributes": {
+                "referenceId": "rule",
+                "type": "Lead"
+              },
+              "LastName": "LastName 1",
+              "Company": "ESF_VR"
+            },
+            {
+              "attributes": {
+                "referenceId": "missing",
+                "type": "Lead"
+              },
+              "LastName": "LastName 1"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1636/15000"
+        },
+        "json": {
+          "hasErrors": true,
+          "results": [
+            {
+              "referenceId": "rule",
+              "errors": [
+                {
+                  "statusCode": "FIELD_CUSTOM_VALIDATION_EXCEPTION",
+                  "message": "esf-sandbox: validation rule probe",
+                  "fields": []
+                }
+              ]
+            },
+            {
+              "referenceId": "missing",
+              "errors": [
+                {
+                  "statusCode": "REQUIRED_FIELD_MISSING",
+                  "message": "Required fields are missing: [Company]",
+                  "fields": [
+                    "Company"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
       }
-    ]
-  }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/query",
+        "query": [
+          [
+            "q",
+            "SELECT Id, LastName, Title FROM Lead WHERE LastName LIKE ? ORDER BY LastName"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1633/15000"
+        },
+        "json": {
+          "totalSize": 0,
+          "done": true,
+          "records": []
+        }
+      }
+    }
+  ]
 }

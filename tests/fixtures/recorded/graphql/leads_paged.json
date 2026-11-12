@@ -1,0 +1,118 @@
+{
+  "esf_fixture": 1,
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/graphql",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "query": "\nquery Leads($like: String, $after: String) {\n  uiapi { query {\n    Lead(first: 2, after: $after, where: {LastName: {like: $like}}, orderBy: {LastName: {order: ASC}}) {\n      edges { node { Id LastName { value } } }\n      pageInfo { hasNextPage endCursor }\n      totalCount\n    }\n  } }\n}\n",
+          "variables": {
+            "like": "esf-sandbox-66b81d44a6df-gql-sync-%"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1658/15000"
+        },
+        "json": {
+          "data": {
+            "uiapi": {
+              "query": {
+                "Lead": {
+                  "edges": [
+                    {
+                      "node": {
+                        "Id": "00Q000000000001EAA",
+                        "LastName": {
+                          "value": "esf-sandbox-66b81d44a6df-gql-sync-0"
+                        }
+                      }
+                    },
+                    {
+                      "node": {
+                        "Id": "00Q000000000002EAA",
+                        "LastName": {
+                          "value": "esf-sandbox-66b81d44a6df-gql-sync-1"
+                        }
+                      }
+                    }
+                  ],
+                  "pageInfo": {
+                    "hasNextPage": true,
+                    "endCursor": "djE6MQ=="
+                  },
+                  "totalCount": 3
+                }
+              }
+            }
+          },
+          "errors": [],
+          "extensions": {}
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/graphql",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "query": "\nquery Leads($like: String, $after: String) {\n  uiapi { query {\n    Lead(first: 2, after: $after, where: {LastName: {like: $like}}, orderBy: {LastName: {order: ASC}}) {\n      edges { node { Id LastName { value } } }\n      pageInfo { hasNextPage endCursor }\n      totalCount\n    }\n  } }\n}\n",
+          "variables": {
+            "like": "esf-sandbox-66b81d44a6df-gql-sync-%",
+            "after": "djE6MQ=="
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1679/15000"
+        },
+        "json": {
+          "data": {
+            "uiapi": {
+              "query": {
+                "Lead": {
+                  "edges": [
+                    {
+                      "node": {
+                        "Id": "00Q000000000003EAA",
+                        "LastName": {
+                          "value": "esf-sandbox-66b81d44a6df-gql-sync-2"
+                        }
+                      }
+                    }
+                  ],
+                  "pageInfo": {
+                    "hasNextPage": false,
+                    "endCursor": "djE6Mg=="
+                  },
+                  "totalCount": 3
+                }
+              }
+            }
+          },
+          "errors": [],
+          "extensions": {}
+        }
+      }
+    }
+  ]
+}
