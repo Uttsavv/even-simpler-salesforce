@@ -1,7 +1,10 @@
 """``sf.bulk`` (§9.11) against hand-written responses, for both clients.
 
-All fixtures under ``tests/fixtures/recorded/bulk`` and every CSV body in this file are
-**synthetic** (no org to record from). Salesforce behaviour relied on, from the *Bulk API 2.0
+Job info bodies come from recordings of a Developer Edition org (API 68.0, 2026-11-12) under
+``tests/fixtures/recorded/bulk`` (see ``test_bulk_recorded.py``, which replays them whole). The
+CSV bodies and the multi-page ``resultPages`` bodies in this file are **synthetic**: the org
+returned a single result page for every query we could afford to run. Salesforce behaviour
+relied on, from the *Bulk API 2.0
 and Bulk API Developer Guide* (https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/):
 
 - *Create a Job* (``create_job.htm``): ``POST jobs/ingest`` with ``object``, ``operation``,
@@ -26,10 +29,12 @@ and Bulk API Developer Guide* (https://developer.salesforce.com/docs/atlas.en-us
 from __future__ import annotations
 
 import asyncio
+import gzip
 import json
 import threading
 import time
 import tracemalloc
+import zlib
 from collections.abc import AsyncIterator, Callable, Iterator
 from pathlib import Path
 from typing import Any
@@ -42,7 +47,7 @@ import even_simpler_salesforce as esf
 from even_simpler_salesforce.core import bulk as core_bulk
 
 from ..conftest import DATA, TOKEN_URL, Harness, Recorder, token_body
-from ..fixtures import load_fixture
+from ..fixtures import recorded_body
 
 JOB = "750xx0000000001AAA"
 QJOB = "750xx0000000002AAA"
@@ -50,10 +55,32 @@ JOBS = f"/services/data/v68.0/jobs/ingest/{JOB}"
 QJOBS = f"/services/data/v68.0/jobs/query/{QJOB}"
 
 
-def job(name: str = "bulk/ingest_job.json", **kw: Any) -> dict[str, Any]:
-    body: dict[str, Any] = load_fixture(name)
+#: Recorded job info bodies: (recording, method, path suffix, index).
+_RECORDED = {
+    "ingest": ("bulk/failed_results.json", "POST", "/jobs/ingest", 0),
+    "ingest_complete": ("bulk/failed_results.json", "GET", "/jobs/ingest/750000000000001AAA", -1),
+    "query": ("bulk/result_pages_v68.json", "POST", "/jobs/query", 0),
+}
+
+
+def job(name: str = "ingest", **kw: Any) -> dict[str, Any]:
+    """A recorded job info body with the id set to ``JOB`` (``QJOB`` for queries), plus ``kw``."""
+    body: dict[str, Any] = recorded_body(*_RECORDED[name])
+    body = json.loads(json.dumps(body).replace(body["id"], QJOB if name == "query" else JOB))
     body.update(kw)
     return body
+
+
+#: Synthetic: three result URLs and a next page, as in the *Get Parallel Results* example.
+RESULT_PAGES: dict[str, Any] = {
+    "resultPages": [
+        {"resultUrl": f"{QJOBS}/results?locator=MQ&maxRecords=2"},
+        {"resultUrl": f"{QJOBS}/results?locator=Mg&maxRecords=2"},
+        {"resultUrl": f"{QJOBS}/results?locator=Mw&maxRecords=2"},
+    ],
+    "nextRecordsUrl": f"{QJOBS}/resultPages?locator=NA",
+    "done": False,
+}
 
 
 def csv_response(
@@ -70,7 +97,7 @@ def ingest_routes(mock: respx.MockRouter, *, final: str = "JobComplete") -> dict
         "create": mock.post(f"{DATA}/jobs/ingest").respond(json=job()),
         "upload": mock.put(path=f"{JOBS}/batches").respond(201),
         "close": mock.patch(path=JOBS).respond(json=job(state="UploadComplete")),
-        "status": mock.get(path=JOBS).respond(json=job("bulk/ingest_job_complete.json", state=final)),
+        "status": mock.get(path=JOBS).respond(json=job("ingest_complete", state=final)),
     }
 
 
@@ -80,8 +107,8 @@ def query_routes(
     results = mock.get(path=f"{QJOBS}/results")
     results.side_effect = list(pages)
     return {
-        "create": mock.post(f"{DATA}/jobs/query").respond(json=job("bulk/query_job.json")),
-        "status": mock.get(path=QJOBS).respond(json=job("bulk/query_job.json", state=final)),
+        "create": mock.post(f"{DATA}/jobs/query").respond(json=job("query")),
+        "status": mock.get(path=QJOBS).respond(json=job("query", state=final)),
         "results": results,
     }
 
@@ -135,6 +162,24 @@ def test_ingest_rows_creates_uploads_and_closes(h: Harness, mock: respx.MockRout
     states = [e.fields["state"] for e in rec.named("sf.bulk.job")]
     assert states == ["Open", "UploadComplete"]
     assert rec.named("sf.bulk.job")[0].fields["job_id"] == JOB
+    assert "content-encoding" not in put.headers  # 64 KiB or less goes uncompressed
+
+
+def test_ingest_gzips_uploads_over_64_kib(h: Harness, mock: respx.MockRouter) -> None:
+    """V40: a Developer Edition org (API 68.0) accepted gzipped uploads, chunked and with
+    Content-Length. The client gzips parts over 64 KiB and sends them chunked."""
+    routes = ingest_routes(mock)
+    sf = h.client()
+    rows = [{"LastName": f"Doe{i:05d}", "Description": "x" * 100} for i in range(1000)]
+    h.run(sf.bulk.ingest("Lead", "insert", rows=rows))
+    put = routes["upload"].calls.last.request
+    assert put.headers["content-encoding"] == "gzip"
+    assert put.headers["transfer-encoding"] == "chunked"
+    assert "content-length" not in put.headers
+    csv_text = gzip.decompress(put.content).decode()
+    assert csv_text.startswith("LastName,Description\nDoe00000,")
+    assert csv_text.count("\n") == 1001
+    assert len(put.content) < len(csv_text) // 10
 
 
 def test_ingest_upsert_bytes_and_options(h: Harness, mock: respx.MockRouter) -> None:
@@ -218,9 +263,7 @@ def test_ingest_splits_large_data_over_several_jobs(
         mock.patch(path=f"/services/data/v68.0/jobs/ingest/{i}").respond(
             json=job(id=i, state="UploadComplete")
         )
-        mock.get(path=f"/services/data/v68.0/jobs/ingest/{i}").respond(
-            json=job("bulk/ingest_job_complete.json", id=i)
-        )
+        mock.get(path=f"/services/data/v68.0/jobs/ingest/{i}").respond(json=job("ingest_complete", id=i))
         mock.get(path=f"/services/data/v68.0/jobs/ingest/{i}/successfulResults/").mock(
             return_value=csv_response(f'"sf__Id","sf__Created",LastName\n{i[:3]}Q,true,X{i[14]}\n')
         )
@@ -235,7 +278,7 @@ def test_ingest_splits_large_data_over_several_jobs(
     )
     info = h.run(j.wait())
     assert info.state is esf.BulkJobState.JOB_COMPLETE
-    assert info.records_processed == 9
+    assert info.records_processed == 3 * job("ingest_complete")["numberRecordsProcessed"]
     assert len(j.parts) == 3
     assert [r["LastName"] for r in h.collect(j.successful_results())] == ["X1", "X2", "X3"]
 
@@ -294,7 +337,7 @@ def test_upload_is_resent_whole_after_token_refresh(h: Harness, mock: respx.Mock
 
 def test_wait_polls_with_backoff_until_complete(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:
     routes = ingest_routes(mock)
-    complete = job("bulk/ingest_job_complete.json")
+    complete = job("ingest_complete")
     routes["status"].side_effect = [
         httpx.Response(200, json=job(state="InProgress")),
         httpx.Response(200, json=job(state="InProgress", numberRecordsProcessed=2)),
@@ -306,7 +349,12 @@ def test_wait_polls_with_backoff_until_complete(h: Harness, mock: respx.MockRout
     info = h.run(j.wait(poll=esf.Backoff(start=2, max=3), timeout=3600))
     assert sf.sleeps == [2, 3, 3]
     assert info.state is esf.BulkJobState.JOB_COMPLETE
-    assert (info.records_processed, info.records_failed, info.total_processing_ms) == (3, 1, 334)
+    expected = (
+        complete["numberRecordsProcessed"],
+        complete["numberRecordsFailed"],
+        complete["totalProcessingTime"],
+    )
+    assert (info.records_processed, info.records_failed, info.total_processing_ms) == expected
     assert info.api_version == "68.0"
     assert j.info == info
     assert h.run(j.wait()) == info  # already final: no more polling
@@ -322,7 +370,7 @@ def test_wait_polls_with_backoff_until_complete(h: Harness, mock: respx.MockRout
         ("InProgress", 0, 0),
         ("InProgress", 2, 0),
         ("InProgress", 2, 1),
-        ("JobComplete", 3, 1),
+        ("JobComplete", expected[0], expected[1]),
     ]
 
 
@@ -421,7 +469,7 @@ def test_results_use_the_api_version_of_the_job(h: Harness, mock: respx.MockRout
     old = f"/services/data/v66.0/jobs/ingest/{JOB}"
     upload = mock.put(path=f"{old}/batches").respond(201)
     mock.patch(path=old).respond(json=job(apiVersion=66.0, state="UploadComplete"))
-    status = mock.get(path=old).respond(json=job("bulk/ingest_job_complete.json", apiVersion=66.0))
+    status = mock.get(path=old).respond(json=job("ingest_complete", apiVersion=66.0))
     results = mock.get(path=f"{old}/successfulResults/").mock(return_value=csv_response("sf__Id\n"))
     sf = h.client()
     j = h.run(sf.bulk.ingest("Lead", "insert", rows=[{"LastName": "Doe"}]))
@@ -475,10 +523,10 @@ def test_query_waits_for_the_job(h: Harness, mock: respx.MockRouter, rec: Record
     (*Get Information About a Query Job*; big-bang.md §21 V82)."""
     routes = query_routes(mock, csv_response("Id\n1\n"))
     routes["status"].side_effect = [
-        httpx.Response(200, json=job("bulk/query_job.json", state="InProgress")),
-        httpx.Response(200, json=job("bulk/query_job.json", state="InProgress", numberRecordsProcessed=500)),
-        httpx.Response(200, json=job("bulk/query_job.json", state="InProgress", numberRecordsProcessed=500)),
-        httpx.Response(200, json=job("bulk/query_job.json", state="JobComplete", numberRecordsProcessed=900)),
+        httpx.Response(200, json=job("query", state="InProgress")),
+        httpx.Response(200, json=job("query", state="InProgress", numberRecordsProcessed=500)),
+        httpx.Response(200, json=job("query", state="InProgress", numberRecordsProcessed=500)),
+        httpx.Response(200, json=job("query", state="JobComplete", numberRecordsProcessed=900)),
     ]
     sf = h.client(recorder=rec)
     rows = h.collect(sf.bulk.query("SELECT Id FROM Lead", poll=esf.Backoff(start=1, max=1)))
@@ -511,11 +559,9 @@ def test_query_compound_field_failure_has_a_hint(h: Harness, mock: respx.MockRou
         ],
     }
     mock.get(f"{DATA}/sobjects/Account/describe").respond(json=describe)
-    mock.post(f"{DATA}/jobs/query").respond(json=job("bulk/query_job.json", object="Account"))
+    mock.post(f"{DATA}/jobs/query").respond(json=job("query", object="Account"))
     mock.get(path=QJOBS).respond(
-        json=job(
-            "bulk/query_job.json", object="Account", state="Failed", errorMessage="FUNCTIONALITY_NOT_ENABLED"
-        )
+        json=job("query", object="Account", state="Failed", errorMessage="FUNCTIONALITY_NOT_ENABLED")
     )
     sf = h.client()
     fields = h.run(sf.bulk.expand_compound_fields("Account", ["Id", "BillingAddress"]))
@@ -540,7 +586,7 @@ def test_query_create_error_gets_the_compound_hint(h: Harness, mock: respx.MockR
 
 
 def test_query_rejects_bad_arguments(h: Harness, mock: respx.MockRouter) -> None:
-    create = mock.post(f"{DATA}/jobs/query").respond(json=job("bulk/query_job.json"))
+    create = mock.post(f"{DATA}/jobs/query").respond(json=job("query"))
     sf = h.client()
     with pytest.raises(ValueError, match="parallel_downloads"):
         h.collect(sf.bulk.query("SELECT Id FROM Lead", parallel_downloads=0))
@@ -565,7 +611,7 @@ class _Pages:
         self.max_in_flight = 0
 
     def pages(self, request: httpx.Request) -> httpx.Response:
-        body = load_fixture("bulk/result_pages.json")
+        body = json.loads(json.dumps(RESULT_PAGES))
         if request.url.params.get("locator") == "NA":
             body = {
                 "resultPages": [
@@ -604,8 +650,8 @@ def test_parallel_downloads_keep_order_and_bound_concurrency(
     h: Harness, mock: respx.MockRouter, n: int
 ) -> None:
     pages = _Pages()
-    mock.post(f"{DATA}/jobs/query").respond(json=job("bulk/query_job.json"))
-    mock.get(path=QJOBS).respond(json=job("bulk/query_job.json", state="JobComplete"))
+    mock.post(f"{DATA}/jobs/query").respond(json=job("query"))
+    mock.get(path=QJOBS).respond(json=job("query", state="JobComplete"))
     listing = mock.get(path=f"{QJOBS}/resultPages").mock(side_effect=pages.pages)
     mock.get(path=f"{QJOBS}/results").mock(side_effect=pages.async_page if h.is_async else pages.sync_page)
     sf = h.client()
@@ -616,8 +662,8 @@ def test_parallel_downloads_keep_order_and_bound_concurrency(
 
 
 def test_parallel_downloads_reject_foreign_urls(h: Harness, mock: respx.MockRouter) -> None:
-    mock.post(f"{DATA}/jobs/query").respond(json=job("bulk/query_job.json"))
-    mock.get(path=QJOBS).respond(json=job("bulk/query_job.json", state="JobComplete"))
+    mock.post(f"{DATA}/jobs/query").respond(json=job("query"))
+    mock.get(path=QJOBS).respond(json=job("query", state="JobComplete"))
     mock.get(path=f"{QJOBS}/resultPages").respond(
         json={"resultPages": [{"resultUrl": "https://evil.example.com/steal"}], "done": True}
     )
@@ -627,11 +673,9 @@ def test_parallel_downloads_reject_foreign_urls(h: Harness, mock: respx.MockRout
 
 
 def test_parallel_download_error_is_raised(h: Harness, mock: respx.MockRouter) -> None:
-    mock.post(f"{DATA}/jobs/query").respond(json=job("bulk/query_job.json"))
-    mock.get(path=QJOBS).respond(json=job("bulk/query_job.json", state="JobComplete"))
-    mock.get(path=f"{QJOBS}/resultPages").respond(
-        json=load_fixture("bulk/result_pages.json") | {"done": True}
-    )
+    mock.post(f"{DATA}/jobs/query").respond(json=job("query"))
+    mock.get(path=QJOBS).respond(json=job("query", state="JobComplete"))
+    mock.get(path=f"{QJOBS}/resultPages").respond(json=RESULT_PAGES | {"done": True})
     results = mock.get(path=f"{QJOBS}/results")
     results.side_effect = [
         csv_response("Id\n1\n"),
@@ -650,8 +694,23 @@ class _Org:
     """An httpx transport playing a Bulk org: reads uploads chunk by chunk, streams results."""
 
     def __init__(self, result_bytes: int = 0) -> None:
-        self.uploaded = 0
+        self.uploaded = 0  # bytes of CSV after gzip decoding
+        self.sent = 0  # bytes on the wire
         self.result_bytes = result_bytes
+        self._inflate: Any = None
+
+    def _upload_start(self, request: httpx.Request) -> None:
+        gz = request.headers.get("content-encoding") == "gzip"
+        self._inflate = zlib.decompressobj(31) if gz else None
+
+    def _upload_chunk(self, chunk: bytes) -> None:
+        self.sent += len(chunk)
+        if self._inflate is None:
+            self.uploaded += len(chunk)
+            return
+        while chunk:  # inflate in bounded steps: the fake org must not skew the memory peak
+            self.uploaded += len(self._inflate.decompress(chunk, 64 * 1024))
+            chunk = self._inflate.unconsumed_tail
 
     def _json(self, request: httpx.Request, body: dict[str, Any]) -> httpx.Response:
         return httpx.Response(200, json=body, request=request)
@@ -661,11 +720,11 @@ class _Org:
         if request.method == "POST" and path.endswith("/jobs/ingest"):
             return self._json(request, job())
         if request.method == "POST" and path.endswith("/jobs/query"):
-            return self._json(request, job("bulk/query_job.json"))
+            return self._json(request, job("query"))
         if request.method == "PATCH":
             return self._json(request, job(state="UploadComplete"))
         if request.method == "GET" and path.endswith(QJOB):
-            return self._json(request, job("bulk/query_job.json", state="JobComplete"))
+            return self._json(request, job("query", state="JobComplete"))
         return None
 
     def _rows(self) -> Iterator[bytes]:
@@ -682,8 +741,9 @@ class _AsyncOrg(_Org, httpx.AsyncBaseTransport):
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
         if request.method == "PUT":
             assert isinstance(request.stream, httpx.AsyncByteStream)
+            self._upload_start(request)
             async for chunk in request.stream:
-                self.uploaded += len(chunk)
+                self._upload_chunk(chunk)
             return httpx.Response(201, request=request)
         found = self._route(request)
         if found is not None:
@@ -700,8 +760,9 @@ class _SyncOrg(_Org, httpx.BaseTransport):
     def handle_request(self, request: httpx.Request) -> httpx.Response:
         if request.method == "PUT":
             assert isinstance(request.stream, httpx.SyncByteStream)
+            self._upload_start(request)
             for chunk in request.stream:
-                self.uploaded += len(chunk)
+                self._upload_chunk(chunk)
             return httpx.Response(201, request=request)
         found = self._route(request)
         if found is not None:
@@ -739,6 +800,7 @@ def test_ingest_from_path_keeps_memory_flat(h: Harness, tmp_path: Path) -> None:
     sf = _org_client(h, org)
     peak = _peak(lambda: h.run(sf.bulk.ingest("Lead", "insert", rows=path)))
     assert org.uploaded > size - len(block)
+    assert org.sent < org.uploaded // 10  # gzipped on the wire (V40)
     assert peak < 2 * 1024 * 1024, f"peak {peak} bytes for a {size}-byte file"
 
 

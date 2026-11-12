@@ -38,7 +38,8 @@ await sf.bulk.ingest("Lead", "update", rows=b"Id,Status\n00Q8d0000000009AAA,Work
 The client streams the upload. It never reads a whole file into memory. Rows from an iterable go
 to a temporary file first, so a generator of a million rows is fine.
 
-A CSV file must be UTF-8. If your file uses `CRLF` line endings or another delimiter, say so with
+A CSV file must be UTF-8. A byte order mark at the start is removed: Salesforce would read it
+as part of the first field name and fail the job. If your file uses `CRLF` line endings or another delimiter, say so with
 `line_ending="CRLF"` or `column_delimiter="TAB"`. The client checks the header row before it
 sends anything.
 
@@ -47,11 +48,14 @@ sends anything.
 In Bulk CSV, an empty cell leaves the field unchanged and `#N/A` sets it to null. For dict rows
 the client writes the cells for you.
 
-| In the dict | In the CSV | Effect |
-|---|---|---|
-| `"Description": None` or `""` | `#N/A` | sets the field to null |
-| key left out | empty cell | leaves the field unchanged |
-| `"Description": "#N/A"` | | raises `ValueError`, because the meaning is unclear |
+| In the dict | In the CSV | On update | On insert |
+|---|---|---|---|
+| `"Description": None` or `""` | `#N/A` | sets the field to null | the field's default, else null |
+| key left out | empty cell | leaves the field unchanged | the field's default, else null |
+| `"Description": "#N/A"` | | raises `ValueError`, because the meaning is unclear | |
+
+An upsert that creates a record behaves like an insert. A field with a default value, such as
+`Lead.Status`, gets its default from both an empty cell and `#N/A`.
 
 The keys of the first row are the columns. A later row may leave a key out, but it can't add one.
 
@@ -139,13 +143,17 @@ fields = await sf.bulk.expand_compound_fields("Account", ["Id", "Name", "Billing
 print(fields)  # ['Id', 'Name', 'BillingStreet', 'BillingCity', ...]
 ```
 
-It reads the describe of the object, from the describe cache when it is fresh. If a query job
-fails because of a compound field, `BulkJobFailed.hint` names the component fields.
+It reads the describe of the object, from the describe cache when it is fresh. Salesforce rejects
+a query that selects a compound field when the client creates the job, with `esf.RequestError`
+(`400 API_ERROR`, "Selecting compound data not supported in Bulk Query"). The error's `hint`
+names the component fields when the describe is cached.
 
 ## All fields
 
 Query jobs don't accept `FIELDS(ALL)` or `FIELDS(CUSTOM)`. If the query uses one of them,
-`sf.bulk.query()` raises `ValueError` before it creates a job. Build the field list from the
+`sf.bulk.query()` raises `ValueError` before it creates a job. `FIELDS(STANDARD)` works on
+objects without compound fields, such as `Campaign`. On objects with compound fields, such as
+`Account` and `Lead`, Salesforce rejects it like a compound field. Build the field list from the
 describe instead:
 
 ```python
@@ -207,6 +215,10 @@ def test_import(esf_fake: FakeSalesforce) -> None:
   The job keeps that version for every later call.
 - The client sends uploads as `text/csv; charset=UTF-8`. It reads result files as UTF-8,
   whatever charset the response names.
+- An upload over 64 KiB is sent gzipped, with chunked transfer encoding. The 100 MB split
+  applies to the CSV before compression.
 - Parallel downloads use the `resultPages` resource, which gives up to five page URLs at a time.
-  Values of `parallel_downloads` above 5 don't download more.
+  Values of `parallel_downloads` above 5 don't download more. The client reads both response
+  shapes: `resultPages` with `resultUrl` (API 63.0 and later) and `resultChunks` with
+  `resultLink` (API 58.0 to 62.0).
 - Every change of job state or progress emits an `sf.bulk.job` [event](../logging.md#events).

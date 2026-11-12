@@ -6,6 +6,7 @@ import functools
 import os
 import tempfile
 import time
+import zlib
 from collections.abc import (
     AsyncGenerator,
     AsyncIterator,
@@ -38,7 +39,7 @@ from ...core.bulk import (
     query_job_body,
 )
 from ...core.files import CHUNK_SIZE
-from ...core.http import RequestSpec, check_record_id, check_sobject
+from ...core.http import GZIP_LEVEL, GZIP_THRESHOLD, RequestSpec, check_record_id, check_sobject
 from ...core.soql import soql_values
 from ...errors import BulkJobFailed, BulkJobTimeout, SalesforceError
 from ...models import BulkFailure, BulkJobInfo, BulkJobState
@@ -375,8 +376,9 @@ class AsyncBulk:
                 ``"hardDelete"``.
             rows: The data: an iterable of dicts, the path of a CSV file, or CSV ``bytes``.
                 For dicts, the keys of the first row are the columns. ``None`` (or ``""``) sets
-                a field to null, and a missing key leaves the field unchanged. A CSV file must
-                be UTF-8 and is streamed from disk.
+                a field to null, and a missing key leaves the field unchanged. On insert, both
+                give the field its default value. A CSV file must be UTF-8 and is streamed
+                from disk; a byte order mark is removed.
             external_id_field: The external id field that matches records. Required for
                 ``upsert``, not allowed otherwise.
             line_ending: ``"LF"`` or ``"CRLF"``: the line ending of your CSV, or the one the
@@ -507,7 +509,16 @@ class AsyncBulk:
         return info
 
     async def _upload(self, info: BulkJobInfo, source: _Source, header: bytes, start: int, end: int) -> None:
-        async def body() -> AsyncIterator[bytes]:
+        """Stream one part to ``PUT jobs/ingest/{id}/batches``, gzipped when it's over 64 KiB.
+
+        A gzipped body is sent with chunked transfer encoding: its size is only known at the
+        end. Salesforce accepts gzipped uploads with ``Content-Length`` and chunked
+        (big-bang.md §21 V40). The 100 MB split applies to the raw CSV either way.
+        """
+        size = len(header) + end - start
+        compress = size > GZIP_THRESHOLD
+
+        async def raw() -> AsyncIterator[bytes]:
             yield header
             offset = start
             while offset < end:
@@ -517,13 +528,22 @@ class AsyncBulk:
                 offset += len(data)
                 yield data
 
+        async def gzipped() -> AsyncIterator[bytes]:
+            z = zlib.compressobj(GZIP_LEVEL, zlib.DEFLATED, 31)  # wbits 31: gzip container
+            async for data in raw():
+                out = await _compat.to_thread(z.compress, data)
+                if out:
+                    yield out
+            yield z.flush()
+
         await self._sf._send(
             RequestSpec(
                 "PUT",
                 _job_path(info.api_version, "ingest", info.id, "/batches"),
                 content_type="text/csv; charset=UTF-8",
-                body_stream=body,
-                body_length=len(header) + end - start,
+                headers={"Content-Encoding": "gzip"} if compress else {},
+                body_stream=gzipped if compress else raw,
+                body_length=None if compress else size,
                 operation="bulk.ingest.upload",
                 sobject=info.sobject,
                 expect_json=False,
@@ -562,8 +582,10 @@ class AsyncBulk:
         Raises:
             ValueError: the query selects ``FIELDS(ALL)`` or ``FIELDS(CUSTOM)``, which query
                 jobs don't support. The client raises it before it creates a job.
-            BulkJobFailed: the job failed or was aborted. If the query selects compound
-                address or geolocation fields, ``hint`` names their components.
+            RequestError: Salesforce rejected the job, for example with ``400 API_ERROR``
+                because the query selects compound address or geolocation fields (also
+                through ``FIELDS(STANDARD)``). ``hint`` then names their components.
+            BulkJobFailed: the job failed or was aborted.
             BulkJobTimeout: the job didn't finish in time.
 
         Example:

@@ -13,6 +13,7 @@ from ..errors import UnexpectedResponse
 from . import jsonlib
 
 __all__ = [
+    "GZIP_LEVEL",
     "GZIP_THRESHOLD",
     "LOOPBACK_MOUNTS",
     "InvalidJSONResponse",
@@ -29,6 +30,8 @@ __all__ = [
 ]
 
 GZIP_THRESHOLD = 64 * 1024
+#: zlib level for request bodies: most of the size gain for a fraction of level 9's CPU.
+GZIP_LEVEL = 5
 _ID_RE = re.compile(r"^[a-zA-Z0-9]{15}(?:[a-zA-Z0-9]{3})?$")
 _SOBJECT_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 _ID_SEGMENT = re.compile(r"(?<=/)(?=[a-zA-Z0-9]*\d)[a-zA-Z0-9]{15}(?:[a-zA-Z0-9]{3})?(?=/|$)")
@@ -223,7 +226,7 @@ def json_body(obj: Any) -> tuple[bytes, str]:
 
 
 def gzip_body(content: bytes) -> bytes:
-    return gzip.compress(content, compresslevel=5)
+    return gzip.compress(content, compresslevel=GZIP_LEVEL)
 
 
 def url_segment(value: str) -> str:
