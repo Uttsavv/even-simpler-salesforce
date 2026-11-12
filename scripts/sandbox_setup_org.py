@@ -6,16 +6,17 @@ Usage (after ``scripts/sandbox_login.py``)::
     uv run python scripts/sandbox_setup_org.py              # deploy core + extras
     uv run python scripts/sandbox_setup_org.py --check-only # validate, save nothing
 
-It deploys ``tests/sandbox/org/core`` and then ``tests/sandbox/org/extras`` with
-``sf.metadata.deploy`` (so the deploy path is exercised too), and assigns the ``Esf_Sandbox``
-permission set to the logged-in user:
+It deploys ``tests/sandbox/org/core``, ``tests/sandbox/org/extras`` and
+``tests/sandbox/org/tooling`` with ``sf.metadata.deploy`` (so the deploy path is exercised too),
+and assigns the ``Esf_Sandbox`` permission set to the logged-in user:
 
 - core: ``Lead.Esf_Ext__c`` (external id), the V5b validation rule and Apex trigger, the
   platform event ``ESF_Sandbox_Event__e`` (``Message__c``), Change Data Capture on Account, the
   Apex REST class ``EsfSandboxRest`` (``/services/apexrest/esf-sandbox/``) and the invocable
   action ``EsfSandboxAction``;
 - extras: a before-save Lead flow with a Custom Error (V5b) and a tabular and a summary Lead
-  report in ``unfiled$public``.
+  report in ``unfiled$public``;
+- tooling: the Apex test class ``EsfSandboxActionTest`` (``runTestsAsynchronous``, quick deploy).
 
 It refuses to run against a production org: ``Organization.IsSandbox`` must be true or the
 org must be a Developer Edition. The fixtures change org behaviour on purpose (Leads with
@@ -95,6 +96,7 @@ def main() -> int:
         print(f"org: {_guard(sf)}")
         ok = _deploy(sf, "core", args.check_only)
         ok = _deploy(sf, "extras", args.check_only) and ok
+        ok = _deploy(sf, "tooling", args.check_only) and ok
         if not args.check_only:
             _assign_permission_set(sf)
     return 0 if ok else 1
