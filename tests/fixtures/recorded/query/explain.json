@@ -1,33 +1,71 @@
 {
-  "synthetic": true,
-  "source": "hand-written from the REST API Developer Guide, 'Get Feedback on Query Performance' (query?explain=, Beta), v264: https://developer.salesforce.com/docs/atlas.en-us.264.0.api_rest.meta/api_rest/dome_query_explain.htm",
-  "body": {
-    "plans": [
-      {
-        "cardinality": 1,
-        "fields": ["Email"],
-        "leadingOperationType": "Index",
-        "notes": [],
-        "relativeCost": 0.0,
-        "sobjectCardinality": 120000,
-        "sobjectType": "Lead"
-      },
-      {
-        "cardinality": 120000,
-        "fields": [],
-        "leadingOperationType": "TableScan",
-        "notes": [
-          {
-            "description": "Not considering filter for optimization because unindexed",
-            "fields": ["IsDeleted"],
-            "tableEnumOrId": "Lead"
-          }
+  "esf_fixture": 1,
+  "source": "recorded by tests/sandbox/test_core_rest.py::test_explain_plans (esf.testing.record, Developer Edition org, API v68.0, 2026-11-12)",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/query",
+        "query": [
+          [
+            "explain",
+            "SELECT Id FROM Lead WHERE Esf_Ext__c = ?"
+          ]
         ],
-        "relativeCost": 2.8,
-        "sobjectCardinality": 120000,
-        "sobjectType": "Lead"
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=2613/15000"
+        },
+        "json": {
+          "cardinalityAndCostComputed": true,
+          "plans": [
+            {
+              "cardinality": 0,
+              "fields": [
+                "Esf_Ext__c"
+              ],
+              "leadingOperationType": "Index",
+              "notes": [
+                {
+                  "description": "Not considering filter for optimization because unindexed",
+                  "fields": [
+                    "IsDeleted"
+                  ],
+                  "tableEnumOrId": "Lead"
+                }
+              ],
+              "relativeCost": 0.0,
+              "sobjectCardinality": 505,
+              "sobjectType": "Lead"
+            },
+            {
+              "cardinality": 0,
+              "fields": [],
+              "leadingOperationType": "TableScan",
+              "notes": [
+                {
+                  "description": "Not considering filter for optimization because unindexed",
+                  "fields": [
+                    "IsDeleted"
+                  ],
+                  "tableEnumOrId": "Lead"
+                }
+              ],
+              "relativeCost": 0.8235294117647058,
+              "sobjectCardinality": 505,
+              "sobjectType": "Lead"
+            }
+          ],
+          "sourceQuery": "SELECT Id FROM Lead WHERE Esf_Ext__c = 'esf-sandbox-x'"
+        }
       }
-    ],
-    "sourceQuery": "SELECT Id FROM Lead WHERE Email = 'a@example.com'"
-  }
+    }
+  ]
 }

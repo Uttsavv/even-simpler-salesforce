@@ -40,7 +40,7 @@ def no_such_column(field: str) -> httpx.Response:
 
 
 def test_invalid_field_suggests_a_field_from_the_cached_describe(h: Harness, mock: respx.MockRouter) -> None:
-    describe = mock.get(DESCRIBE).respond(json=load_fixture("sobject/describe_lead_fields.json"))
+    describe = mock.get(DESCRIBE).respond(json=load_fixture("sobject/describe_lead.json"))
     mock.get(QUERY).mock(return_value=no_such_column("Emial"))
     sf = h.client()
     h.run(sf.sobject("Lead").describe())
@@ -56,7 +56,7 @@ def test_invalid_field_suggests_a_field_from_the_cached_describe(h: Harness, moc
 
 
 def test_invalid_field_without_a_cached_describe_has_no_hint(h: Harness, mock: respx.MockRouter) -> None:
-    describe = mock.get(DESCRIBE).respond(json=load_fixture("sobject/describe_lead_fields.json"))
+    describe = mock.get(DESCRIBE).respond(json=load_fixture("sobject/describe_lead.json"))
     mock.post(f"{DATA}/sobjects/Lead/").respond(
         400,
         json=[
