@@ -1,0 +1,54 @@
+{
+  "esf_fixture": 1,
+  "recorded": "2026-11-12, Developer Edition org, API v68.0; tests/sandbox/test_files_soap.py::test_download[sync] (esf.testing.record)",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/sobjects/ContentVersion/068000000000002AAA/VersionData",
+        "query": [],
+        "headers": {
+          "accept": "*/*",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1780/15000"
+        },
+        "json": [
+          {
+            "errorCode": "NOT_FOUND",
+            "message": "The requested resource does not exist"
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/sobjects/Attachment/00P000000000004EAA/Body",
+        "query": [],
+        "headers": {
+          "accept": "*/*",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1778/15000"
+        },
+        "json": [
+          {
+            "errorCode": "NOT_FOUND",
+            "message": "The requested resource does not exist"
+          }
+        ]
+      }
+    }
+  ]
+}

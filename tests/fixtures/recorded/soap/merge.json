@@ -1,5 +1,26 @@
 {
-  "synthetic": true,
-  "source": "hand-written from the SOAP API Developer Guide, merge() and MergeResult: https://developer.salesforce.com/docs/atlas.en-us.api.meta/api/sforce_api_calls_merge.htm",
-  "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns=\"urn:partner.soap.sforce.com\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:sf=\"urn:fault.partner.soap.sforce.com\"><soapenv:Body><mergeResponse><result><id>001xx0000000001AAA</id><mergedRecordIds>001xx0000000002AAA</mergedRecordIds><mergedRecordIds>001xx0000000003AAA</mergedRecordIds><success>true</success><updatedRelatedIds>003xx0000000001AAA</updatedRelatedIds></result></mergeResponse></soapenv:Body></soapenv:Envelope>"
+  "esf_fixture": 1,
+  "recorded": "2026-11-12, Developer Edition org, API v68.0; tests/sandbox/test_files_soap.py::test_merge[sync] (esf.testing.record)",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/Soap/u/68.0",
+        "query": [],
+        "headers": {
+          "accept": "text/xml",
+          "content-type": "text/xml; charset=UTF-8",
+          "sforce-call-options": "client=esf-sandbox"
+        },
+        "text": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><env:Envelope xmlns:env=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:p=\"urn:partner.soap.sforce.com\" xmlns:o=\"urn:sobject.partner.soap.sforce.com\"><env:Header><p:SessionHeader><p:sessionId><redacted></p:sessionId></p:SessionHeader></env:Header><env:Body><p:merge><p:request><p:masterRecord><o:type>Lead</o:type><o:Id>00Q000000000001EAA</o:Id></p:masterRecord><p:recordToMergeIds>00Q000000000002EAA</p:recordToMergeIds><p:recordToMergeIds>00Q000000000003EAA</p:recordToMergeIds></p:request></p:merge></env:Body></env:Envelope>"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/xml; charset=utf-8"
+        },
+        "text": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns=\"urn:partner.soap.sforce.com\"><soapenv:Header><LimitInfoHeader><limitInfo><current>1686</current><limit>15000</limit><type>API REQUESTS</type></limitInfo></LimitInfoHeader></soapenv:Header><soapenv:Body><mergeResponse><result><id>00Q000000000001EAA</id><mergedRecordIds>00Q000000000002EAA</mergedRecordIds><mergedRecordIds>00Q000000000003EAA</mergedRecordIds><success>true</success></result></mergeResponse></soapenv:Body></soapenv:Envelope>"
+      }
+    }
+  ]
 }

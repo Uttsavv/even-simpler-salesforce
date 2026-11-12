@@ -270,6 +270,13 @@ def test_redactor_unit() -> None:
         "login.salesforce.com and example.my.salesforce.com"
     )
     assert r.text("x@example.com") == "x@example.com"
+    # SOAP SessionHeader: the element text is redacted whatever its shape (prefixed or not).
+    assert r.text("<p:SessionHeader><p:sessionId>not-an-00D-token</p:sessionId></p:SessionHeader>") == (
+        "<p:SessionHeader><p:sessionId><redacted></p:sessionId></p:SessionHeader>"
+    )
+    assert r.text('<sessionId xmlns="urn:x">abc</sessionId><sessionIdX>keep</sessionIdX>') == (
+        '<sessionId xmlns="urn:x"><redacted></sessionId><sessionIdX>keep</sessionIdX>'
+    )
     assert gzip  # imported for the >64 KiB request path above
 
 

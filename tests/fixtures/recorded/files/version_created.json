@@ -1,5 +1,32 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Salesforce REST API Developer Guide, Insert or Update Blob Data: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/dome_sobject_insert_update_blob.htm",
-  "body": {"id": "068xx0000000001AAA", "success": true, "errors": []}
+  "esf_fixture": 1,
+  "recorded": "2026-11-12, Developer Edition org, API v68.0; tests/sandbox/test_files_soap.py::test_first_publish_location_link[sync] (esf.testing.record)",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/sobjects/ContentVersion",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "multipart/form-data; boundary=\"esf-5156916cddcf5b76ffb0a3be8b87f32f\""
+        },
+        "text": "--esf-5156916cddcf5b76ffb0a3be8b87f32f\r\nContent-Disposition: form-data; name=\"entity_content\"\r\nContent-Type: application/json\r\n\r\n{\"PathOnClient\":\"esf-sandbox-146ca6e61b9d-explicit.txt\",\"Title\":\"esf-sandbox-146ca6e61b9d-explicit.txt\"}\r\n--esf-5156916cddcf5b76ffb0a3be8b87f32f\r\nContent-Disposition: form-data; name=\"VersionData\"; filename=\"esf-sandbox-146ca6e61b9d-explicit.txt\"\r\nContent-Type: application/octet-stream\r\n\r\nhello\r\n--esf-5156916cddcf5b76ffb0a3be8b87f32f--\r\n"
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "location": "/services/data/v68.0/sobjects/ContentVersion/068000000000003AAA",
+          "sforce-limit-info": "api-usage=1774/15000"
+        },
+        "json": {
+          "id": "068000000000003AAA",
+          "success": true,
+          "errors": []
+        }
+      }
+    }
+  ]
 }

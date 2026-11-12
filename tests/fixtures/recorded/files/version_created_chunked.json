@@ -1,0 +1,32 @@
+{
+  "esf_fixture": 1,
+  "recorded": "2026-11-12, Developer Edition org, API v68.0; tests/sandbox/test_files_soap.py::test_upload_sized_and_chunked[sync] (esf.testing.record)",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/sobjects/ContentVersion",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "multipart/form-data; boundary=\"esf-f1c5e6a4c786a3e378953fb299b4b9fd\""
+        },
+        "text": "--esf-f1c5e6a4c786a3e378953fb299b4b9fd\r\nContent-Disposition: form-data; name=\"entity_content\"\r\nContent-Type: application/json\r\n\r\n{\"PathOnClient\":\"esf-sandbox-146ca6e61b9d-chunked.txt\",\"Title\":\"esf-sandbox-146ca6e61b9d-chunked-sync\"}\r\n--esf-f1c5e6a4c786a3e378953fb299b4b9fd\r\nContent-Disposition: form-data; name=\"VersionData\"; filename=\"esf-sandbox-146ca6e61b9d-chunked.txt\"\r\nContent-Type: application/octet-stream\r\n\r\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\n\r\n--esf-f1c5e6a4c786a3e378953fb299b4b9fd--\r\n"
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1716/15000",
+          "location": "/services/data/v68.0/sobjects/ContentVersion/068000000000003AAA"
+        },
+        "json": {
+          "id": "068000000000003AAA",
+          "success": true,
+          "errors": []
+        }
+      }
+    }
+  ]
+}

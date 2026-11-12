@@ -1,8 +1,10 @@
 """``core.soap`` and ``core.events``: envelopes, hardened XML parsing, faults, publish results.
 
-Response shapes are **synthetic**, from the SOAP API Developer Guide (convertLead(),
-LeadConvertResult, merge(), Error Handling) and the Platform Events Developer Guide; URLs in
-``core/soap.py`` and ``core/events.py``.
+SOAP responses in ``tests/fixtures/recorded/soap`` are redacted recordings from a Developer
+Edition org (API v68.0, 2026-11-12; big-bang.md §21 V35). Envelopes written inline are shaped
+after them. Sources: the SOAP API Developer Guide (convertLead(), LeadConvertResult, merge(),
+Error Handling) and the Platform Events Developer Guide; URLs in ``core/soap.py`` and
+``core/events.py``.
 """
 
 from __future__ import annotations
@@ -181,27 +183,42 @@ def test_parse_xml_malformed(doc: bytes) -> None:
 
 
 def test_parse_convert_results() -> None:
-    """Synthetic fixture ``soap/convert_lead.json``."""
+    """Recorded ``soap/convert_lead.json``: one converted lead, one refused (with its lead id)."""
     ok, bad = soap.parse_convert_results(fixture("convert_lead.json"), 2)
     assert ok == esf.LeadConvertResult(
         ok=True,
-        lead_id=LEAD,
-        account_id=ACC,
-        contact_id="003xx0000000001AAA",
-        opportunity_id="006xx0000000001AAA",
+        lead_id="00Q000000000001EAA",
+        account_id="001000000000003AAA",
+        contact_id="003000000000004AAA",
+        opportunity_id="006000000000005AAA",
     )
     assert not bad.ok
-    assert bad.lead_id is None
-    assert bad.errors == (ErrorDetail("INVALID_STATUS", "invalid convertedStatus: Qualified", ("Status",)),)
+    assert bad.lead_id == "00Q000000000002EAA"
+    assert (bad.account_id, bad.contact_id, bad.opportunity_id) == (None, None, None)  # xsi:nil
+    assert bad.errors == (
+        ErrorDetail("INVALID_STATUS", "invalid convertedStatus: Open - Not Contacted", ("Status",)),
+    )
+
+
+def test_parse_convert_results_out_of_order_elements() -> None:
+    """Recorded ``soap/convert_element_order.json``: ``leadId`` sent before ``convertedStatus``.
+
+    Salesforce doesn't fault on a ``LeadConvert`` whose elements break the WSDL sequence; it fails
+    the row with ``UNKNOWN_EXCEPTION`` "invalid parameter value" (org-observed, API v68.0). The
+    envelope builder keeps the WSDL order (test_convert_envelope_all_fields_in_wsdl_order).
+    """
+    (res,) = soap.parse_convert_results(fixture("convert_element_order.json"), 1)
+    assert not res.ok
+    assert res.errors == (ErrorDetail("UNKNOWN_EXCEPTION", "invalid parameter value"),)
 
 
 def test_parse_merge_results() -> None:
-    """Synthetic fixture ``soap/merge.json``."""
+    """Recorded ``soap/merge.json`` (Leads without related records: no ``updatedRelatedIds``)."""
     (res,) = soap.parse_merge_results(fixture("merge.json"))
     assert res.ok
-    assert res.id == ACC
-    assert res.merged_ids == ("001xx0000000002AAA", "001xx0000000003AAA")
-    assert res.updated_related_ids == ("003xx0000000001AAA",)
+    assert res.id == "00Q000000000001EAA"
+    assert res.merged_ids == ("00Q000000000002EAA", "00Q000000000003EAA")
+    assert res.updated_related_ids == ()
 
 
 def test_result_with_empty_values() -> None:
@@ -233,7 +250,7 @@ def test_parse_results_unexpected(body: bytes, match: str) -> None:
 
 
 def test_parse_fault_with_detail() -> None:
-    """Synthetic fixture ``soap/fault_invalid_session.json``."""
+    """Recorded ``soap/fault_invalid_session.json`` (a bogus session id; HTTP 500)."""
     d = soap.parse_fault(fixture("fault_invalid_session.json"))
     assert d is not None
     assert d.error_code == "INVALID_SESSION_ID"
@@ -296,9 +313,11 @@ def test_classify_session_fault() -> None:
 
 
 def test_classify_unknown_fault_is_soap_fault() -> None:
-    err = classify(xml_response(500, fixture("fault_invalid_id.json")), SPEC)
+    """Recorded ``soap/fault_invalid_type.json``: an exceptionCode without a class of its own."""
+    err = classify(xml_response(500, fixture("fault_invalid_type.json")), SPEC)
     assert type(err) is esf.SoapFault
-    assert err.fault_code == "sf:INVALID_ID_FIELD"
+    assert err.fault_code == "sf:INVALID_TYPE_FOR_OPERATION"
+    assert err.error_code == "INVALID_TYPE_FOR_OPERATION"
 
 
 def test_classify_fault_retry_after_and_server_unavailable() -> None:

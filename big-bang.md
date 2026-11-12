@@ -983,8 +983,10 @@ await sf.merge(master_id, [dup1, dup2], sobject="Account")      # Lead, Contact,
 
 Implementation: hand-built SOAP envelopes for the Partner API (`/services/Soap/u/{v}`) with the
 OAuth access token as `SessionHeader.sessionId`, parsed with `xml.etree`. Faults map to §8 classes.
-⚠️ **VERIFY** that the SOAP API endpoint (not `login()`) keeps working with OAuth tokens after the
-Summer '27 `login()` retirement.
+Verified in a Developer Edition org (API v68.0, V11/V35): `convertLead` and `merge` work with an
+OAuth access token; the retirement covers `login()` only. Call-level errors and a bad session
+are HTTP 500 faults (`INVALID_SESSION_ID`, never a 401); `LeadConvert` elements must keep the WSDL
+order (out of order, the row fails with `UNKNOWN_EXCEPTION`).
 
 ### 9.9 Files (0.2)
 
@@ -1002,7 +1004,10 @@ Uploads always use a **multipart** `POST sobjects/ContentVersion` and stream the
 official limit applies: up to **2 GB** per ContentVersion (500 MB for other blob objects; 500 MB
 total per sObject Collections request). Non-multipart JSON uploads are limited to 37.5 MB of
 base64 and are never used. Legacy `Attachment` download is supported via
-`sf.files.download_attachment(id)`.
+`sf.files.download_attachment(id)`. Org-observed (API v68.0, V37–V39): uploads with
+`Content-Length` and with chunked transfer encoding are both accepted; `VersionData` comes as
+`application/octetstream` with `Content-Length` and no gzip; the link `FirstPublishLocationId`
+creates on a record is `ShareType=V`, `Visibility=AllUsers`.
 
 ### 9.10 Platform events — `sf.platform_events` (0.2)
 

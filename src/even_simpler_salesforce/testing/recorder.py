@@ -53,7 +53,8 @@ Redaction, applied before anything touches the disk:
 - OAuth secrets anywhere in JSON or form bodies (``access_token``, ``refresh_token``,
   ``id_token``, ``client_secret``, ``client_assertion``, ``assertion``, ``signature``, ``code``,
   ``code_verifier``, ``password``, ``sessionId``...) become ``"<redacted>"``.
-- Session ids (``00D…!…``) and ``Bearer …`` values inside any string become ``<redacted>``.
+- Session ids (``00D…!…``) and ``Bearer …`` values inside any string become ``<redacted>``, and
+  so does the text of every XML ``sessionId`` element (SOAP ``SessionHeader``), whatever it holds.
 - E-mail addresses become ``user<N>@example.com`` and phone/fax fields ``555-01NN``,
   consistently within one fixture.
 - In sObject records (JSON objects with ``attributes``), names and postal addresses
@@ -124,6 +125,7 @@ _KEEP_RESPONSE_HEADERS = (
     "warning",
 )
 _SESSION = re.compile(r"00D[A-Za-z0-9]{12,15}![A-Za-z0-9._\-]+")
+_XML_SESSION = re.compile(r"(<(?:[A-Za-z_][\w.\-]*:)?sessionId(?:\s[^>]*)?>)[^<]*(</)")
 _BEARER = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=!\-]+")
 _EMAIL = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 _HOST = re.compile(
@@ -221,6 +223,7 @@ class Redactor:
     def text(self, value: str) -> str:
         """Redact one string."""
         value = _SESSION.sub(REDACTED, value)
+        value = _XML_SESSION.sub(rf"\g<1>{REDACTED}\g<2>", value)
         value = _BEARER.sub(f"Bearer {REDACTED}", value)
         if self.mask_emails:
             value = _EMAIL.sub(self._email, value)
