@@ -149,3 +149,97 @@ def test_async_fake() -> None:
         assert await fake.bulk.expand_compound_fields("Account", ["Id"]) == ["Id"]
 
     asyncio.run(go())
+
+
+def test_start_query_job_handle_and_pages() -> None:
+    fake = FakeSalesforce()
+    fake.on_query("SELECT Id, Name FROM Lead", rows=[{"Id": f"00Q{n}", "Name": ""} for n in range(5)])
+    job = fake.bulk.start_query("SELECT Id, Name FROM Lead", include_deleted=True)
+    assert job.info.operation == "queryAll"
+    assert job.id.startswith("750")
+    assert "queryAll Lead JobComplete" in repr(job)
+    assert job.wait(timeout=1) is job.info
+    assert job.refresh() is job.info
+    assert job.abort() is job.info
+    assert [r["Id"] for r in job.rows()] == [f"00Q{n}" for n in range(5)]
+    assert job.info.records_processed == 5
+
+    pages = []
+    for page in job.pages(max_records=2):
+        pages.append((page.locator, page.next_locator, page.size, [r["Id"] for r in page.rows()]))
+    assert pages == [
+        (None, "2", 2, ["00Q0", "00Q1"]),
+        ("2", "4", 2, ["00Q2", "00Q3"]),
+        ("4", None, 1, ["00Q4"]),
+    ]
+    resumed = [[r["Name"] for r in p.rows()] for p in job.pages(locator="4")]
+    assert resumed == [[None]]
+    kept = list(job.pages())
+    assert kept[0].size == 5
+    assert "next_locator=None" in repr(kept[0])
+    with pytest.raises(ValueError, match="closed"):
+        list(kept[0].rows())
+    with pytest.raises(esf.RequestError):
+        list(job.pages(locator="99"))
+    with pytest.raises(ValueError):
+        list(job.pages(max_records=0))
+    with pytest.raises(ValueError):
+        list(job.pages(locator=""))
+    with pytest.raises(ValueError, match="parallel_downloads"):
+        list(job.rows(parallel_downloads=0))
+    with pytest.raises(ValueError, match="timeout"):
+        job.wait(timeout=0)
+
+    assert fake.bulk.query_job(job.id) is job
+    (call,) = fake.calls_for("bulk.query.status")
+    assert call.args["job_id"] == job.id
+
+
+def test_reopen_jobs_by_id() -> None:
+    fake = FakeSalesforce()
+    one = fake.bulk.ingest("Lead", "insert", rows=[{"LastName": "Doe", "Company": "Acme"}])
+    two = fake.bulk.ingest("Lead", "insert", rows=[{"LastName": "Roe", "Company": "Acme"}])
+    assert fake.bulk.ingest_job(one.ids) is one
+    both = fake.bulk.ingest_job([*one.ids, *two.ids])
+    assert both.ids == (*one.ids, *two.ids)
+    assert both.info.records_processed == 2
+    assert len(list(both.successful_results())) == 2
+    fake.on_query("SELECT Id FROM Lead", rows=[])
+    query = fake.bulk.start_query("SELECT Id FROM Lead")
+    with pytest.raises(esf.NotFound):
+        fake.bulk.ingest_job([query.id])
+    with pytest.raises(esf.NotFound):
+        fake.bulk.query_job(one.ids[0])
+    with pytest.raises(esf.NotFound):
+        fake.bulk.query_job("750000000000099AAA")
+    with pytest.raises(esf.NotFound):
+        fake.bulk.ingest_job(["750000000000099AAA"])
+    with pytest.raises(TypeError):
+        fake.bulk.ingest_job(one.ids[0])  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="empty"):
+        fake.bulk.ingest_job([])
+
+
+def test_async_fake_job_handles() -> None:
+    fake = AsyncFakeSalesforce()
+    fake.on_query("SELECT Id FROM Lead", rows=[{"Id": "00Q1"}, {"Id": "00Q2"}])
+
+    async def go() -> None:
+        job = await fake.bulk.start_query("SELECT Id FROM Lead")
+        assert repr(job).startswith("<AsyncFakeQueryJob")
+        assert (await job.wait()).state is esf.BulkJobState.JOB_COMPLETE
+        assert await job.refresh() is job.info
+        assert await job.abort() is job.info
+        assert [r async for r in job.rows()] == [{"Id": "00Q1"}, {"Id": "00Q2"}]
+        seen = []
+        async for page in job.pages(max_records=1):
+            assert repr(page).startswith("<AsyncFakeResultPage")
+            seen.append((page.locator, page.next_locator, page.size, [r async for r in page.rows()]))
+            page.close()
+        assert seen == [(None, "1", 1, [{"Id": "00Q1"}]), ("1", None, 1, [{"Id": "00Q2"}])]
+        again = await fake.bulk.query_job(job.id)
+        assert again.id == job.id
+        ingest = await fake.bulk.ingest("Lead", "insert", rows=[{"LastName": "Doe", "Company": "Acme"}])
+        assert (await fake.bulk.ingest_job(ingest.ids)).ids == ingest.ids
+
+    asyncio.run(go())

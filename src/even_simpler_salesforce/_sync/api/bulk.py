@@ -37,20 +37,21 @@ from ...core.bulk import (
     parse_bulk_error,
     parse_job_info,
     parse_locator,
+    parse_record_count,
     parse_result_pages,
     query_job_body,
 )
 from ...core.files import CHUNK_SIZE
 from ...core.http import GZIP_LEVEL, GZIP_THRESHOLD, RequestSpec, check_record_id, check_sobject
 from ...core.soql import soql_values
-from ...errors import BulkJobFailed, BulkJobTimeout, SalesforceError
+from ...errors import BulkJobFailed, BulkJobNotComplete, BulkJobTimeout, SalesforceError
 from ...models import BulkFailure, BulkJobInfo, BulkJobState
 from .. import _compat
 
 if TYPE_CHECKING:
     from ..client import Salesforce
 
-__all__ = ["Bulk", "IngestJob"]
+__all__ = ["Bulk", "IngestJob", "QueryJob", "ResultPage"]
 
 #: Result downloads ask for CSV; the Accept header must match the job's content type.
 _CSV = {"Accept": "text/csv"}
@@ -345,6 +346,316 @@ class IngestJob:
                 stream.close()
 
 
+def _query_sobject(soql: str) -> str | None:
+    from ..client import _sobject_of  # pyright: ignore[reportPrivateUsage]
+
+    return _sobject_of(soql)
+
+
+def _query_hint(client: Salesforce, soql: str, message: str | None) -> str | None:
+    """Name the components of compound fields in ``soql``, when the describe is cached."""
+    sobject = _query_sobject(soql)
+    describe = client._transport.cached_describe(client._runtime, sobject) if sobject else None
+    return compound_hint(soql, describe, message)
+
+
+def _check_parallel(parallel_downloads: int) -> None:
+    if not isinstance(parallel_downloads, int) or parallel_downloads < 1:  # pyright: ignore[reportUnnecessaryIsInstance]
+        raise ValueError("parallel_downloads must be an int >= 1")
+
+
+def _nulls(row: dict[str, str]) -> dict[str, str | None]:
+    return {k: (v if v != "" else None) for k, v in row.items()}
+
+
+class ResultPage:
+    """One page of query results, yielded by :meth:`QueryJob.pages`.
+
+    The client downloads the whole page to a temporary file before it yields the page, so
+    reading the rows makes no more calls. The file is closed when the iteration moves on to the
+    next page or ends: read the rows before you ask for the next page.
+    """
+
+    def __init__(self, locator: str | None, next_locator: str | None, size: int | None, f: IO[bytes]) -> None:
+        #: The locator that fetched this page. ``None`` for the first page.
+        self.locator = locator
+        #: The locator of the next page: save it after you've handled the rows, and pass it to
+        #: ``pages(locator=...)`` to go on from there. ``None`` after the last page.
+        self.next_locator = next_locator
+        #: The number of rows in the page (``Sforce-NumberOfRecords``), if Salesforce sent it.
+        self.size = size
+        self._file = f
+
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__} locator={self.locator!r} next_locator={self.next_locator!r}>"
+
+    def rows(self) -> Iterator[dict[str, str | None]]:
+        """The rows of the page, in order, read from the temporary file.
+
+        Each call reads the page from the start.
+
+        Raises:
+            ValueError: the iteration has moved on and the page is closed.
+        """
+        f = self._file
+        if f.closed:
+            raise ValueError("this page is closed; read its rows before you ask for the next page")
+        f.seek(0)
+        for row in _read_csv(_file_chunks(f)):
+            yield _nulls(row)
+
+    def close(self) -> None:
+        """Delete the temporary file. ``pages()`` does it for you when it moves on."""
+        self._file.close()
+
+
+class QueryJob:
+    """A Bulk API 2.0 query job, returned by ``sf.bulk.start_query()`` and ``sf.bulk.query_job()``.
+
+    The job runs in Salesforce. Call :meth:`wait`, then read the results with :meth:`rows`, or
+    page by page with :meth:`pages` to resume a download later. ``id`` is enough to open the job
+    again in another process.
+    """
+
+    def __init__(self, client: Salesforce, info: BulkJobInfo, soql: str | None = None) -> None:
+        self._sf = client
+        self._jobs = _Jobs(client, "query")
+        self._info = info
+        self._soql = soql  # known when this client created the job; used for error hints
+
+    def __repr__(self) -> str:
+        info = self._info
+        return f"<{type(self).__name__} {info.id} {info.operation} {info.sobject} {info.state.value}>"
+
+    @property
+    def id(self) -> str:
+        """The Salesforce job id. Pass it to ``sf.bulk.query_job()`` to open the job again."""
+        return self._info.id
+
+    @property
+    def info(self) -> BulkJobInfo:
+        """Status from the latest call: state, ``records_processed`` and timing."""
+        return self._info
+
+    def refresh(self) -> BulkJobInfo:
+        """Get the current status, if the job isn't finished. Returns :attr:`info`."""
+        if not self._info.state.is_final:
+            self._info = self._jobs.status(self._info)
+        return self._info
+
+    def wait(self, *, poll: Backoff | None = None, timeout: float = DEFAULT_TIMEOUT) -> BulkJobInfo:
+        """Poll until the job is finished. Returns the final :attr:`info`.
+
+        Args:
+            poll: How long to wait between status calls. Defaults to ``esf.Backoff()``
+                (2 s, doubling up to 30 s).
+            timeout: Seconds to wait in total.
+
+        Raises:
+            BulkJobFailed: the job ended ``Failed`` or ``Aborted``.
+            BulkJobTimeout: the job didn't finish in time. It keeps running; call ``wait()``
+                again to keep waiting.
+
+        Example:
+            info = job.wait(timeout=3600)
+            print(info.records_processed)
+        """
+        soql = self._soql
+        infos = [self._info]
+        try:
+            self._jobs.wait(
+                infos, poll, timeout, lambda i: _query_hint(self._sf, soql, i.error_message) if soql else None
+            )
+        finally:
+            self._info = infos[0]
+        return self._info
+
+    def abort(self) -> BulkJobInfo:
+        """Abort the job if it isn't finished. Returns :attr:`info`."""
+        if not self._info.state.is_final:
+            self._info = self._jobs.set_state(self._info, "Aborted", "bulk.query.abort")
+        return self._info
+
+    def _check_complete(self) -> None:
+        info = self._info
+        if info.state is BulkJobState.JOB_COMPLETE:
+            return
+        if info.state in (BulkJobState.FAILED, BulkJobState.ABORTED):
+            raise _failed(info)
+        raise BulkJobNotComplete(
+            f"Bulk job {info.id} is {info.state.value}; call wait() before you read the results",
+            job_id=info.id,
+            state=info.state.value,
+            operation="bulk.query.results",
+            sobject=info.sobject,
+        )
+
+    def rows(self, *, parallel_downloads: int = 1) -> Generator[dict[str, str | None], None]:
+        """Yield every row of a complete job, in order.
+
+        Rows are dicts with the selected fields as keys. Values are strings, and empty values
+        are ``None``. The client reads each page as it arrives, so memory stays flat.
+
+        Args:
+            parallel_downloads: With more than 1, the client downloads up to this many result
+                pages at the same time and still yields rows in order. Salesforce hands out at
+                most five page URLs at a time, so values above 5 don't download more.
+
+        Raises:
+            BulkJobNotComplete: the job isn't ``JobComplete`` yet. Call :meth:`wait` first.
+            BulkJobFailed: the job failed or was aborted.
+
+        Example:
+            job.wait()
+            for row in job.rows(parallel_downloads=4):
+                print(row["Id"])
+        """
+        _check_parallel(parallel_downloads)
+        self._check_complete()
+        info = self._info
+        # resultPages needs API 58.0; the client supports 59.0 and later.
+        n = parallel_downloads
+        rows = _serial(self._sf, info) if n == 1 else _parallel(self._sf, info, n)
+        try:
+            for row in rows:
+                yield _nulls(row)
+        finally:
+            rows.close()  # closes the open result stream if you stop early
+
+    def pages(
+        self, *, locator: str | None = None, max_records: int | None = None
+    ) -> Iterator[ResultPage]:
+        """Yield the results of a complete job page by page, so a download can resume.
+
+        After you've handled the rows of a page, save ``page.next_locator``. To go on after a
+        restart, open the job with ``sf.bulk.query_job(job_id)`` and pass the saved locator.
+        A locator stays valid as long as the job exists, and a page can be read again.
+
+        Args:
+            locator: The ``next_locator`` of the last page you handled. ``None`` starts at the
+                first page.
+            max_records: The most rows per page. Salesforce picks the size when it's ``None``.
+                Smaller pages mean less to download again after a restart.
+
+        Raises:
+            BulkJobNotComplete: the job isn't ``JobComplete`` yet. Call :meth:`wait` first.
+            BulkJobFailed: the job failed or was aborted.
+
+        Example:
+            for page in job.pages(locator=saved, max_records=50_000):
+                for row in page.rows():
+                    print(row["Id"])
+                saved = page.next_locator  # None after the last page
+        """
+        if locator is not None and (not isinstance(locator, str) or not locator.strip()):  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise ValueError("locator must be a non-empty string from page.next_locator, or None")
+        if max_records is not None and (
+            not isinstance(max_records, int) or isinstance(max_records, bool) or max_records < 1  # pyright: ignore[reportUnnecessaryIsInstance]
+        ):
+            raise ValueError("max_records must be an int >= 1, or None")
+        self._check_complete()
+        info = self._info
+        path = _job_path(info.api_version, "query", info.id, "/results")
+        while True:
+            params: dict[str, str] = {}
+            if locator is not None:
+                params["locator"] = locator
+            if max_records is not None:
+                params["maxRecords"] = str(max_records)
+            raw = _result_page(self._sf, info, path, params or None)
+            f = _spool_stream(raw.stream)
+            page = ResultPage(locator, parse_locator(raw.headers), parse_record_count(raw.headers), f)
+            try:
+                yield page
+            finally:
+                page.close()
+            if page.next_locator is None:
+                return
+            locator = page.next_locator
+
+
+def _result_page(
+    client: Salesforce, info: BulkJobInfo, path: str, params: Mapping[str, str] | None
+) -> Any:
+    return client._send(
+        RequestSpec(
+            "GET",
+            path,
+            params=params,
+            headers=_CSV,
+            operation="bulk.query.results",
+            sobject=info.sobject,
+            expect_json=False,
+            stream_response=True,
+        )
+    )
+
+
+def _spool_stream(stream: Any) -> IO[bytes]:
+    """Copy a streamed response body to a temporary file, then close the stream."""
+    f = _spool()
+    try:
+        for chunk in stream:
+            _compat.to_thread(f.write, chunk)
+        f.seek(0)
+    except BaseException:
+        f.close()
+        raise
+    finally:
+        stream.close()
+    return f
+
+
+def _serial(client: Salesforce, info: BulkJobInfo) -> Generator[dict[str, str], None]:
+    """Follow ``Sforce-Locator`` one page at a time, parsing each page as it streams."""
+    path = _job_path(info.api_version, "query", info.id, "/results")
+    locator: str | None = None
+    while True:
+        raw = _result_page(client, info, path, {"locator": locator} if locator else None)
+        stream = raw.stream
+        try:
+            for row in _read_csv(stream.__iter__()):
+                yield row
+        finally:
+            stream.close()
+        locator = parse_locator(raw.headers)
+        if locator is None:
+            return
+
+
+def _download(client: Salesforce, info: BulkJobInfo, url: str) -> IO[bytes]:
+    raw = _result_page(client, info, url, None)
+    return _spool_stream(raw.stream)
+
+
+def _parallel(
+    client: Salesforce, info: BulkJobInfo, n: int
+) -> Generator[dict[str, str], None]:
+    """Download the pages of each ``resultPages`` batch at once, then yield them in order."""
+    prefix = _job_path(info.api_version, "query", info.id, "/")
+    next_url: str | None = _job_path(info.api_version, "query", info.id, "/resultPages")
+    while next_url is not None:
+        raw = client._send(
+            RequestSpec("GET", next_url, operation="bulk.query.pages", sobject=info.sobject)
+        )
+        urls, next_url = parse_result_pages(raw.json(), prefix)
+
+        settled = _compat.gather_settled(
+            n, [functools.partial(_download, client, info, u) for u in urls]
+        )
+        files = [f for f in settled if not isinstance(f, Exception)]
+        try:
+            for item in settled:
+                if isinstance(item, Exception):
+                    raise item
+            for f in files:
+                for row in _read_csv(_file_chunks(f)):
+                    yield row
+        finally:
+            for f in files:
+                f.close()
+
+
 class Bulk:
     """Bulk API 2.0: load or read large numbers of records with asynchronous jobs.
 
@@ -554,6 +865,43 @@ class Bulk:
 
     # --- query -----------------------------------------------------------------------------
 
+    def start_query(self, soql: str, *values: Any, include_deleted: bool = False) -> QueryJob:
+        """Create a Bulk API 2.0 query job and return it without waiting.
+
+        Salesforce runs the job in the background. Keep ``job.id`` to open the job again later,
+        also from another process, with :meth:`query_job`. Salesforce keeps the results for
+        7 days after the job completes.
+
+        Args:
+            soql: The query. ``{}`` placeholders are filled with ``values``, as in ``sf.query``.
+            *values: Values for the ``{}`` placeholders.
+            include_deleted: Use ``queryAll``: also deleted and archived records.
+
+        Returns:
+            The job. Call ``wait()`` on it, then read ``rows()`` or ``pages()``.
+
+        Raises:
+            ValueError: the query selects ``FIELDS(ALL)`` or ``FIELDS(CUSTOM)``, which query
+                jobs don't support. The client raises it before it creates a job.
+            RequestError: Salesforce rejected the job, for example with ``400 API_ERROR``
+                because the query selects compound address or geolocation fields. ``hint``
+                then names their components.
+
+        Example:
+            job = sf.bulk.start_query("SELECT Id, Name FROM Lead")
+            print(job.id)  # store it, then open the job again with sf.bulk.query_job(job_id)
+        """
+        soql = soql_values(soql, values)
+        check_bulk_query(soql)
+        sobject = _query_sobject(soql)
+        try:
+            info = self._create("query", query_job_body(soql, include_deleted), sobject, soql)
+        except SalesforceError as exc:
+            if exc.hint is None:
+                exc.hint = _query_hint(self._sf, soql, exc.message)
+            raise
+        return QueryJob(self._sf, info, soql)
+
     def query(
         self,
         soql: str,
@@ -567,7 +915,8 @@ class Bulk:
 
         The client creates the job, polls it until it's complete, and then streams the result
         CSV. Rows are dicts with the selected fields as keys (``"Owner.Name"`` for parent
-        fields). Values are strings, and empty values are ``None``.
+        fields). Values are strings, and empty values are ``None``. To keep the job id, wait
+        in another process or resume a download, use :meth:`start_query` instead.
 
         Args:
             soql: The query. ``{}`` placeholders are filled with ``values``, as in ``sf.query``.
@@ -594,104 +943,80 @@ class Bulk:
             for row in sf.bulk.query("SELECT Id, Name FROM Lead", parallel_downloads=4):
                 print(row["Name"])
         """
-        if not isinstance(parallel_downloads, int) or parallel_downloads < 1:  # pyright: ignore[reportUnnecessaryIsInstance]
-            raise ValueError("parallel_downloads must be an int >= 1")
-        from ..client import _sobject_of  # pyright: ignore[reportPrivateUsage]
-
-        soql = soql_values(soql, values)
-        check_bulk_query(soql)
-        sobject = _sobject_of(soql)
-
-        def hint(message: str | None) -> str | None:
-            describe = self._sf._transport.cached_describe(self._sf._runtime, sobject) if sobject else None
-            return compound_hint(soql, describe, message)
-
-        try:
-            info = self._create("query", query_job_body(soql, include_deleted), sobject, soql)
-        except SalesforceError as exc:
-            if exc.hint is None:
-                exc.hint = hint(exc.message)
-            raise
-        infos = [info]
-        _Jobs(self._sf, "query").wait(infos, poll, timeout, lambda i: hint(i.error_message))
-        info = infos[0]
-        # resultPages needs API 58.0; the client supports 59.0 and later.
-        rows = self._serial(info) if parallel_downloads == 1 else self._parallel(info, parallel_downloads)
+        _check_parallel(parallel_downloads)
+        job = self.start_query(soql, *values, include_deleted=include_deleted)
+        job.wait(poll=poll, timeout=timeout)
+        rows = job.rows(parallel_downloads=parallel_downloads)
         try:
             for row in rows:
-                yield {k: (v if v != "" else None) for k, v in row.items()}
+                yield row
         finally:
             rows.close()  # closes the open result stream if you stop early
 
-    def _page(self, info: BulkJobInfo, path: str, params: Mapping[str, str] | None) -> Any:
-        return self._sf._send(
+    # --- open a job again ----------------------------------------------------------------------
+
+    def query_job(self, job_id: str) -> QueryJob:
+        """Open a query job by its id, for example in a worker after a restart.
+
+        The client gets the job's current status. Later calls use the API version that created
+        the job. Salesforce deletes a job 7 days after it finished.
+
+        Raises:
+            ValueError: ``job_id`` isn't a record id.
+            NotFound: Salesforce has no query job with this id: the job was deleted, or the id
+                belongs to an ingest job.
+
+        Example:
+            job = sf.bulk.query_job(job_id)
+            job.wait()
+        """
+        info = self._get_job("query", job_id)
+        # Salesforce answers 404 for the id of the other job kind (big-bang.md §21 V88); this
+        # check only guards against a response for the wrong kind of job.
+        if not _is_query(info):
+            raise ValueError(f"job {info.id} is an ingest job; open it with sf.bulk.ingest_job()")
+        return QueryJob(self._sf, info)
+
+    def ingest_job(self, job_ids: Sequence[str]) -> IngestJob:
+        """Open an ingest job by its ids: the ``ids`` of the job that ``ingest()`` returned.
+
+        An upload over 100 MB runs as several Salesforce jobs. Pass all of their ids, in upload
+        order, to get the same job back. The client gets the status of each one.
+
+        Raises:
+            TypeError: ``job_ids`` is a string, not a sequence of ids.
+            ValueError: ``job_ids`` is empty, or an id isn't a record id.
+            NotFound: Salesforce has no ingest job with one of the ids: the job was deleted, or
+                the id belongs to a query job.
+
+        Example:
+            job = sf.bulk.ingest_job(saved_ids)
+            job.wait()
+        """
+        if isinstance(job_ids, str):
+            raise TypeError("job_ids must be a sequence of job ids, such as job.ids, not a string")
+        ids = list(job_ids)
+        if not ids:
+            raise ValueError("job_ids is empty")
+        for job_id in ids:
+            check_record_id(job_id)
+        infos: list[BulkJobInfo] = []
+        for job_id in ids:
+            info = self._get_job("ingest", job_id)
+            if _is_query(info):
+                raise ValueError(f"job {info.id} is a query job; open it with sf.bulk.query_job()")
+            infos.append(info)
+        return IngestJob(self._sf, infos)
+
+    def _get_job(self, kind: str, job_id: str) -> BulkJobInfo:
+        raw = self._sf._send(
             RequestSpec(
                 "GET",
-                path,
-                params=params,
-                headers=_CSV,
-                operation="bulk.query.results",
-                sobject=info.sobject,
-                expect_json=False,
-                stream_response=True,
+                f"jobs/{kind}/{check_record_id(job_id)}",
+                operation=f"bulk.{kind}.status",
             )
         )
-
-    def _serial(self, info: BulkJobInfo) -> Generator[dict[str, str], None]:
-        """Follow ``Sforce-Locator`` one page at a time, parsing each page as it streams."""
-        path = _job_path(info.api_version, "query", info.id, "/results")
-        locator: str | None = None
-        while True:
-            raw = self._page(info, path, {"locator": locator} if locator else None)
-            stream = raw.stream
-            try:
-                for row in _read_csv(stream.__iter__()):
-                    yield row
-            finally:
-                stream.close()
-            locator = parse_locator(raw.headers)
-            if locator is None:
-                return
-
-    def _download(self, info: BulkJobInfo, url: str) -> IO[bytes]:
-        raw = self._page(info, url, None)
-        stream = raw.stream
-        f = _spool()
-        try:
-            for chunk in stream:
-                _compat.to_thread(f.write, chunk)
-            f.seek(0)
-        except BaseException:
-            f.close()
-            raise
-        finally:
-            stream.close()
-        return f
-
-    def _parallel(self, info: BulkJobInfo, n: int) -> Generator[dict[str, str], None]:
-        """Download the pages of each ``resultPages`` batch at once, then yield them in order."""
-        prefix = _job_path(info.api_version, "query", info.id, "/")
-        next_url: str | None = _job_path(info.api_version, "query", info.id, "/resultPages")
-        while next_url is not None:
-            raw = self._sf._send(
-                RequestSpec("GET", next_url, operation="bulk.query.pages", sobject=info.sobject)
-            )
-            urls, next_url = parse_result_pages(raw.json(), prefix)
-
-            settled = _compat.gather_settled(
-                n, [functools.partial(self._download, info, u) for u in urls]
-            )
-            files = [f for f in settled if not isinstance(f, Exception)]
-            try:
-                for item in settled:
-                    if isinstance(item, Exception):
-                        raise item
-                for f in files:
-                    for row in _read_csv(_file_chunks(f)):
-                        yield row
-            finally:
-                for f in files:
-                    f.close()
+        return parse_job_info(raw.json(), self._sf.api_version)
 
     # --- helpers -----------------------------------------------------------------------------
 

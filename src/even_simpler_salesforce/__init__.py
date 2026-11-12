@@ -8,12 +8,12 @@
 ``__all__`` is the SemVer-covered public surface. Everything else is private.
 """
 
-from ._async.api.bulk import AsyncIngestJob
+from ._async.api.bulk import AsyncIngestJob, AsyncQueryJob, AsyncResultPage
 from ._async.client import AsyncSalesforce
 from ._async.replay_store import AsyncInMemoryReplayStore, AsyncReplayStore
 from ._async.token_store import AsyncInMemoryTokenStore
 from ._async.transport import AsyncFileStream
-from ._sync.api.bulk import IngestJob
+from ._sync.api.bulk import IngestJob, QueryJob, ResultPage
 from ._sync.client import Salesforce
 from ._sync.replay_store import InMemoryReplayStore, ReplayStore
 from ._sync.token_store import InMemoryTokenStore
@@ -43,6 +43,7 @@ from .errors import (
     AuthError,
     BudgetExceeded,
     BulkJobFailed,
+    BulkJobNotComplete,
     BulkJobTimeout,
     Conflict,
     ConnectError,
@@ -149,6 +150,8 @@ __all__ = [
     "AsyncInMemoryReplayStore",
     "AsyncInMemoryTokenStore",
     "AsyncIngestJob",
+    "AsyncQueryJob",
+    "AsyncResultPage",
     "AsyncReplayStore",
     "AsyncSalesforce",
     "AsyncTokenStore",
@@ -163,6 +166,7 @@ __all__ = [
     "BulkJobFailed",
     "BulkJobInfo",
     "BulkJobState",
+    "BulkJobNotComplete",
     "BulkJobTimeout",
     "Cache",
     "ChangeHeader",
@@ -196,6 +200,8 @@ __all__ = [
     "InMemoryReplayStore",
     "InMemoryTokenStore",
     "IngestJob",
+    "QueryJob",
+    "ResultPage",
     "InvalidField",
     "InvalidPicklistValue",
     "InvalidReference",

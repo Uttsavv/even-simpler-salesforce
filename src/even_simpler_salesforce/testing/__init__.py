@@ -21,7 +21,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from ._bulk import AsyncFakeBulk, AsyncFakeIngestJob, FakeBulk, FakeIngestJob
+from ._bulk import (
+    AsyncFakeBulk,
+    AsyncFakeIngestJob,
+    AsyncFakeQueryJob,
+    AsyncFakeResultPage,
+    FakeBulk,
+    FakeIngestJob,
+    FakeQueryJob,
+    FakeResultPage,
+)
 from ._composite import (
     AsyncFakeBatchBuilder,
     AsyncFakeComposite,
@@ -80,6 +89,8 @@ __all__ = [
     "AsyncFakeFiles",
     "AsyncFakeGraphBuilder",
     "AsyncFakeIngestJob",
+    "AsyncFakeQueryJob",
+    "AsyncFakeResultPage",
     "AsyncFakeSObject",
     "AsyncFakeSalesforce",
     "AsyncFakeUi",
@@ -103,6 +114,8 @@ __all__ = [
     "FakeFiles",
     "FakeGraphBuilder",
     "FakeIngestJob",
+    "FakeQueryJob",
+    "FakeResultPage",
     "FakeRequest",
     "FakeSObject",
     "FakeSalesforce",

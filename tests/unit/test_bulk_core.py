@@ -513,6 +513,21 @@ def test_parse_locator(headers: dict[str, str], locator: str | None) -> None:
     assert B.parse_locator(headers) == locator
 
 
+@pytest.mark.parametrize(
+    ("headers", "count"),
+    [
+        ({}, None),
+        ({"sforce-numberofrecords": " 50000 "}, 50000),
+        ({"sforce-numberofrecords": "0"}, 0),
+        ({"sforce-numberofrecords": "-1"}, None),
+        ({"sforce-numberofrecords": "many"}, None),
+    ],
+)
+def test_parse_record_count(headers: dict[str, str], count: int | None) -> None:
+    """*Get Results for a Query Job*: ``Sforce-NumberOfRecords`` is the number of records in the set."""
+    assert B.parse_record_count(headers) == count
+
+
 PREFIX = f"/services/data/v68.0/jobs/query/{JOB}/"
 
 

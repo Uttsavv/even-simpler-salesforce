@@ -29,17 +29,27 @@ from ..core.bulk import (
     check_bulk_query,
     check_ingest,
     check_line_ending,
+    combine_infos,
     expand_compound_fields,
 )
-from ..core.http import check_sobject
+from ..core.http import check_record_id, check_sobject
 from ..core.records import flatten
 from ..core.soql import soql_values
-from ..errors import SalesforceError
+from ..errors import NotFound, RequestError, SalesforceError
 from ..models import BulkFailure, BulkJobInfo, BulkJobState, ErrorDetail
 from ._ids import make_id
 from ._state import FakeState, Who
 
-__all__ = ["AsyncFakeBulk", "AsyncFakeIngestJob", "FakeBulk", "FakeIngestJob"]
+__all__ = [
+    "AsyncFakeBulk",
+    "AsyncFakeIngestJob",
+    "AsyncFakeQueryJob",
+    "AsyncFakeResultPage",
+    "FakeBulk",
+    "FakeIngestJob",
+    "FakeQueryJob",
+    "FakeResultPage",
+]
 
 
 def _sobject_of(soql: str) -> str | None:
@@ -87,18 +97,20 @@ class FakeIngestJob:
         info: BulkJobInfo,
         successes: list[dict[str, str]],
         failures: list[BulkFailure],
+        parts: Sequence[BulkJobInfo] | None = None,
     ) -> None:
         self._info = info
         self._successes = successes
         self._failures = failures
+        self._parts = tuple(parts) if parts else (info,)
 
     def __repr__(self) -> str:
         return f"<FakeIngestJob {self._info.id} {self._info.operation} {self._info.sobject}>"
 
     @property
     def ids(self) -> tuple[str, ...]:
-        """The job id (the fake never splits an upload)."""
-        return (self._info.id,)
+        """The job id (the fake never splits an upload), or the ids given to ``ingest_job()``."""
+        return tuple(p.id for p in self._parts)
 
     @property
     def info(self) -> BulkJobInfo:
@@ -108,7 +120,7 @@ class FakeIngestJob:
     @property
     def parts(self) -> tuple[BulkJobInfo, ...]:
         """One status per job."""
-        return (self._info,)
+        return self._parts
 
     def refresh(self) -> BulkJobInfo:
         """Return :attr:`info`; the fake job is already finished."""
@@ -139,6 +151,134 @@ class FakeIngestJob:
     def unprocessed_records(self) -> Iterator[dict[str, str]]:
         """Always empty: the fake processes every row."""
         yield from ()
+
+
+class FakeResultPage:
+    """One page of :meth:`FakeQueryJob.pages`: rows held in memory."""
+
+    def __init__(
+        self, locator: str | None, next_locator: str | None, rows: list[dict[str, str | None]]
+    ) -> None:
+        #: The locator that fetched this page. ``None`` for the first page.
+        self.locator = locator
+        #: The locator of the next page, ``None`` after the last page.
+        self.next_locator = next_locator
+        #: The number of rows in the page.
+        self.size: int | None = len(rows)
+        self._rows = rows
+        self._closed = False
+
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__} locator={self.locator!r} next_locator={self.next_locator!r}>"
+
+    def rows(self) -> Iterator[dict[str, str | None]]:
+        """The rows of the page. Raises ``ValueError`` once the iteration has moved on."""
+        if self._closed:
+            raise ValueError("this page is closed; read its rows before you ask for the next page")
+        for row in self._rows:
+            yield dict(row)
+
+    def close(self) -> None:
+        """Mark the page closed, as the real client does when ``pages()`` moves on."""
+        self._closed = True
+
+
+class FakeQueryJob:
+    """What ``fake.bulk.start_query()`` returns: a finished job with the scripted rows.
+
+    The rows are taken from the ``fake.on_query`` scripts when the job is created.
+    """
+
+    def __init__(self, info: BulkJobInfo, rows: list[dict[str, str | None]]) -> None:
+        self._info = info
+        self._rows = rows
+
+    def __repr__(self) -> str:
+        info = self._info
+        return f"<FakeQueryJob {info.id} {info.operation} {info.sobject} {info.state.value}>"
+
+    @property
+    def id(self) -> str:
+        """The job id. Pass it to ``fake.bulk.query_job()`` to get the job back."""
+        return self._info.id
+
+    @property
+    def info(self) -> BulkJobInfo:
+        """Final status: always ``JobComplete``."""
+        return self._info
+
+    def refresh(self) -> BulkJobInfo:
+        """Return :attr:`info`; the fake job is already finished."""
+        return self._info
+
+    def wait(self, *, poll: Backoff | None = None, timeout: float = 3600.0) -> BulkJobInfo:
+        """Return :attr:`info` at once: the fake job is already ``JobComplete``.
+
+        Use ``fake.fail_next("bulk.query", esf.BulkJobFailed(...))`` to make ``start_query()``
+        fail instead.
+        """
+        if not timeout > 0:
+            raise ValueError("timeout must be > 0 seconds")
+        return self._info
+
+    def abort(self) -> BulkJobInfo:
+        """No-op: the fake job finished before you could abort it."""
+        return self._info
+
+    def rows(self, *, parallel_downloads: int = 1) -> Iterator[dict[str, str | None]]:
+        """Every row, as Bulk CSV strings (empty values ``None``)."""
+        _check_parallel(parallel_downloads)
+        for row in self._rows:
+            yield dict(row)
+
+    def pages(
+        self, *, locator: str | None = None, max_records: int | None = None
+    ) -> Iterator[FakeResultPage]:
+        """The rows in pages of ``max_records`` (one page when ``None``).
+
+        Locators are the row offset as a string; pass ``page.next_locator`` back to resume.
+        """
+        _check_pages(locator, max_records)
+        start = 0
+        if locator is not None:
+            if not locator.isdigit() or int(locator) > len(self._rows):
+                raise RequestError(
+                    f"unknown locator {locator!r} for job {self._info.id}",
+                    error_code="INVALIDLOCATOR",
+                    status=400,
+                    operation="bulk.query.results",
+                )
+            start = int(locator)
+        size = max_records or max(len(self._rows), 1)
+        while True:
+            end = min(start + size, len(self._rows))
+            nxt = str(end) if end < len(self._rows) else None
+            page = FakeResultPage(locator, nxt, self._rows[start:end])
+            try:
+                yield page
+            finally:
+                page.close()
+            if nxt is None:
+                return
+            locator, start = nxt, end
+
+
+def _check_parallel(parallel_downloads: int) -> None:
+    if not isinstance(parallel_downloads, int) or parallel_downloads < 1:  # pyright: ignore[reportUnnecessaryIsInstance]
+        raise ValueError("parallel_downloads must be an int >= 1")
+
+
+def _check_pages(locator: str | None, max_records: int | None) -> None:
+    if locator is not None and (not isinstance(locator, str) or not locator.strip()):  # pyright: ignore[reportUnnecessaryIsInstance]
+        raise ValueError("locator must be a non-empty string from page.next_locator, or None")
+    if max_records is not None and (
+        not isinstance(max_records, int) or isinstance(max_records, bool) or max_records < 1  # pyright: ignore[reportUnnecessaryIsInstance]
+    ):
+        raise ValueError("max_records must be an int >= 1, or None")
+
+
+def _job_not_found(job_id: str) -> NotFound:
+    return NotFound(f"no Bulk job with id {job_id}", error_code="NOT_FOUND", status=404)
 
 
 class FakeBulk:
@@ -195,7 +335,9 @@ class FakeBulk:
                 created_date=self._state.clock(),
                 system_modstamp=self._state.clock(),
             )
-            return FakeIngestJob(info, successes, failures)
+            job = FakeIngestJob(info, successes, failures)
+            self._state.bulk_jobs[info.id] = job
+            return job
 
         return self._state.run(
             self._who,
@@ -236,6 +378,44 @@ class FakeBulk:
         st.delete(sobject, rid, operation="bulk.ingest")
         return rid, False
 
+    def start_query(self, soql: str, *values: Any, include_deleted: bool = False) -> FakeQueryJob:
+        """Create a finished query job with the rows of ``fake.on_query`` (operation ``bulk.query``).
+
+        Rows are flattened (``"Owner.Name"``), values become strings and empty values ``None``.
+        """
+        soql = soql_values(soql, values)
+        check_bulk_query(soql)
+        sobject = _sobject_of(soql)
+
+        def fn() -> FakeQueryJob:
+            rows, _ = self._state.query_rows(soql)
+            data = [{k: _text(v) for k, v in flatten(r).items()} for r in rows]
+            info = BulkJobInfo(
+                id=self._job_id(),
+                operation="queryAll" if include_deleted else "query",
+                sobject=sobject,
+                state=BulkJobState.JOB_COMPLETE,
+                api_version=self._state.api_version,
+                records_processed=len(data),
+                records_failed=0,
+                created_date=self._state.clock(),
+                system_modstamp=self._state.clock(),
+            )
+            job = FakeQueryJob(info, data)
+            self._state.bulk_jobs[info.id] = job
+            return job
+
+        return self._state.run(
+            self._who,
+            "bulk.query",
+            sobject,
+            {"soql": soql, "include_deleted": include_deleted},
+            fn,
+            method="POST",
+            path="jobs/query",
+            soql=soql,
+        )
+
     def query(
         self,
         soql: str,
@@ -249,28 +429,68 @@ class FakeBulk:
 
         Rows are flattened (``"Owner.Name"``), values become strings and empty values ``None``.
         """
-        if not isinstance(parallel_downloads, int) or parallel_downloads < 1:  # pyright: ignore[reportUnnecessaryIsInstance]
-            raise ValueError("parallel_downloads must be an int >= 1")
+        _check_parallel(parallel_downloads)
         if not timeout > 0:
             raise ValueError("timeout must be > 0 seconds")
-        soql = soql_values(soql, values)
-        check_bulk_query(soql)
+        job = self.start_query(soql, *values, include_deleted=include_deleted)
+        yield from job.rows(parallel_downloads=parallel_downloads)
 
-        def fn() -> list[dict[str, str | None]]:
-            rows, _ = self._state.query_rows(soql)
-            return [{k: _text(v) for k, v in flatten(r).items()} for r in rows]
+    def query_job(self, job_id: str) -> FakeQueryJob:
+        """The query job with this id, made by ``start_query()`` or ``query()`` on this fake.
 
-        rows = self._state.run(
+        Raises ``NotFound`` for an unknown id or an ingest job's id, as Salesforce does.
+        """
+        check_record_id(job_id)
+
+        def fn() -> FakeQueryJob:
+            job = self._state.bulk_jobs.get(job_id)
+            if not isinstance(job, FakeQueryJob):
+                raise _job_not_found(job_id)
+            return job
+
+        return self._state.run(
+            self._who, "bulk.query.status", None, {"job_id": job_id}, fn, method="GET", path="jobs/query"
+        )
+
+    def ingest_job(self, job_ids: Sequence[str]) -> FakeIngestJob:
+        """The ingest job with these ids, made by ``ingest()`` on this fake.
+
+        Raises ``NotFound`` for an unknown id or a query job's id, as Salesforce does.
+        """
+        if isinstance(job_ids, str):
+            raise TypeError("job_ids must be a sequence of job ids, such as job.ids, not a string")
+        ids = list(job_ids)
+        if not ids:
+            raise ValueError("job_ids is empty")
+        for job_id in ids:
+            check_record_id(job_id)
+
+        def fn() -> FakeIngestJob:
+            jobs: list[FakeIngestJob] = []
+            for job_id in ids:
+                job = self._state.bulk_jobs.get(job_id)
+                if not isinstance(job, FakeIngestJob):
+                    raise _job_not_found(job_id)
+                jobs.append(job)
+            if len(jobs) == 1:
+                return jobs[0]
+            parts = [p for j in jobs for p in j.parts]
+            return FakeIngestJob(
+                combine_infos(parts),
+                [r for j in jobs for r in j._successes],  # pyright: ignore[reportPrivateUsage]
+                [f for j in jobs for f in j._failures],  # pyright: ignore[reportPrivateUsage]
+                parts,
+            )
+
+        return self._state.run(
             self._who,
-            "bulk.query",
-            _sobject_of(soql),
-            {"soql": soql, "include_deleted": include_deleted, "parallel_downloads": parallel_downloads},
+            "bulk.ingest.status",
+            None,
+            {"job_ids": tuple(ids)},
             fn,
             method="GET",
-            path="jobs/query",
-            soql=soql,
+            path="jobs/ingest",
         )
-        yield from rows
 
     def expand_compound_fields(self, sobject: str, fields: Sequence[str]) -> list[str]:
         """Expand compound fields with the describe set by ``fake.set_describe``."""
@@ -332,6 +552,72 @@ class AsyncFakeIngestJob:
             yield row
 
 
+class AsyncFakeResultPage:
+    """Async twin of :class:`FakeResultPage`."""
+
+    def __init__(self, inner: FakeResultPage) -> None:
+        self._inner = inner
+        self.locator = inner.locator
+        self.next_locator = inner.next_locator
+        self.size = inner.size
+
+    def __repr__(self) -> str:
+        return repr(self._inner).replace("<Fake", "<AsyncFake", 1)
+
+    async def rows(self) -> AsyncIterator[dict[str, str | None]]:
+        """See :meth:`FakeResultPage.rows`."""
+        for row in self._inner.rows():
+            yield row
+
+    def close(self) -> None:
+        """See :meth:`FakeResultPage.close`."""
+        self._inner.close()
+
+
+class AsyncFakeQueryJob:
+    """Async twin of :class:`FakeQueryJob`."""
+
+    def __init__(self, inner: FakeQueryJob) -> None:
+        self._inner = inner
+
+    def __repr__(self) -> str:
+        return repr(self._inner).replace("<Fake", "<AsyncFake", 1)
+
+    @property
+    def id(self) -> str:
+        """See :attr:`FakeQueryJob.id`."""
+        return self._inner.id
+
+    @property
+    def info(self) -> BulkJobInfo:
+        """See :attr:`FakeQueryJob.info`."""
+        return self._inner.info
+
+    async def refresh(self) -> BulkJobInfo:
+        """See :meth:`FakeQueryJob.refresh`."""
+        return self._inner.refresh()
+
+    async def wait(self, *, poll: Backoff | None = None, timeout: float = 3600.0) -> BulkJobInfo:
+        """See :meth:`FakeQueryJob.wait`."""
+        return self._inner.wait(poll=poll, timeout=timeout)
+
+    async def abort(self) -> BulkJobInfo:
+        """See :meth:`FakeQueryJob.abort`."""
+        return self._inner.abort()
+
+    async def rows(self, *, parallel_downloads: int = 1) -> AsyncIterator[dict[str, str | None]]:
+        """See :meth:`FakeQueryJob.rows`."""
+        for row in self._inner.rows(parallel_downloads=parallel_downloads):
+            yield row
+
+    async def pages(
+        self, *, locator: str | None = None, max_records: int | None = None
+    ) -> AsyncIterator[AsyncFakeResultPage]:
+        """See :meth:`FakeQueryJob.pages`."""
+        for page in self._inner.pages(locator=locator, max_records=max_records):
+            yield AsyncFakeResultPage(page)
+
+
 class AsyncFakeBulk:
     """Async twin of :class:`FakeBulk`."""
 
@@ -358,6 +644,18 @@ class AsyncFakeBulk:
             column_delimiter=column_delimiter,
         )
         return AsyncFakeIngestJob(job)
+
+    async def start_query(self, soql: str, *values: Any, include_deleted: bool = False) -> AsyncFakeQueryJob:
+        """See :meth:`FakeBulk.start_query`."""
+        return AsyncFakeQueryJob(self._inner.start_query(soql, *values, include_deleted=include_deleted))
+
+    async def query_job(self, job_id: str) -> AsyncFakeQueryJob:
+        """See :meth:`FakeBulk.query_job`."""
+        return AsyncFakeQueryJob(self._inner.query_job(job_id))
+
+    async def ingest_job(self, job_ids: Sequence[str]) -> AsyncFakeIngestJob:
+        """See :meth:`FakeBulk.ingest_job`."""
+        return AsyncFakeIngestJob(self._inner.ingest_job(job_ids))
 
     async def query(
         self,

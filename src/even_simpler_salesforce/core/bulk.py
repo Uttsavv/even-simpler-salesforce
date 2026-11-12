@@ -85,6 +85,7 @@ __all__ = [
     "parse_job_info",
     "parse_job_state",
     "parse_locator",
+    "parse_record_count",
     "parse_result_pages",
     "query_job_body",
     "select_fields",
@@ -657,6 +658,18 @@ def parse_locator(headers: Mapping[str, str]) -> str | None:
     if value is None or value.strip() in ("", "null"):
         return None
     return value.strip()
+
+
+def parse_record_count(headers: Mapping[str, str]) -> int | None:
+    """The ``Sforce-NumberOfRecords`` of a query results page, or ``None`` if it's missing."""
+    value = headers.get("sforce-numberofrecords")
+    if value is None:
+        return None
+    try:
+        count = int(value.strip())
+    except ValueError:
+        return None
+    return count if count >= 0 else None
 
 
 def parse_result_pages(body: Any, prefix: str) -> tuple[list[str], str | None]:
