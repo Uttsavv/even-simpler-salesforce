@@ -1,0 +1,46 @@
+{
+  "esf_fixture": 1,
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/graphql",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "query": "query { uiapi { query { NoSuchObject__c(first: 1) { edges { node { Id } } } } } }"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1685/15000"
+        },
+        "json": {
+          "data": {},
+          "errors": [
+            {
+              "extensions": {
+                "ErrorType": "ValidationError"
+              },
+              "locations": [
+                {
+                  "column": 25,
+                  "line": 1
+                }
+              ],
+              "message": "Validation error (FieldUndefined@[uiapi/query/NoSuchObject__c]) : Field &#39;NoSuchObject__c&#39; in type &#39;RecordQuery&#39; is undefined",
+              "paths": []
+            }
+          ],
+          "extensions": {}
+        }
+      }
+    }
+  ]
+}

@@ -10,10 +10,22 @@ from datetime import datetime, timezone
 from email.utils import format_datetime
 from typing import TYPE_CHECKING, Any, TypeVar, overload
 
-from ...core.http import RawResponse, RequestSpec, check_record_id, check_sobject, url_segment
-from ...core.records import apply_model, duplicate_rule_header, format_sf_datetime, parse_upsert
+from ...core.classify import error_from_detail
+from ...core.http import RawResponse, RequestSpec, check_record_id, check_sobject, path_template, url_segment
+from ...core.records import (
+    apply_model,
+    duplicate_matches,
+    external_id_in_data,
+    external_id_lookup_soql,
+    format_sf_datetime,
+    needs_external_id_fallback,
+    parse_record_results,
+    parse_upsert,
+    query_ids,
+    write_headers,
+)
 from ...core.soql import soql_identifier
-from ...errors import UnexpectedResponse
+from ...errors import MultipleMatches, NotFound, SalesforceError, UnexpectedResponse
 from ...models import UpsertResult
 
 if TYPE_CHECKING:
@@ -36,17 +48,22 @@ def _write_headers(
     allow_save: bool | None,
     if_unmodified_since: datetime | None = None,
 ) -> dict[str, str]:
-    h: dict[str, str] = {}
-    if assignment_rule_id is not None:
-        if isinstance(assignment_rule_id, bool):
-            h["Sforce-Auto-Assign"] = "TRUE" if assignment_rule_id else "FALSE"
-        else:
-            h["Sforce-Auto-Assign"] = check_record_id(assignment_rule_id)
-    if allow_save is not None:
-        h["Sforce-Duplicate-Rule-Header"] = duplicate_rule_header(allow_save=allow_save)
+    h = write_headers(assignment_rule_id, allow_save)
     if if_unmodified_since is not None:
         h["If-Unmodified-Since"] = _http_date(if_unmodified_since)
     return h
+
+
+def _in_context(err: SalesforceError, spec: RequestSpec) -> SalesforceError:
+    """Give an error built by the library the context the transport would have set.
+
+    ``spec`` must already be scoped (``SObject._scoped``).
+    """
+    err.operation = spec.operation
+    err.sobject = spec.sobject
+    err.method = spec.method
+    err.path = spec.path_template or path_template(spec.path)
+    return err
 
 
 class SObject:
@@ -64,16 +81,20 @@ class SObject:
     def __repr__(self) -> str:
         return f"<{type(self).__name__} {self.name}>"
 
+    def _scoped(self, spec: RequestSpec) -> RequestSpec:
+        """``spec`` with the Tooling API prefix applied to its path and operation, if any."""
+        if not self._base:
+            return spec
+        template = spec.path_template
+        return dataclasses.replace(
+            spec,
+            path=self._base + spec.path,
+            operation="tooling." + spec.operation,
+            path_template=f"/{self._base}{template.lstrip('/')}" if template else None,
+        )
+
     def _send(self, spec: RequestSpec) -> RawResponse:
-        if self._base:
-            template = spec.path_template
-            spec = dataclasses.replace(
-                spec,
-                path=self._base + spec.path,
-                operation="tooling." + spec.operation,
-                path_template=f"/{self._base}{template.lstrip('/')}" if template else None,
-            )
-        return self._sf._send(spec)
+        return self._sf._send(self._scoped(spec))
 
     # --- read --------------------------------------------------------------------------
 
@@ -142,19 +163,60 @@ class SObject:
     def get_by_external_id(
         self, field: str, value: str, fields: Sequence[str] | None = None, *, model: Any = None
     ) -> Any:
-        """``GET sobjects/{o}/{field}/{value}``."""
+        """``GET sobjects/{o}/{field}/{value}``: the record whose external id ``field`` is ``value``.
+
+        Salesforce reads a path that ends in ``.json``, ``.xml`` or ``.html`` as a response
+        format, so it can't find a record whose value ends like that. For such values the client
+        finds the id with ``SELECT Id ... WHERE field = value`` and then reads the record with
+        ``GET sobjects/{o}/{id}``: two requests, the same result and the same errors.
+
+        Raises:
+            NotFound: No record has this value.
+            MultipleMatches: Several records have it (the field isn't unique).
+        """
         params = {"fields": ",".join(soql_identifier(f) for f in fields)} if fields else None
+        spec = RequestSpec(
+            "GET",
+            f"sobjects/{self.name}/{soql_identifier(field)}/{url_segment(str(value))}",
+            params=params,
+            operation="sobject.get_by_external_id",
+            sobject=self.name,
+            path_template=f"/sobjects/{self.name}/{field}/:value",
+        )
+        if needs_external_id_fallback(str(value)):
+            record_id = self._find_by_external_id(field, str(value), spec)
+            return self.get(record_id, fields, model=model)
+        raw = self._send(spec)
+        return apply_model([raw.json()], model)[0]
+
+    def _find_by_external_id(self, field: str, value: str, spec: RequestSpec) -> str:
+        """The id of the one record with ``field = value``, by SOQL (see ``get_by_external_id``)."""
+        q = external_id_lookup_soql(self.name, field, value)
         raw = self._send(
             RequestSpec(
                 "GET",
-                f"sobjects/{self.name}/{soql_identifier(field)}/{url_segment(str(value))}",
-                params=params,
+                "query",
+                params={"q": q},
+                idempotent=True,
                 operation="sobject.get_by_external_id",
                 sobject=self.name,
-                path_template=f"/sobjects/{self.name}/{field}/:value",
+                soql=q,
             )
         )
-        return apply_model([raw.json()], model)[0]
+        ids = query_ids(raw.json())
+        if not ids:
+            raise _in_context(
+                NotFound("The requested resource does not exist", error_code="NOT_FOUND", status=404),
+                self._scoped(spec),
+            )
+        if len(ids) > 1:
+            base = f"/services/data/v{self._sf.api_version}/{self._base}sobjects/{self.name}"
+            matches = tuple(f"{base}/{i}" for i in ids)
+            raise _in_context(
+                MultipleMatches(f"external id matched {len(ids)} records", matches=matches, status=300),
+                self._scoped(spec),
+            )
+        return ids[0]
 
     def describe(self, *, cached: bool = True) -> dict[str, Any]:
         """``GET sobjects/{o}/describe``, served from the describe cache when fresh."""
@@ -237,7 +299,11 @@ class SObject:
         allow_save: bool | None = None,
         if_unmodified_since: datetime | None = None,
     ) -> None:
-        """``PATCH sobjects/{o}/{id}``. ``if_unmodified_since`` → :class:`Conflict` on 412."""
+        """``PATCH sobjects/{o}/{id}``. ``if_unmodified_since`` → :class:`Conflict` on 412.
+
+        A key set to ``None`` is sent as JSON ``null`` and clears the field; a key left out of
+        ``data`` keeps its value.
+        """
         content, ctype = self._sf._transport.encode(dict(data))
         self._send(
             RequestSpec(
@@ -262,7 +328,19 @@ class SObject:
         assignment_rule_id: str | bool | None = None,
         allow_save: bool | None = None,
     ) -> UpsertResult:
-        """``PATCH sobjects/{o}/{field}/{value}``. Raises :class:`MultipleMatches` on HTTP 300."""
+        """``PATCH sobjects/{o}/{field}/{value}``: update the matching record, or create one.
+
+        For a value that ends in ``.json``, ``.xml`` or ``.html`` (which Salesforce reads as a
+        response format in a path), the client sends the same upsert as one record through
+        ``PATCH composite/sobjects/{o}/{field}`` instead. The result and the errors are the same.
+
+        Raises:
+            MultipleMatches: Several records have this value (HTTP 300).
+            InvalidField: ``data`` also sets ``field``.
+        """
+        headers = _write_headers(assignment_rule_id, allow_save)
+        if needs_external_id_fallback(str(value)):
+            return self._upsert_by_collection(field, str(value), data, headers)
         content, ctype = self._sf._transport.encode(dict(data))
         raw = self._send(
             RequestSpec(
@@ -270,7 +348,7 @@ class SObject:
                 f"sobjects/{self.name}/{soql_identifier(field)}/{url_segment(str(value))}",
                 content=content,
                 content_type=ctype,
-                headers=_write_headers(assignment_rule_id, allow_save),
+                headers=headers,
                 operation="sobject.upsert",
                 sobject=self.name,
                 path_template=f"/sobjects/{self.name}/{field}/:value",
@@ -281,12 +359,53 @@ class SObject:
         body = raw.json() if raw.content else None
         return parse_upsert(raw.status, body)
 
+    def _upsert_by_collection(
+        self, field: str, value: str, data: Mapping[str, Any], headers: dict[str, str]
+    ) -> UpsertResult:
+        """``upsert`` through sObject Collections, for values that can't go in a path."""
+        spec = RequestSpec(
+            "PATCH",
+            f"composite/sobjects/{self.name}/{soql_identifier(field)}",
+            operation="sobject.upsert",
+            sobject=self.name,
+            path_template=f"/sobjects/{self.name}/{field}/:value",
+            records=1,
+            dml=True,
+        )
+        invalid = external_id_in_data(field, data)
+        if invalid is not None:
+            raise _in_context(invalid, self._scoped(spec))
+        record = {"attributes": {"type": self.name}, **data, field: value}
+        content, ctype = self._sf._transport.encode({"allOrNone": False, "records": [record]})
+        spec = dataclasses.replace(spec, content=content, content_type=ctype, headers=headers)
+        raw = self._send(spec)
+        result = parse_record_results(raw.json(), 1)[0]
+        if result.ok:
+            return UpsertResult(id=result.id, created=bool(result.created))
+        primary = result.errors[0] if result.errors else None
+        if primary is None:
+            raise UnexpectedResponse(
+                "upsert failed without error details", operation=self._scoped(spec).operation
+            )
+        multiple = duplicate_matches(primary, self._sf.api_version, self.name)
+        if multiple is not None:
+            raise _in_context(multiple, self._scoped(spec))
+        raise error_from_detail(
+            primary,
+            status=400,
+            spec=self._scoped(spec),
+            dml=True,
+            error_tags=self._sf._transport.error_tags,
+            errors=result.errors,
+        )
+
     def delete(self, record_id: str) -> None:
         """``DELETE sobjects/{o}/{id}``.
 
         Takes no conditional headers: Salesforce doesn't support them on DELETE
-        (REST API Developer Guide, *Conditional Request Headers*), so a precondition would be
-        ignored and the record deleted anyway.
+        (REST API Developer Guide, *Conditional Request Headers*). Sent anyway, an
+        ``If-Unmodified-Since`` makes Salesforce reject the request (500 ``UNKNOWN_EXCEPTION``,
+        or 400 ``BAD_HEADER`` for a future date) and keep the record.
         """
         self._send(
             RequestSpec(

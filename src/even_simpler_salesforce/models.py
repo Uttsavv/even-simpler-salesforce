@@ -94,7 +94,8 @@ class ActionResult:
 
     Attributes:
         ok: ``isSuccess`` from Salesforce.
-        outputs: ``outputValues`` (empty when the invocation failed).
+        outputs: ``outputValues``. Usually empty when the invocation failed; a failed Flow
+            interview still has ``Flow__InterviewGuid`` and ``Flow__InterviewStatus``.
         errors: The error entries when it failed.
         action_name: ``actionName`` as Salesforce reports it.
     """
@@ -824,8 +825,9 @@ class DeployResult:
 
     Attributes:
         id: The deployment id (``0Af...``).
-        status: ``Pending``, ``InProgress``, ``FinalizingDeploy``, ``FinalizingDeployFailed``,
-            ``Succeeded``, ``SucceededPartial``, ``Failed``, ``Canceling`` or ``Canceled``.
+        status: ``Pending``, ``InProgress``, ``Finalizing``, ``FinalizingDeploy``,
+            ``FinalizingDeployFailed``, ``Succeeded``, ``SucceededPartial``, ``Failed``,
+            ``Canceling`` or ``Canceled``.
         done: Whether Salesforce has finished the deployment.
         success: Whether the deployment succeeded.
         check_only: Whether this was a validation that saves nothing.
@@ -863,13 +865,19 @@ class DeployResult:
 
     @property
     def failed(self) -> bool:
-        """Whether the deployment finished without fully succeeding."""
+        """Whether the deployment finished without fully succeeding.
+
+        A finished deployment with failed Apex tests counts as failed too. With
+        ``rollback_on_error`` off (the default in non-production orgs) Salesforce reports such a
+        deployment as ``Succeeded``, with the failures under ``test_failures``.
+        """
         if self.status in _DEPLOY_FAILED_STATES:
             return True
-        return self.done and not self.success
+        return self.done and (not self.success or self.test_errors > 0 or bool(self.test_failures))
 
     def raise_for_errors(self) -> None:
-        """Raise :class:`DeployFailed` if the deployment failed or deployed only some components.
+        """Raise :class:`DeployFailed` if the deployment failed, deployed only some components,
+        or ran Apex tests that failed.
 
         Does nothing while the deployment is still running.
         """
@@ -1086,8 +1094,10 @@ class PubSubEvent:
         topic: The topic you subscribed to, e.g. ``"/data/AccountChangeEvent"``.
         replay_id: Opaque position of the event in the stream. Store it to resume after it.
             Replay ids are not unique across org migrations: never de-duplicate on them.
-        event_id: ``EventUuid`` of a platform event, the key to de-duplicate on. ``None`` for
-            change events: de-duplicate those on ``(change.transaction_key,
+        event_id: ``ConsumerEvent.event.id`` as Salesforce sent it, or ``None`` when it was
+            empty. On a platform event it is the ``EventUuid``, the key to de-duplicate on.
+            Change events carry one too, but Salesforce documents it for platform events
+            only: de-duplicate change events on ``(change.transaction_key,
             change.sequence_number)``.
         schema_id: Id of the Avro schema the payload was written with.
         payload: The decoded event. Change events keep their ``ChangeEventHeader`` here too.

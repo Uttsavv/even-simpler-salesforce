@@ -736,6 +736,8 @@ class FakeCollections:
         sobject: str | None = None,
         all_or_none: bool = False,
         concurrency: int | None = None,
+        assignment_rule_id: str | bool | None = None,
+        allow_save: bool | None = None,
     ) -> BatchResult[RecordResult]:
         """Create records. Rows need ``attributes.type`` or ``sobject=``."""
         row_list = [dict(r) for r in rows]
@@ -743,7 +745,13 @@ class FakeCollections:
             self._who,
             "collections.create",
             sobject,
-            {"rows": row_list, "sobject": sobject, "all_or_none": all_or_none},
+            {
+                "rows": row_list,
+                "sobject": sobject,
+                "all_or_none": all_or_none,
+                "assignment_rule_id": assignment_rule_id,
+                "allow_save": allow_save,
+            },
             lambda: self._state.coll_create(row_list, sobject, all_or_none),
             method="POST",
             path="composite/sobjects",
@@ -757,6 +765,8 @@ class FakeCollections:
         *,
         all_or_none: bool = False,
         concurrency: int | None = None,
+        assignment_rule_id: str | bool | None = None,
+        allow_save: bool | None = None,
     ) -> BatchResult[RecordResult]:
         """Update records; each row needs ``Id``."""
         row_list = [dict(r) for r in rows]
@@ -764,7 +774,12 @@ class FakeCollections:
             self._who,
             "collections.update",
             sobject,
-            {"rows": row_list, "all_or_none": all_or_none},
+            {
+                "rows": row_list,
+                "all_or_none": all_or_none,
+                "assignment_rule_id": assignment_rule_id,
+                "allow_save": allow_save,
+            },
             lambda: self._state.coll_update(sobject, row_list, all_or_none),
             method="PATCH",
             path="composite/sobjects",
@@ -779,6 +794,8 @@ class FakeCollections:
         *,
         all_or_none: bool = False,
         concurrency: int | None = None,
+        assignment_rule_id: str | bool | None = None,
+        allow_save: bool | None = None,
     ) -> BatchResult[RecordResult]:
         """Upsert records by external id ``field``."""
         row_list = [dict(r) for r in rows]
@@ -786,7 +803,13 @@ class FakeCollections:
             self._who,
             "collections.upsert",
             sobject,
-            {"field": field, "rows": row_list, "all_or_none": all_or_none},
+            {
+                "field": field,
+                "rows": row_list,
+                "all_or_none": all_or_none,
+                "assignment_rule_id": assignment_rule_id,
+                "allow_save": allow_save,
+            },
             lambda: self._state.coll_upsert(sobject, field, row_list, all_or_none),
             method="PATCH",
             path=f"composite/sobjects/{sobject}/{field}",
@@ -1599,9 +1622,18 @@ class AsyncFakeCollections:
         sobject: str | None = None,
         all_or_none: bool = False,
         concurrency: int | None = None,
+        assignment_rule_id: str | bool | None = None,
+        allow_save: bool | None = None,
     ) -> BatchResult[RecordResult]:
         """See :meth:`FakeCollections.create`."""
-        return self._inner.create(rows, sobject=sobject, all_or_none=all_or_none, concurrency=concurrency)
+        return self._inner.create(
+            rows,
+            sobject=sobject,
+            all_or_none=all_or_none,
+            concurrency=concurrency,
+            assignment_rule_id=assignment_rule_id,
+            allow_save=allow_save,
+        )
 
     async def update(
         self,
@@ -1610,9 +1642,18 @@ class AsyncFakeCollections:
         *,
         all_or_none: bool = False,
         concurrency: int | None = None,
+        assignment_rule_id: str | bool | None = None,
+        allow_save: bool | None = None,
     ) -> BatchResult[RecordResult]:
         """See :meth:`FakeCollections.update`."""
-        return self._inner.update(sobject, rows, all_or_none=all_or_none, concurrency=concurrency)
+        return self._inner.update(
+            sobject,
+            rows,
+            all_or_none=all_or_none,
+            concurrency=concurrency,
+            assignment_rule_id=assignment_rule_id,
+            allow_save=allow_save,
+        )
 
     async def upsert(
         self,
@@ -1622,9 +1663,19 @@ class AsyncFakeCollections:
         *,
         all_or_none: bool = False,
         concurrency: int | None = None,
+        assignment_rule_id: str | bool | None = None,
+        allow_save: bool | None = None,
     ) -> BatchResult[RecordResult]:
         """See :meth:`FakeCollections.upsert`."""
-        return self._inner.upsert(sobject, field, rows, all_or_none=all_or_none, concurrency=concurrency)
+        return self._inner.upsert(
+            sobject,
+            field,
+            rows,
+            all_or_none=all_or_none,
+            concurrency=concurrency,
+            assignment_rule_id=assignment_rule_id,
+            allow_save=allow_save,
+        )
 
     async def delete(
         self,

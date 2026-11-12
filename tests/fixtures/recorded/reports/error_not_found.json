@@ -1,0 +1,35 @@
+{
+  "esf_fixture": 1,
+  "note": "recorded with esf.testing.record (tests/sandbox/test_ui_reports.py, API 68.0)",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/analytics/reports/00O000000000000EAA",
+        "query": [
+          [
+            "includeDetails",
+            "true"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8"
+        },
+        "json": [
+          {
+            "errorCode": "NOT_FOUND",
+            "message": "The data you’re trying to access is unavailable.",
+            "specificErrorCode": 104
+          }
+        ]
+      }
+    }
+  ]
+}

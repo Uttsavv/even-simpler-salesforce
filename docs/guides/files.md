@@ -46,7 +46,8 @@ raises the error instead.
 ## Share a file with a record
 
 Pass `link_to=` to share the new file with a record in the same request. Salesforce then chooses
-the share type and visibility.
+the share type and visibility. The documentation doesn't name them; on a Lead in a Developer
+Edition org (API v68.0) the link was a viewer link (`"V"`) visible to all users (`"AllUsers"`).
 
 To choose them yourself, also pass `share_type=` or `visibility=`. The client then makes two more
 calls: one gets the document id and one creates the link. If the link fails, the error message
@@ -143,7 +144,13 @@ To seed a file without recording a call, use `fake.add_file(data, filename=..., 
 
 The upload body has two parts. The first part is JSON with `PathOnClient`, `Title` and, with
 `link_to=` but no `share_type=` or `visibility=`, `FirstPublishLocationId`. The second part is the file. The client sends
-`Content-Length` when it knows the size, and chunked transfer encoding otherwise.
+`Content-Length` when it knows the size, and chunked transfer encoding otherwise. Salesforce
+accepts both.
+
+Salesforce doesn't send a file's own type with the download: `VersionData` came as
+`application/octetstream` in a Developer Edition org (API v68.0). Use
+`ContentDocument.FileExtension` (`FileLink.file_extension`) instead. An attachment's `Body` comes
+with the attachment's `ContentType`. A missing or deleted id raises `NotFound`.
 
 A download emits its `sf.request` event when the stream closes. `bytes_in` is then the number of
 bytes received, which is the compressed size if Salesforce sent the file gzipped. In that case

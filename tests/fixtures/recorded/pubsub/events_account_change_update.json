@@ -1,0 +1,166 @@
+{
+ "_note": "Recorded 2026-11-12 from a Developer Edition org (API v68.0) by a raw gRPC probe; ids, org id, user and record names redacted. One Account update nulled Description, Website and BillingStreet, changed BillingCity and set Esf_Day__c (Date) and Esf_When__c (DateTime); a second update nulled BillingCity only. Re-reading both events from EARLIEST returned the same ConsumerEvent.event.id for each replay id.",
+ "topic": "/data/AccountChangeEvent",
+ "id_stable_on_redelivery": [
+  true,
+  true
+ ],
+ "events": [
+  {
+   "id": "6475e6f1-7c6e-4287-887e-f8c2546ce473",
+   "schema_id": "vYNl82EQhf0BDdrB7-ZcNg",
+   "headers": [],
+   "record": {
+    "ChangeEventHeader": {
+     "entityName": "Account",
+     "recordIds": [
+      "001xx0000000001AAA"
+     ],
+     "changeType": "UPDATE",
+     "changeOrigin": "com/salesforce/api/rest/68.0;client=esf-sandbox",
+     "transactionKey": "00000000-0000-0000-0000-000000000001",
+     "sequenceNumber": 1,
+     "commitTimestamp": 1794437524000,
+     "commitNumber": 1794437524557225998,
+     "commitUser": "005xx0000000001AAA",
+     "nulledFields": [
+      "0x010200",
+      "4-0x01"
+     ],
+     "diffFields": [],
+     "changedFields": [
+      "0x180000410200",
+      "4-0x03"
+     ]
+    },
+    "Name": null,
+    "Type": null,
+    "ParentId": null,
+    "BillingAddress": {
+     "Street": null,
+     "City": "Paris",
+     "State": null,
+     "PostalCode": null,
+     "Country": null,
+     "StateCode": null,
+     "CountryCode": null,
+     "Latitude": null,
+     "Longitude": null,
+     "GeocodeAccuracy": null
+    },
+    "ShippingAddress": null,
+    "Phone": null,
+    "Fax": null,
+    "AccountNumber": null,
+    "Website": null,
+    "Sic": null,
+    "Industry": null,
+    "AnnualRevenue": null,
+    "NumberOfEmployees": null,
+    "Ownership": null,
+    "TickerSymbol": null,
+    "Description": null,
+    "Rating": null,
+    "Site": null,
+    "OwnerId": null,
+    "CreatedDate": null,
+    "CreatedById": null,
+    "LastModifiedDate": 1794437524000,
+    "LastModifiedById": null,
+    "Jigsaw": null,
+    "JigsawCompanyId": null,
+    "CleanStatus": null,
+    "AccountSource": null,
+    "DunsNumber": null,
+    "Tradestyle": null,
+    "NaicsCode": null,
+    "NaicsDesc": null,
+    "YearStarted": null,
+    "SicDesc": null,
+    "DandbCompanyId": null,
+    "OperatingHoursId": null,
+    "CustomerPriority__c": null,
+    "SLA__c": null,
+    "Active__c": null,
+    "NumberofLocations__c": null,
+    "UpsellOpportunity__c": null,
+    "SLASerialNumber__c": null,
+    "SLAExpirationDate__c": null,
+    "Esf_Day__c": 1794441600000,
+    "Esf_When__c": 1794479400000
+   }
+  },
+  {
+   "id": "8724181a-864e-4b6f-97f8-9585ae52d227",
+   "schema_id": "vYNl82EQhf0BDdrB7-ZcNg",
+   "headers": [],
+   "record": {
+    "ChangeEventHeader": {
+     "entityName": "Account",
+     "recordIds": [
+      "001xx0000000001AAA"
+     ],
+     "changeType": "UPDATE",
+     "changeOrigin": "com/salesforce/api/rest/68.0;client=esf-sandbox",
+     "transactionKey": "00000000-0000-0000-0000-000000000002",
+     "sequenceNumber": 1,
+     "commitTimestamp": 1794437527000,
+     "commitNumber": 1794437527314472962,
+     "commitUser": "005xx0000000001AAA",
+     "nulledFields": [
+      "4-0x02"
+     ],
+     "diffFields": [],
+     "changedFields": [
+      "0x400000",
+      "4-0x02"
+     ]
+    },
+    "Name": null,
+    "Type": null,
+    "ParentId": null,
+    "BillingAddress": null,
+    "ShippingAddress": null,
+    "Phone": null,
+    "Fax": null,
+    "AccountNumber": null,
+    "Website": null,
+    "Sic": null,
+    "Industry": null,
+    "AnnualRevenue": null,
+    "NumberOfEmployees": null,
+    "Ownership": null,
+    "TickerSymbol": null,
+    "Description": null,
+    "Rating": null,
+    "Site": null,
+    "OwnerId": null,
+    "CreatedDate": null,
+    "CreatedById": null,
+    "LastModifiedDate": 1794437527000,
+    "LastModifiedById": null,
+    "Jigsaw": null,
+    "JigsawCompanyId": null,
+    "CleanStatus": null,
+    "AccountSource": null,
+    "DunsNumber": null,
+    "Tradestyle": null,
+    "NaicsCode": null,
+    "NaicsDesc": null,
+    "YearStarted": null,
+    "SicDesc": null,
+    "DandbCompanyId": null,
+    "OperatingHoursId": null,
+    "CustomerPriority__c": null,
+    "SLA__c": null,
+    "Active__c": null,
+    "NumberofLocations__c": null,
+    "UpsellOpportunity__c": null,
+    "SLASerialNumber__c": null,
+    "SLAExpirationDate__c": null,
+    "Esf_Day__c": null,
+    "Esf_When__c": null
+   }
+  }
+ ]
+}

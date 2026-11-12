@@ -1,10 +1,35 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Salesforce User Interface API Developer Guide (Status Codes and Error Responses); no org recording yet",
-  "body": [
+  "esf_fixture": 1,
+  "note": "recorded with esf.testing.record (tests/sandbox/test_ui_reports.py, API 68.0)",
+  "interactions": [
     {
-      "errorCode": "ILLEGAL_QUERY_PARAMETER_VALUE",
-      "message": "recordId should be a valid record ID: 003R000000"
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/ui-api/records/00Q000000000000AAA",
+        "query": [
+          [
+            "fields",
+            "Lead.Name"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=3119/15000"
+        },
+        "json": [
+          {
+            "errorCode": "UNKNOWN_EXCEPTION",
+            "message": "Record ID is malformed: 00Q000000000000AAA"
+          }
+        ]
+      }
     }
   ]
 }

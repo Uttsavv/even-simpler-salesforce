@@ -1,14 +1,51 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Salesforce Reports and Dashboards REST API Developer Guide (Execute Async, Instances List, Instance Results); no org recording yet",
-  "body": {
-    "id": "0LGxx0000000001AAA",
-    "requestDate": "2026-11-11T09:00:00Z",
-    "completionDate": null,
-    "hasDetailRows": true,
-    "ownerId": "005xx0000000001AAA",
-    "queryable": false,
-    "status": "New",
-    "url": "/services/data/v68.0/analytics/reports/00Oxx0000000001AAA/instances/0LGxx0000000001AAA"
-  }
+  "esf_fixture": 1,
+  "note": "recorded with esf.testing.record (tests/sandbox/test_ui_reports.py, API 68.0)",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/analytics/reports/00O000000000001EAA/instances",
+        "query": [
+          [
+            "includeDetails",
+            "true"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "reportMetadata": {
+            "reportFilters": [
+              {
+                "column": "LAST_NAME",
+                "operator": "startsWith",
+                "value": "esf-sandbox-5d9621e906af-r"
+              }
+            ]
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=3167/15000"
+        },
+        "json": {
+          "completionDate": null,
+          "hasDetailRows": true,
+          "id": "0LG000000000002GAA",
+          "ownerId": "005000000000003AAA",
+          "queryable": false,
+          "requestDate": "2026-11-11T23:04:31Z",
+          "status": "New",
+          "url": "/services/data/v68.0/analytics/reports/00O000000000001EAA/instances/0LG000000000002GAA"
+        }
+      }
+    }
+  ]
 }

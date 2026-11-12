@@ -46,8 +46,12 @@ print(sorted(lead["fields"]))  # ['Company', 'Email', 'Name', 'Phone', 'Status']
 | `layout_types` | `"Full"`, `"Compact"` | return the fields on this layout |
 | `modes` | `"View"`, `"Edit"`, `"Create"` | the layout mode; Salesforce uses `View` without it |
 
-Pass `fields`, `layout_types` or both. With neither, the call raises `ValueError` before it
-sends anything.
+Pass either `fields` or `layout_types`. With neither, or with both, the call raises
+`ValueError` before it sends anything: Salesforce answers both with `400
+INVALID_INPUT_COMBINATION`.
+
+Each field is `{"value": ..., "displayValue": ...}`. `displayValue` is the formatted value, such
+as `"$1,500,000"` for a currency or the label of a picklist value, and `None` for plain text.
 
 ## Get object metadata
 
@@ -130,14 +134,22 @@ print(len(names))  # 152
 
 ## Handle errors
 
-UI API errors map to the usual classes. A record the user can't see raises `esf.NotFound`.
-An object that doesn't exist raises `esf.InvalidType` from `object_info()`.
+UI API errors map to the usual classes.
+
+| Problem | Exception | Salesforce answers |
+|---|---|---|
+| A record that doesn't exist or the user can't see | `esf.NotFound` | `404 NOT_FOUND` |
+| An object that doesn't exist, or the user can't access | `esf.Forbidden` | `403 INSUFFICIENT_ACCESS` |
+| An object the UI API doesn't support | `esf.InvalidType` | `400 INVALID_TYPE` |
+| A field in `fields` that doesn't exist | `esf.InvalidField` | `400 INVALID_FIELD` |
+| A field of another object in `fields` | `esf.RequestError` | `400 INVALID_INPUT` |
+| A bad `page_token` | `esf.RequestError` | `400 ILLEGAL_QUERY_PARAMETER_VALUE` |
 
 ```python
 try:
     await sf.ui.object_info("Invoice__c")
-except esf.InvalidType as exc:
-    print(exc.status, exc.error_code)  # 404 NOT_FOUND
+except esf.Forbidden as exc:
+    print(exc.status, exc.error_code)  # 403 INSUFFICIENT_ACCESS
 ```
 
 ## Test code that uses the UI API
@@ -156,7 +168,10 @@ except esf.InvalidType as exc:
   wait and read the cache.
 - `record()`, the defaults and the list views are not cached. They change with the data.
 - UI API error bodies have the same shape as REST error bodies, so the same classes apply.
-  `NOT_FOUND` from `object_info()` means the object doesn't exist, so it is `InvalidType`.
+  `NOT_FOUND` from `object_info()` would mean the object doesn't exist, so it is `InvalidType`;
+  a real org answers `403 INSUFFICIENT_ACCESS` instead.
+- The describe cache revalidates with `If-Modified-Since`. The UI API ignores it and sends the
+  full object again with `200`, so a revalidation costs one API call and saves no data.
 
 ## Limitations
 

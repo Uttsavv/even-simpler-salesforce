@@ -1,0 +1,152 @@
+{
+  "esf_fixture": 1,
+  "source": "recorded 2026-11-11 with esf.testing.record from a Developer Edition org (API v68.0); as deploy_test_failure, with rollbackOnError=true",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/metadata/deployRequest/0Af000000000001CAA",
+        "query": [
+          [
+            "includeDetails",
+            "true"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1506/15000"
+        },
+        "json": {
+          "deployOptions": null,
+          "deployResult": {
+            "canceledBy": null,
+            "canceledByName": null,
+            "checkOnly": true,
+            "completedDate": "2026-11-11T22:52:48.000+0000",
+            "createdBy": "005000000000002",
+            "createdByName": "<redacted>",
+            "createdDate": "2026-11-11T22:52:43.000+0000",
+            "deployExtensionResults": [],
+            "details": {
+              "componentFailures": [],
+              "componentSuccesses": [
+                {
+                  "changed": true,
+                  "columnNumber": null,
+                  "componentType": "ApexClass",
+                  "created": true,
+                  "createdDate": "2026-11-11T22:52:47.000+0000",
+                  "deleted": false,
+                  "fileName": "classes/EsfSandboxFailingTest.cls",
+                  "fullName": "EsfSandboxFailingTest",
+                  "id": "01p000000000003AAA",
+                  "lineNumber": null,
+                  "problem": null,
+                  "problemType": null,
+                  "success": true
+                },
+                {
+                  "changed": true,
+                  "columnNumber": null,
+                  "componentType": "",
+                  "created": false,
+                  "createdDate": "2026-11-11T22:52:47.000+0000",
+                  "deleted": false,
+                  "fileName": "package.xml",
+                  "fullName": "package.xml",
+                  "id": null,
+                  "lineNumber": null,
+                  "problem": null,
+                  "problemType": null,
+                  "success": true
+                }
+              ],
+              "retrieveResult": null,
+              "runTestResult": {
+                "apexLogId": null,
+                "codeCoverage": [],
+                "codeCoverageWarnings": [],
+                "failures": [
+                  {
+                    "id": "01p000000000003AAA",
+                    "message": "System.AssertException: Assertion Failed: esf-sandbox failure: Expected: 1, Actual: 2",
+                    "methodName": "fails",
+                    "name": "EsfSandboxFailingTest",
+                    "namespace": null,
+                    "seeAllData": null,
+                    "stackTrace": "Class.EsfSandboxFailingTest.fails: line 1, column 1",
+                    "testCategory": null,
+                    "time": 34.0,
+                    "type": "Class"
+                  }
+                ],
+                "flowCoverage": [
+                  {
+                    "elementsNotCovered": [
+                      "set_greeting",
+                      "is_fail",
+                      "create_bad_lead"
+                    ],
+                    "flowId": "301000000000004",
+                    "flowName": "Esf_Sandbox_Action_Flow",
+                    "flowNamespace": null,
+                    "numElements": 3,
+                    "numElementsNotCovered": 3,
+                    "processType": "AutoLaunchedFlow"
+                  },
+                  {
+                    "elementsNotCovered": [
+                      "esf_error",
+                      "is_esf_flow"
+                    ],
+                    "flowId": "301000000000005",
+                    "flowName": "Esf_Sandbox_V5b_Flow",
+                    "flowNamespace": null,
+                    "numElements": 2,
+                    "numElementsNotCovered": 2,
+                    "processType": "AutoLaunchedFlow"
+                  }
+                ],
+                "flowCoverageWarnings": [],
+                "numFailures": 1,
+                "numTestsRun": 1,
+                "successes": [],
+                "totalTime": 59.0
+              }
+            },
+            "done": true,
+            "errorMessage": null,
+            "errorStatusCode": null,
+            "id": "0Af000000000001CAA",
+            "ignoreWarnings": false,
+            "lastModifiedDate": "2026-11-11T22:52:48.000+0000",
+            "notifications": [],
+            "numberComponentErrors": 0,
+            "numberComponentsDeployed": 1,
+            "numberComponentsTotal": 1,
+            "numberFiles": 3,
+            "numberTestErrors": 1,
+            "numberTestsCompleted": 0,
+            "numberTestsTotal": 1,
+            "rollbackOnError": true,
+            "runTestsEnabled": true,
+            "startDate": "2026-11-11T22:52:47.000+0000",
+            "stateDetail": null,
+            "status": "Failed",
+            "success": false,
+            "zipSize": 495
+          },
+          "id": "0Af000000000001CAA",
+          "validatedDeployRequestId": null
+        }
+      }
+    }
+  ]
+}

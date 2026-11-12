@@ -1,0 +1,48 @@
+{
+  "esf_fixture": 1,
+  "note": "recorded with esf.testing.record (tests/sandbox/test_ui_reports.py, API 68.0)",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/analytics/reports/00O000000000001EAA",
+        "query": [
+          [
+            "includeDetails",
+            "true"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "reportMetadata": {
+            "reportFilters": [
+              {
+                "column": "LEAD_SOURCE",
+                "operator": "sortOf",
+                "value": "x"
+              }
+            ]
+          }
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=707/15000"
+        },
+        "json": [
+          {
+            "errorCode": "BAD_REQUEST",
+            "message": "For the filter 1: Specify a valid condition because sortOf is invalid.",
+            "specificErrorCode": 113
+          }
+        ]
+      }
+    }
+  ]
+}

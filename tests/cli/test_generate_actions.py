@@ -1,7 +1,9 @@
-"""``esf generate actions`` (§9.7, §9.18) against respx-mocked, **synthetic** describe responses.
+"""``esf generate actions`` (§9.7, §9.18) against respx-mocked describe responses.
 
-The describe and list shapes follow the Salesforce Actions Developer Guide (see
-tests/contract/test_actions.py for the URLs); no org recording exists yet.
+``_mock_org`` serves **synthetic** bodies (``actions/describe_assign_lead.json`` and inline
+ones) shaped after the Salesforce Actions Developer Guide (see tests/contract/test_actions.py
+for the URLs). ``test_generate_from_recorded_describes`` uses describes recorded from a
+Developer Edition org (API v68.0, 2026-11-12, V33 in big-bang.md §21).
 """
 
 from __future__ import annotations
@@ -26,7 +28,7 @@ from even_simpler_salesforce.cli._actions_codegen import (
 from even_simpler_salesforce.cli._generate_actions import env_prefix, parse_include
 from even_simpler_salesforce.testing import FakeSalesforce
 
-from ..fixtures import load_fixture
+from ..fixtures import load_fixture, load_response
 
 INSTANCE = "https://acme.my.salesforce.com"
 API = f"{INSTANCE}/services/data/v68.0"
@@ -63,7 +65,7 @@ def _mock_org(mock: respx.MockRouter) -> None:
         }
     )
     mock.get(f"{API}/actions/custom/flow/Assign_Lead").respond(
-        json=load_fixture("actions/describe_flow.json")
+        json=load_fixture("actions/describe_assign_lead.json")
     )
     mock.get(f"{API}/actions/custom/flow/Archive_Old").respond(json={"name": "Archive_Old", "inputs": []})
     mock.get(f"{API}/actions/custom/apex/OrderService").respond(
@@ -105,6 +107,37 @@ def test_generate_dataclasses(
     assert result == mod.AssignLeadResult(assigned_to="005", flow_interview_status="Finished")
     assert fake.run(order).total == 1.0
     assert fake.calls[0].args["inputs"] == {"leadId": "00Qxx0000000001AAA"}
+
+
+def test_generate_from_recorded_describes(tmp_path: Path, mock: respx.MockRouter) -> None:
+    """Recorded describes of an Apex, a Flow and a standard action (V33)."""
+    for path, fixture in (
+        ("custom/apex/EsfSandboxAction", "describe_apex"),
+        ("custom/flow/Esf_Sandbox_Action_Flow", "describe_flow"),
+        ("standard/chatterPost", "describe_standard"),
+    ):
+        status, body = load_response(f"actions/{fixture}.json")
+        mock.get(f"{API}/actions/{path}").respond(status, json=body)
+    out = tmp_path / "sf_recorded.py"
+    code = main(
+        ["generate", "actions", "--include", "apex:EsfSandboxAction",
+         "--include", "flow:Esf_Sandbox_Action_Flow", "--include", "standard:chatterPost",
+         "--out", str(out)]
+    )  # fmt: skip
+    assert code == EXIT_OK
+    mod = _load(out, "gen_rec")
+    apex = mod.EsfSandboxAction(name="esf")  # required Apex input: no default
+    with pytest.raises(TypeError):
+        mod.EsfSandboxAction()
+    assert mod.EsfSandboxActionFlow().name is None  # Flow inputs are never required
+    post = mod.ChatterPost(text="hi", subject_name_or_id="me")
+    assert post.visibility is None
+    fake = FakeSalesforce()
+    fake.on_action("apex", "EsfSandboxAction", {"greeting": "hello esf"})
+    fake.on_action("flow", "Esf_Sandbox_Action_Flow", {"greeting": "x", "Flow__InterviewStatus": "Finished"})
+    assert fake.run(apex) == mod.EsfSandboxActionResult(greeting="hello esf")
+    flow = fake.run(mod.EsfSandboxActionFlow(name="x"))
+    assert (flow.greeting, flow.flow_interview_status) == ("x", "Finished")
 
 
 def test_generate_pydantic(tmp_path: Path, mock: respx.MockRouter, monkeypatch: pytest.MonkeyPatch) -> None:

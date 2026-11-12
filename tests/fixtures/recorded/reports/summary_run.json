@@ -1,204 +1,396 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Salesforce Reports and Dashboards REST API Developer Guide (Execute Sync, Decode the Fact Map); no org recording yet",
-  "body": {
-    "attributes": {
-      "describeUrl": "/services/data/v68.0/analytics/reports/00Oxx0000000001AAA/describe",
-      "instancesUrl": "/services/data/v68.0/analytics/reports/00Oxx0000000001AAA/instances",
-      "reportId": "00Oxx0000000001AAA",
-      "reportName": "Open Opportunities",
-      "type": "Report"
-    },
-    "allData": true,
-    "hasDetailRows": true,
-    "factMap": {
-      "0!T": {
-        "aggregates": [
-          {
-            "label": "$1,500.00",
-            "value": {
-              "amount": 1500.0,
-              "currency": null
-            }
-          },
-          {
-            "label": "2",
-            "value": 2
-          }
+  "esf_fixture": 1,
+  "note": "recorded with esf.testing.record (tests/sandbox/test_ui_reports.py, API 68.0)",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/analytics/reports/00O000000000001EAA",
+        "query": [
+          [
+            "includeDetails",
+            "true"
+          ]
         ],
-        "rows": [
-          {
-            "dataCells": [
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "reportMetadata": {
+            "groupingsDown": [
               {
-                "label": "Acme",
-                "value": "001xx0000000001AAA"
-              },
-              {
-                "label": "Acme - 200 units",
-                "value": "Acme - 200 units"
-              },
-              {
-                "label": "$1,000.00",
-                "value": {
-                  "amount": 1000.0,
-                  "currency": null
-                }
+                "name": "CREATED_DATE",
+                "dateGranularity": "Day",
+                "sortOrder": "Asc"
               }
-            ]
-          },
-          {
-            "dataCells": [
+            ],
+            "aggregates": [
+              "s!ANNUAL_REVENUE",
+              "RowCount"
+            ],
+            "detailColumns": [
+              "LAST_NAME",
+              "ANNUAL_REVENUE",
+              "LEAD_SOURCE"
+            ],
+            "reportFilters": [
               {
-                "label": "Initech",
-                "value": "001xx0000000003AAA"
-              },
-              {
-                "label": "Initech pilot",
-                "value": "Initech pilot"
-              },
-              {
-                "label": "$500.00",
-                "value": {
-                  "amount": 500.0,
-                  "currency": null
-                }
+                "column": "LAST_NAME",
+                "operator": "startsWith",
+                "value": "esf-sandbox-5d9621e906af-r"
               }
             ]
           }
-        ]
+        }
       },
-      "1!T": {
-        "aggregates": [
-          {
-            "label": "$2,500.00",
-            "value": {
-              "amount": 2500.0,
-              "currency": null
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=3145/15000"
+        },
+        "json": {
+          "attributes": {
+            "describeUrl": "/services/data/v68.0/analytics/reports/00O000000000001EAA/describe",
+            "instancesUrl": "/services/data/v68.0/analytics/reports/00O000000000001EAA/instances",
+            "reportId": "00O000000000001EAA",
+            "reportName": "ESF Sandbox Leads Summary",
+            "type": "Report"
+          },
+          "allData": true,
+          "factMap": {
+            "0!T": {
+              "aggregates": [
+                {
+                  "label": "$7,500,000",
+                  "value": 7500000.0
+                },
+                {
+                  "label": "5",
+                  "value": 5
+                }
+              ],
+              "rows": [
+                {
+                  "dataCells": [
+                    {
+                      "label": "esf-sandbox-5d9621e906af-r0",
+                      "recordId": "00Q000000000002EAA",
+                      "value": "00Q000000000002EAA"
+                    },
+                    {
+                      "label": "$1,500,000",
+                      "recordId": "00Q000000000002EAA",
+                      "value": {
+                        "amount": 1500000,
+                        "currency": null
+                      }
+                    },
+                    {
+                      "label": "Web",
+                      "recordId": "00Q000000000002EAA",
+                      "value": "Web"
+                    }
+                  ]
+                },
+                {
+                  "dataCells": [
+                    {
+                      "label": "esf-sandbox-5d9621e906af-r1",
+                      "recordId": "00Q000000000003EAA",
+                      "value": "00Q000000000003EAA"
+                    },
+                    {
+                      "label": "$1,500,000",
+                      "recordId": "00Q000000000003EAA",
+                      "value": {
+                        "amount": 1500000,
+                        "currency": null
+                      }
+                    },
+                    {
+                      "label": "Web",
+                      "recordId": "00Q000000000003EAA",
+                      "value": "Web"
+                    }
+                  ]
+                },
+                {
+                  "dataCells": [
+                    {
+                      "label": "esf-sandbox-5d9621e906af-r2",
+                      "recordId": "00Q000000000004EAA",
+                      "value": "00Q000000000004EAA"
+                    },
+                    {
+                      "label": "$1,500,000",
+                      "recordId": "00Q000000000004EAA",
+                      "value": {
+                        "amount": 1500000,
+                        "currency": null
+                      }
+                    },
+                    {
+                      "label": "Web",
+                      "recordId": "00Q000000000004EAA",
+                      "value": "Web"
+                    }
+                  ]
+                },
+                {
+                  "dataCells": [
+                    {
+                      "label": "esf-sandbox-5d9621e906af-r3",
+                      "recordId": "00Q000000000005EAA",
+                      "value": "00Q000000000005EAA"
+                    },
+                    {
+                      "label": "$1,500,000",
+                      "recordId": "00Q000000000005EAA",
+                      "value": {
+                        "amount": 1500000,
+                        "currency": null
+                      }
+                    },
+                    {
+                      "label": "Phone Inquiry",
+                      "recordId": "00Q000000000005EAA",
+                      "value": "Phone Inquiry"
+                    }
+                  ]
+                },
+                {
+                  "dataCells": [
+                    {
+                      "label": "esf-sandbox-5d9621e906af-r4",
+                      "recordId": "00Q000000000006EAA",
+                      "value": "00Q000000000006EAA"
+                    },
+                    {
+                      "label": "$1,500,000",
+                      "recordId": "00Q000000000006EAA",
+                      "value": {
+                        "amount": 1500000,
+                        "currency": null
+                      }
+                    },
+                    {
+                      "label": "Partner Referral",
+                      "recordId": "00Q000000000006EAA",
+                      "value": "Partner Referral"
+                    }
+                  ]
+                }
+              ]
+            },
+            "T!T": {
+              "aggregates": [
+                {
+                  "label": "$7,500,000",
+                  "value": 7500000.0
+                },
+                {
+                  "label": "5",
+                  "value": 5
+                }
+              ],
+              "rows": []
             }
           },
-          {
-            "label": "1",
-            "value": 1
-          }
-        ],
-        "rows": [
-          {
-            "dataCells": [
+          "groupingsAcross": {
+            "groupings": []
+          },
+          "groupingsDown": {
+            "groupings": [
               {
-                "label": "Globex",
-                "value": "001xx0000000002AAA"
-              },
-              {
-                "label": "Globex renewal",
-                "value": "Globex renewal"
-              },
-              {
-                "label": "$2,500.00",
-                "value": {
-                  "amount": 2500.0,
-                  "currency": null
-                }
+                "groupings": [],
+                "key": "0",
+                "label": "11/11/2026",
+                "value": "2026-11-11"
               }
             ]
-          }
-        ]
-      },
-      "T!T": {
-        "aggregates": [
-          {
-            "label": "$4,000.00",
-            "value": {
-              "amount": 4000.0,
-              "currency": null
+          },
+          "hasDetailRows": true,
+          "hasExceededTabularRowLimit": false,
+          "picklistColors": {},
+          "reportExtendedMetadata": {
+            "aggregateColumnInfo": {
+              "RowCount": {
+                "dataType": "int",
+                "label": "Record Count"
+              },
+              "s!ANNUAL_REVENUE": {
+                "dataType": "currency",
+                "label": "Sum of Annual Revenue"
+              }
+            },
+            "availableDashboardSettings": null,
+            "detailColumnInfo": {
+              "LAST_NAME": {
+                "dataType": "string",
+                "entityColumnName": "Lead.Name",
+                "fieldInfo": {
+                  "entityName": "Lead",
+                  "fieldName": "LastName",
+                  "lookupEntityName": "Lead"
+                },
+                "filterValues": [],
+                "filterable": true,
+                "fullyQualifiedName": "Lead.LastName",
+                "inactiveFilterValues": [],
+                "isLookup": true,
+                "label": "Last Name",
+                "uniqueCountable": true
+              },
+              "ANNUAL_REVENUE": {
+                "dataType": "currency",
+                "entityColumnName": "Lead.AnnualRevenue",
+                "fieldInfo": {
+                  "entityName": "Lead",
+                  "fieldName": "AnnualRevenue"
+                },
+                "filterValues": [],
+                "filterable": true,
+                "fullyQualifiedName": "Lead.AnnualRevenue",
+                "inactiveFilterValues": [],
+                "isLookup": false,
+                "label": "Annual Revenue",
+                "uniqueCountable": true
+              },
+              "LEAD_SOURCE": {
+                "dataType": "picklist",
+                "entityColumnName": "Lead.LeadSource",
+                "fieldInfo": {
+                  "entityName": "Lead",
+                  "fieldName": "LeadSource"
+                },
+                "filterValues": [
+                  {
+                    "apiName": "Web",
+                    "label": "Web",
+                    "name": "Web"
+                  },
+                  {
+                    "apiName": "Phone Inquiry",
+                    "label": "Phone Inquiry",
+                    "name": "Phone Inquiry"
+                  },
+                  {
+                    "apiName": "Partner Referral",
+                    "label": "Partner Referral",
+                    "name": "Partner Referral"
+                  },
+                  {
+                    "apiName": "Purchased List",
+                    "label": "Purchased List",
+                    "name": "Purchased List"
+                  },
+                  {
+                    "apiName": "Other",
+                    "label": "Other",
+                    "name": "Other"
+                  }
+                ],
+                "filterable": true,
+                "fullyQualifiedName": "Lead.LeadSource",
+                "inactiveFilterValues": [],
+                "isLookup": false,
+                "label": "Lead Source",
+                "uniqueCountable": true
+              }
+            },
+            "groupingColumnInfo": {
+              "CREATED_DATE": {
+                "dataType": "date",
+                "entityColumnName": "Lead.CreatedDate",
+                "filterValues": [],
+                "filterable": true,
+                "fullyQualifiedName": "Lead.CreatedDate",
+                "groupingLevel": 0,
+                "inactiveFilterValues": [],
+                "isLookup": false,
+                "label": "Create Date",
+                "uniqueCountable": true
+              }
             }
           },
-          {
-            "label": "3",
-            "value": 3
+          "reportMetadata": {
+            "aggregates": [
+              "s!ANNUAL_REVENUE",
+              "RowCount"
+            ],
+            "chart": null,
+            "crossFilters": [],
+            "currency": null,
+            "dashboardSetting": null,
+            "description": null,
+            "detailColumns": [
+              "LAST_NAME",
+              "ANNUAL_REVENUE",
+              "LEAD_SOURCE"
+            ],
+            "developerName": "Esf_Sandbox_Leads_Summary",
+            "division": null,
+            "folderId": "00D000000000007EAA",
+            "groupingsAcross": [],
+            "groupingsDown": [
+              {
+                "dateGranularity": "Day",
+                "name": "CREATED_DATE",
+                "sortAggregate": null,
+                "sortOrder": "Asc"
+              }
+            ],
+            "hasDetailRows": true,
+            "hasRecordCount": true,
+            "historicalSnapshotDates": [],
+            "id": "00O000000000001EAA",
+            "name": "ESF Sandbox Leads Summary",
+            "paletteColors": [
+              "#126afc",
+              "#0b54ca",
+              "#0c3e99",
+              "#062a6c",
+              "#04153d",
+              "#a0a7fd",
+              "#768bfd"
+            ],
+            "presentationOptions": {
+              "hasStackedSummaries": false
+            },
+            "reportBooleanFilter": null,
+            "reportFilters": [
+              {
+                "column": "LAST_NAME",
+                "filterType": "fieldValue",
+                "isRunPageEditable": false,
+                "operator": "startsWith",
+                "value": "esf-sandbox-5d9621e906af-r"
+              }
+            ],
+            "reportFormat": "SUMMARY",
+            "reportType": {
+              "label": "Leads",
+              "type": "LeadList"
+            },
+            "scope": "org",
+            "showGrandTotal": true,
+            "showSubtotals": true,
+            "sortBy": [],
+            "standardDateFilter": {
+              "column": "CREATED_DATE",
+              "durationValue": "CUSTOM",
+              "endDate": null,
+              "startDate": null
+            },
+            "standardFilters": null,
+            "supportsRoleHierarchy": false,
+            "userOrHierarchyFilterId": null
           }
-        ]
-      }
-    },
-    "groupingsAcross": {
-      "groupings": []
-    },
-    "groupingsDown": {
-      "groupings": [
-        {
-          "key": "0",
-          "label": "Prospecting",
-          "value": "Prospecting",
-          "groupings": [],
-          "dateGranularity": "None"
-        },
-        {
-          "key": "1",
-          "label": "Closed Won",
-          "value": "Closed Won",
-          "groupings": [],
-          "dateGranularity": "None"
         }
-      ]
-    },
-    "reportExtendedMetadata": {
-      "aggregateColumnInfo": {
-        "s!AMOUNT": {
-          "label": "Sum of Amount",
-          "dataType": "currency",
-          "downGroupingContext": null,
-          "acrossGroupingContext": null
-        },
-        "RowCount": {
-          "label": "Record Count",
-          "dataType": "int",
-          "downGroupingContext": null,
-          "acrossGroupingContext": null
-        }
-      },
-      "detailColumnInfo": {
-        "ACCOUNT_NAME": {
-          "label": "Account Name",
-          "dataType": "string"
-        },
-        "OPPORTUNITY_NAME": {
-          "label": "Opportunity Name",
-          "dataType": "string"
-        },
-        "AMOUNT": {
-          "label": "Amount",
-          "dataType": "currency"
-        }
-      },
-      "groupingColumnInfo": {}
-    },
-    "reportMetadata": {
-      "id": "00Oxx0000000001AAA",
-      "name": "Open Opportunities",
-      "reportFormat": "SUMMARY",
-      "detailColumns": [
-        "ACCOUNT_NAME",
-        "OPPORTUNITY_NAME",
-        "AMOUNT"
-      ],
-      "aggregates": [
-        "s!AMOUNT",
-        "RowCount"
-      ],
-      "groupingsDown": [
-        {
-          "name": "STAGE_NAME",
-          "sortOrder": "Asc",
-          "dateGranularity": "None"
-        }
-      ],
-      "groupingsAcross": [],
-      "reportFilters": [],
-      "reportBooleanFilter": null,
-      "hasDetailRows": true,
-      "reportType": {
-        "type": "Opportunity",
-        "label": "Opportunities"
       }
     }
-  }
+  ]
 }

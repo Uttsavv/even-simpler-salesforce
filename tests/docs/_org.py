@@ -118,6 +118,7 @@ _IN = re.compile(r"(\w+)\s+IN\s*\(([^)]*)\)", re.I)
 _LIMIT = re.compile(r"\bLIMIT\s+(\d+)", re.I)
 _FIELDS_FN = re.compile(r"FIELDS\(\s*(STANDARD|CUSTOM|ALL)\s*\)", re.I)
 _GQL_CONN = re.compile(r"\buiapi\s*\{\s*query\s*\{\s*(?P<obj>\w+)\s*(?:\((?P<args>[^)]*)\))?\s*\{", re.S)
+_GQL_CREATE = re.compile(r"\buiapi\s*\{\s*(?P<obj>\w+)Create\s*\(")
 _GQL_FIRST = re.compile(r"\bfirst\s*:\s*(?:(\d+)|\$(\w+))")
 GQL_FIELDS = {"Name", "FirstName", "LastName", "Company", "Email", "Status", "Phone", "Country", "Street"}
 UI_COMPACT = {"Lead": ["Name", "Company", "Email", "Phone", "Status"]}
@@ -881,6 +882,13 @@ class FakeOrg:
 
     def _ui(self, parts: list[str], params: dict[str, str], version: str) -> dict[str, Any]:
         kind, args = parts[0], parts[1:]
+        if kind in ("object-info", "list-info") and args and args[0] not in self.records:
+            # A real org answers 403 for an unknown object here (big-bang.md §21 V61).
+            raise Rejected(
+                "INSUFFICIENT_ACCESS",
+                "You don't have access to this record. Ask your administrator for help or to request access.",
+                status=403,
+            )
         if kind == "records":
             sobject, rec = self._find(args[0])
             if "fields" in params:
@@ -956,11 +964,32 @@ class FakeOrg:
 
     def _graphql(self, body: dict[str, Any]) -> dict[str, Any]:
         query, variables = str(body.get("query", "")), dict(body.get("variables") or {})
+        create = _GQL_CREATE.search(query)
+        if create and create.group("obj") in PREFIXES:
+            # uiapi { <Object>Create(input: $input) { Record { Id } } }, as recorded from a real
+            # org (tests/fixtures/recorded/graphql/mutation_create.json).
+            obj = create.group("obj")
+            rec = self._store(obj, dict(dict(variables.get("input") or {}).get(obj) or {}))
+            return {
+                "data": {"uiapi": {f"{obj}Create": {"Record": {"Id": rec["Id"]}}}},
+                "errors": [],
+                "extensions": {},
+            }
         m = _GQL_CONN.search(query)
         if not m or m.group("obj") not in PREFIXES:
             return {
-                "data": None,
-                "errors": [{"message": "Invalid Syntax", "extensions": {"ErrorType": "InvalidSyntax"}}],
+                "data": {},
+                "errors": [
+                    {
+                        "extensions": {"ErrorType": "InvalidSyntax"},
+                        "locations": [{"column": 1, "line": 1}],
+                        "message": (
+                            "Invalid syntax with offending token &#39;&lt;EOF&gt;&#39; at line 1 column 1"
+                        ),
+                        "paths": [],
+                    }
+                ],
+                "extensions": {},
             }
         obj, args = m.group("obj"), m.group("args") or ""
         conn, _ = self._gql_block(query, m.end() - 1)
@@ -972,19 +1001,22 @@ class FakeOrg:
             fields = re.findall(r"\w+", flat)
         for f in fields:
             if f != "Id" and f not in GQL_FIELDS | CUSTOM_FIELDS:
+                # Shape recorded from a real org (tests/fixtures/recorded/graphql): data is {},
+                # the path key is "paths" and the message is HTML-escaped.
                 return {
-                    "data": None,
+                    "data": {},
                     "errors": [
                         {
-                            "message": (
-                                "Validation error of type FieldUndefined: "
-                                f"Field '{f}' in type '{obj}' is undefined"
-                            ),
-                            "locations": [{"line": 1, "column": query.find(f) + 1}],
-                            "path": None,
                             "extensions": {"ErrorType": "ValidationError"},
+                            "locations": [{"column": query.find(f) + 1, "line": 1}],
+                            "message": (
+                                f"Validation error (FieldUndefined@[uiapi/query/{obj}/edges/node/{f}]) : "
+                                f"Field &#39;{f}&#39; in type &#39;{obj}&#39; is undefined"
+                            ),
+                            "paths": [],
                         }
                     ],
+                    "extensions": {},
                 }
         fm = _GQL_FIRST.search(args)
         first = 10
@@ -1017,6 +1049,7 @@ class FakeOrg:
                 }
             },
             "errors": [],
+            "extensions": {},
         }
 
     # --- composite --------------------------------------------------------------------

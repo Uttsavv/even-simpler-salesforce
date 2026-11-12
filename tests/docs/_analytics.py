@@ -1,9 +1,10 @@
-"""Reports and dashboards of the synthetic docs org (``analytics/...``; all **synthetic**).
+"""Reports and dashboards of the docs org (``analytics/...``).
 
-Every report answers with the summary report fixture (``tests/fixtures/recorded/reports``):
-opportunities grouped by ``STAGE_NAME``. ``GET analytics/reports`` lists the recently viewed
-reports of ``recent.json``. An asynchronous run finishes at once. Every
-dashboard answers with the dashboard fixture.
+Every report answers with the recorded summary report fixture
+(``tests/fixtures/recorded/reports/summary_two_level_run.json``): Leads grouped by
+``LEAD_SOURCE``, then ``STATUS``. ``GET analytics/reports`` lists the recently viewed reports of
+``recent.json``. An asynchronous run finishes at once (synthetic). Every dashboard answers with
+the recorded dashboard fixture, and a refresh with ``dashboard_refresh.json``'s shape.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ _seq = itertools.count(1)
 
 
 def _run(report_id: str, include_details: bool) -> dict[str, Any]:
-    body = load_fixture("reports/summary_run.json")
+    body = load_fixture("reports/summary_two_level_run.json")
     body["attributes"]["reportId"] = report_id
     body["reportMetadata"]["id"] = report_id
     if not include_details:
@@ -55,8 +56,5 @@ def analytics(method: str, parts: list[str], params: dict[str, str], version: st
         if method == "GET":
             return load_fixture("reports/dashboard.json"), 200
         if method == "PUT":
-            return {
-                "id": parts[1],
-                "statusUrl": f"/services/data/v{version}/analytics/dashboards/{parts[1]}/status",
-            }, 201
+            return {"statusUrl": f"/services/data/v{version}/analytics/dashboards/{parts[1]}/status"}, 201
     return None

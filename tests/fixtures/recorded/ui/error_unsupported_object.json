@@ -1,0 +1,30 @@
+{
+  "esf_fixture": 1,
+  "note": "recorded with esf.testing.record (tests/sandbox/test_ui_reports.py, API 68.0)",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/ui-api/object-info/PermissionSetAssignment",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=3119/15000"
+        },
+        "json": [
+          {
+            "errorCode": "INVALID_TYPE",
+            "message": "Object PermissionSetAssignment is not supported in UI API"
+          }
+        ]
+      }
+    }
+  ]
+}

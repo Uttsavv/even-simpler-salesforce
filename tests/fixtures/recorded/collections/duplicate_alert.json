@@ -1,0 +1,92 @@
+{
+  "esf_fixture": 1,
+  "source": "recorded by tests/sandbox/test_core_rest.py::test_collections_duplicate_rule_header (esf.testing.record, Developer Edition org, API v68.0, 2026-11-12)",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/composite/sobjects",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "allOrNone": false,
+          "records": [
+            {
+              "FirstName": "FirstName 1",
+              "LastName": "LastName 1",
+              "Company": "esf-sandbox-dup",
+              "Email": "esf-sandbox-a955cbb6cf97-sync@example.com",
+              "attributes": {
+                "type": "Lead"
+              }
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=2687/15000"
+        },
+        "json": [
+          {
+            "success": false,
+            "errors": [
+              {
+                "statusCode": "DUPLICATES_DETECTED",
+                "message": "Use one of these records?",
+                "fields": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/composite/sobjects",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-duplicate-rule-header": "allowSave=true; includeRecordDetails=false; runAsCurrentUser=false",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "allOrNone": false,
+          "records": [
+            {
+              "FirstName": "FirstName 1",
+              "LastName": "LastName 1",
+              "Company": "esf-sandbox-dup",
+              "Email": "esf-sandbox-a955cbb6cf97-sync@example.com",
+              "attributes": {
+                "type": "Lead"
+              }
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=2694/15000"
+        },
+        "json": [
+          {
+            "id": "00Q000000000002EAA",
+            "success": true,
+            "errors": []
+          }
+        ]
+      }
+    }
+  ]
+}

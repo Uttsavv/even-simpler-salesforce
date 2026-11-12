@@ -1,0 +1,117 @@
+{
+  "esf_fixture": 1,
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/graphql",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "query": "\nmutation Create($input: LeadCreateInput!) {\n  uiapi { LeadCreate(input: $input) { Record { Id LastName { value } } } }\n}\n",
+          "variables": {
+            "input": {
+              "Lead": {
+                "LastName": "esf-sandbox-66b81d44a6df-gmut-sync",
+                "Company": "esf-sandbox"
+              }
+            }
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1694/15000"
+        },
+        "json": {
+          "data": {
+            "uiapi": {
+              "LeadCreate": {
+                "Record": {
+                  "Id": "00Q000000000001EAA",
+                  "LastName": {
+                    "value": "esf-sandbox-66b81d44a6df-gmut-sync"
+                  }
+                }
+              }
+            }
+          },
+          "errors": [],
+          "extensions": {}
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/graphql",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "query": "mutation Del($input: RecordDeleteInput!) { uiapi { LeadDelete(input: $input) { Id } } }",
+          "variables": {
+            "input": {
+              "Id": "00Q000000000001EAA"
+            }
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1701/15000"
+        },
+        "json": {
+          "data": {
+            "uiapi": {
+              "LeadDelete": {
+                "Id": "00Q000000000001EAA"
+              }
+            }
+          },
+          "errors": [],
+          "extensions": {}
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/query",
+        "query": [
+          [
+            "q",
+            "SELECT Id, LastName, Title FROM Lead WHERE LastName LIKE ? ORDER BY LastName"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1704/15000"
+        },
+        "json": {
+          "totalSize": 0,
+          "done": true,
+          "records": []
+        }
+      }
+    }
+  ]
+}

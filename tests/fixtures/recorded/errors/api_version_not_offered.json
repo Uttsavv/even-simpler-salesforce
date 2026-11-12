@@ -1,0 +1,29 @@
+{
+  "esf_fixture": 1,
+  "source": "recorded by tests/sandbox/test_core_rest.py::test_unoffered_api_version (esf.testing.record, Developer Edition org, API v68.0, 2026-11-12)",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v69.0/limits",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8"
+        },
+        "json": [
+          {
+            "errorCode": "NOT_FOUND",
+            "message": "The requested resource does not exist"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -63,6 +63,9 @@ _NEVER_SENT = (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout, http
 _REDACT_HEADERS = frozenset({"authorization", "cookie", "set-cookie"})
 #: In-memory tokens kept per client family; the least recently used beyond this are dropped.
 MAX_TOKENS_IN_MEMORY = 10_000
+#: After its one refresh, a call adopts at most this many newer stored tokens (another process
+#: refreshed and so revoked ours) before it gives up. The last adopted resend holds the store lock.
+MAX_ADOPTS = 2
 
 _K = TypeVar("_K")
 _V = TypeVar("_V")
@@ -408,6 +411,9 @@ class AsyncTransport:
         attempts = 0
         reasons: list[str] = []
         refreshed = False
+        adopted = 0  # newer stored tokens adopted after our refresh was superseded
+        superseded = False  # gave up while the store kept moving on
+        lock_resend = False  # send the next attempt under the token store's lock
         raw: RawResponse | None = None
         failure: BaseException | None = None
         bytes_out = len(spec.content) if spec.content else 0
@@ -430,13 +436,21 @@ class AsyncTransport:
                     attempts += 1
                     sent = True
                     generation = runtime.generation()
-                    try:
-                        raw, wire_in, wire_out = await self._attempt(spec, token, runtime.instance_url)
-                        bytes_in += wire_in
-                        bytes_out = wire_out
-                        err = classify(raw, spec, self.error_tags)
-                    except _AttemptFailed as f:
-                        raw, err, sent = None, f.error, f.sent
+                    # The last adopted resend runs under the store lock, so no other refresh
+                    # can revoke its token while it is in flight. Taken inside the gate, like a
+                    # refresh, and without the in-process key lock (a refresh takes that first).
+                    held = runtime.store_lock() if lock_resend else _compat.nullcontext()
+                    async with held:
+                        if lock_resend:
+                            lock_resend = False
+                            token = await runtime.adopt_newer(token, locked=True) or token
+                        try:
+                            raw, wire_in, wire_out = await self._attempt(spec, token, runtime.instance_url)
+                            bytes_in += wire_in
+                            bytes_out = wire_out
+                            err = classify(raw, spec, self.error_tags)
+                        except _AttemptFailed as f:
+                            raw, err, sent = None, f.error, f.sent
                     if err is None:
                         assert raw is not None
                         if raw.content and raw.status != 304 and (spec.expect_json or raw.is_json):
@@ -453,9 +467,46 @@ class AsyncTransport:
                         err.status == 401
                         or (err.error_code == "INVALID_SESSION_ID" and is_soap_path(spec.path))
                     ):
+                        if refreshed and runtime.can_refresh and resend_after_401(spec, err):
+                            # With refresh-token rotation every refresh revokes the earlier access
+                            # tokens, so another process (or caller) that refreshed after us has
+                            # revoked ours. Adopt the newer stored token; never POST again.
+                            newer = await runtime.adopt_newer(token)
+                            if newer is not None and adopted < MAX_ADOPTS:
+                                adopted += 1
+                                token = newer
+                                lock_resend = adopted == MAX_ADOPTS
+                                reasons.append("token_superseded")
+                                self.emit(
+                                    "sf.retry",
+                                    {
+                                        "operation": spec.operation,
+                                        "attempt": attempts,
+                                        "reason": "token_superseded",
+                                        "delay_ms": 0.0,
+                                        "error_code": err.error_code,
+                                        "status": err.status,
+                                    },
+                                )
+                                continue
+                            superseded = newer is not None
                         if refreshed or not runtime.can_refresh or not resend_after_401(spec, err):
-                            if refreshed:
-                                err.message = f"{err.message} (still rejected after one token refresh)"
+                            if superseded:
+                                note = (
+                                    "token superseded by another refresh; gave up after one "
+                                    f"refresh and {adopted} adopted token(s)"
+                                )
+                            elif adopted:
+                                note = (
+                                    "still rejected after one token refresh and "
+                                    f"{adopted} newer stored token(s)"
+                                )
+                            elif refreshed:
+                                note = "still rejected after one token refresh"
+                            else:
+                                note = ""
+                            if note:
+                                err.message = f"{err.message} ({note})"
                                 err.args = (err.message,)
                             raise err
                         token = await runtime.refresh(token, entered=generation)
@@ -494,6 +545,7 @@ class AsyncTransport:
                     exc,
                     soql=spec.soql,
                     refreshed=refreshed,
+                    superseded=superseded,
                     describe=lambda name: self.cached_describe(runtime, name),
                 )
             raise

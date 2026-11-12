@@ -9,7 +9,8 @@ on 2026-11-11; open points are V60 to V64 in big-bang.md §21):
   ``fields``, ``optionalFields``, ``layoutTypes`` (``Compact``, ``Full``) and ``modes``
   (``Create``, ``Edit``, ``View``) are comma-separated lists. From API version 45.0 the
   request needs ``fields``, ``optionalFields`` or ``layoutTypes``. Field names are
-  ``ObjectApiName.FieldName``.
+  ``ObjectApiName.FieldName``. Org-observed (API 68.0): ``fields`` with ``layoutTypes`` is
+  refused unless ``childRelationships`` is also given.
 - *Get Object Metadata* (``GET ui-api/object-info/{objectApiName}``).
 - *Get Values for All Picklist Fields of a Record Type*
   (``GET ui-api/object-info/{objectApiName}/picklist-values/{recordTypeId}``, API 42.0,
@@ -29,6 +30,13 @@ on 2026-11-11; open points are V60 to V64 in big-bang.md §21):
   (https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_errors.htm):
   error bodies carry ``errorCode`` and ``message``, the same shape as other REST resources,
   so :func:`~even_simpler_salesforce.core.classify.classify` maps them unchanged.
+  Org-observed (API 68.0): an unknown object on ``object-info`` and ``list-info`` is 403
+  ``INSUFFICIENT_ACCESS``, an object the UI API doesn't support is 400 ``INVALID_TYPE``, and a
+  record id with a wrong case checksum is 400 ``UNKNOWN_EXCEPTION`` ("Record ID is
+  malformed").
+- ``object-info`` and ``picklist-values`` send an ``ETag`` but no ``Last-Modified`` header,
+  and ignore ``If-Modified-Since`` (always 200); ``If-None-Match`` with the ``ETag`` gets 304
+  (org-observed, API 68.0).
 """
 
 from __future__ import annotations
@@ -107,9 +115,15 @@ def record_params(
 ) -> list[tuple[str, str]]:
     """Query parameters for ``GET ui-api/records/{id}``.
 
+    Salesforce needs ``fields`` or ``layoutTypes``. It refuses both in one request with HTTP
+    400 ``INVALID_INPUT_COMBINATION`` ("May not provide both 'fields' and 'layoutTypes'")
+    unless ``childRelationships`` is also given, which this client doesn't send, so the
+    combination is refused here. The docs don't say this; it was seen in a Developer Edition
+    org on API 68.0 (big-bang.md §21 V63).
+
     Raises:
-        ValueError: neither ``fields`` nor ``layout_types`` given, an unqualified field name,
-            or an unknown layout type or mode.
+        ValueError: neither or both of ``fields`` and ``layout_types`` given, an unqualified
+            field name, or an unknown layout type or mode.
         TypeError: a single string instead of a list.
     """
     params: list[tuple[str, str]] = []
@@ -123,6 +137,8 @@ def record_params(
             params.append(("layoutTypes", ",".join(layouts)))
     if not params:
         raise ValueError("pass fields or layout_types: Salesforce needs one of them")
+    if len(params) == 2:
+        raise ValueError("pass fields or layout_types, not both: Salesforce refuses the combination")
     if modes is not None:
         chosen = _names(modes, MODES, "modes")
         if chosen:

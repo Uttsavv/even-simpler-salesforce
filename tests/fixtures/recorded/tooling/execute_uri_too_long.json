@@ -1,0 +1,29 @@
+{
+  "esf_fixture": 1,
+  "source": "recorded 2026-11-11 with esf.testing.record from a Developer Edition org (API v68.0); anonymousBody of 30,000 characters; the request query is shortened in this file",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/tooling/executeAnonymous/",
+        "query": [
+          [
+            "anonymousBody",
+            "System.debug(1);//xxxx... (30000 characters in total; shortened here)"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 414,
+        "headers": {
+          "content-type": "text/html;charset=iso-8859-1"
+        },
+        "text": "<html>\n<head>\n<meta http-equiv=\"Content-Type\" content=\"text/html;charset=ISO-8859-1\"/>\n<title>Error 414 URI Too Long</title>\n</head>\n<body>\n<h2>HTTP ERROR 414 URI Too Long</h2>\n<table>\n<tr><th>URI:</th><td>/badMessage</td></tr>\n<tr><th>STATUS:</th><td>414</td></tr>\n<tr><th>MESSAGE:</th><td>URI Too Long</td></tr>\n</table>\n\n</body>\n</html>\n"
+      }
+    }
+  ]
+}

@@ -1,5 +1,25 @@
 {
-  "synthetic": true,
-  "source": "hand-written from the SOAP API Developer Guide, Error Handling (API faults, ExceptionCode): https://developer.salesforce.com/docs/atlas.en-us.api.meta/api/sforce_api_concepts_errorhandling.htm",
-  "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns=\"urn:partner.soap.sforce.com\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:sf=\"urn:fault.partner.soap.sforce.com\"><soapenv:Body><soapenv:Fault><faultcode>sf:INVALID_SESSION_ID</faultcode><faultstring>INVALID_SESSION_ID: Invalid Session ID found in SessionHeader: Illegal Session</faultstring><detail><sf:UnexpectedErrorFault xsi:type=\"sf:UnexpectedErrorFault\"><sf:exceptionCode>INVALID_SESSION_ID</sf:exceptionCode><sf:exceptionMessage>Invalid Session ID found in SessionHeader: Illegal Session</sf:exceptionMessage></sf:UnexpectedErrorFault></detail></soapenv:Fault></soapenv:Body></soapenv:Envelope>"
+  "esf_fixture": 1,
+  "recorded": "2026-11-12, Developer Edition org, API v68.0; tests/sandbox/test_files_soap.py::test_invalid_session[sync] (esf.testing.record)",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/Soap/u/68.0",
+        "query": [],
+        "headers": {
+          "content-type": "text/xml; charset=UTF-8",
+          "accept": "text/xml"
+        },
+        "text": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><env:Envelope xmlns:env=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:p=\"urn:partner.soap.sforce.com\" xmlns:o=\"urn:sobject.partner.soap.sforce.com\"><env:Header><p:SessionHeader><p:sessionId><redacted></p:sessionId></p:SessionHeader></env:Header><env:Body><p:merge><p:request><p:masterRecord><o:type>Lead</o:type><o:Id>00Q000000000001EAA</o:Id></p:masterRecord><p:recordToMergeIds>00Q000000000002EAA</p:recordToMergeIds></p:request></p:merge></env:Body></env:Envelope>"
+      },
+      "response": {
+        "status": 500,
+        "headers": {
+          "content-type": "text/xml; charset=utf-8"
+        },
+        "text": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:sf=\"urn:fault.partner.soap.sforce.com\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"><soapenv:Body><soapenv:Fault><faultcode>sf:INVALID_SESSION_ID</faultcode><faultstring>INVALID_SESSION_ID: Invalid Session ID found in SessionHeader: Illegal Session</faultstring><detail><sf:UnexpectedErrorFault xsi:type=\"sf:UnexpectedErrorFault\"><sf:exceptionCode>INVALID_SESSION_ID</sf:exceptionCode><sf:exceptionMessage>Invalid Session ID found in SessionHeader: Illegal Session</sf:exceptionMessage></sf:UnexpectedErrorFault></detail></soapenv:Fault></soapenv:Body></soapenv:Envelope>"
+      }
+    }
+  ]
 }

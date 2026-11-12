@@ -1,21 +1,186 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Salesforce REST API Developer Guide, sObject Tree (Create Nested Records); no org recording yet",
-  "body": {
-    "hasErrors": false,
-    "results": [
-      {
-        "referenceId": "acme",
-        "id": "001xx0000000003AAA"
+  "esf_fixture": 1,
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/composite/tree/Lead",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "records": [
+            {
+              "attributes": {
+                "referenceId": "lead1",
+                "type": "Lead"
+              },
+              "LastName": "LastName 1",
+              "Company": "esf-sandbox",
+              "Tasks": {
+                "records": [
+                  {
+                    "attributes": {
+                      "type": "Task",
+                      "referenceId": "task1"
+                    },
+                    "Subject": "esf-sandbox-66b81d44a6df-tok-sync"
+                  }
+                ]
+              }
+            },
+            {
+              "attributes": {
+                "referenceId": "lead2",
+                "type": "Lead"
+              },
+              "LastName": "LastName 2",
+              "Company": "esf-sandbox"
+            }
+          ]
+        }
       },
-      {
-        "referenceId": "ref1",
-        "id": "003xx0000000003AAA"
-      },
-      {
-        "referenceId": "ref2",
-        "id": "001xx0000000004AAA"
+      "response": {
+        "status": 201,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1627/15000"
+        },
+        "json": {
+          "hasErrors": false,
+          "results": [
+            {
+              "referenceId": "lead1",
+              "id": "00Q000000000001EAA"
+            },
+            {
+              "referenceId": "lead2",
+              "id": "00Q000000000002EAA"
+            },
+            {
+              "referenceId": "task1",
+              "id": "00T000000000003EAA"
+            }
+          ]
+        }
       }
-    ]
-  }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/query",
+        "query": [
+          [
+            "q",
+            "SELECT Id, LastName, Title FROM Lead WHERE LastName LIKE ? ORDER BY LastName"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1631/15000"
+        },
+        "json": {
+          "totalSize": 2,
+          "done": true,
+          "records": [
+            {
+              "attributes": {
+                "type": "Lead",
+                "url": "/services/data/v68.0/sobjects/Lead/00Q000000000001EAA"
+              },
+              "Id": "00Q000000000001EAA",
+              "LastName": "LastName 1",
+              "Title": null
+            },
+            {
+              "attributes": {
+                "type": "Lead",
+                "url": "/services/data/v68.0/sobjects/Lead/00Q000000000002EAA"
+              },
+              "Id": "00Q000000000002EAA",
+              "LastName": "LastName 2",
+              "Title": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "path": "/services/data/v68.0/composite/sobjects",
+        "query": [
+          [
+            "ids",
+            "00Q000000000001EAA,00Q000000000002EAA"
+          ],
+          [
+            "allOrNone",
+            "false"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1632/15000"
+        },
+        "json": [
+          {
+            "id": "00Q000000000001EAA",
+            "success": true,
+            "errors": []
+          },
+          {
+            "id": "00Q000000000002EAA",
+            "success": true,
+            "errors": []
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/query",
+        "query": [
+          [
+            "q",
+            "SELECT Id FROM Task WHERE Subject = ?"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1638/15000"
+        },
+        "json": {
+          "totalSize": 0,
+          "done": true,
+          "records": []
+        }
+      }
+    }
+  ]
 }

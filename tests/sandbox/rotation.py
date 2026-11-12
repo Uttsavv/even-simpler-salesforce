@@ -13,6 +13,12 @@ A worker whose refresh was beaten by another process adopts the stored token ins
 POSTing; that is the algorithm working, and it is counted separately. Each worker reports what
 happened; the caller asserts on the reports.
 
+With rotation on, every refresh also revokes all earlier access tokens of the grant (observed
+on a real org, 2026-11-12). So the verify call (``limits()``) of one worker often finds its
+token already superseded by another worker's refresh: the client answers the 401 by adopting
+the newer stored token and resending. Those calls are counted as ``superseded``; a verify call
+that still fails is an unrecovered error.
+
 Used by ``tests/sandbox/test_rotation.py`` (real org) and ``tests/contract/test_rotation_multiprocess.py``
 (respx fake token endpoint with rotation semantics, runs in normal CI). In the mocked variant
 ``install`` names a ``module:function`` that each worker enters as a context manager before it
@@ -69,6 +75,8 @@ class WorkerReport:
     rotated: int = 0  # of those, how many returned a new refresh token
     adopted: int = 0  # refresh() calls answered by a token another process had saved
     verified: int = 0  # successful API calls (GET limits) with the refreshed token
+    superseded: int = 0  # of those, how many first got a 401 (token revoked by another refresh)
+    rejected: int = 0  # 401s the verify calls got and recovered from (attempts - 1)
     reauth_required: int = 0  # ReauthorizationRequired (invalid_grant) - must stay 0
     errors: list[str] = field(default_factory=lambda: [])
     seconds: float = 0.0
@@ -83,6 +91,13 @@ class _Counter:
             self.report.posts += 1
             if event.get("rotated"):
                 self.report.rotated += 1
+        elif event.name == "sf.request" and event.get("operation") == "limits":
+            if event.get("outcome") != "ok":
+                return
+            extra = int(event.get("attempts") or 1) - 1
+            if extra:
+                self.report.superseded += 1
+                self.report.rejected += extra
 
 
 def _resolve(ref: str) -> Callable[..., Any]:
@@ -151,7 +166,15 @@ def _sync_loop(cfg: RotationConfig, report: WorkerReport, barrier: Any) -> None:
                 continue
             _after_refresh(report, held, new, posts_before)
             if cfg.verify_every and report.cycles_done % cfg.verify_every == 0:
-                sf.limits()
+                try:
+                    sf.limits()
+                except esf.ReauthorizationRequired as exc:
+                    report.reauth_required += 1
+                    report.errors.append(_describe(exc))
+                    return
+                except esf.SalesforceError as exc:  # unrecovered: counted, the loop goes on
+                    report.errors.append(_describe(exc))
+                    continue
                 report.verified += 1
             if cfg.pause:
                 time.sleep(cfg.pause)
@@ -182,7 +205,15 @@ async def _async_loop(cfg: RotationConfig, report: WorkerReport, barrier: Any) -
                 continue
             _after_refresh(report, held, new, posts_before)
             if cfg.verify_every and report.cycles_done % cfg.verify_every == 0:
-                await sf.limits()
+                try:
+                    await sf.limits()
+                except esf.ReauthorizationRequired as exc:
+                    report.reauth_required += 1
+                    report.errors.append(_describe(exc))
+                    return
+                except esf.SalesforceError as exc:  # unrecovered: counted, the loop goes on
+                    report.errors.append(_describe(exc))
+                    continue
                 report.verified += 1
             if cfg.pause:
                 await asyncio.sleep(cfg.pause)
@@ -233,7 +264,8 @@ def run_rotation(
 def summarise(reports: Sequence[WorkerReport]) -> str:
     lines = [
         f"  worker {r.index} ({r.kind}): cycles={r.cycles_done} posts={r.posts} rotated={r.rotated} "
-        f"adopted={r.adopted} verified={r.verified} reauth={r.reauth_required} "
+        f"adopted={r.adopted} verified={r.verified} superseded={r.superseded} "
+        f"rejected={r.rejected} reauth={r.reauth_required} "
         f"errors={len(r.errors)} {r.seconds}s"
         for r in reports
     ]

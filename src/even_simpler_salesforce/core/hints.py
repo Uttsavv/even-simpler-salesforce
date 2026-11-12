@@ -105,6 +105,7 @@ def hint_for(
     *,
     soql: str | None = None,
     refreshed: bool = False,
+    superseded: bool = False,
     describe: DescribeLookup | None = None,
 ) -> str | None:
     """The hint for ``err``, or ``None`` when there is nothing specific to say.
@@ -113,6 +114,8 @@ def hint_for(
         err: The error about to be raised.
         soql: The SOQL text of the call, if any (inspected, never quoted).
         refreshed: Whether the call already refreshed its token once.
+        superseded: Whether the token store kept moving on while the call used its token
+            (another refresh replaced, and so revoked, it).
         describe: Returns the cached describe of an sObject, or ``None`` when not cached.
     """
     code = err.error_code
@@ -124,6 +127,13 @@ def hint_for(
         and refreshed
         and (err.status == 401 or code == "INVALID_SESSION_ID")
     ):
+        if superseded:
+            return (
+                "The token was superseded: another process or client refreshed it again while "
+                "this call was using it, and with refresh-token rotation every refresh revokes "
+                "the earlier access tokens. Don't force refreshes; let clients that share a "
+                "token_key refresh only on expiry or a 401."
+            )
         return (
             "Salesforce also rejected the token the client just refreshed. Check the connected "
             "app: it needs the 'api' OAuth scope, and its IP and session policies must allow "
@@ -152,12 +162,13 @@ def add_hint(
     *,
     soql: str | None = None,
     refreshed: bool = False,
+    superseded: bool = False,
     describe: DescribeLookup | None = None,
 ) -> None:
     """Set ``err.hint`` unless it already has one. Never raises."""
     if err.hint is not None:
         return
     try:
-        err.hint = hint_for(err, soql=soql, refreshed=refreshed, describe=describe)
+        err.hint = hint_for(err, soql=soql, refreshed=refreshed, superseded=superseded, describe=describe)
     except Exception:  # a hint must never replace the real error
         err.hint = None

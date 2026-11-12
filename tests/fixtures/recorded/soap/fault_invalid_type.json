@@ -1,0 +1,26 @@
+{
+  "esf_fixture": 1,
+  "recorded": "2026-11-12, Developer Edition org, API v68.0; tests/sandbox/test_files_soap.py::test_merge_unsupported_type_is_fault[sync] (esf.testing.record)",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/Soap/u/68.0",
+        "query": [],
+        "headers": {
+          "accept": "text/xml",
+          "content-type": "text/xml; charset=UTF-8",
+          "sforce-call-options": "client=esf-sandbox"
+        },
+        "text": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><env:Envelope xmlns:env=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:p=\"urn:partner.soap.sforce.com\" xmlns:o=\"urn:sobject.partner.soap.sforce.com\"><env:Header><p:SessionHeader><p:sessionId><redacted></p:sessionId></p:SessionHeader></env:Header><env:Body><p:merge><p:request><p:masterRecord><o:type>Opportunity</o:type><o:Id>006000000000001AAA</o:Id></p:masterRecord><p:recordToMergeIds>006000000000002AAA</p:recordToMergeIds></p:request></p:merge></env:Body></env:Envelope>"
+      },
+      "response": {
+        "status": 500,
+        "headers": {
+          "content-type": "text/xml; charset=utf-8"
+        },
+        "text": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:sf=\"urn:fault.partner.soap.sforce.com\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"><soapenv:Body><soapenv:Fault><faultcode>sf:INVALID_TYPE_FOR_OPERATION</faultcode><faultstring>INVALID_TYPE_FOR_OPERATION: entity type does not support merge</faultstring><detail><sf:UnexpectedErrorFault xsi:type=\"sf:UnexpectedErrorFault\"><sf:exceptionCode>INVALID_TYPE_FOR_OPERATION</sf:exceptionCode><sf:exceptionMessage>entity type does not support merge</sf:exceptionMessage></sf:UnexpectedErrorFault></detail></soapenv:Fault></soapenv:Body></soapenv:Envelope>"
+      }
+    }
+  ]
+}

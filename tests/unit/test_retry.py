@@ -185,3 +185,27 @@ def test_other_401_does_not_resend_writes(spec: RequestSpec) -> None:
     exc = esf.SessionExpired("customer PIN invalid", error_code="UNAUTHORIZED", status=401)
     assert not resend_after_401(spec, exc)
     assert not resend_after_401(spec, esf.SessionExpired("HTTP 401", status=401))
+
+
+SOAP_READ = RequestSpec("POST", "/services/Soap/m/68.0", idempotent=True)
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        esf.InvalidType("Unknown type:NoSuchType", status=500, error_code="INVALID_TYPE"),
+        esf.SoapFault("Retrieve result has been deleted.", status=500, error_code="INVALID_LOCATOR"),
+    ],
+)
+def test_soap_fault_is_an_answer_not_a_server_failure(exc: esf.SalesforceError) -> None:
+    """Salesforce sends every SOAP fault as HTTP 500; resending gets the same fault (V72/V73)."""
+    assert decide_retry(SOAP_READ, exc, sent=True).retry is False
+    # The same status and code on a REST path keeps the §7.4 rule.
+    assert decide_retry(GET, exc, sent=True) == RetryDecision(True, "http_500")
+
+
+def test_soap_server_unavailable_and_faultless_500_are_still_retried() -> None:
+    busy = esf.ServerError("busy", status=500, error_code="SERVER_UNAVAILABLE")
+    assert decide_retry(SOAP_READ, busy, sent=True) == RetryDecision(True, "http_500")
+    page = esf.UnexpectedResponse("non-JSON response (HTTP 500, text/html)", status=500)
+    assert decide_retry(SOAP_READ, page, sent=True) == RetryDecision(True, "http_500")

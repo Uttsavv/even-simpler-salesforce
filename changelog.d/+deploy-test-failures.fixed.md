@@ -1,0 +1,1 @@
+`DeployResult.failed` and `raise_for_errors()` now count failed Apex tests. Salesforce reports a deployment whose tests failed as `Succeeded` when `rollback_on_error` is off (the default outside production).

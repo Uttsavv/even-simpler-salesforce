@@ -1,41 +1,114 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Metadata API Developer Guide (V85): https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_rest_deploy_cancel.htm",
-  "body": {
-    "id": "0Afxx0000000001AAA",
-    "validatedDeployRequestId": null,
-    "deployOptions": {
-      "checkOnly": false,
-      "ignoreWarnings": false,
-      "purgeOnDelete": false,
-      "allowMissingFiles": false,
-      "autoUpdatePackage": false,
-      "singlePackage": true,
-      "rollbackOnError": true,
-      "testLevel": "NoTestRun",
-      "runTests": null
-    },
-    "deployResult": {
-      "id": "0Afxx0000000001AAA",
-      "checkOnly": false,
-      "createdBy": "005xx0000000001AAA",
-      "createdByName": "Ada Admin",
-      "createdDate": "2026-11-11T10:00:00.000+0000",
-      "ignoreWarnings": false,
-      "rollbackOnError": true,
-      "runTestsEnabled": false,
-      "numberComponentErrors": 0,
-      "numberComponentsDeployed": 0,
-      "numberComponentsTotal": 0,
-      "numberTestErrors": 0,
-      "numberTestsCompleted": 0,
-      "numberTestsTotal": 0,
-      "errorMessage": null,
-      "errorStatusCode": null,
-      "details": null,
-      "status": "Canceling",
-      "done": false,
-      "success": false
+  "esf_fixture": 1,
+  "source": "recorded 2026-11-11 with esf.testing.record from a Developer Edition org (API v68.0)",
+  "interactions": [
+    {
+      "request": {
+        "method": "PATCH",
+        "path": "/services/data/v68.0/metadata/deployRequest/0Af000000000001CAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "deployResult": {
+            "status": "Canceling"
+          }
+        }
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1594/15000"
+        },
+        "json": {
+          "deployOptions": null,
+          "deployResult": {
+            "canceledBy": "005000000000002",
+            "canceledByName": "<redacted>",
+            "checkOnly": true,
+            "completedDate": null,
+            "createdBy": "005000000000002",
+            "createdByName": "<redacted>",
+            "createdDate": "2026-11-11T22:53:34.000+0000",
+            "deployExtensionResults": [],
+            "details": {
+              "componentFailures": [],
+              "componentSuccesses": [
+                {
+                  "changed": true,
+                  "columnNumber": null,
+                  "componentType": "ApexClass",
+                  "created": true,
+                  "createdDate": "2026-11-11T22:53:34.000+0000",
+                  "deleted": false,
+                  "fileName": "classes/EsfSandboxSlowTest.cls",
+                  "fullName": "EsfSandboxSlowTest",
+                  "id": "01p000000000003AAA",
+                  "lineNumber": null,
+                  "problem": null,
+                  "problemType": null,
+                  "success": true
+                },
+                {
+                  "changed": true,
+                  "columnNumber": null,
+                  "componentType": "",
+                  "created": false,
+                  "createdDate": "2026-11-11T22:53:35.000+0000",
+                  "deleted": false,
+                  "fileName": "package.xml",
+                  "fullName": "package.xml",
+                  "id": null,
+                  "lineNumber": null,
+                  "problem": null,
+                  "problemType": null,
+                  "success": true
+                }
+              ],
+              "retrieveResult": null,
+              "runTestResult": {
+                "apexLogId": null,
+                "codeCoverage": [],
+                "codeCoverageWarnings": [],
+                "failures": [],
+                "flowCoverage": [],
+                "flowCoverageWarnings": [],
+                "numFailures": 0,
+                "numTestsRun": 0,
+                "successes": [],
+                "totalTime": 0.0
+              }
+            },
+            "done": false,
+            "errorMessage": null,
+            "errorStatusCode": null,
+            "id": "0Af000000000001CAA",
+            "ignoreWarnings": false,
+            "lastModifiedDate": "2026-11-11T22:53:36.000+0000",
+            "notifications": [],
+            "numberComponentErrors": 0,
+            "numberComponentsDeployed": 1,
+            "numberComponentsTotal": 1,
+            "numberFiles": 3,
+            "numberTestErrors": 0,
+            "numberTestsCompleted": 0,
+            "numberTestsTotal": 1,
+            "rollbackOnError": false,
+            "runTestsEnabled": true,
+            "startDate": "2026-11-11T22:53:34.000+0000",
+            "stateDetail": "Running Test: EsfSandboxSlowTest.slow",
+            "status": "Canceling",
+            "success": false,
+            "zipSize": 576
+          },
+          "id": "0Af000000000001CAA",
+          "validatedDeployRequestId": null
+        }
+      }
     }
-  }
+  ]
 }

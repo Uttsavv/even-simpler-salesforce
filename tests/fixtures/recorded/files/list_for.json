@@ -1,32 +1,75 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic): SOQL on ContentDocumentLink filtered by LinkedEntityId; fields from the Object Reference, ContentDocumentLink: https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_contentdocumentlink.htm",
-  "body": {
-    "totalSize": 2,
-    "done": true,
-    "records": [
-      {
-        "attributes": {"type": "ContentDocumentLink", "url": "/services/data/v68.0/sobjects/ContentDocumentLink/06Axx0000000001AAA"},
-        "Id": "06Axx0000000001AAA",
-        "ContentDocumentId": "069xx0000000001AAA",
-        "ShareType": "V",
-        "Visibility": "AllUsers",
-        "ContentDocument": {
-          "attributes": {"type": "ContentDocument", "url": "/services/data/v68.0/sobjects/ContentDocument/069xx0000000001AAA"},
-          "Title": "Invoice",
-          "FileExtension": "pdf",
-          "ContentSize": 48213,
-          "LatestPublishedVersionId": "068xx0000000001AAA"
+  "esf_fixture": 1,
+  "recorded": "2026-11-12, Developer Edition org, API v68.0; tests/sandbox/test_files_soap.py::test_first_publish_location_link[sync] (esf.testing.record)",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/query",
+        "query": [
+          [
+            "q",
+            "SELECT Id, ContentDocumentId, ShareType, Visibility, ContentDocument.Title, ContentDocument.FileExtension, ContentDocument.ContentSize, ContentDocument.LatestPublishedVersionId FROM ContentDocumentLink WHERE LinkedEntityId = ?"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
         }
       },
-      {
-        "attributes": {"type": "ContentDocumentLink", "url": "/services/data/v68.0/sobjects/ContentDocumentLink/06Axx0000000002AAA"},
-        "Id": "06Axx0000000002AAA",
-        "ContentDocumentId": "069xx0000000002AAA",
-        "ShareType": "I",
-        "Visibility": "InternalUsers",
-        "ContentDocument": null
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1756/15000"
+        },
+        "json": {
+          "totalSize": 2,
+          "done": true,
+          "records": [
+            {
+              "attributes": {
+                "type": "ContentDocumentLink",
+                "url": "/services/data/v68.0/sobjects/ContentDocumentLink/06A000000000006EAA"
+              },
+              "Id": "06A000000000006EAA",
+              "ContentDocumentId": "069000000000007AAA",
+              "ShareType": "V",
+              "Visibility": "AllUsers",
+              "ContentDocument": {
+                "attributes": {
+                  "type": "ContentDocument",
+                  "url": "/services/data/v68.0/sobjects/ContentDocument/069000000000007AAA"
+                },
+                "Title": "Title 1",
+                "FileExtension": "txt",
+                "ContentSize": 680,
+                "LatestPublishedVersionId": "068000000000002AAA"
+              }
+            },
+            {
+              "attributes": {
+                "type": "ContentDocumentLink",
+                "url": "/services/data/v68.0/sobjects/ContentDocumentLink/06A000000000005EAA"
+              },
+              "Id": "06A000000000005EAA",
+              "ContentDocumentId": "069000000000004AAA",
+              "ShareType": "I",
+              "Visibility": "AllUsers",
+              "ContentDocument": {
+                "attributes": {
+                  "type": "ContentDocument",
+                  "url": "/services/data/v68.0/sobjects/ContentDocument/069000000000004AAA"
+                },
+                "Title": "Title 2",
+                "FileExtension": "txt",
+                "ContentSize": 5,
+                "LatestPublishedVersionId": "068000000000003AAA"
+              }
+            }
+          ]
+        }
       }
-    ]
-  }
+    }
+  ]
 }

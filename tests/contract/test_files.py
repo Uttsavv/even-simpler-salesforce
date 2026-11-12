@@ -1,7 +1,9 @@
-"""``sf.files`` (§9.9) against hand-written responses, for both clients.
+"""``sf.files`` (§9.9) against recorded responses, for both clients.
 
-All fixtures under ``tests/fixtures/recorded/files`` are **synthetic** (no org to record from).
-Salesforce behaviour relied on:
+The fixtures under ``tests/fixtures/recorded/files`` are redacted recordings from a Developer
+Edition org (API v68.0, 2026-11-12, ``tests/sandbox/test_files_soap.py``; big-bang.md §21 V37,
+V38, V39). Other responses written inline in a test are shaped after them. Salesforce
+behaviour relied on:
 
 - *Insert or Update Blob Data*, REST API Developer Guide
   (https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/dome_sobject_insert_update_blob.htm):
@@ -33,11 +35,11 @@ import respx
 import even_simpler_salesforce as esf
 
 from ..conftest import DATA, Harness, Recorder
-from ..fixtures import load_fixture
+from ..fixtures import load_fixture, recorded_response
 
-CV_ID = "068xx0000000001AAA"
-DOC_ID = "069xx0000000001AAA"
-LINK_ID = "06Axx0000000001AAA"
+CV_ID = "068000000000003AAA"  # ids as in the recordings (tests/fixtures/recorded/files)
+DOC_ID = "069000000000004AAA"
+LINK_ID = "06A000000000005EAA"
 ACCOUNT_ID = "001xx0000000001AAA"
 ATT_ID = "00Pxx0000000001AAA"
 CV_URL = f"{DATA}/sobjects/ContentVersion"
@@ -47,6 +49,12 @@ CHUNK = 256 * 1024
 
 def created(name: str = "files/version_created.json") -> httpx.Response:
     return httpx.Response(201, json=load_fixture(name))
+
+
+def replayed(name: str, index: int = 0) -> httpx.Response:
+    """The recorded response ``index`` of ``name`` as an ``httpx.Response``."""
+    status, headers, body = recorded_response(name, index)
+    return httpx.Response(status, headers=headers, content=body)
 
 
 def parts(request: httpx.Request) -> tuple[dict[str, Any], dict[str, str], bytes]:
@@ -179,7 +187,8 @@ def test_upload_non_seekable_file_is_sent_once(h: Harness, mock: respx.MockRoute
 
 
 def test_upload_stream_uses_chunked_encoding(h: Harness, mock: respx.MockRouter) -> None:
-    route = mock.post(CV_URL).mock(return_value=created())
+    """Recorded ``files/version_created_chunked.json`` (V37): Salesforce accepts a chunked upload."""
+    route = mock.post(CV_URL).mock(return_value=created("files/version_created_chunked.json"))
     sf = h.client()
     assert h.run(sf.files.upload(stream_of(h, [b"ab", bytearray(b"cd")]), filename="s.bin")) == CV_ID
     req = route.calls.last.request
@@ -686,6 +695,39 @@ def test_download_bytes_and_attachment(h: Harness, mock: respx.MockRouter, rec: 
         h.run(sf.files.download_bytes("../x"))
 
 
+def test_download_recorded_responses(h: Harness, mock: respx.MockRouter) -> None:
+    """Recorded ``files/download_*.json`` (V38).
+
+    ``VersionData`` comes as ``application/octetstream`` (sic), ``Attachment/{id}/Body`` with the
+    attachment's ``ContentType``; neither is gzip-encoded. A deleted id is a JSON 404 ``NOT_FOUND``
+    on both.
+    """
+    _, headers, body = recorded_response("files/download_version.json")
+    assert headers["content-type"] == "application/octetstream"
+    _, _, att_body = recorded_response("files/download_attachment.json")
+    mock.get(f"{CV_URL}/068000000000002AAA/VersionData").side_effect = [
+        replayed("files/download_version.json"),
+        replayed("files/download_version.json"),
+        replayed("files/download_missing.json", 0),
+    ]
+    mock.get(f"{DATA}/sobjects/Attachment/00P000000000004EAA/Body").side_effect = [
+        replayed("files/download_attachment.json"),
+        replayed("files/download_missing.json", 1),
+    ]
+    sf = h.client()
+    assert h.run(sf.files.download_bytes("068000000000002AAA")) == body
+    assert body.startswith(b"esf sandbox file\n")
+    got, _ = _read_all(h, sf, "068000000000002AAA")
+    assert got == body
+    assert h.run(sf.files.download_attachment("00P000000000004EAA")) == att_body == body
+    with pytest.raises(esf.NotFound) as ei:
+        h.run(sf.files.download_bytes("068000000000002AAA"))
+    assert (ei.value.status, ei.value.error_code) == (404, "NOT_FOUND")
+    with pytest.raises(esf.NotFound) as ei:
+        h.run(sf.files.download_attachment("00P000000000004EAA"))
+    assert (ei.value.status, ei.value.error_code) == (404, "NOT_FOUND")
+
+
 def test_download_of_json_file_is_not_parsed(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:
     """A downloaded .json file is the file, not an API response: no records count, no parsing."""
     body = json.dumps([{"a": 1}, {"a": 2}, {"a": 3}]).encode()
@@ -719,7 +761,21 @@ def test_link(h: Harness, mock: respx.MockRouter) -> None:
 
 
 def test_list_for(h: Harness, mock: respx.MockRouter) -> None:
-    route = mock.get(f"{DATA}/query").respond(json=load_fixture("files/list_for.json"))
+    """Recorded ``files/list_for.json`` (V39): the link that ``FirstPublishLocationId`` created
+    (``V``/``AllUsers``) and an explicit ``I``/``AllUsers`` link. The third row, a link whose
+    ``ContentDocument`` is not readable (``null``), is **synthetic**, added here."""
+    body = load_fixture("files/list_for.json")
+    body["records"].append(
+        {
+            "attributes": {"type": "ContentDocumentLink"},
+            "Id": "06Axx0000000002AAA",
+            "ContentDocumentId": "069xx0000000002AAA",
+            "ShareType": "I",
+            "Visibility": "InternalUsers",
+            "ContentDocument": None,
+        }
+    )
+    route = mock.get(f"{DATA}/query").respond(json=body)
     sf = h.client()
     links = h.run(sf.files.list_for(ACCOUNT_ID))
     q = route.calls.last.request.url.params["q"]
@@ -727,13 +783,23 @@ def test_list_for(h: Harness, mock: respx.MockRouter) -> None:
     assert q.endswith(f"FROM ContentDocumentLink WHERE LinkedEntityId = '{ACCOUNT_ID}'")
     assert links == [
         esf.FileLink(
+            link_id="06A000000000006EAA",
+            content_document_id="069000000000007AAA",
+            latest_version_id="068000000000002AAA",
+            title="Title 1",  # the recorder masks Title
+            file_extension="txt",
+            size=680,
+            share_type="V",
+            visibility="AllUsers",
+        ),
+        esf.FileLink(
             link_id=LINK_ID,
             content_document_id=DOC_ID,
             latest_version_id=CV_ID,
-            title="Invoice",
-            file_extension="pdf",
-            size=48213,
-            share_type="V",
+            title="Title 2",
+            file_extension="txt",
+            size=5,
+            share_type="I",
             visibility="AllUsers",
         ),
         esf.FileLink(

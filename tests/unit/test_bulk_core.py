@@ -356,6 +356,26 @@ def test_reader_rejects_malformed(data: bytes, message: str) -> None:
             "Street is required",
             (),
         ),
+        # Cells recorded from a Developer Edition org, API 68.0 (V41): fields are separated by
+        # spaces, and a cell without fields ends in ":--".
+        (
+            "REQUIRED_FIELD_MISSING:Required fields are missing: [LastName, Company]:LastName Company --",
+            "REQUIRED_FIELD_MISSING",
+            "Required fields are missing: [LastName, Company]",
+            ("LastName", "Company"),
+        ),
+        (
+            "INVALID_EMAIL_ADDRESS:Email: invalid email address: not-an-email:Email --",
+            "INVALID_EMAIL_ADDRESS",
+            "Email: invalid email address: not-an-email",
+            ("Email",),
+        ),
+        (
+            "FIELD_CUSTOM_VALIDATION_EXCEPTION:esf-sandbox: validation rule probe:--",
+            "FIELD_CUSTOM_VALIDATION_EXCEPTION",
+            "esf-sandbox: validation rule probe",
+            (),
+        ),
         ("Something odd happened", None, "Something odd happened", ()),
         ("", None, "", ()),
     ],
@@ -515,6 +535,23 @@ def test_parse_result_pages() -> None:
     assert B.parse_result_pages({"resultPages": [], "nextRecordsUrl": None}, PREFIX) == ([], None)
 
 
+def test_parse_result_pages_before_api_63() -> None:
+    """Recorded at API 59.0-62.0: ``resultChunks[].resultLink``, relative to the version root."""
+    prefix = f"/services/data/v60.0/jobs/query/{JOB}/"
+    body = {
+        "done": False,
+        "nextRecordsUrl": f"/jobs/query/{JOB}/resultPages?locator=C",
+        "resultChunks": [{"resultLink": f"/jobs/query/{JOB}/results?locator=A"}],
+    }
+    assert B.parse_result_pages(body, prefix) == (
+        [f"{prefix}results?locator=A"],
+        f"{prefix}resultPages?locator=C",
+    )
+    other = {"resultChunks": [{"resultLink": "/jobs/query/750xx0000000009AAA/results"}]}
+    with pytest.raises(esf.UnexpectedResponse, match="not a result of this job"):
+        B.parse_result_pages(other, prefix)
+
+
 @pytest.mark.parametrize(
     ("body", "message"),
     [
@@ -586,6 +623,18 @@ def test_compound_hint() -> None:
     assert B.compound_hint("SELECT Id FROM Account", DESCRIBE, "Compound field") is not None
     assert B.compound_hint("SELECT Id FROM Account", DESCRIBE, "other") is None
     assert B.compound_hint(soql, None, None) is None
+
+
+def test_compound_hint_for_fields_standard() -> None:
+    """V81: the org runs FIELDS(STANDARD) unless the object has compound fields; then job
+    creation fails with 400 API_ERROR "Selecting compound data not supported in Bulk Query"."""
+    message = "Selecting compound data not supported in Bulk Query"
+    hint = B.compound_hint("SELECT FIELDS(STANDARD) FROM Lead", DESCRIBE, message)
+    assert hint is not None
+    assert hint.startswith("FIELDS(STANDARD) includes")
+    quoted = B.compound_hint("SELECT Id FROM Lead WHERE Name = 'FIELDS(STANDARD)'", None, message)
+    assert quoted is not None
+    assert quoted.startswith("Bulk queries can't read")
 
 
 # --- polling -------------------------------------------------------------------------------------

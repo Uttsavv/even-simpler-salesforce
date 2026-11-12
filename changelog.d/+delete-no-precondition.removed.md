@@ -1,1 +1,1 @@
-`sobject.delete()` no longer takes `if_unmodified_since=`. Salesforce ignores conditional headers on `DELETE`, so the option deleted a changed record instead of raising `Conflict`.
+`sobject.delete()` no longer takes `if_unmodified_since=`. Salesforce doesn't support conditional headers on `DELETE`: it rejects such a request (`500 UNKNOWN_EXCEPTION`, or `400 BAD_HEADER` for a future date) instead of checking the precondition.

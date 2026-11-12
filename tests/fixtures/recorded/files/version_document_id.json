@@ -1,9 +1,37 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic): GET sobjects/ContentVersion/{id}?fields=ContentDocumentId",
-  "body": {
-    "attributes": {"type": "ContentVersion", "url": "/services/data/v68.0/sobjects/ContentVersion/068xx0000000001AAA"},
-    "ContentDocumentId": "069xx0000000001AAA",
-    "Id": "068xx0000000001AAA"
-  }
+  "esf_fixture": 1,
+  "recorded": "2026-11-12, Developer Edition org, API v68.0; tests/sandbox/test_files_soap.py::test_first_publish_location_link[sync] (esf.testing.record)",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/sobjects/ContentVersion/068000000000003AAA",
+        "query": [
+          [
+            "fields",
+            "ContentDocumentId"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1761/15000"
+        },
+        "json": {
+          "attributes": {
+            "type": "ContentVersion",
+            "url": "/services/data/v68.0/sobjects/ContentVersion/068000000000003AAA"
+          },
+          "ContentDocumentId": "069000000000004AAA",
+          "Id": "068000000000003AAA"
+        }
+      }
+    }
+  ]
 }

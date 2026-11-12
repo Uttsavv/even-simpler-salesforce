@@ -53,7 +53,8 @@ Redaction, applied before anything touches the disk:
 - OAuth secrets anywhere in JSON or form bodies (``access_token``, ``refresh_token``,
   ``id_token``, ``client_secret``, ``client_assertion``, ``assertion``, ``signature``, ``code``,
   ``code_verifier``, ``password``, ``sessionId``...) become ``"<redacted>"``.
-- Session ids (``00D…!…``) and ``Bearer …`` values inside any string become ``<redacted>``.
+- Session ids (``00D…!…``) and ``Bearer …`` values inside any string become ``<redacted>``, and
+  so does the text of every XML ``sessionId`` element (SOAP ``SessionHeader``), whatever it holds.
 - E-mail addresses become ``user<N>@example.com`` and phone/fax fields ``555-01NN``,
   consistently within one fixture.
 - In sObject records (JSON objects with ``attributes``), names and postal addresses
@@ -62,7 +63,9 @@ Redaction, applied before anything touches the disk:
 - Literals in SOQL/SOSL query parameters (``q``, ``explain``) become ``?``.
 - Instance hosts (``*.salesforce.com``, ``*.force.com``) become ``example.my.salesforce.com``.
 - Salesforce ids are replaced with fake ids keeping the key prefix (consistently, in paths,
-  queries and bodies, so recorded follow-up requests still match); ``mask_ids=False`` keeps them.
+  queries, bodies and JSON object keys, so recorded follow-up requests still match);
+  ``mask_ids=False`` keeps them. Well-known all-zero ids such as the master record type
+  ``012000000000000AAA`` are kept.
 
 Redaction is pattern-based: custom fields can still hold personal data. Add their API names to
 ``extra_keys`` and review every fixture before committing it.
@@ -124,6 +127,7 @@ _KEEP_RESPONSE_HEADERS = (
     "warning",
 )
 _SESSION = re.compile(r"00D[A-Za-z0-9]{12,15}![A-Za-z0-9._\-]+")
+_XML_SESSION = re.compile(r"(<(?:[A-Za-z_][\w.\-]*:)?sessionId(?:\s[^>]*)?>)[^<]*(</)")
 _BEARER = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=!\-]+")
 _EMAIL = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 _HOST = re.compile(
@@ -195,7 +199,9 @@ class Redactor:
 
     def _id(self, m: re.Match[str]) -> str:
         value = m.group(0)
-        if not any(c.isdigit() for c in value):
+        if not any(c.isdigit() for c in value) or set(value[3:15]) == {"0"}:
+            # Not an id, or a well-known constant such as the master record type
+            # ``012000000000000AAA``: no org data, and tests rely on it.
             return value
         key = value[:15]
         with self._lock:
@@ -221,6 +227,7 @@ class Redactor:
     def text(self, value: str) -> str:
         """Redact one string."""
         value = _SESSION.sub(REDACTED, value)
+        value = _XML_SESSION.sub(rf"\g<1>{REDACTED}\g<2>", value)
         value = _BEARER.sub(f"Bearer {REDACTED}", value)
         if self.mask_emails:
             value = _EMAIL.sub(self._email, value)
@@ -246,7 +253,9 @@ class Redactor:
         if isinstance(obj, Mapping):
             m = cast("Mapping[str, Any]", obj)
             record = "attributes" in m
-            return {str(k): self.value(v, str(k), in_record=record) for k, v in m.items()}
+            # Keys are redacted too: some resources key maps by record id (UI API
+            # ``recordTypeInfos``), and the ids must match the masked ones in the values.
+            return {self.text(str(k)): self.value(v, str(k), in_record=record) for k, v in m.items()}
         if isinstance(obj, list):
             items = cast("list[Any]", obj)
             return [self.value(v, key) for v in items]

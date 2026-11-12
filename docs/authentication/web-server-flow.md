@@ -136,6 +136,18 @@ When the access token expires, the client refreshes it with the stored refresh t
   durable store's `lock()` can extend it across processes.
 - The client saves a rotated refresh token to the store with compare-and-swap. It does this
   before it uses the new access token. If another process saved first, the client uses that process's token.
+- With refresh-token rotation on, every refresh also revokes all earlier access tokens of the
+  grant. We observed this on a real Developer Edition org (2026-11-12). Salesforce's
+  [rotation article](https://help.salesforce.com/s/articleView?id=005316711&language=en_US&type=1)
+  only says that the used refresh token stops working. So if several processes share a
+  `token_key`, another process's refresh can revoke a token that this process has just
+  refreshed.
+- If a call gets a `401` after its one refresh, the client re-reads the store. If the store holds
+  a newer token, the client uses it and resends the call, at most 2 times. It never sends a
+  second refresh request of its own. The second resend holds the store's `lock()`, so no other
+  refresh can revoke its token while it is in flight. Each resend adds `token_superseded` to
+  `retry_reasons` in the `sf.request` event. If the call still fails, the `SessionExpired`
+  message says that another refresh superseded the token.
 - The client never resends a refresh request that timed out or was reset after it was sent. It
   waits briefly and re-reads the store. If no other process stored a new token, it raises
   `RefreshFailed(ambiguous=True)`.

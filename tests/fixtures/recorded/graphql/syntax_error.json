@@ -1,0 +1,46 @@
+{
+  "esf_fixture": 1,
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/graphql",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "query": "query { uiapi { query { Lead(first: 1) { edges { node { Id } } } "
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1688/15000"
+        },
+        "json": {
+          "data": {},
+          "errors": [
+            {
+              "extensions": {
+                "ErrorType": "InvalidSyntax"
+              },
+              "locations": [
+                {
+                  "column": 66,
+                  "line": 1
+                }
+              ],
+              "message": "Invalid syntax with offending token &#39;&lt;EOF&gt;&#39; at line 1 column 66",
+              "paths": []
+            }
+          ],
+          "extensions": {}
+        }
+      }
+    }
+  ]
+}

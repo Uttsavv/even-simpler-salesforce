@@ -1,19 +1,53 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Salesforce Actions Developer Guide, Invoking Actions and Flow Actions pages; no org recording yet",
-  "body": [
+  "esf_fixture": 1,
+  "interactions": [
     {
-      "actionName": "Assign_Lead",
-      "errors": [
-        {
-          "statusCode": "FIELD_CUSTOM_VALIDATION_EXCEPTION",
-          "message": "[REGION_REQUIRED] Region is required",
-          "fields": []
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/actions/custom/flow/Esf_Sandbox_Action_Flow",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "inputs": [
+            {
+              "name": "fail"
+            }
+          ]
         }
-      ],
-      "isSuccess": false,
-      "outputValues": null,
-      "version": 1
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=224/15000"
+        },
+        "json": [
+          {
+            "actionName": "Esf_Sandbox_Action_Flow",
+            "errors": [
+              {
+                "statusCode": "REQUIRED_FIELD_MISSING",
+                "message": "This error occurred when the flow tried to create records: REQUIRED_FIELD_MISSING: Required fields are missing: [LastName, Company]. You can look up ExceptionCode values in the SOAP API Developer Guide.",
+                "fields": []
+              }
+            ],
+            "expectedError": false,
+            "invocationId": null,
+            "isSuccess": false,
+            "outcome": null,
+            "outputValues": {
+              "Flow__InterviewGuid": "4132d70f94897ab5ec1430586cc01a1ccc0edca-7438",
+              "Flow__InterviewStatus": "Error"
+            },
+            "sortOrder": -1,
+            "version": 1
+          }
+        ]
+      }
     }
   ]
 }

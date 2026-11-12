@@ -62,10 +62,13 @@ def test_record_params() -> None:
         ("layoutTypes", "Compact"),
         ("modes", "Edit,View"),
     ]
-    assert ui.record_params(("Lead.Name",), ("Full",), ()) == [
-        ("fields", "Lead.Name"),
-        ("layoutTypes", "Full"),
-    ]
+    assert ui.record_params(("Lead.Name",), (), ()) == [("fields", "Lead.Name")]
+
+
+def test_record_params_refuse_fields_with_layout() -> None:
+    """Salesforce answers 400 INVALID_INPUT_COMBINATION to both (org-observed, V63)."""
+    with pytest.raises(ValueError, match="not both"):
+        ui.record_params(("Lead.Name",), ("Full",), ())
 
 
 def test_record_params_need_fields_or_layout() -> None:

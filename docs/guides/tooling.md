@@ -95,8 +95,9 @@ A compile problem or an exception is a normal result, not an error. The call rai
 the request itself fails.
 
 The code runs as the connected user, and that user needs the "Author Apex" permission. The code
-goes in the URL, so its length is limited. If Salesforce rejects a long URL (HTTP 414), the call
-raises `RequestTooLarge` and the code didn't run. Put long code in an Apex class instead.
+goes in the URL, URL-encoded, so its length is limited: a test org accepted about 18,500 encoded
+characters. If Salesforce rejects a long URL (HTTP 414 or 431), the call raises
+`RequestTooLarge` and the code didn't run. Put long code in an Apex class instead.
 
 !!! warning "Never resent"
     Anonymous Apex can change data. The client never calls `execute_anonymous` on its own, and
@@ -157,7 +158,11 @@ has a result.
 ## Code completions
 
 `completions(type)` returns the symbols that editors offer for code completion. `type` is
-`"apex"` (system classes and their methods) or `"visualforce"` (components).
+`"apex"` (system classes and their methods) or `"visualforce"` (components). The JSON comes back
+unchanged: Apex symbols are under `publicDeclarations`, keyed by namespace and class, and
+Visualforce components are under `completions`, keyed by tag. The Apex answer is large (about
+29 MB) and can take longer than the default 60-second read timeout; create the client with
+`timeout=esf.Timeouts(read=300)` if it times out.
 
 ```python
 symbols = await sf.tooling.completions("apex")

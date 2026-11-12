@@ -53,18 +53,22 @@ class Ui:
             record_id: The record id.
             fields: Field names qualified with the object, like ``["Lead.Name", "Lead.Owner.Name"]``.
                 The call fails if the user can't read one of them.
-            layout_types: ``"Full"`` or ``"Compact"``: return the fields on that layout.
+            layout_types: ``"Full"`` or ``"Compact"``: return the fields on that layout. Pass
+                either ``fields`` or ``layout_types``: Salesforce refuses the two together.
             modes: ``"View"``, ``"Edit"`` or ``"Create"``: the layout mode for ``layout_types``.
                 Salesforce uses ``View`` when you leave it out.
 
         Returns:
-            The record: ``apiName``, ``id``, ``fields`` (``{"Name": {"value": ..., "displayValue": ...}}``)
-            and ``childRelationships``.
+            The record: ``apiName``, ``id``, ``fields`` (``{"Name": {"value": ..., "displayValue": ...}}``),
+            ``childRelationships``, ``recordTypeId``, ``eTag``, ``lastModifiedDate`` and
+            ``systemModstamp``. ``displayValue`` is the formatted value (``"$1,500,000"`` for a
+            currency, the label of a picklist value) and ``None`` for plain text.
 
         Raises:
-            ValueError: neither ``fields`` nor ``layout_types`` given, an unqualified field
-                name, or an unknown layout type or mode.
+            ValueError: neither or both of ``fields`` and ``layout_types`` given, an
+                unqualified field name, or an unknown layout type or mode.
             NotFound: no record with this id, or the user can't see it.
+            InvalidField: a field in ``fields`` doesn't exist.
         """
         params = record_params(fields, layout_types, modes)
         return self._get(record_path(record_id), "ui.record", None, params)
@@ -81,7 +85,9 @@ class Ui:
             ``childRelationships``, ``themeInfo`` and more.
 
         Raises:
-            InvalidType: the object doesn't exist or the UI API doesn't support it.
+            Forbidden: the object doesn't exist or the user can't access it (Salesforce answers
+                403 ``INSUFFICIENT_ACCESS`` for both).
+            InvalidType: the UI API doesn't support the object.
         """
         path = object_info_path(name)
         data = self._sf._describe(path, f"ui:object-info:{name}", cached, name, "ui.object_info")

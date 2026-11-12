@@ -13,11 +13,13 @@ sf = esf.AsyncSalesforce(auth)
 
 result = await sf.reports.run("00O5g00000ABCDeEAK")
 for row in result.rows():
-    print(row["STAGE_NAME"], row["OPPORTUNITY_NAME"])  # Prospecting Acme - 200 units
+    print(row["LEAD_SOURCE"], row["STATUS"], row["COMPANY"])  # Web Open - Not Contacted 00Q5g00000AbCdEEAZ
 ```
 
 `run()` returns an `esf.ReportResult`. `rows()` gives one dict per record. The keys are the
-column API names of the report, such as `OPPORTUNITY_NAME`.
+column API names of the report, such as `LEAD_SOURCE`. Each value is the `value` of the cell.
+For a column that links to the record, such as a name or a company, that is the record id; the
+text is the cell `label` in `result.raw`.
 
 ## Read the totals
 
@@ -27,10 +29,12 @@ Amount" and `RowCount` for the record count.
 
 ```python
 for row in result.summary_rows():
-    print(row.get("STAGE_NAME", "Total"), row["RowCount"])
-# Prospecting 2
-# Closed Won 1
-# Total 3
+    print(row.get("LEAD_SOURCE", "Total"), row.get("STATUS", ""), row["RowCount"])
+# Web  3
+# Web Open - Not Contacted 2
+# Web Working - Contacted 1
+# ...
+# Total  5
 ```
 
 If you need only the totals, pass `include_details=False`. Salesforce then sends no detail
@@ -39,7 +43,7 @@ rows, so the response is smaller.
 ```python
 totals = await sf.reports.run("00O5g00000ABCDeEAK", include_details=False)
 print(totals.rows())  # []
-print(totals.summary_rows()[-1]["s!AMOUNT"])  # {'amount': 4000.0, 'currency': None}
+print(totals.summary_rows()[-1])  # {'RowCount': 5}
 ```
 
 ## Filter a run
@@ -50,9 +54,12 @@ dict with `column`, `operator` and `value`, as Salesforce defines them.
 ```python
 result = await sf.reports.run(
     "00O5g00000ABCDeEAK",
-    [{"column": "STAGE_NAME", "operator": "equals", "value": "Prospecting"}],
+    [{"column": "LEAD_SOURCE", "operator": "equals", "value": "Web"}],
 )
 ```
+
+The run doesn't change the saved report. A filter on a column that doesn't exist, or with an
+operator Salesforce doesn't know, raises `esf.RequestError` with `error_code` `BAD_REQUEST`.
 
 To find the column names and the saved filters, call `describe()`. It returns the report
 metadata as Salesforce sends it.
@@ -60,19 +67,20 @@ metadata as Salesforce sends it.
 ```python
 meta = await sf.reports.describe("00O5g00000ABCDeEAK")
 print(meta["reportMetadata"]["reportFormat"])  # SUMMARY
-print(meta["reportMetadata"]["detailColumns"])  # ['ACCOUNT_NAME', 'OPPORTUNITY_NAME', 'AMOUNT']
+print(meta["reportMetadata"]["detailColumns"])  # ['LAST_NAME', 'COMPANY']
 ```
 
 ## Find a report
 
 `recent()` lists the reports the user viewed most recently, at most 200. Each entry has the
-`id` and `name` of the report.
+`id` and `name` of the report, and the `url`, `describeUrl`, `instancesUrl` and `fieldsUrl` of
+its resources.
 
 ```python
 for report in await sf.reports.recent():
     print(report["id"], report["name"])
-# 00Oxx0000000001AAA Open Opportunities
-# 00Oxx0000000002AAA Pipeline by Stage and Type
+# 00O5g00000ABCDeEAK Leads by Source
+# 00O5g00000ABCDfEAK Open Leads
 ```
 
 `recent()` doesn't list every report. To find any report by name or folder, query the `Report`
@@ -94,7 +102,7 @@ an asynchronous run with `run_async()`. Then wait for the results with `instance
 run = await sf.reports.run_async("00O5g00000ABCDeEAK")
 print(run.status)  # New
 result = await sf.reports.instance(run.report_id, run.id, timeout=300)
-print(len(result.rows()))  # 3
+print(len(result.rows()))  # 5
 ```
 
 `instance()` asks Salesforce for the status until it is `Success`. The waits between two
@@ -126,8 +134,13 @@ Each component has a `reportResult` in the same format as a report run. Wrap it 
 dashboard = await sf.reports.dashboards.get("01Z5g00000ABCDeEAK")
 for component in dashboard["componentData"]:
     print(component["status"]["refreshStatus"])  # IDLE
-    print(esf.ReportResult(component["reportResult"]).summary_rows()[0]["RowCount"])  # 2
+    if component["reportResult"] is not None:
+        print(esf.ReportResult(component["reportResult"]).summary_rows()[-1]["RowCount"])  # 5
 ```
+
+A component has no data (`reportResult` is `None` and `status.componentDataStatus` is
+`NO_DATA`) until the dashboard was refreshed once. An unknown dashboard id raises
+`esf.InvalidReference` (Salesforce answers `400 INVALID_CROSS_REFERENCE_KEY`, not `404`).
 
 ## Refresh a dashboard
 
@@ -139,8 +152,11 @@ started = await sf.reports.dashboards.refresh("01Z5g00000ABCDeEAK")
 print(started["statusUrl"])  # /services/data/v68.0/analytics/dashboards/01Z5g00000ABCDeEAK/status
 ```
 
-Call `get()` later to read the new data. A component is done when its `refreshStatus` is
-`IDLE`.
+It returns only `statusUrl`. Call `get()` later to read the new data. A component is done when
+its `refreshStatus` is `IDLE`.
+
+Salesforce refuses a refresh while one is running (`esf.Conflict`, HTTP 409) and less than a
+minute after the last one (`esf.Forbidden`, HTTP 403).
 
 ## Test code that uses reports
 
@@ -191,13 +207,15 @@ follows.
 
 - A row from `rows()` starts with the grouping values of its cell, row groupings first. Then
   come the detail columns, in report order.
-- Each grouping value is the `value` of the grouping, for example `"2026-10-01"` for a date
-  grouping by month. A detail value is the `value` of the cell. A currency cell has the value
-  `{"amount": ..., "currency": ...}`. For the display text, read `result.raw`.
+- Each grouping value is the `value` of the grouping, for example `"2026-11-11"` for a date
+  grouping by day. A detail value is the `value` of the cell. A currency detail cell has the
+  value `{"amount": ..., "currency": ...}` (`currency` is `None` in an org with one currency),
+  but a currency aggregate is a plain number. For the display text, read `result.raw`.
 - In `summary_rows()`, a subtotal has no keys for the deeper groupings. The grand total has
   only aggregates.
 - Rows are in the order of the groupings. Within a grouping, they keep the report order.
-- If Salesforce leaves out an empty matrix cell, the helpers skip it.
+- Salesforce sends an empty matrix cell with a zero count and no rows, so `summary_rows()`
+  includes it with `RowCount` 0. If a cell is missing from the fact map, the helpers skip it.
 
 ## How it works
 
@@ -219,4 +237,5 @@ follows.
 - `rows()` and `summary_rows()` don't read joined reports (`MULTI_BLOCK`). They raise
   `ValueError`; read `result.raw` instead.
 - To change the groupings or the aggregates of a run, send your own `reportMetadata` with
-  [`sf.request()`](requests.md).
+  [`sf.request()`](requests.md). Wrap the answer in `esf.ReportResult` to use the helpers.
+- A run right after you insert records can miss them for a moment.

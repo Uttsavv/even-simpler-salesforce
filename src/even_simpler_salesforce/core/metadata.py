@@ -77,10 +77,13 @@ __all__ = [
 NS_METADATA = "http://soap.sforce.com/2006/04/metadata"
 
 #: ``DeployResult.status`` values (newer API versions add the two ``Finalizing`` states).
+#: ``Finalizing`` is org-observed: a REST quick deploy reported it while finishing (API v68.0,
+#: 2026-11-12); it is not final and not a failure.
 DEPLOY_STATUSES = frozenset(
     {
         "Pending",
         "InProgress",
+        "Finalizing",
         "FinalizingDeploy",
         "FinalizingDeployFailed",
         "Succeeded",

@@ -1,9 +1,11 @@
 """Composite family: ``sf.composite`` (§9.4), on both clients.
 
-Every response here is **synthetic** (``tests/fixtures/recorded/composite/*.json``), hand-written
-from the REST API Developer Guide because no org recording exists yet. developer.salesforce.com
-answers automated clients with 403, so the pages were read through search excerpts; the open
-points are V55-V59 in big-bang.md §21.
+The responses in ``tests/fixtures/recorded/composite/*.json`` are recorded from a real org
+(Developer Edition, API v68.0, 2026-11-12) by ``tests/sandbox/test_composite_graphql.py``; each
+test here builds the same request with the client and checks it matches the recorded one. The
+small inline bodies (malformed responses, statuses the org didn't produce) are **synthetic**.
+developer.salesforce.com answers automated clients with 403, so the pages were read through
+search excerpts; the evidence is V55-V59 in big-bang.md §21.
 
 - Composite (``compositeRequest``, ``referenceId``, ``@{ref.field}``, 25 subrequests of which
   at most 5 sObject Collections or query operations; HTTP 200 with one result per subrequest):
@@ -33,7 +35,7 @@ import respx
 import even_simpler_salesforce as esf
 
 from ..conftest import API, DATA, Harness, Recorder
-from ..fixtures import load_fixture
+from ..fixtures import load_fixture, load_request
 
 ACC = "001xx0000000001AAA"
 
@@ -56,62 +58,80 @@ def three(sf: Any) -> Any:
 def test_builder_sends_references_and_parses_results(
     h: Harness, mock: respx.MockRouter, rec: Recorder
 ) -> None:
-    """Synthetic: a Composite request whose later subrequests use ``@{acc.id}``."""
-    route = mock.post(f"{DATA}/composite").respond(json=load_fixture("composite/composite_ok.json"))
+    """Recorded: ``@{lead.id}`` in a URL, a SOQL literal and ``@{got.LastName}`` in a body."""
+    fixture = "composite/composite_ok.json"
+    route = mock.post(f"{DATA}/composite").respond(json=load_fixture(fixture))
+    recorded = load_request(fixture)
     sf = h.client(recorder=rec)
-    result = h.run(three(sf).send())
-    body = sent(route)
-    assert body["allOrNone"] is True
-    assert body["collateSubrequests"] is False
-    reqs = body["compositeRequest"]
-    assert [r["referenceId"] for r in reqs] == ["acc", "Contact2", "query3"]
-    assert reqs[0] == {
-        "method": "POST",
-        "url": f"/services/data/v{API}/sobjects/Account",
-        "referenceId": "acc",
-        "body": {"Name": "Acme"},
-    }
-    assert reqs[1]["body"]["AccountId"] == "@{acc.id}"
-    assert reqs[2]["method"] == "GET"
-    assert "body" not in reqs[2]
-    assert "%27@{acc.id}%27" in reqs[2]["url"]  # the reference itself isn't percent-encoded
+    c = sf.composite.builder()
+    lead = c.create("Lead", recorded["compositeRequest"][0]["body"], ref_id="lead")
+    got = c.get("Lead", lead.ref("id"), ["Id", "LastName"], ref_id="got")
+    c.query("SELECT Id FROM Lead WHERE Id = {}", lead.ref("id"), ref_id="found")
+    c.update("Lead", lead.ref("id"), {"Title": got.ref("LastName")}, ref_id="titled")
+    result = h.run(c.send())
+    assert sent(route) == recorded
+    assert "%27@{lead.id}%27" in recorded["compositeRequest"][2]["url"]  # the reference isn't encoded
     assert isinstance(result, esf.CompositeResult)
-    assert [r.status for r in result] == [201, 201, 200]
-    assert result["acc"].body["id"] == ACC
-    assert result[1].headers["Location"].endswith("/Contact/003xx0000000001AAA")
-    assert result["query3"].body["totalSize"] == 1
+    assert [r.status for r in result] == [201, 200, 200, 204]
+    lead_id = result["lead"].body["id"]
+    assert result["lead"].headers["Location"] == f"/services/data/v{API}/sobjects/Lead/{lead_id}"
+    assert result["got"].body["Id"] == lead_id
+    assert result["found"].body["totalSize"] == 1
+    assert result["titled"].body is None
     assert not result.failed
-    assert len(result.succeeded) == 3
+    assert len(result.succeeded) == 4
     result.raise_for_errors()  # nothing failed
     (event,) = rec.requests
     assert event["operation"] == "composite.send"
-    assert event["records"] == 3
+    assert event["records"] == 4
 
 
 def test_rolled_back_request_raises_the_real_cause(h: Harness, mock: respx.MockRouter) -> None:
-    """Synthetic: with allOrNone the other subrequests report ``PROCESSING_HALTED``."""
-
-    class AddressRequired(esf.ValidationRuleFailed): ...
-
-    mock.post(f"{DATA}/composite").respond(json=load_fixture("composite/composite_rolled_back.json"))
-    sf = h.client(error_tags={"ADDR_REQUIRED": AddressRequired})
-    result = h.run(three(sf).send())
+    """Recorded: with allOrNone the other subrequests report 400 ``PROCESSING_HALTED``."""
+    fixture = "composite/composite_rolled_back.json"
+    mock.post(f"{DATA}/composite").respond(json=load_fixture(fixture))
+    recorded = load_request(fixture)
+    sf = h.client()
+    c = sf.composite.builder(all_or_none=True)
+    ok = c.create("Lead", recorded["compositeRequest"][0]["body"], ref_id="ok")
+    c.create("Lead", recorded["compositeRequest"][1]["body"], ref_id="bad")
+    c.get("Lead", ok.ref("id"), ["Id"], ref_id="read")
+    result = h.run(c.send())
     assert len(result.failed) == 3
     assert [r.halted for r in result] == [True, False, True]
-    assert isinstance(result["acc"].error, esf.RecordError)
-    with pytest.raises(AddressRequired) as ei:
+    assert isinstance(result["ok"].error, esf.RecordError)
+    assert result["ok"].errors[0].error_code == "PROCESSING_HALTED"
+    with pytest.raises(esf.ValidationRuleFailed) as ei:
         result.raise_for_errors()
     err = ei.value
-    assert err.message == "Street is required"
-    assert err.fields == ("Street",)
+    assert err.error_code == "FIELD_CUSTOM_VALIDATION_EXCEPTION"
+    assert err.message == "esf-sandbox: validation rule probe"
     assert err.status == 400
     assert err.operation == "composite.send"
     assert err.method == "POST"
-    assert err.path == "/sobjects/Contact"
+    assert err.path == "/sobjects/Lead"
     assert len(err.errors) == 3
-    assert [e.extended["referenceId"] for e in err.errors] == ["acc", "Contact2", "query3"]
+    assert [e.extended["referenceId"] for e in err.errors] == ["ok", "bad", "read"]
     # The stored error is not changed by raising.
-    assert len(result["Contact2"].errors) == 1
+    assert len(result["bad"].errors) == 1
+
+
+def test_failed_subrequest_without_all_or_none(h: Harness, mock: respx.MockRouter) -> None:
+    """Recorded: allOrNone=false; the failed subrequest fails alone."""
+    fixture = "composite/composite_partial.json"
+    mock.post(f"{DATA}/composite").respond(json=load_fixture(fixture))
+    recorded = load_request(fixture)
+    sf = h.client()
+    c = sf.composite.builder()
+    c.create("Lead", recorded["compositeRequest"][0]["body"], ref_id="ok")
+    c.create("Lead", recorded["compositeRequest"][1]["body"], ref_id="bad")
+    result = h.run(c.send())
+    assert [r.status for r in result] == [201, 400]
+    assert [r.ok for r in result] == [True, False]
+    assert not result["bad"].halted
+    assert isinstance(result["bad"].error, esf.ValidationRuleFailed)
+    with pytest.raises(esf.ValidationRuleFailed):
+        result.raise_for_errors()
 
 
 def test_subrequest_status_picks_the_class(h: Harness, mock: respx.MockRouter) -> None:
@@ -298,29 +318,31 @@ def test_upsert_update_delete_urls(h: Harness, mock: respx.MockRouter) -> None:
 
 
 def test_graph_failure_rolls_back_only_its_graph(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:
-    """Synthetic: two graphs; the second fails and reports ``isSuccessful: false``."""
-    route = mock.post(f"{DATA}/composite/graph").respond(json=load_fixture("composite/graph_mixed.json"))
+    """Recorded: two graphs; the second fails and reports ``isSuccessful: false``."""
+    fixture = "composite/graph_mixed.json"
+    route = mock.post(f"{DATA}/composite/graph").respond(json=load_fixture(fixture))
+    recorded = load_request(fixture)
+    rows = [[sub.get("body") for sub in g["compositeRequest"]] for g in recorded["graphs"]]
     sf = h.client(recorder=rec)
     g = sf.composite.graph()
     g1 = g.graph("g1")
-    g1.create("Account", {"Name": "Acme"}, ref_id="acc")
+    lead = g1.create("Lead", rows[0][0], ref_id="lead")
+    g1.update("Lead", lead.ref("id"), {"Title": "esf-sandbox"}, ref_id="titled")
     g2 = g.graph("g2")
-    acc2 = g2.create("Account", {"Name": "Globex"}, ref_id="acc2")
-    g2.create("Contact", {"AccountId": acc2.ref("id")})
+    g2.create("Lead", rows[1][0], ref_id="ok")
+    g2.create("Lead", rows[1][1], ref_id="bad")
     results = h.run(g.send())
-    body = sent(route)
-    assert [x["graphId"] for x in body["graphs"]] == ["g1", "g2"]
-    assert body["graphs"][1]["compositeRequest"][1]["body"] == {"AccountId": "@{acc2.id}"}
-    assert body["graphs"][0]["compositeRequest"][0]["url"] == f"/services/data/v{API}/sobjects/Account"
+    assert sent(route) == recorded
     assert [(r.graph_id, r.ok) for r in results] == [("g1", True), ("g2", False)]
     assert isinstance(results[0], esf.GraphResult)
     results[0].raise_for_errors()
-    assert results[0].results["acc"].body["id"] == "001xx0000000002AAA"
-    with pytest.raises(esf.RequiredFieldMissing) as ei:
+    assert [r.status for r in results[0].results] == [201, 204]
+    assert results[1].results["ok"].halted
+    with pytest.raises(esf.ValidationRuleFailed) as ei:
         results[1].raise_for_errors()
     assert ei.value.operation == "composite.graph"
     (event,) = rec.requests
-    assert (event["operation"], event["records"]) == ("composite.graph", 3)
+    assert (event["operation"], event["records"]) == ("composite.graph", 4)
 
 
 def test_graph_without_error_details(h: Harness, mock: respx.MockRouter) -> None:
@@ -380,11 +402,54 @@ def test_graph_unexpected_bodies(h: Harness, mock: respx.MockRouter) -> None:
 
 
 def test_tree_creates_nested_records(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:
-    """Synthetic: 201 with ``hasErrors: false`` and one result per record."""
-    route = mock.post(f"{DATA}/composite/tree/Account").respond(
-        201, json=load_fixture("composite/tree_ok.json")
-    )
+    """Recorded: 201 with ``hasErrors: false`` and one result per record, children included."""
+    fixture = "composite/tree_ok.json"
+    route = mock.post(f"{DATA}/composite/tree/Lead").respond(201, json=load_fixture(fixture))
+    recorded = load_request(fixture)
+    first, second = recorded["records"]
     sf = h.client(recorder=rec)
+    records = [
+        {
+            "attributes": {"referenceId": "lead1"},
+            "LastName": first["LastName"],
+            "Company": first["Company"],
+            "Tasks": {
+                "records": [
+                    {
+                        "attributes": {"type": "Task", "referenceId": "task1"},
+                        "Subject": first["Tasks"]["records"][0]["Subject"],
+                    }
+                ]
+            },
+        },
+        {
+            "attributes": {"referenceId": "lead2"},
+            "LastName": second["LastName"],
+            "Company": second["Company"],
+        },
+    ]
+    ids = h.run(sf.composite.tree("Lead", records))
+    assert sent(route) == recorded
+    assert sorted(ids) == ["lead1", "lead2", "task1"]
+    assert ids["task1"].startswith("00T")
+    (event,) = rec.requests
+    assert (event["operation"], event["sobject"], event["records"]) == ("composite.tree", "Lead", 3)
+
+
+def test_tree_generates_reference_ids(h: Harness, mock: respx.MockRouter) -> None:
+    """Records without ``referenceId`` get ``ref1``, ``ref2``... depth first (synthetic body)."""
+    route = mock.post(f"{DATA}/composite/tree/Account").respond(
+        201,
+        json={
+            "hasErrors": False,
+            "results": [
+                {"referenceId": "acme", "id": ACC},
+                {"referenceId": "ref1", "id": "003xx0000000003AAA"},
+                {"referenceId": "ref2", "id": "001xx0000000004AAA"},
+            ],
+        },
+    )
+    sf = h.client()
     records = [
         {
             "attributes": {"referenceId": "acme"},
@@ -394,7 +459,7 @@ def test_tree_creates_nested_records(h: Harness, mock: respx.MockRouter, rec: Re
         {"Name": "Globex"},
     ]
     ids = h.run(sf.composite.tree("Account", records))
-    assert ids == {"acme": "001xx0000000003AAA", "ref1": "003xx0000000003AAA", "ref2": "001xx0000000004AAA"}
+    assert ids == {"acme": ACC, "ref1": "003xx0000000003AAA", "ref2": "001xx0000000004AAA"}
     body = sent(route)
     assert body["records"][0]["attributes"] == {"referenceId": "acme", "type": "Account"}
     assert body["records"][0]["Contacts"]["records"][0]["attributes"] == {
@@ -403,25 +468,26 @@ def test_tree_creates_nested_records(h: Harness, mock: respx.MockRouter, rec: Re
     }
     assert body["records"][1]["attributes"] == {"type": "Account", "referenceId": "ref2"}
     assert "attributes" not in records[1]  # the input isn't changed
-    (event,) = rec.requests
-    assert (event["operation"], event["sobject"], event["records"]) == ("composite.tree", "Account", 3)
 
 
 def test_tree_failure_raises_typed_error(h: Harness, mock: respx.MockRouter) -> None:
-    """Synthetic: 400 with ``hasErrors: true``; nothing was saved."""
-    route = mock.post(f"{DATA}/composite/tree/Contact").respond(
-        400, json=load_fixture("composite/tree_failed.json")
-    )
+    """Recorded: 400 with ``hasErrors: true``; ``results`` lists only the failed records."""
+    fixture = "composite/tree_failed.json"
+    route = mock.post(f"{DATA}/composite/tree/Lead").respond(400, json=load_fixture(fixture))
+    recorded = load_request(fixture)
     sf = h.client()
-    with pytest.raises(esf.RecordError) as ei:
-        h.run(sf.composite.tree("Contact", [{"LastName": "Doe", "Email": "not-an-email"}]))
+    with pytest.raises(esf.ValidationRuleFailed) as ei:
+        h.run(sf.composite.tree("Lead", recorded["records"]))
     err = ei.value
-    assert err.error_code == "INVALID_EMAIL_ADDRESS"
-    assert err.fields == ("Email",)
+    assert err.error_code == "FIELD_CUSTOM_VALIDATION_EXCEPTION"
     assert err.status == 400
     assert err.operation == "composite.tree"
-    assert err.sobject == "Contact"
-    assert err.errors[0].extended["referenceId"] == "ref1"
+    assert err.sobject == "Lead"
+    assert [(e.error_code, e.extended["referenceId"]) for e in err.errors] == [
+        ("FIELD_CUSTOM_VALIDATION_EXCEPTION", "rule"),
+        ("REQUIRED_FIELD_MISSING", "missing"),
+    ]
+    assert err.errors[1].fields == ("Company",)
     assert route.call_count == 1  # a write: never resent
 
 
@@ -474,23 +540,38 @@ def test_tree_limits_are_checked_before_sending(h: Harness, mock: respx.MockRout
 # --- Batch ----------------------------------------------------------------------------------------
 
 
-def test_batch_runs_independent_subrequests(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:
-    """Synthetic: a 200 with ``hasErrors: true``, a 404 and a halted 412."""
-    route = mock.post(f"{DATA}/composite/batch").respond(json=load_fixture("composite/batch_mixed.json"))
+@pytest.mark.parametrize("halt", [False, True])
+def test_batch_runs_independent_subrequests(
+    h: Harness, mock: respx.MockRouter, rec: Recorder, halt: bool
+) -> None:
+    """Recorded: ``hasErrors`` and ``results[]``; with haltOnError the rest get 412."""
+    fixture = "composite/batch_halted.json" if halt else "composite/batch_mixed.json"
+    route = mock.post(f"{DATA}/composite/batch").respond(json=load_fixture(fixture))
+    recorded = load_request(fixture)
+    rows = [r.get("richInput") for r in recorded["batchRequests"]]
     sf = h.client(recorder=rec)
-    b = sf.composite.batch(halt_on_error=True)
-    first = b.get("Account", ACC, ["Name"])
-    b.get("Account", "001xx0000000009AAA")
-    b.update("Account", ACC, {"Name": "Acme 2"})
+    b = sf.composite.batch(halt_on_error=halt)
+    created = b.create("Lead", rows[0])
+    b.create("Lead", rows[1])
+    b.query("SELECT Id FROM Lead LIMIT 1")
+    b.update("Lead", recorded["batchRequests"][3]["url"].rsplit("/", 1)[1], {"Title": "x"})
     result = h.run(b.send())
-    body = sent(route)
-    assert body["haltOnError"] is True
-    assert body["batchRequests"][0] == {"method": "GET", "url": f"v{API}/sobjects/Account/{ACC}?fields=Name"}
-    assert body["batchRequests"][2]["richInput"] == {"Name": "Acme 2"}
-    assert result[first.reference_id].body["Name"] == "Acme"
-    assert [r.status for r in result] == [200, 404, 412]
-    assert result[2].halted
-    with pytest.raises(esf.NotFound):
+    assert sent(route) == recorded
+    assert recorded["batchRequests"][0] == {
+        "method": "POST",
+        "url": f"v{API}/sobjects/Lead",
+        "richInput": rows[0],
+    }
+    assert result[created.reference_id].body["success"] is True
+    assert isinstance(result[1].error, esf.ValidationRuleFailed)
+    if halt:
+        assert [r.status for r in result] == [201, 400, 412, 412]
+        assert [r.halted for r in result] == [False, False, True, True]
+    else:
+        assert [r.status for r in result] == [201, 400, 200, 400]
+        assert result[2].body["done"] is True
+        assert result[3].errors[0].error_code == "MALFORMED_ID"
+    with pytest.raises(esf.ValidationRuleFailed):
         result.raise_for_errors()
     (event,) = rec.requests
     assert event["operation"] == "composite.batch"

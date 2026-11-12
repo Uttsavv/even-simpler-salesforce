@@ -12,7 +12,7 @@ from even_simpler_salesforce.core import hints as H
 
 from ..fixtures import load_fixture
 
-LEAD = load_fixture("sobject/describe_lead_fields.json")  # synthetic
+LEAD = load_fixture("sobject/describe_lead.json")  # recorded
 
 
 def lookup(**objects: Mapping[str, Any]) -> H.DescribeLookup:
@@ -38,7 +38,7 @@ def test_missing_column(message: str, expected: tuple[str, str] | None) -> None:
 
 def test_field_suggestions_are_case_insensitive_and_skip_exact_matches() -> None:
     assert H.field_suggestions("Emial", LEAD) == ["Email"]
-    assert H.field_suggestions("lastname", LEAD) == ["LastName"]
+    assert H.field_suggestions("lastname", LEAD)[0] == "LastName"  # recorded describe: FirstName too
     assert H.field_suggestions("Email", LEAD) == []  # the field exists: nothing to suggest
     assert H.field_suggestions("Xyzzy", LEAD) == []
     assert H.field_suggestions("Email", {"fields": "odd"}) == []
@@ -115,6 +115,10 @@ def test_session_hint_only_after_a_refresh() -> None:
     assert H.hint_for(local, refreshed=True) is None
     soap = esf.SessionExpired("Invalid Session ID", error_code="INVALID_SESSION_ID", status=500)
     assert H.hint_for(soap, refreshed=True) == hint  # a SOAP fault arrives as HTTP 500
+    superseded = H.hint_for(err, refreshed=True, superseded=True)
+    assert superseded is not None
+    assert "superseded" in superseded
+    assert "'api' OAuth scope" not in superseded
 
 
 def test_api_disabled_and_request_limit_hints() -> None:

@@ -1,0 +1,36 @@
+{
+  "esf_fixture": 1,
+  "source": "recorded by tests/sandbox/test_core_rest.py::test_invalid_field_message_shapes (esf.testing.record, Developer Edition org, API v68.0, 2026-11-12)",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/sobjects/Lead/",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "LastName": "esf-sandbox-a955cbb6cf97-v29",
+          "Company": "esf-sandbox",
+          "Nope__x": "1"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=2737/15000"
+        },
+        "json": [
+          {
+            "message": "No such column 'Nope__x' on sobject of type Lead",
+            "errorCode": "INVALID_FIELD"
+          }
+        ]
+      }
+    }
+  ]
+}

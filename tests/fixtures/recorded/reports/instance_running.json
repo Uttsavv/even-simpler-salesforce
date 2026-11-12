@@ -1,48 +1,105 @@
 {
   "synthetic": true,
-  "source": "hand-written (synthetic) from the Salesforce Reports and Dashboards REST API Developer Guide (Execute Async, Instances List, Instance Results); no org recording yet",
+  "source": "hand-written (synthetic): an instance in status Running, made from the recorded reports/instance_success.json (attributes keys as recorded on API 68.0; factMap and groupings emptied). A Developer Edition run of a small report finished before the first poll and never failed, so neither status could be recorded (big-bang.md §21 V66).",
   "body": {
     "attributes": {
-      "id": "0LGxx0000000001AAA",
-      "reportId": "00Oxx0000000001AAA",
-      "reportName": "Open Opportunities",
-      "ownerId": "005xx0000000001AAA",
-      "requestDate": "2026-11-11T09:00:00Z",
-      "type": "ReportInstance",
+      "completionDate": null,
+      "errorMessage": null,
+      "id": "0LG000000000002GAA",
+      "ownerId": "005000000000003AAA",
+      "queryable": false,
+      "reportId": "00O000000000001EAA",
+      "reportName": "ESF Sandbox Leads Summary",
+      "requestDate": "2026-11-11T23:04:31Z",
+      "showDetailedErrorToUser": false,
       "status": "Running",
-      "completionDate": null
+      "type": "ReportInstance"
     },
     "allData": false,
     "hasDetailRows": false,
     "factMap": {},
+    "groupingsAcross": {
+      "groupings": []
+    },
+    "groupingsDown": {
+      "groupings": []
+    },
     "reportMetadata": {
-      "id": "00Oxx0000000001AAA",
-      "name": "Open Opportunities",
-      "reportFormat": "SUMMARY",
-      "detailColumns": [
-        "ACCOUNT_NAME",
-        "OPPORTUNITY_NAME",
-        "AMOUNT"
-      ],
       "aggregates": [
-        "s!AMOUNT",
         "RowCount"
       ],
+      "chart": null,
+      "crossFilters": [],
+      "currency": null,
+      "dashboardSetting": null,
+      "description": null,
+      "detailColumns": [
+        "LAST_NAME",
+        "COMPANY"
+      ],
+      "developerName": "Esf_Sandbox_Leads_Summary",
+      "division": null,
+      "folderId": "00D000000000009EAA",
+      "groupingsAcross": [],
       "groupingsDown": [
         {
-          "name": "STAGE_NAME",
-          "sortOrder": "Asc",
-          "dateGranularity": "None"
+          "dateGranularity": "None",
+          "name": "LEAD_SOURCE",
+          "sortAggregate": null,
+          "sortOrder": "Asc"
+        },
+        {
+          "dateGranularity": "None",
+          "name": "STATUS",
+          "sortAggregate": null,
+          "sortOrder": "Asc"
         }
       ],
-      "groupingsAcross": [],
-      "reportFilters": [],
-      "reportBooleanFilter": null,
       "hasDetailRows": true,
+      "hasRecordCount": true,
+      "historicalSnapshotDates": [],
+      "id": "00O000000000001EAA",
+      "name": "ESF Sandbox Leads Summary",
+      "paletteColors": [
+        "#126afc",
+        "#0b54ca",
+        "#0c3e99",
+        "#062a6c",
+        "#04153d",
+        "#a0a7fd",
+        "#768bfd"
+      ],
+      "presentationOptions": {
+        "hasStackedSummaries": false
+      },
+      "reportBooleanFilter": null,
+      "reportFilters": [
+        {
+          "column": "LAST_NAME",
+          "filterType": "fieldValue",
+          "isRunPageEditable": false,
+          "operator": "startsWith",
+          "value": "esf-sandbox-5d9621e906af-r"
+        }
+      ],
+      "reportFormat": "SUMMARY",
       "reportType": {
-        "type": "Opportunity",
-        "label": "Opportunities"
-      }
+        "label": "Leads",
+        "type": "LeadList"
+      },
+      "scope": "org",
+      "showGrandTotal": true,
+      "showSubtotals": true,
+      "sortBy": [],
+      "standardDateFilter": {
+        "column": "CREATED_DATE",
+        "durationValue": "CUSTOM",
+        "endDate": null,
+        "startDate": null
+      },
+      "standardFilters": null,
+      "supportsRoleHierarchy": false,
+      "userOrHierarchyFilterId": null
     }
   }
 }

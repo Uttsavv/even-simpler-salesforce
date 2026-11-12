@@ -1,5 +1,26 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Metadata API Developer Guide: https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_checkretrievestatus.htm",
-  "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns=\"http://soap.sforce.com/2006/04/metadata\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"><soapenv:Body><checkRetrieveStatusResponse><result><done>true</done><id>09Sxx0000000001AAA</id><status>Succeeded</status><success>true</success></result></checkRetrieveStatusResponse></soapenv:Body></soapenv:Envelope>"
+  "esf_fixture": 1,
+  "source": "recorded 2026-11-11 with esf.testing.record from a Developer Edition org (API v68.0)",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/Soap/m/68.0",
+        "query": [],
+        "headers": {
+          "accept": "text/xml",
+          "content-type": "text/xml; charset=UTF-8",
+          "sforce-call-options": "client=esf-sandbox"
+        },
+        "text": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><env:Envelope xmlns:env=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:m=\"http://soap.sforce.com/2006/04/metadata\"><env:Header><m:SessionHeader><m:sessionId><redacted></m:sessionId></m:SessionHeader></env:Header><env:Body><m:checkRetrieveStatus><m:asyncProcessId>09S000000000001EAA</m:asyncProcessId><m:includeZip>false</m:includeZip></m:checkRetrieveStatus></env:Body></env:Envelope>"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/xml; charset=utf-8"
+        },
+        "text": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns=\"http://soap.sforce.com/2006/04/metadata\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"><soapenv:Body><checkRetrieveStatusResponse><result><done>true</done><fileProperties><createdById>005000000000002AAA</createdById><createdByName>User 1</createdByName><createdDate>2026-11-11T22:41:27.000Z</createdDate><fileName>classes/EsfSandboxActionTest.cls</fileName><fullName>EsfSandboxActionTest</fullName><id>01p000000000003AAA</id><lastModifiedById>005000000000002AAA</lastModifiedById><lastModifiedByName>User 1</lastModifiedByName><lastModifiedDate>2026-11-11T22:53:15.000Z</lastModifiedDate><manageableState>unmanaged</manageableState><type>ApexClass</type></fileProperties><fileProperties><createdById>005000000000002AAA</createdById><createdByName>User 1</createdByName><createdDate>2026-11-11T22:54:02.605Z</createdDate><fileName>package.xml</fileName><fullName>package.xml</fullName><id></id><lastModifiedById>005000000000002AAA</lastModifiedById><lastModifiedByName>User 1</lastModifiedByName><lastModifiedDate>2026-11-11T22:54:02.605Z</lastModifiedDate><manageableState>unmanaged</manageableState><type>Package</type></fileProperties><id>09S000000000001EAA</id><messages><fileName>package.xml</fileName><problem>Entity of type &apos;ApexClass&apos; named &apos;EsfSandboxNoSuchClass&apos; cannot be found</problem></messages><status>Succeeded</status><success>true</success><zipFile xsi:nil=\"true\"/></result></checkRetrieveStatusResponse></soapenv:Body></soapenv:Envelope>"
+      }
+    }
+  ]
 }

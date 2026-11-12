@@ -1,44 +1,119 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Salesforce REST API Developer Guide, Composite and allOrNone Parameters in Composite and Collections Requests; no org recording yet",
-  "body": {
-    "compositeResponse": [
-      {
-        "body": [
-          {
-            "errorCode": "PROCESSING_HALTED",
-            "message": "The transaction was rolled back since another operation in the same transaction failed."
-          }
-        ],
-        "httpHeaders": {},
-        "httpStatusCode": 400,
-        "referenceId": "acc"
+  "esf_fixture": 1,
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/composite",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "allOrNone": true,
+          "collateSubrequests": false,
+          "compositeRequest": [
+            {
+              "method": "POST",
+              "url": "/services/data/v68.0/sobjects/Lead",
+              "referenceId": "ok",
+              "body": {
+                "LastName": "esf-sandbox-66b81d44a6df-crb-sync",
+                "Company": "esf-sandbox"
+              }
+            },
+            {
+              "method": "POST",
+              "url": "/services/data/v68.0/sobjects/Lead",
+              "referenceId": "bad",
+              "body": {
+                "LastName": "esf-sandbox-66b81d44a6df-crb-sync",
+                "Company": "ESF_VR"
+              }
+            },
+            {
+              "method": "GET",
+              "url": "/services/data/v68.0/sobjects/Lead/@{ok.id}?fields=Id",
+              "referenceId": "read"
+            }
+          ]
+        }
       },
-      {
-        "body": [
-          {
-            "message": "[ADDR_REQUIRED] Street is required",
-            "errorCode": "FIELD_CUSTOM_VALIDATION_EXCEPTION",
-            "fields": [
-              "Street"
-            ]
-          }
-        ],
-        "httpHeaders": {},
-        "httpStatusCode": 400,
-        "referenceId": "Contact2"
-      },
-      {
-        "body": [
-          {
-            "errorCode": "PROCESSING_HALTED",
-            "message": "The transaction was rolled back since another operation in the same transaction failed."
-          }
-        ],
-        "httpHeaders": {},
-        "httpStatusCode": 400,
-        "referenceId": "query3"
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1597/15000"
+        },
+        "json": {
+          "compositeResponse": [
+            {
+              "body": [
+                {
+                  "errorCode": "PROCESSING_HALTED",
+                  "message": "The transaction was rolled back since another operation in the same transaction failed."
+                }
+              ],
+              "httpHeaders": {},
+              "httpStatusCode": 400,
+              "referenceId": "ok"
+            },
+            {
+              "body": [
+                {
+                  "message": "esf-sandbox: validation rule probe",
+                  "errorCode": "FIELD_CUSTOM_VALIDATION_EXCEPTION",
+                  "fields": []
+                }
+              ],
+              "httpHeaders": {},
+              "httpStatusCode": 400,
+              "referenceId": "bad"
+            },
+            {
+              "body": [
+                {
+                  "errorCode": "PROCESSING_HALTED",
+                  "message": "The transaction was rolled back since another operation in the same transaction failed."
+                }
+              ],
+              "httpHeaders": {},
+              "httpStatusCode": 400,
+              "referenceId": "read"
+            }
+          ]
+        }
       }
-    ]
-  }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/query",
+        "query": [
+          [
+            "q",
+            "SELECT Id, LastName, Title FROM Lead WHERE LastName LIKE ? ORDER BY LastName"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1600/15000"
+        },
+        "json": {
+          "totalSize": 0,
+          "done": true,
+          "records": []
+        }
+      }
+    }
+  ]
 }

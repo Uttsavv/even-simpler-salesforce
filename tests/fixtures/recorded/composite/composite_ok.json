@@ -1,50 +1,148 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Salesforce REST API Developer Guide, Composite (Send Multiple Requests Using Composite) and Composite Request Body; no org recording yet",
-  "body": {
-    "compositeResponse": [
-      {
-        "body": {
-          "id": "001xx0000000001AAA",
-          "success": true,
-          "errors": []
+  "esf_fixture": 1,
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/composite",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
         },
-        "httpHeaders": {
-          "Location": "/services/data/v68.0/sobjects/Account/001xx0000000001AAA"
-        },
-        "httpStatusCode": 201,
-        "referenceId": "acc"
+        "json": {
+          "allOrNone": false,
+          "collateSubrequests": false,
+          "compositeRequest": [
+            {
+              "method": "POST",
+              "url": "/services/data/v68.0/sobjects/Lead",
+              "referenceId": "lead",
+              "body": {
+                "LastName": "esf-sandbox-66b81d44a6df-cok-sync",
+                "Company": "esf-sandbox"
+              }
+            },
+            {
+              "method": "GET",
+              "url": "/services/data/v68.0/sobjects/Lead/@{lead.id}?fields=Id,LastName",
+              "referenceId": "got"
+            },
+            {
+              "method": "GET",
+              "url": "/services/data/v68.0/query?q=SELECT%20Id%20FROM%20Lead%20WHERE%20Id%20%3D%20%27@{lead.id}%27",
+              "referenceId": "found"
+            },
+            {
+              "method": "PATCH",
+              "url": "/services/data/v68.0/sobjects/Lead/@{lead.id}",
+              "referenceId": "titled",
+              "body": {
+                "Title": "@{got.LastName}"
+              }
+            }
+          ]
+        }
       },
-      {
-        "body": {
-          "id": "003xx0000000001AAA",
-          "success": true,
-          "errors": []
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1585/15000"
         },
-        "httpHeaders": {
-          "Location": "/services/data/v68.0/sobjects/Contact/003xx0000000001AAA"
-        },
-        "httpStatusCode": 201,
-        "referenceId": "Contact2"
+        "json": {
+          "compositeResponse": [
+            {
+              "body": {
+                "id": "00Q000000000001EAA",
+                "success": true,
+                "errors": []
+              },
+              "httpHeaders": {
+                "Location": "/services/data/v68.0/sobjects/Lead/00Q000000000001EAA"
+              },
+              "httpStatusCode": 201,
+              "referenceId": "lead"
+            },
+            {
+              "body": {
+                "attributes": {
+                  "type": "Lead",
+                  "url": "/services/data/v68.0/sobjects/Lead/00Q000000000001EAA"
+                },
+                "Id": "00Q000000000001EAA",
+                "LastName": "LastName 1"
+              },
+              "httpHeaders": {},
+              "httpStatusCode": 200,
+              "referenceId": "got"
+            },
+            {
+              "body": {
+                "totalSize": 1,
+                "done": true,
+                "records": [
+                  {
+                    "attributes": {
+                      "type": "Lead",
+                      "url": "/services/data/v68.0/sobjects/Lead/00Q000000000001EAA"
+                    },
+                    "Id": "00Q000000000001EAA"
+                  }
+                ]
+              },
+              "httpHeaders": {},
+              "httpStatusCode": 200,
+              "referenceId": "found"
+            },
+            {
+              "body": null,
+              "httpHeaders": {},
+              "httpStatusCode": 204,
+              "referenceId": "titled"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/query",
+        "query": [
+          [
+            "q",
+            "SELECT Id, LastName, Title FROM Lead WHERE LastName LIKE ? ORDER BY LastName"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
       },
-      {
-        "body": {
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1585/15000"
+        },
+        "json": {
           "totalSize": 1,
           "done": true,
           "records": [
             {
               "attributes": {
-                "type": "Contact",
-                "url": "/services/data/v68.0/sobjects/Contact/003xx0000000001AAA"
+                "type": "Lead",
+                "url": "/services/data/v68.0/sobjects/Lead/00Q000000000001EAA"
               },
-              "Id": "003xx0000000001AAA"
+              "Id": "00Q000000000001EAA",
+              "LastName": "LastName 1",
+              "Title": "Title 1"
             }
           ]
-        },
-        "httpHeaders": {},
-        "httpStatusCode": 200,
-        "referenceId": "query3"
+        }
       }
-    ]
-  }
+    }
+  ]
 }

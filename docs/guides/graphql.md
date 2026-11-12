@@ -67,6 +67,10 @@ names = [lead["Name"]["value"] async for lead in sf.graphql_iter(query, path="ui
 print(len(names))  # 450
 ```
 
+A connection returns 10 records when you leave out `first:`, and at most 2,000 for one
+`first:`. Without `upperBound`, paging stops at 4,000 records; with a larger `first:` or
+past that point Salesforce returns a `DataFetchingException`, which raises `GraphQLError`.
+
 `path` is the dotted path from `data` to the connection. The client sets `after` to the
 `endCursor` of each page and yields each `edges[].node`. Pass other variables in the second
 argument, as with `sf.graphql()`.
@@ -76,15 +80,21 @@ If the query has no `$after` variable, the call raises `ValueError` before it se
 ## Handle errors
 
 If the response has an `errors` array, the call raises `esf.GraphQLError`. Salesforce answers
-a query with an unknown field with `200 OK` and an `errors` array, so the status does not tell
-you that the query failed.
+`200 OK` with an `errors` array for every GraphQL error, so the status does not tell you that
+the query failed. `error_code` tells you what went wrong:
+
+| `error_code` | Cause | `data` |
+|---|---|---|
+| `InvalidSyntax` | the document doesn't parse | `{}` |
+| `ValidationError` | an unknown object or field, or a field the user can't read | `{}` |
+| `DataFetchingException` | a field failed while Salesforce read or saved it, such as `first: 2001` or a validation rule in a mutation | the fields that did resolve |
 
 ```python
 try:
     await sf.graphql("query { uiapi { query { Lead { edges { node { Nmae { value } } } } } } }")
 except esf.GraphQLError as exc:
     print(exc.error_code)  # ValidationError
-    print(exc.graphql_errors[0]["locations"])  # [{'line': 1, 'column': 47}]
+    print(exc.graphql_errors[0]["locations"])  # [{'column': 47, 'line': 1}]
 ```
 
 `GraphQLError` has these attributes, on top of the ones every error has:
@@ -92,23 +102,54 @@ except esf.GraphQLError as exc:
 | Attribute | Type | Description |
 |---|---|---|
 | `graphql_errors` | `tuple[Mapping, ...]` | the `errors` entries as Salesforce sent them |
-| `errors` | `tuple[ErrorDetail, ...]` | the same entries; `extended` holds `path`, `locations` and `extensions` |
+| `errors` | `tuple[ErrorDetail, ...]` | the same entries with the message HTML-unescaped; `extended` holds `path`, `locations` and `extensions` |
 | `error_code` | `str \| None` | `extensions.ErrorType` of the first entry, such as `ValidationError` |
-| `data` | `Any` | the partial `data` that came with the errors, or `None` |
+| `data` | `Any` | the `data` that came with the errors (`{}` when the document was rejected), or `None` |
 
 ### Use partial data
 
-A response can hold `data` for some fields and `errors` for others. The call still raises,
-so you never use incomplete data by mistake. If part of the data is enough, read it from
-`exc.data`. The `path` of each error tells you which field failed.
+After a `DataFetchingException`, the response holds `data` for the fields that resolved,
+`None` for the field that failed, and `errors` for it. The call still raises, so you never use
+incomplete data by mistake. If part of the data is enough, read it from `exc.data`.
+`extended["path"]` of each error tells you which field failed. Salesforce sends it as
+`paths`; the client reads either name.
 
 ```python
 query = "query { uiapi { query { Lead(first: 1) { edges { node { Id } } } } } }"
 try:
     data = await sf.graphql(query)
 except esf.GraphQLError as exc:
-    failed = [e.get("path") for e in exc.graphql_errors]
+    failed = [e.extended.get("path") for e in exc.errors]
     data = exc.data or {}
+```
+
+A field the user can't read (no field-level security) does not give partial data: Salesforce
+rejects the whole document with `ValidationError`, as for a field that doesn't exist.
+
+## Create records with a mutation
+
+A mutation creates, updates or deletes records. Salesforce names the fields
+`<Object>Create`, `<Object>Update` and `<Object>Delete`; mutations are generally available
+from API version 66.0 (beta from 59.0). The client never resends a mutation after it may have
+reached Salesforce.
+
+If a record fails, the call raises `GraphQLError` with `DataFetchingException`. The failed
+operation gets an entry with the reason, such as the validation rule message, and one that says
+the transaction was rolled back. By default (`uiapi(input: {allOrNone: true})`) one failure
+rolls back every operation of the mutation, and the operations that didn't fail get only the
+rolled-back entry, which can come first. Look through `exc.errors` for the reason rather than
+reading only `exc.message`.
+
+```python
+data = await sf.graphql(
+    """
+    mutation Create($input: LeadCreateInput!) {
+      uiapi { LeadCreate(input: $input) { Record { Id } } }
+    }
+    """,
+    {"input": {"Lead": {"LastName": "Lovelace", "Company": "Analytical Engines"}}},
+)
+print(data["uiapi"]["LeadCreate"]["Record"]["Id"])
 ```
 
 ## Test code that uses GraphQL

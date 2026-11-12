@@ -1,0 +1,276 @@
+{
+  "esf_fixture": 1,
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/jobs/query",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "operation": "query",
+          "query": "SELECT Id, BillingAddress FROM Account",
+          "contentType": "CSV",
+          "columnDelimiter": "COMMA",
+          "lineEnding": "LF"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=370/15000"
+        },
+        "json": [
+          {
+            "errorCode": "API_ERROR",
+            "message": "Selecting compound data not supported in Bulk Query"
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/jobs/query",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "operation": "query",
+          "query": "SELECT FIELDS(STANDARD) FROM Lead",
+          "contentType": "CSV",
+          "columnDelimiter": "COMMA",
+          "lineEnding": "LF"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=368/15000"
+        },
+        "json": [
+          {
+            "errorCode": "API_ERROR",
+            "message": "Selecting compound data not supported in Bulk Query"
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/jobs/query",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "operation": "query",
+          "query": "SELECT FIELDS(STANDARD) FROM Campaign",
+          "contentType": "CSV",
+          "columnDelimiter": "COMMA",
+          "lineEnding": "LF"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=368/15000"
+        },
+        "json": {
+          "id": "750000000000001AAA",
+          "operation": "query",
+          "object": "Campaign",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:54:21.000+0000",
+          "systemModstamp": "2026-11-12T07:54:21.000+0000",
+          "state": "UploadComplete",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/query/750000000000001AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=383/15000"
+        },
+        "json": {
+          "id": "750000000000001AAA",
+          "operation": "query",
+          "object": "Campaign",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:54:21.000+0000",
+          "systemModstamp": "2026-11-12T07:54:21.000+0000",
+          "state": "UploadComplete",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Query",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "retries": 0,
+          "totalProcessingTime": 0,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/query/750000000000001AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=395/15000"
+        },
+        "json": {
+          "id": "750000000000001AAA",
+          "operation": "query",
+          "object": "Campaign",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:54:21.000+0000",
+          "systemModstamp": "2026-11-12T07:54:21.000+0000",
+          "state": "UploadComplete",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Query",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "retries": 0,
+          "totalProcessingTime": 0,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/query/750000000000001AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=411/15000"
+        },
+        "json": {
+          "id": "750000000000001AAA",
+          "operation": "query",
+          "object": "Campaign",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:54:21.000+0000",
+          "systemModstamp": "2026-11-12T07:54:29.000+0000",
+          "state": "InProgress",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Query",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 0,
+          "retries": 0,
+          "totalProcessingTime": 0,
+          "isPkChunkingSupported": true
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/query/750000000000001AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=431/15000"
+        },
+        "json": {
+          "id": "750000000000001AAA",
+          "operation": "query",
+          "object": "Campaign",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:54:21.000+0000",
+          "systemModstamp": "2026-11-12T07:54:38.000+0000",
+          "state": "JobComplete",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Query",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 0,
+          "retries": 0,
+          "totalProcessingTime": 31,
+          "isPkChunkingSupported": true
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/query/750000000000001AAA/results",
+        "query": [],
+        "headers": {
+          "accept": "text/csv",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/csv",
+          "sforce-limit-info": "api-usage=431/15000",
+          "sforce-locator": "null",
+          "sforce-numberofrecords": "0"
+        },
+        "text": "\"Id\",\"IsDeleted\",\"Name\",\"ParentId\",\"Type\",\"Status\",\"StartDate\",\"EndDate\",\"ExpectedRevenue\",\"BudgetedCost\",\"ActualCost\",\"ExpectedResponse\",\"NumberSent\",\"IsActive\",\"Description\",\"NumberOfLeads\",\"NumberOfConvertedLeads\",\"NumberOfContacts\",\"NumberOfResponses\",\"NumberOfOpportunities\",\"NumberOfWonOpportunities\",\"AmountAllOpportunities\",\"AmountWonOpportunities\",\"OwnerId\",\"CreatedDate\",\"CreatedById\",\"LastModifiedDate\",\"LastModifiedById\",\"SystemModstamp\",\"LastActivityDate\",\"LastViewedDate\",\"LastReferencedDate\",\"CampaignMemberRecordTypeId\"\n"
+      }
+    }
+  ]
+}

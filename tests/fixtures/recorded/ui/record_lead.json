@@ -1,30 +1,56 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Salesforce User Interface API Developer Guide (Get a Record; Record response body); no org recording yet",
-  "body": {
-    "apiName": "Lead",
-    "childRelationships": {},
-    "eTag": "a1b2c3",
-    "fields": {
-      "Name": {
-        "displayValue": null,
-        "value": "Ada Lovelace"
+  "esf_fixture": 1,
+  "note": "recorded with esf.testing.record (tests/sandbox/test_ui_reports.py, API 68.0)",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/ui-api/records/00Q000000000001EAA",
+        "query": [
+          [
+            "fields",
+            "Lead.Name,Lead.AnnualRevenue,Lead.Status"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
       },
-      "Status": {
-        "displayValue": "Open - Not Contacted",
-        "value": "Open - Not Contacted"
-      },
-      "AnnualRevenue": {
-        "displayValue": "$1,500,000.00",
-        "value": 1500000
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=3137/15000",
+          "etag": "\"74a392bbf2a70d554730259f8f39b4a9--gzip\""
+        },
+        "json": {
+          "apiName": "Lead",
+          "childRelationships": {},
+          "eTag": "74a392bbf2a70d554730259f8f39b4a9",
+          "fields": {
+            "AnnualRevenue": {
+              "displayValue": "$1,500,000",
+              "value": 1500000.0
+            },
+            "Name": {
+              "displayValue": null,
+              "value": "esf-sandbox-5d9621e906af-r0"
+            },
+            "Status": {
+              "displayValue": "Open - Not Contacted",
+              "value": "Open - Not Contacted"
+            }
+          },
+          "id": "00Q000000000001EAA",
+          "lastModifiedById": "005000000000002AAA",
+          "lastModifiedDate": "2026-11-11T23:03:32.000Z",
+          "recordTypeId": "012000000000000AAA",
+          "recordTypeInfo": null,
+          "systemModstamp": "2026-11-11T23:03:32.000Z",
+          "weakEtag": 1794438212000
+        }
       }
-    },
-    "id": "00Qxx0000000001AAA",
-    "lastModifiedById": "005xx0000000001AAA",
-    "lastModifiedDate": "2026-11-10T09:30:00.000Z",
-    "recordTypeId": "012000000000000AAA",
-    "recordTypeInfo": null,
-    "systemModstamp": "2026-11-10T09:30:00.000Z",
-    "weakEtag": 1762767000000
-  }
+    }
+  ]
 }

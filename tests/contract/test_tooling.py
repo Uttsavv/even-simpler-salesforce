@@ -1,9 +1,11 @@
 """Tooling API: ``sf.tooling`` (§9.12) and anonymous Apex (§9.7), on both clients.
 
-Every response here is **synthetic** (``tests/fixtures/recorded/tooling/*.json`` and the inline
-bodies below), hand-written from the Tooling API Developer Guide because no org recording
-exists yet. developer.salesforce.com refuses non-browser clients, so the pages were read
-through search excerpts (big-bang.md §21, V17, V23, V45-V47):
+Responses come from ``tests/fixtures/recorded/tooling``. Most are **recorded** from a Developer
+Edition org (API v68.0) with ``esf.testing.record`` on 2026-11-11 (``tests/sandbox/
+test_tooling_metadata.py``; big-bang.md §21 V17, V23, V45-V47). Still **synthetic**:
+``query_page1.json``/``query_page2.json`` (a paged Tooling query needs more than 2,000 rows,
+which the org doesn't have) and the inline bodies marked so below. developer.salesforce.com
+refuses non-browser clients, so the pages were read through search excerpts:
 
 - REST resources (``query``, ``sobjects``, ``executeAnonymous``, ``completions``):
   https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/intro_rest_resources.htm
@@ -31,17 +33,21 @@ import pytest
 import respx
 
 import even_simpler_salesforce as esf
+from even_simpler_salesforce.testing import replay
 
 from ..conftest import DATA, INSTANCE, USER_ID, Harness, Recorder
-from ..fixtures import load_fixture
+from ..fixtures import RECORDED, load_fixture, load_interaction
 
 TOOLING = f"{DATA}/tooling"
 ANON = f"{TOOLING}/executeAnonymous/"
-NOW = datetime(2030, 1, 1, tzinfo=timezone.utc)
-FLAG_ID = "7tfxx0000000001AAA"
-LEVEL_ID = "7dlxx0000000001AAA"
-LOG_ID = "07Lxx0000000002AAA"
-PAGE1 = load_fixture("tooling/query_page1.json")
+# ``tooling/capture_log.json``: the client created its TraceFlag at NOW; the run's ApexLog
+# started two seconds later (StartTime has whole seconds only).
+NOW = datetime(2026, 11, 11, 22, 48, 30, tzinfo=timezone.utc)
+CAPTURE = "tooling/capture_log.json"
+LEVEL_ID = "7dl000000000001AAA"
+FLAG_ID = "7tf000000000003AAA"
+LOG_ID = "07L000000000004EAA"
+PAGE1 = load_fixture("tooling/query_page1.json")  # synthetic
 
 
 def _empty(entity: str) -> dict[str, Any]:
@@ -57,7 +63,7 @@ def _client(h: Harness, rec: Recorder | None = None, **kw: Any) -> Any:
 # --- query & records -------------------------------------------------------------------
 
 
-def test_query_uses_the_tooling_path_and_query_more_follows_its_cursor(
+def test_query_uses_the_tooling_path_and_query_more_follows_its_cursor(  # synthetic pages
     h: Harness, mock: respx.MockRouter, rec: Recorder
 ) -> None:
     route = mock.get(f"{TOOLING}/query").respond(json=PAGE1)
@@ -207,6 +213,8 @@ def test_execute_anonymous_success(h: Harness, mock: respx.MockRouter, rec: Reco
     sf = _client(h, rec)
     code = "Account a = new Account(Name = 'x & y');\ninsert a;"
     result = h.run(sf.tooling.execute_anonymous(code))
+    # Recorded: line and column are -1 and the empty fields are null when nothing failed.
+    assert load_fixture("tooling/execute_ok.json")["line"] == -1
     assert result == esf.AnonymousResult(compiled=True, success=True)
     assert route.calls[0].request.url.params["anonymousBody"] == code
     (event,) = rec.requests
@@ -215,21 +223,44 @@ def test_execute_anonymous_success(h: Harness, mock: respx.MockRouter, rec: Reco
 
 def test_execute_anonymous_compile_error(h: Harness, mock: respx.MockRouter) -> None:
     mock.get(ANON).respond(json=load_fixture("tooling/execute_compile_error.json"))
-    result = h.run(_client(h).tooling.execute_anonymous("System debug('x');"))
+    result = h.run(_client(h).tooling.execute_anonymous("Integer i = 1;\nSystem debug('x');"))
     assert not result.compiled
     assert not result.success
     assert result.compile_problem == "Unexpected token 'debug'."
-    assert (result.line, result.column) == (1, 13)
+    assert (result.line, result.column) == (2, 8)
     assert result.exception_message is None
+    assert result.exception_stack_trace is None
 
 
 def test_execute_anonymous_exception(h: Harness, mock: respx.MockRouter) -> None:
     mock.get(ANON).respond(json=load_fixture("tooling/execute_exception.json"))
-    result = h.run(_client(h).tooling.execute_anonymous("Integer i = 1 / 0;"))
+    result = h.run(_client(h).tooling.execute_anonymous("Integer a = 0;\nInteger i = 1 / a;"))
     assert result.compiled
     assert not result.success
     assert result.exception_message == "System.MathException: Divide by 0"
-    assert result.exception_stack_trace == "AnonymousBlock: line 1, column 1"
+    assert result.exception_stack_trace == "AnonymousBlock: line 2, column 1"
+    assert (result.line, result.column) == (2, 1)
+    assert result.compile_problem is None
+
+
+@pytest.mark.parametrize(
+    ("fixture", "status"),
+    [("tooling/execute_uri_too_long.json", 414), ("tooling/execute_headers_too_large.json", 431)],
+)
+def test_execute_anonymous_too_long_is_request_too_large(
+    h: Harness, mock: respx.MockRouter, fixture: str, status: int
+) -> None:
+    """Recorded (V45): 30,000 and 20,000 characters of code got an HTML 414 / 431 page."""
+    recorded = load_interaction(fixture)["response"]
+    assert recorded["status"] == status
+    route = mock.get(ANON).respond(
+        status, text=recorded["text"], headers={"content-type": recorded["headers"]["content-type"]}
+    )
+    with pytest.raises(esf.RequestTooLarge) as ei:
+        h.run(_client(h).tooling.execute_anonymous("System.debug(1);//" + "x" * 30_000))
+    assert ei.value.status == status
+    assert ei.value.operation == "tooling.execute_anonymous"
+    assert route.call_count == 1
 
 
 @pytest.mark.parametrize("failure", ["timeout", "503", "500"])
@@ -290,7 +321,7 @@ class _Org:
             recs = [{"attributes": {"type": "DebugLevel"}, "Id": LEVEL_ID}] if self.level else []
             return httpx.Response(200, json={**_empty("DebugLevel"), "records": recs, "totalSize": len(recs)})
         self.order.append("query ApexLog")
-        return httpx.Response(200, json=load_fixture("tooling/apex_logs.json"))
+        return httpx.Response(200, json=load_fixture(CAPTURE, 4))
 
     def create(self, name: str, new_id: str) -> Callable[[httpx.Request], httpx.Response]:
         def fn(request: httpx.Request) -> httpx.Response:
@@ -310,8 +341,9 @@ class _Org:
         mock.post(f"{TOOLING}/sobjects/TraceFlag/").mock(side_effect=self.create("TraceFlag", FLAG_ID))
         mock.post(f"{TOOLING}/sobjects/DebugLevel/").mock(side_effect=self.create("DebugLevel", LEVEL_ID))
         mock.delete(f"{TOOLING}/sobjects/TraceFlag/{FLAG_ID}").mock(side_effect=self.delete)
+        body = load_interaction(CAPTURE, 5)["response"]
         mock.get(f"{TOOLING}/sobjects/ApexLog/{LOG_ID}/Body").respond(
-            text=load_fixture("tooling/apex_log_body.json"), headers={"content-type": "text/plain"}
+            text=body["text"], headers={"content-type": body["headers"]["content-type"]}
         )
 
         def run(request: httpx.Request) -> httpx.Response:
@@ -330,7 +362,7 @@ def test_capture_log_full_flow(h: Harness, mock: respx.MockRouter, rec: Recorder
     result = h.run(sf.tooling.execute_anonymous("System.debug('hello');", capture_log=True))
     assert result.success
     assert result.log is not None
-    assert "USER_DEBUG|[1]|DEBUG|hello" in result.log
+    assert "USER_DEBUG|[1]|DEBUG|esf-sandbox capture" in result.log
     assert org.order == [
         "query TraceFlag",
         "query DebugLevel",
@@ -349,12 +381,12 @@ def test_capture_log_full_flow(h: Harness, mock: respx.MockRouter, rec: Recorder
         "TracedEntityId": USER_ID,
         "DebugLevelId": LEVEL_ID,
         "LogType": "USER_DEBUG",
-        "StartDate": "2030-01-01T00:00:00Z",
-        "ExpirationDate": "2030-01-01T00:10:00Z",
+        "StartDate": "2026-11-11T22:48:30Z",
+        "ExpirationDate": "2026-11-11T22:58:30Z",
     }
     assert org.deleted == [FLAG_ID]
     assert f"LogUserId = '{USER_ID}'" in org.soql[-1]
-    assert "StartTime >= 2029-12-31T23:59:00Z" in org.soql[-1]
+    assert "StartTime >= 2026-11-11T22:47:30Z" in org.soql[-1]
     # Every extra call goes through the pipeline and is counted in usage.
     ops = [e["operation"] for e in rec.requests]
     assert ops.count("tooling.query") == 3
@@ -432,7 +464,7 @@ def test_capture_log_without_a_matching_log(h: Harness, mock: respx.MockRouter) 
     org = _Org()
     org.install(mock)
     sf = _client(h)
-    sf._transport.now = lambda: datetime(2031, 1, 1, tzinfo=timezone.utc)  # every log is older
+    sf._transport.now = lambda: datetime(2027, 1, 1, tzinfo=timezone.utc)  # every log is older
     result = h.run(sf.tooling.execute_anonymous("System.debug(1);", capture_log=True))
     assert result.success
     assert result.log is None
@@ -462,11 +494,13 @@ def test_capture_log_userinfo_without_user_id(h: Harness, mock: respx.MockRouter
 
 
 def test_run_tests_async(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:
-    """Synthetic: the job id comes back as a JSON string (V46)."""
-    route = mock.post(f"{TOOLING}/runTestsAsynchronous/").respond(200, json="707xx0000000001")
+    """Recorded (V46): the 15-character job id comes back as a JSON string, HTTP 200."""
+    recorded = load_interaction("tooling/run_tests_async.json")["response"]
+    assert recorded["status"] == 200
+    route = mock.post(f"{TOOLING}/runTestsAsynchronous/").respond(200, json=recorded["json"])
     sf = _client(h, rec)
     job = h.run(sf.tooling.run_tests_async(["01pxx0000000002AAA", "01pxx0000000004AAA"]))
-    assert job == "707xx0000000001"
+    assert job == "707000000000002"
     assert json.loads(route.calls[0].request.content) == {"classids": "01pxx0000000002AAA,01pxx0000000004AAA"}
     assert rec.requests[0]["operation"] == "tooling.run_tests_async"
 
@@ -493,14 +527,54 @@ def test_run_tests_async_validates_ids(h: Harness) -> None:
 
 
 def test_completions(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:
+    """Recorded (V47), trimmed to two classes: ``publicDeclarations`` keyed by namespace."""
     route = mock.get(f"{TOOLING}/completions").respond(json=load_fixture("tooling/completions_apex.json"))
     sf = _client(h, rec)
     out = h.run(sf.tooling.completions("apex"))
-    assert "Math" in out["publicDeclarations"]["System"]
+    math = out["publicDeclarations"]["System"]["Math"]
+    assert set(math) == {"constructors", "methods", "properties"}
+    assert any(m["name"] == "abs" for m in math["methods"])
     assert route.calls[0].request.url.params["type"] == "apex"
     assert rec.requests[0]["operation"] == "tooling.completions"
     with pytest.raises(ValueError, match="apex, visualforce"):
         h.run(sf.tooling.completions("java"))  # type: ignore[arg-type]
-    mock.get(f"{TOOLING}/completions").respond(json=[])
+    # Recorded, trimmed: Visualforce answers under "completions", keyed by component.
+    route.respond(json=load_fixture("tooling/completions_visualforce.json"))
+    page = h.run(sf.tooling.completions("visualforce"))["completions"]["apex:page"]
+    assert "attribs" in page
+    assert route.calls[-1].request.url.params["type"] == "visualforce"
+    route.respond(json=[])
     with pytest.raises(esf.UnexpectedResponse):
         h.run(sf.tooling.completions("visualforce"))
+
+
+def test_capture_log_replays_the_recorded_flow(h: Harness) -> None:
+    """The recorded ``capture_log=True`` flow (V23), replayed request by request.
+
+    The run's ``ApexLog`` has ``Operation`` ``/services/data/v68.0/tooling/executeAnonymous/``
+    and a ``StartTime`` truncated to the second; it was queryable at once.
+    """
+    transport = replay(RECORDED / CAPTURE)
+    http = httpx.AsyncClient(transport=transport) if h.is_async else httpx.Client(transport=transport)
+    sf = _client(h, http_client=http)
+    result = h.run(sf.tooling.execute_anonymous("System.debug('esf-sandbox capture');", capture_log=True))
+    assert result.success
+    assert result.log is not None
+    assert "USER_DEBUG|[1]|DEBUG|esf-sandbox capture" in result.log
+    assert transport.handler.remaining == 0  # type: ignore[attr-defined]
+    log_row = load_fixture(CAPTURE, 4)["records"][0]
+    assert log_row["Operation"] == "/services/data/v68.0/tooling/executeAnonymous/"
+
+
+def test_a_second_active_trace_flag_is_refused(h: Harness, mock: respx.MockRouter) -> None:
+    """Recorded (V23): Salesforce refuses an overlapping USER_DEBUG flag for the same user.
+
+    That's why ``capture_log`` reuses an active flag instead of creating one.
+    """
+    recorded = load_interaction("tooling/trace_flag_overlap.json")["response"]
+    mock.post(f"{TOOLING}/sobjects/TraceFlag/").respond(recorded["status"], json=recorded["json"])
+    sf = _client(h)
+    with pytest.raises(esf.InvalidReference) as ei:
+        h.run(sf.tooling.sobject("TraceFlag").create({"TracedEntityId": USER_ID, "LogType": "USER_DEBUG"}))
+    assert ei.value.error_code == "FIELD_INTEGRITY_EXCEPTION"
+    assert "already being traced" in ei.value.message

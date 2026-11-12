@@ -336,8 +336,9 @@ class RequestTooLarge(RequestError):
 class UnsupportedApiVersion(RequestError):
     """The API version doesn't fit the call. Two sources, told apart by ``error_code``:
 
-    - ``"UNSUPPORTED_API_VERSION"``: Salesforce rejected the configured ``api_version`` (e.g. the
-      org doesn't offer it yet).
+    - ``"UNSUPPORTED_API_VERSION"``: Salesforce rejected the configured ``api_version``. A version
+      newer than the org's release is not reported this way: Salesforce answers 404
+      ``NOT_FOUND`` (:class:`NotFound`) on every resource (observed on a v68.0 org).
     - ``"API_VERSION_TOO_OLD"``: raised by the library before sending, because a feature needs
       a newer ``api_version`` than configured.
     """
@@ -519,10 +520,17 @@ class ApexError(SalesforceError):
 class GraphQLError(SalesforceError):
     """GraphQL response with an ``errors`` array.
 
+    Salesforce answers ``200 OK`` with an ``errors`` array for a syntax error
+    (``InvalidSyntax``), an unknown object or field (``ValidationError``, also for a field the
+    user can't read) and a failure while fetching data or saving a mutation
+    (``DataFetchingException``).
+
     ``.graphql_errors`` holds the entries as Salesforce sent them (``message``, ``locations``,
-    ``path``, ``extensions``). ``.errors`` holds them as :class:`ErrorDetail`, with
-    ``extensions.ErrorType`` as the error code. ``.data`` holds the partial ``data`` that came
-    with the errors, or ``None``.
+    ``paths``, ``extensions``). ``.errors`` holds them as :class:`ErrorDetail`, with
+    ``extensions.ErrorType`` as the error code, the message HTML-unescaped and the field path
+    in ``extended["path"]``. ``.data`` holds the ``data`` that came with the errors: ``{}``
+    when the document was rejected, or the fields that did resolve (the failed one is
+    ``None``) after a ``DataFetchingException``.
     """
 
     graphql_errors: tuple[Mapping[str, Any], ...]

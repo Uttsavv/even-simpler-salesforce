@@ -8,6 +8,9 @@ The fake builds UI API shapes from its in-memory records and describes, so code 
 - ``object_info``, ``picklist_values`` and ``create_defaults`` come from the describe set with
   ``fake.set_describe`` (or the minimal one synthesised from the records).
 - list views come from ``fake.set_list_view``; ``__Recent`` always exists.
+- errors follow what a real org (API 68.0) answers: an unknown object is 403
+  ``INSUFFICIENT_ACCESS`` (:class:`~even_simpler_salesforce.Forbidden`), a field of another
+  object in ``fields`` 400 ``INVALID_INPUT``, an unknown field 400 ``INVALID_FIELD``.
 
 There is no layout engine: ``layout_types`` returns every field, and ``layout`` in the
 defaults is an empty ``Full`` layout.
@@ -35,7 +38,7 @@ from ..core.ui import (
     record_params,
     record_path,
 )
-from ..errors import InvalidField, InvalidType, NotFound, RequestError
+from ..errors import Forbidden, InvalidField, NotFound, RequestError
 from ._ids import make_id
 from ._state import FakeState, Who, _get_field
 
@@ -116,6 +119,17 @@ def _not_found(operation: str, sobject: str | None) -> NotFound:
     )
 
 
+def _no_access(operation: str, sobject: str) -> Forbidden:
+    # An unknown object: Salesforce answers 403 INSUFFICIENT_ACCESS, not 404 (V61).
+    return Forbidden(
+        "You don't have access to this record. Ask your administrator for help or to request access.",
+        error_code="INSUFFICIENT_ACCESS",
+        status=403,
+        operation=operation,
+        sobject=sobject,
+    )
+
+
 def _dicts(raw: Any) -> list[dict[str, Any]]:
     items: list[Any] = list(raw) if isinstance(raw, (list, tuple)) else []  # pyright: ignore[reportUnknownArgumentType]
     return [cast("dict[str, Any]", i) for i in items if isinstance(i, dict)]
@@ -146,8 +160,12 @@ def _ui_record(sobject: str, rec: Mapping[str, Any], names: Sequence[str] | None
         "childRelationships": {},
         "eTag": None,
         "fields": {k: {"value": _ui_value(_get_field(rec, k)), "displayValue": None} for k in keys},
+        "lastModifiedById": rec.get("LastModifiedById"),
+        "lastModifiedDate": rec.get("LastModifiedDate"),
         "recordTypeId": rec.get("RecordTypeId") or MASTER_RECORD_TYPE,
         "recordTypeInfo": None,
+        "systemModstamp": rec.get("SystemModstamp"),
+        "weakEtag": 0,
     }
 
 
@@ -201,10 +219,22 @@ class FakeUi:
             return _ui_record(sobject, rec, None)
         known = {str(f["name"]).lower() for f in self._fields(sobject)} | {k.lower() for k in rec}
         tops: dict[str, None] = {}
+        others = sorted({q.partition(".")[0] for q in fields} - {sobject})
+        if others:
+            raise RequestError(
+                'The "fields" query string parameter contained object api names that do not '
+                "correspond to the api names of any of the requested record ids. The requested "
+                f"object api names were: [{', '.join(others)}], while the requested records had "
+                f"object types: [{sobject}]",
+                error_code="INVALID_INPUT",
+                status=400,
+                operation="ui.record",
+                sobject=sobject,
+            )
         for qualified in fields:
             obj, _, rest = qualified.partition(".")
             top = rest.split(".", 1)[0]
-            if obj != sobject or top.lower() not in known:
+            if top.lower() not in known:
                 raise InvalidField(
                     f"No such column '{rest}' on entity '{obj}'",
                     error_code="INVALID_FIELD",
@@ -227,13 +257,7 @@ class FakeUi:
     def _object_info(self, sobject: str) -> dict[str, Any]:
         d = self._state.describe(sobject)
         if sobject not in self._state.describes and sobject not in self._state.store:
-            raise InvalidType(
-                f"Object {sobject} is not supported in UI API",
-                error_code="NOT_FOUND",
-                status=404,
-                operation="ui.object_info",
-                sobject=sobject,
-            )
+            raise _no_access("ui.object_info", sobject)
         fields = {
             str(f["name"]): {
                 "apiName": f["name"],
@@ -343,21 +367,35 @@ class FakeUi:
         path = list_views_path(name)
         return self._run("ui.list_views", name, {}, lambda: self._list_views(name), path)
 
+    def _known(self, sobject: str) -> bool:
+        st = self._state
+        return sobject in st.describes or sobject in st.store or sobject in st.list_views
+
     def _list_views(self, sobject: str) -> dict[str, Any]:
+        if not self._known(sobject):
+            raise _no_access("ui.list_views", sobject)
         views: dict[str, ListView] = self._state.list_views.get(sobject, {})
         base = f"/services/data/v{self._state.api_version}/{list_views_path(sobject)}"
-        lists = [
+        lists = [{"apiName": _RECENT, "id": None, "label": "Recently Viewed", "url": f"{base}/{_RECENT}"}]
+        lists += [
             {"apiName": v.api_name, "id": v.id, "label": v.label, "url": f"{base}/{v.api_name}"}
             for v in views.values()
+            if v.api_name != _RECENT
         ]
+        size = max(20, len(lists))
         return {
             "count": len(lists),
             "currentPageToken": "0",
+            "currentPageUrl": f"{base}?pageSize={size}&pageToken=0",
+            "eTag": None,
             "lists": lists,
             "nextPageToken": None,
+            "nextPageUrl": None,
             "objectApiName": sobject,
-            "pageSize": max(20, len(lists)),
+            "pageSize": size,
             "previousPageToken": None,
+            "previousPageUrl": None,
+            "queryString": None,
             "recentListsOnly": False,
         }
 
@@ -386,6 +424,7 @@ class FakeUi:
     ) -> dict[str, Any]:
         rows = list(self._state.store.get(sobject, {}).values())
         fields: Sequence[str] | None = None
+        view: ListView | None = None
         if list_view != _RECENT:
             view = self._state.list_views.get(sobject, {}).get(list_view)
             if view is None:
@@ -400,7 +439,7 @@ class FakeUi:
             start = -1
         if start < 0:
             raise RequestError(
-                f"pageToken should be a valid page token: {page_token}",
+                f'For input string: "{page_token}"',
                 error_code="ILLEGAL_QUERY_PARAMETER_VALUE",
                 status=400,
                 operation="ui.list_records",
@@ -408,14 +447,35 @@ class FakeUi:
             )
         page = rows[start : start + size]
         end = start + len(page)
+        base = f"/services/data/v{self._state.api_version}/{list_records_path(sobject, list_view)}"
+
+        def url(token: str | None) -> str | None:
+            return None if token is None else f"{base}?pageSize={size}&pageToken={token}"
+
+        next_token = str(end) if end < len(rows) else None
+        previous = str(max(0, start - size)) if start > 0 else None
         return {
             "count": len(page),
             "currentPageToken": str(start),
+            "currentPageUrl": url(str(start)),
+            "fields": [],
             "listInfoETag": None,
-            "nextPageToken": str(end) if end < len(rows) else None,
+            "listReference": {
+                "id": None if view is None else view.id,
+                "listViewApiName": list_view,
+                "objectApiName": sobject,
+                "type": "listView",
+            },
+            "nextPageToken": next_token,
+            "nextPageUrl": url(next_token),
+            "optionalFields": [],
             "pageSize": size,
-            "previousPageToken": str(max(0, start - size)) if start > 0 else None,
+            "previousPageToken": previous,
+            "previousPageUrl": url(previous),
             "records": [_ui_record(sobject, r, fields) for r in page],
+            "searchTerm": None,
+            "sortBy": None,
+            "where": None,
         }
 
 

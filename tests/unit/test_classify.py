@@ -242,6 +242,28 @@ def test_html_body() -> None:
     assert exc2.retryable is False
 
 
+@pytest.mark.parametrize(
+    ("fixture", "status"),
+    [("tooling/execute_uri_too_long.json", 414), ("tooling/execute_headers_too_large.json", 431)],
+)
+def test_too_large_html_page_is_request_too_large(fixture: str, status: int) -> None:
+    """Recorded (V45): the web tier answers a long ``executeAnonymous`` URL with an HTML page."""
+    page = load_fixture(fixture)
+    assert isinstance(page, str)
+    exc = classify(
+        resp(status, headers={"content-type": "text/html;charset=iso-8859-1"}, text=page.encode()), SPEC
+    )
+    assert type(exc) is esf.RequestTooLarge
+    assert exc.status == status
+    assert exc.retryable is False
+    assert exc.raw is not None
+    assert b"Too L" in exc.raw
+    plain = classify(
+        resp(431, headers={"content-type": "text/plain"}, text=b"Request Header Fields Too Large"), SPEC
+    )
+    assert type(plain) is esf.RequestTooLarge
+
+
 def test_non_json_without_content_type_and_truncated_raw() -> None:
     big = b"x" * 10_000
     r = RawResponse(502, {}, big)

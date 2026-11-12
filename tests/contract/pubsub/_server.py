@@ -9,9 +9,16 @@ function taking a :class:`Stream` and returning an iterator of ``FetchResponse``
 script ends the stream cleanly by returning, or fails it with :meth:`Stream.abort`. With no
 script left, the stream stays open (sending nothing) until the client cancels it.
 
-Every response here is **synthetic**: the shapes come from the proto and from the Pub/Sub API
-Developer Guide (*Subscribe RPC*, *Pull Subscription and Flow Control*, *Handle Errors*,
-*Event Deserialization Considerations*), not from a sandbox recording (V27/V28).
+Two kinds of data:
+
+- **Recorded** (``tests/fixtures/recorded/pubsub``, from a Developer Edition org, API v68.0):
+  the schemas of ``AccountChangeEvent`` and two platform events, decoded change and platform
+  events (re-encoded here with their recorded schema), and the status, details and trailers of
+  real errors (:func:`recorded_failure`). The ``GetSchema`` failure is the recorded one.
+- **Synthetic** (``Order_Event__e``, the small ``AccountChangeEvent`` schema, ``order()``,
+  ``account_change()``, ``fails()``): hand-built to drive flow control, replay and reconnect
+  paths that can't be produced on demand. Their shapes follow the recordings: trailers carry
+  ``error-code`` and ``rpc-id``, and change events carry an ``id``, as Salesforce sends.
 """
 
 from __future__ import annotations
@@ -23,6 +30,7 @@ import threading
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import fastavro
@@ -106,8 +114,51 @@ ACCOUNT_SCHEMA: dict[str, Any] = {
     ],
 }
 
-SCHEMAS = {ORDER_SCHEMA_ID: ORDER_SCHEMA, ACCOUNT_SCHEMA_ID: ACCOUNT_SCHEMA}
+# --- recorded data ---------------------------------------------------------------------------
+
+RECORDED = Path(__file__).resolve().parents[2] / "fixtures" / "recorded" / "pubsub"
+
+
+def recorded(name: str) -> Any:
+    """A fixture from ``tests/fixtures/recorded/pubsub``."""
+    return json.loads((RECORDED / name).read_text())
+
+
+RECORDED_SCHEMAS: dict[str, dict[str, Any]] = {
+    f["schema_id"]: f["schema"]
+    for f in (
+        recorded("schema_account_change_event.json"),
+        recorded("schema_esf_sandbox_event.json"),
+        recorded("schema_esf_sandbox_date_event.json"),
+    )
+}
+
+SCHEMAS = {ORDER_SCHEMA_ID: ORDER_SCHEMA, ACCOUNT_SCHEMA_ID: ACCOUNT_SCHEMA, **RECORDED_SCHEMAS}
 _PARSED = {k: fastavro.parse_schema(v) for k, v in SCHEMAS.items()}
+
+
+def recorded_event(fixture: Mapping[str, Any], n: int) -> pb.ConsumerEvent:
+    """A recorded event (``id``, ``schema_id``, decoded ``record``) with replay id ``rid(n)``."""
+    payload = avro(fixture["schema_id"], fixture["record"])
+    return pb.ConsumerEvent(
+        event=pb.ProducerEvent(id=fixture["id"], schema_id=fixture["schema_id"], payload=payload),
+        replay_id=rid(n),
+    )
+
+
+RECORDED_ERRORS: dict[str, Any] = recorded("errors.json")["errors"]
+
+
+def recorded_failure(name: str) -> Script:
+    """Fail the stream exactly as Salesforce did in the recorded error ``name``."""
+    err = RECORDED_ERRORS[name]
+
+    def script(s: Stream) -> Iterator[pb.FetchResponse]:
+        s.context.set_trailing_metadata(tuple(err["trailers"].items()))
+        s.context.abort(getattr(grpc.StatusCode, err["status"]), err["details"])
+        yield from ()
+
+    return script
 
 
 def avro(schema_id: str, record: Mapping[str, Any]) -> bytes:
@@ -171,7 +222,10 @@ def account_change(
         **(values or {}),
     }
     return pb.ConsumerEvent(
-        event=pb.ProducerEvent(id="", schema_id=ACCOUNT_SCHEMA_ID, payload=avro(ACCOUNT_SCHEMA_ID, record)),
+        # Salesforce sets an id on change events too (recorded, V79).
+        event=pb.ProducerEvent(
+            id=f"cdc-uuid-{n}", schema_id=ACCOUNT_SCHEMA_ID, payload=avro(ACCOUNT_SCHEMA_ID, record)
+        ),
         replay_id=rid(n),
     )
 
@@ -267,9 +321,10 @@ class FakePubSubServer(pb_grpc.PubSubServicer):
     def GetSchema(self, request: pb.SchemaRequest, context: Any) -> pb.SchemaInfo:  # noqa: N802
         self.schema_calls.append((request.schema_id, dict(context.invocation_metadata())))
         schema = self.schemas.get(request.schema_id)
-        if schema is None:
-            context.set_trailing_metadata((("error-code", CODE + "schema.not.found"),))
-            context.abort(grpc.StatusCode.NOT_FOUND, "no such schema")
+        if schema is None:  # as recorded for an unknown schema id: UNAVAILABLE, not NOT_FOUND
+            err = RECORDED_ERRORS["get_schema_unknown"]
+            context.set_trailing_metadata(tuple(err["trailers"].items()))
+            context.abort(getattr(grpc.StatusCode, err["status"]), err["details"])
         return pb.SchemaInfo(schema_json=schema, schema_id=request.schema_id, rpc_id="rpc-schema")
 
     def Subscribe(

@@ -10,6 +10,10 @@ not recorded traffic:
   and every access token issued from it) and returns ``invalid_grant``;
 - a refresh that overlaps another one with the same refresh token gets HTTP 400
   "Token request is already being processed" (counted as an *overlap*).
+- org-observed (a Developer Edition org, 2026-11-12; the help page and the rotation article
+  https://help.salesforce.com/s/articleView?id=005316711&language=en_US&type=1 are silent on
+  it): **every successful refresh revokes all earlier access tokens** of the grant, so a
+  process's freshly refreshed token dies as soon as another process refreshes again.
 
 State lives in a SQLite file so all worker processes see one org. :func:`install` (entered by
 each worker, see ``tests/sandbox/rotation.py``) starts respx in that process and routes the
@@ -51,9 +55,10 @@ COUNTERS = ("refreshes", "reuse", "overlaps", "unknown", "api_ok", "api_401")
 class FakeOrg:
     """Shared fake org state (one SQLite file)."""
 
-    def __init__(self, path: str | Path, *, delay: float = 0.002) -> None:
+    def __init__(self, path: str | Path, *, delay: float = 0.002, api_delay: float = 0.0) -> None:
         self.path = str(path)
         self.delay = delay  # time a refresh is "in flight" (widens race windows)
+        self.api_delay = api_delay  # time before an API call checks its token
 
     def _conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path, timeout=60, isolation_level=None)
@@ -142,6 +147,7 @@ class FakeOrg:
                 return self._invalid_grant()
             c.execute("UPDATE refresh_tokens SET state = 'used' WHERE rt = ?", (rt,))
             c.execute("INSERT INTO refresh_tokens VALUES (?, 'current')", (new_rt,))
+            c.execute("UPDATE access_tokens SET valid = 0")  # org-observed: earlier ATs revoked
             c.execute("INSERT INTO access_tokens VALUES (?, 1)", (new_at,))
             self._bump(c, "refreshes")
         body: dict[str, Any] = {
@@ -158,6 +164,8 @@ class FakeOrg:
 
     def limits(self, request: httpx.Request) -> httpx.Response:
         at = request.headers.get("Authorization", "").removeprefix("Bearer ")
+        if self.api_delay:
+            time.sleep(self.api_delay)  # the request travels; another refresh may land meanwhile
         with self._tx() as c:
             row = c.execute("SELECT valid FROM access_tokens WHERE at = ?", (at,)).fetchone()
             ok = bool(row and row[0])
@@ -181,9 +189,14 @@ class FakeOrg:
 
 @contextlib.contextmanager
 def install(arg: str | None) -> Iterator[None]:
-    """Route this process's httpx traffic to the fake org. ``arg`` = JSON ``{"path", "delay"}``."""
+    """Route this process's httpx traffic to the fake org.
+
+    ``arg`` = JSON ``{"path", "delay", "api_delay"}``.
+    """
     opts: dict[str, Any] = json.loads(arg or "{}")
-    org = FakeOrg(opts["path"], delay=float(opts.get("delay", 0.002)))
+    org = FakeOrg(
+        opts["path"], delay=float(opts.get("delay", 0.002)), api_delay=float(opts.get("api_delay", 0.0))
+    )
     with respx.mock(assert_all_called=False) as router:
         router.post(TOKEN_URL).mock(side_effect=org.token)
         router.get(LIMITS_URL).mock(side_effect=org.limits)

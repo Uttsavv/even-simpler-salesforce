@@ -1,0 +1,34 @@
+{
+  "esf_fixture": 1,
+  "note": "recorded with esf.testing.record (tests/sandbox/test_ui_reports.py, API 68.0)",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/analytics/dashboards/01Z000000000001EAA/status",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=713/15000"
+        },
+        "json": {
+          "componentStatus": [
+            {
+              "componentDataStatus": "DATA",
+              "componentId": "01a000000000002AAA",
+              "refreshDate": "2026-11-11T23:17:05.000+0000",
+              "refreshStatus": "IDLE"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

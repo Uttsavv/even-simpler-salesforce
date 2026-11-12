@@ -1,0 +1,173 @@
+{
+  "esf_fixture": 1,
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/actions/standard/chatterPost",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=202/15000"
+        },
+        "json": {
+          "allowsTransactionControl": false,
+          "capabilityTypes": null,
+          "category": "Messaging",
+          "configurationEditor": null,
+          "description": "Post to the feed for a specific record, user, or Chatter group.",
+          "genericTypes": null,
+          "hasCallout": false,
+          "iconId": null,
+          "iconName": null,
+          "inputs": [
+            {
+              "apexClass": null,
+              "bytelength": 15000,
+              "configuration": false,
+              "defaultValue": null,
+              "description": "Required. Body of the Chatter post.",
+              "label": "Message",
+              "maxOccurs": 1,
+              "name": "text",
+              "picklistValues": null,
+              "placeholderText": null,
+              "required": true,
+              "sObjectType": null,
+              "setupReferenceType": null,
+              "toolingType": null,
+              "type": "STRING"
+            },
+            {
+              "apexClass": null,
+              "bytelength": 240,
+              "configuration": false,
+              "defaultValue": null,
+              "description": "Required. The user, Chatter group, or record whose feed you want to post to.",
+              "label": "Target Name or ID",
+              "maxOccurs": 1,
+              "name": "subjectNameOrId",
+              "picklistValues": null,
+              "placeholderText": null,
+              "required": true,
+              "sObjectType": null,
+              "setupReferenceType": null,
+              "toolingType": null,
+              "type": "STRING"
+            },
+            {
+              "apexClass": null,
+              "bytelength": 0,
+              "configuration": false,
+              "defaultValue": null,
+              "description": "Optional. Required if Target Name or ID is set to a username or the name of a Chatter group. Valid values are \"user\" and \"group\".",
+              "label": "Target Type",
+              "maxOccurs": 1,
+              "name": "type",
+              "picklistValues": [
+                {
+                  "active": true,
+                  "defaultValue": false,
+                  "label": "User",
+                  "validFor": null,
+                  "value": "user"
+                },
+                {
+                  "active": true,
+                  "defaultValue": false,
+                  "label": "Group",
+                  "validFor": null,
+                  "value": "group"
+                }
+              ],
+              "placeholderText": null,
+              "required": false,
+              "sObjectType": null,
+              "setupReferenceType": null,
+              "toolingType": null,
+              "type": "PICKLIST"
+            },
+            {
+              "apexClass": null,
+              "bytelength": 18,
+              "configuration": false,
+              "defaultValue": null,
+              "description": "Optional. Valid only if Digital Experiences is enabled. Required if posting to a user or Chatter group that belongs to an Experience Cloud site.",
+              "label": "Experience Cloud Site ID",
+              "maxOccurs": 1,
+              "name": "communityId",
+              "picklistValues": null,
+              "placeholderText": null,
+              "required": false,
+              "sObjectType": null,
+              "setupReferenceType": null,
+              "toolingType": null,
+              "type": "REFERENCE"
+            },
+            {
+              "apexClass": null,
+              "bytelength": 0,
+              "configuration": false,
+              "defaultValue": null,
+              "description": "Optional. Valid only if Digital Experiences is enabled. Specifies whether this feed item is available to all users or internal users only.",
+              "label": "Visibility",
+              "maxOccurs": 1,
+              "name": "visibility",
+              "picklistValues": [
+                {
+                  "active": true,
+                  "defaultValue": false,
+                  "label": "All Users",
+                  "validFor": null,
+                  "value": "allUsers"
+                },
+                {
+                  "active": true,
+                  "defaultValue": false,
+                  "label": "Internal Users",
+                  "validFor": null,
+                  "value": "internalUsers"
+                }
+              ],
+              "placeholderText": null,
+              "required": false,
+              "sObjectType": null,
+              "setupReferenceType": null,
+              "toolingType": null,
+              "type": "PICKLIST"
+            }
+          ],
+          "label": "Post to Chatter",
+          "methodDescription": "Executes the action.",
+          "methodLabel": "Execute.",
+          "methodName": "Execute.",
+          "name": "chatterPost",
+          "outputs": [
+            {
+              "additionalAttributes": null,
+              "apexClass": null,
+              "description": "The ID of the new Chatter feed item.",
+              "label": "Feed Item ID",
+              "maxOccurs": 1,
+              "name": "feedItemId",
+              "picklistValues": null,
+              "sobjectType": null,
+              "type": "REFERENCE"
+            }
+          ],
+          "standard": true,
+          "systemGeneratedOuput": false,
+          "targetEntityName": null,
+          "type": "CHATTERPOST"
+        }
+      }
+    }
+  ]
+}
