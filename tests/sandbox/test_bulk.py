@@ -2,7 +2,8 @@
 
 Covers V18 (CSV nulls, defaults, BOM, non-ASCII), V40 (gzipped uploads), V41 (``sf__Error`` and
 ``sf__Created`` cells), V42 (compound fields), V43 (``resultPages`` shapes), V44 (job info),
-V81 (``FIELDS(STANDARD)``) and V82 (query job progress and ``sf.bulk.job`` events).
+V81 (``FIELDS(STANDARD)``), V82 (query job progress and ``sf.bulk.job`` events) and V88 (job
+handles).
 
 Every Lead carries the run tag in ``LastName`` and is deleted by the test (soft delete: the
 Developer Edition user has no "Bulk API Hard Delete" permission) and, as a safety net, by the
@@ -356,3 +357,56 @@ def test_query_job_progress_events(sb: Driver, tag: str, cleanup: Cleanup) -> No
         assert events[-1]["records_processed"] == n
     finally:
         _delete(sb, sf, ids, cleanup)
+
+
+# --- V88: job handles -----------------------------------------------------------------------------
+
+
+@pytest.mark.usefixtures("writes")
+def test_job_handles_reopen_and_resume(sb: Driver, tag: str, cleanup: Cleanup) -> None:
+    """V88: a query job opened again by id (also by a client on another API version) keeps the
+    job's version, ``maxRecords`` pages carry ``Sforce-NumberOfRecords``, a saved locator resumes
+    the download, and an id of the other job kind is rejected."""
+    check = sb.client()
+    rows = [{"LastName": f"{tag}-jh{i}-{sb.kind}", "Company": "esf-sandbox"} for i in range(3)]
+    ids = [r.id for r in sb.run(check.collections.create(rows, sobject="Lead")).succeeded]
+    cleanup.add(*ids)
+    try:
+        assert len(ids) == 3
+        sf = sb.client(api_version="68.0")
+        soql = "SELECT Id FROM Lead WHERE LastName LIKE {} ORDER BY LastName"
+        job = sb.run(sf.bulk.start_query(soql, f"{tag}-jh%-{sb.kind}"))
+        with pytest.raises(esf.BulkJobNotComplete):
+            sb.collect(job.rows())
+
+        other = sb.client(api_version="60.0")
+        again = sb.run(other.bulk.query_job(job.id))  # status GET in another version
+        assert again.info.api_version == "68.0"
+        sb.run(again.wait(poll=POLL))
+
+        def read(it: Any) -> list[tuple[Any, ...]]:
+            out: list[tuple[Any, ...]] = []
+            if sb.is_async:
+
+                async def go() -> None:
+                    async for page in it:
+                        out.append((page.next_locator, page.size, [r["Id"] async for r in page.rows()]))
+
+                sb.run(go())
+            else:
+                for page in it:
+                    out.append((page.next_locator, page.size, [r["Id"] for r in page.rows()]))
+            return out
+
+        pages = read(again.pages(max_records=1))
+        assert [p[2][0][:15] for p in pages] == [i[:15] for i in ids]
+        assert [p[1] for p in pages] == [1, 1, 1]
+        assert pages[-1][0] is None
+        resumed = read(again.pages(locator=pages[0][0], max_records=1))
+        assert [p[2] for p in resumed] == [p[2] for p in pages[1:]]
+
+        with pytest.raises(esf.NotFound) as ei:  # 404 NOT_FOUND, not the query job's info
+            sb.run(sf.bulk.ingest_job([job.id]))
+        assert ei.value.error_code == "NOT_FOUND"
+    finally:
+        _delete(sb, check, ids, cleanup)
