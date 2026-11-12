@@ -62,7 +62,9 @@ Redaction, applied before anything touches the disk:
 - Literals in SOQL/SOSL query parameters (``q``, ``explain``) become ``?``.
 - Instance hosts (``*.salesforce.com``, ``*.force.com``) become ``example.my.salesforce.com``.
 - Salesforce ids are replaced with fake ids keeping the key prefix (consistently, in paths,
-  queries and bodies, so recorded follow-up requests still match); ``mask_ids=False`` keeps them.
+  queries, bodies and JSON object keys, so recorded follow-up requests still match);
+  ``mask_ids=False`` keeps them. Well-known all-zero ids such as the master record type
+  ``012000000000000AAA`` are kept.
 
 Redaction is pattern-based: custom fields can still hold personal data. Add their API names to
 ``extra_keys`` and review every fixture before committing it.
@@ -195,7 +197,9 @@ class Redactor:
 
     def _id(self, m: re.Match[str]) -> str:
         value = m.group(0)
-        if not any(c.isdigit() for c in value):
+        if not any(c.isdigit() for c in value) or set(value[3:15]) == {"0"}:
+            # Not an id, or a well-known constant such as the master record type
+            # ``012000000000000AAA``: no org data, and tests rely on it.
             return value
         key = value[:15]
         with self._lock:
@@ -246,7 +250,9 @@ class Redactor:
         if isinstance(obj, Mapping):
             m = cast("Mapping[str, Any]", obj)
             record = "attributes" in m
-            return {str(k): self.value(v, str(k), in_record=record) for k, v in m.items()}
+            # Keys are redacted too: some resources key maps by record id (UI API
+            # ``recordTypeInfos``), and the ids must match the masked ones in the values.
+            return {self.text(str(k)): self.value(v, str(k), in_record=record) for k, v in m.items()}
         if isinstance(obj, list):
             items = cast("list[Any]", obj)
             return [self.value(v, key) for v in items]
