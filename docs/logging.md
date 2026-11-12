@@ -213,7 +213,8 @@ The OpenTelemetry observer counts events in `esf.pubsub.events` and records `lag
 
 The `reason` of `sf.retry` and each entry of `retry_reasons` take one of these values:
 `connect_error`, `timeout`, `transport_error`, `row_locked`, `rate_limited`, `http_500`,
-`http_502`, `http_503`, `http_504`.
+`http_502`, `http_503`, `http_504`, `token_superseded` (after its refresh, the call's token was
+revoked by another refresh, and the client resent the call with the newer stored token).
 
 ## The `sf.request` event
 

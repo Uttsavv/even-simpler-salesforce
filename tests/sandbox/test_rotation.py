@@ -15,6 +15,11 @@ with rotation on, each refresh returns a new refresh token and reusing a rotated
 invalidates the chain. So a single lost update would surface here as ``invalid_grant``
 (``ReauthorizationRequired``) and leave the stored token unusable.
 
+Org-observed (2026-11-12, not in the docs): every refresh also revokes all earlier access
+tokens of the grant. So a worker's verify call (``limits()``) often finds its token superseded
+by another worker's refresh; the client then adopts the newer stored token and resends. Those
+calls are counted (``superseded``) but are not errors; a verify call that still fails is.
+
 The mocked twin that runs in normal CI is ``tests/contract/test_rotation_multiprocess.py``.
 """
 
@@ -51,10 +56,12 @@ def test_rotation_four_processes_no_invalid_grant(settings: Settings) -> None:
     )
     reports = run_rotation(cfg, ("async", "sync", "async", "sync"))
     detail = summarise(reports)
-    print(f"\nrotation: {total} rotations requested\n{detail}")
+    superseded = sum(r.superseded for r in reports)
+    print(f"\nrotation: {total} rotations requested, {superseded} verify calls superseded+adopted\n{detail}")
 
     assert sum(r.reauth_required for r in reports) == 0, detail
-    assert all(not r.errors for r in reports), detail
+    assert all(not r.errors for r in reports), detail  # incl. verify calls not recovered
+    assert sum(r.verified for r in reports) > 0, detail
     posts = sum(r.posts for r in reports)
     assert posts >= total, detail
     assert sum(r.rotated for r in reports) == posts, f"rotation looks OFF for this app\n{detail}"

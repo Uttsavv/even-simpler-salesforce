@@ -30,6 +30,7 @@ from .fake_rotation_org import CLIENT_ID, CLIENT_SECRET, ID_URL, INSTANCE, FakeO
 
 KEY = "web_server:rotation-contract"
 TOTAL = int(os.environ.get("ESF_ROTATION_MOCK_CYCLES", "1000"))
+API_DELAY = float(os.environ.get("ESF_ROTATION_MOCK_API_DELAY", "0.002"))
 
 
 def _setup(tmp_path: Path) -> tuple[FakeOrg, str]:
@@ -61,7 +62,7 @@ def _cfg(org: FakeOrg, db: str, rotations: int, install: str) -> RotationConfig:
         rotations=rotations,
         verify_every=10,
         install=install,
-        install_arg=json.dumps({"path": org.path, "delay": 0.001}),
+        install_arg=json.dumps({"path": org.path, "delay": 0.001, "api_delay": API_DELAY}),
     )
 
 
@@ -87,7 +88,10 @@ def test_four_processes_never_hit_invalid_grant(tmp_path: Path, kinds: tuple[str
     assert counters["reuse"] == 0, counters  # nobody ever presented a rotated-out token
     assert counters["unknown"] == 0, counters
     assert counters["overlaps"] == 0, counters  # the store lock serialised every POST
-    assert counters["api_401"] == 0, counters
+    # Every refresh revokes the earlier access tokens (org-observed), so verify calls are often
+    # superseded by another process's refresh; each such 401 was recovered by adopting the newer
+    # stored token, never by an extra token POST (refreshes == posts below).
+    assert counters["api_401"] == sum(r.rejected for r in reports), (counters, detail)
     assert counters["api_ok"] == sum(r.verified for r in reports) > 0, counters
     assert counters["refreshes"] == sum(r.posts for r in reports), (counters, detail)
     assert counters["refreshes"] >= total, detail  # the chain really rotated TOTAL times

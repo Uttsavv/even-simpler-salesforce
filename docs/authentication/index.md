@@ -167,8 +167,10 @@ async with esf.AsyncSalesforce(auth) as sf:
    finds none, it requests a new one.
 2. Each call sends the token the client holds. If Salesforce answers `401` with
    `INVALID_SESSION_ID`, the client refreshes once and resends the call. A second `401` raises
-   `SessionExpired`. A `401` without that code can come from an Apex REST class that already
-   ran. The client resends such a call only if it is a read.
+   `SessionExpired`, unless another process has stored a newer token meanwhile: then the client
+   uses that token and resends, at most 2 more times
+   ([rotation](web-server-flow.md#how-refresh-works)). A `401` without that code can come from
+   an Apex REST class that already ran. The client resends such a call only if it is a read.
 3. The client checks the `instance_url` of every token it gets from the token endpoint or the
    token store. It must be `https://`, or `http://` to a loopback host. Otherwise the client
    raises an error and doesn't send the bearer token.
