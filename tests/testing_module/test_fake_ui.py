@@ -83,8 +83,11 @@ def test_record_errors() -> None:
     with pytest.raises(esf.InvalidField) as ei:
         fake.ui.record(lead, fields=["Lead.Nope"])
     assert ei.value.fields == ("Lead.Nope",)
-    with pytest.raises(esf.InvalidField):
+    with pytest.raises(esf.RequestError) as other:  # a field of another object
         fake.ui.record(lead, fields=["Account.Name"])
+    assert (other.value.status, other.value.error_code) == (400, "INVALID_INPUT")
+    with pytest.raises(ValueError, match="not both"):
+        fake.ui.record(lead, fields=["Lead.Name"], layout_types=["Full"])
     with pytest.raises(esf.NotFound):
         fake.ui.record("00Qxx0000000099AAA", fields=["Lead.Name"])
     with pytest.raises(ValueError, match="fields or layout_types"):
@@ -111,8 +114,9 @@ def test_object_info_from_the_describe() -> None:
     assert info["fields"]["Tags__c"]["dataType"] == "MultiPicklist"
     assert info["fields"]["CreatedDate"]["dataType"] == "DateTime"
     assert fake.calls_for("ui.object_info", sobject="Lead")[0].args == {"cached": True}
-    with pytest.raises(esf.InvalidType):
+    with pytest.raises(esf.Forbidden) as ei:  # like a real org: 403, not 404
         fake.ui.object_info("Nope__c")
+    assert (ei.value.status, ei.value.error_code) == (403, "INSUFFICIENT_ACCESS")
 
 
 def test_object_info_synthesised_from_records() -> None:
@@ -171,10 +175,14 @@ def test_list_views_and_records() -> None:
     assert again.label == "OpenLeads"
 
     views = fake.ui.list_views("Lead")
-    assert views["count"] == 1
-    assert views["lists"][0]["apiName"] == "OpenLeads"
-    assert views["lists"][0]["url"].endswith("/ui-api/list-info/Lead/OpenLeads")
-    assert fake.ui.list_views("Account")["lists"] == []
+    assert views["count"] == 2
+    assert [v["apiName"] for v in views["lists"]] == ["__Recent", "OpenLeads"]
+    assert views["lists"][0]["id"] is None
+    assert views["lists"][1]["url"].endswith("/ui-api/list-info/Lead/OpenLeads")
+    fake.add("Account", {"Name": "A"})
+    assert [v["apiName"] for v in fake.ui.list_views("Account")["lists"]] == ["__Recent"]
+    with pytest.raises(esf.Forbidden):
+        fake.ui.list_views("Nope__c")
 
     page = fake.ui.list_records("Lead", "OpenLeads", page_size=1)
     assert page["records"][0]["fields"] == {"LastName": {"value": "L1", "displayValue": None}}
@@ -220,7 +228,7 @@ def test_async_fake_ui() -> None:
             assert "Status" in (await fake.ui.picklist_values("Lead", MASTER))["picklistFieldValues"]
             assert (await fake.ui.create_defaults("Lead"))["record"]["apiName"] == "Lead"
             assert (await fake.ui.clone_defaults(lead))["record"]["fields"]["LastName"]["value"] == "L"
-            assert (await fake.ui.list_views("Lead"))["count"] == 1
+            assert (await fake.ui.list_views("Lead"))["count"] == 2
             assert (await fake.ui.list_records("Lead", "All", page_size=10))["count"] == 1
 
     asyncio.run(go())

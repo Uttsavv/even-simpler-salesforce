@@ -1,171 +1,343 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Salesforce Reports and Dashboards REST API Developer Guide (Get Dashboard Results, Refresh a Dashboard); no org recording yet",
-  "body": {
-    "componentData": [
-      {
-        "componentId": "01axx0000000001AAA",
-        "reportResult": {
-          "attributes": {
-            "describeUrl": "/services/data/v68.0/analytics/reports/00Oxx0000000001AAA/describe",
-            "instancesUrl": "/services/data/v68.0/analytics/reports/00Oxx0000000001AAA/instances",
-            "reportId": "00Oxx0000000001AAA",
-            "reportName": "Open Opportunities",
-            "type": "Report"
-          },
-          "allData": true,
-          "factMap": {
-            "0!T": {
-              "aggregates": [
-                {
-                  "label": "$1,500.00",
-                  "value": {
-                    "amount": 1500.0,
-                    "currency": null
-                  }
-                },
-                {
-                  "label": "2",
-                  "value": 2
-                }
-              ]
-            },
-            "1!T": {
-              "aggregates": [
-                {
-                  "label": "$2,500.00",
-                  "value": {
-                    "amount": 2500.0,
-                    "currency": null
-                  }
-                },
-                {
-                  "label": "1",
-                  "value": 1
-                }
-              ]
-            },
-            "T!T": {
-              "aggregates": [
-                {
-                  "label": "$4,000.00",
-                  "value": {
-                    "amount": 4000.0,
-                    "currency": null
-                  }
-                },
-                {
-                  "label": "3",
-                  "value": 3
-                }
-              ]
-            }
-          },
-          "groupingsAcross": {
-            "groupings": []
-          },
-          "groupingsDown": {
-            "groupings": [
-              {
-                "key": "0",
-                "label": "Prospecting",
-                "value": "Prospecting",
-                "groupings": [],
-                "dateGranularity": "None"
-              },
-              {
-                "key": "1",
-                "label": "Closed Won",
-                "value": "Closed Won",
-                "groupings": [],
-                "dateGranularity": "None"
-              }
-            ]
-          },
-          "hasDetailRows": false,
-          "reportExtendedMetadata": {
-            "aggregateColumnInfo": {
-              "s!AMOUNT": {
-                "label": "Sum of Amount",
-                "dataType": "currency",
-                "downGroupingContext": null,
-                "acrossGroupingContext": null
-              },
-              "RowCount": {
-                "label": "Record Count",
-                "dataType": "int",
-                "downGroupingContext": null,
-                "acrossGroupingContext": null
-              }
-            },
-            "detailColumnInfo": {
-              "ACCOUNT_NAME": {
-                "label": "Account Name",
-                "dataType": "string"
-              },
-              "OPPORTUNITY_NAME": {
-                "label": "Opportunity Name",
-                "dataType": "string"
-              },
-              "AMOUNT": {
-                "label": "Amount",
-                "dataType": "currency"
-              }
-            },
-            "groupingColumnInfo": {}
-          },
-          "reportMetadata": {
-            "id": "00Oxx0000000001AAA",
-            "name": "Open Opportunities",
-            "reportFormat": "SUMMARY",
-            "detailColumns": [
-              "ACCOUNT_NAME",
-              "OPPORTUNITY_NAME",
-              "AMOUNT"
-            ],
-            "aggregates": [
-              "s!AMOUNT",
-              "RowCount"
-            ],
-            "groupingsDown": [
-              {
-                "name": "STAGE_NAME",
-                "sortOrder": "Asc",
-                "dateGranularity": "None"
-              }
-            ],
-            "groupingsAcross": [],
-            "reportFilters": [],
-            "reportBooleanFilter": null,
-            "hasDetailRows": true,
-            "reportType": {
-              "type": "Opportunity",
-              "label": "Opportunities"
-            }
-          }
+  "esf_fixture": 1,
+  "note": "recorded with esf.testing.record (tests/sandbox/test_ui_reports.py, API 68.0)",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/analytics/dashboards/01Z000000000001EAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=710/15000"
         },
-        "status": {
-          "dataStatus": "DATA",
-          "errorCode": null,
-          "errorMessage": null,
-          "errorSeverity": null,
-          "refreshDate": "2026-11-11T08:00:00Z",
-          "refreshStatus": "IDLE"
+        "json": {
+          "attributes": {
+            "dashboardId": "01Z000000000001EAA",
+            "dashboardName": "ESF Sandbox Leads Dashboard",
+            "describeUrl": "/services/data/v68.0/analytics/dashboards/01Z000000000001EAA/describe",
+            "statusUrl": "/services/data/v68.0/analytics/dashboards/01Z000000000001EAA/status",
+            "type": "Dashboard"
+          },
+          "chatterPhotoUrls": {},
+          "componentData": [
+            {
+              "componentId": "01a000000000002AAA",
+              "reportResult": {
+                "attributes": null,
+                "allData": true,
+                "factMap": {
+                  "0!T": {
+                    "aggregates": [
+                      {
+                        "label": "901",
+                        "value": 901
+                      }
+                    ]
+                  },
+                  "1!T": {
+                    "aggregates": [
+                      {
+                        "label": "6",
+                        "value": 6
+                      }
+                    ]
+                  },
+                  "2!T": {
+                    "aggregates": [
+                      {
+                        "label": "2",
+                        "value": 2
+                      }
+                    ]
+                  },
+                  "3!T": {
+                    "aggregates": [
+                      {
+                        "label": "2",
+                        "value": 2
+                      }
+                    ]
+                  },
+                  "T!T": {
+                    "aggregates": [
+                      {
+                        "label": "911",
+                        "value": 911
+                      }
+                    ]
+                  }
+                },
+                "groupingsAcross": {
+                  "groupings": []
+                },
+                "groupingsDown": {
+                  "groupings": [
+                    {
+                      "groupings": [],
+                      "key": "0",
+                      "label": "-",
+                      "value": null
+                    },
+                    {
+                      "groupings": [],
+                      "key": "1",
+                      "label": "Web",
+                      "value": "Web"
+                    },
+                    {
+                      "groupings": [],
+                      "key": "2",
+                      "label": "Phone Inquiry",
+                      "value": "Phone Inquiry"
+                    },
+                    {
+                      "groupings": [],
+                      "key": "3",
+                      "label": "Partner Referral",
+                      "value": "Partner Referral"
+                    }
+                  ]
+                },
+                "hasDetailRows": false,
+                "hasExceededTabularRowLimit": false,
+                "reportExtendedMetadata": {
+                  "aggregateColumnInfo": {
+                    "RowCount": {
+                      "dataType": "int",
+                      "label": "Record Count"
+                    }
+                  },
+                  "availableDashboardSettings": null,
+                  "detailColumnInfo": {},
+                  "groupingColumnInfo": {
+                    "LEAD_SOURCE": {
+                      "dataType": "picklist",
+                      "entityColumnName": "Lead.LeadSource",
+                      "filterValues": [
+                        {
+                          "apiName": "Web",
+                          "label": "Web",
+                          "name": "Web"
+                        },
+                        {
+                          "apiName": "Phone Inquiry",
+                          "label": "Phone Inquiry",
+                          "name": "Phone Inquiry"
+                        },
+                        {
+                          "apiName": "Partner Referral",
+                          "label": "Partner Referral",
+                          "name": "Partner Referral"
+                        },
+                        {
+                          "apiName": "Purchased List",
+                          "label": "Purchased List",
+                          "name": "Purchased List"
+                        },
+                        {
+                          "apiName": "Other",
+                          "label": "Other",
+                          "name": "Other"
+                        }
+                      ],
+                      "filterable": true,
+                      "fullyQualifiedName": "Lead.LeadSource",
+                      "groupingLevel": 0,
+                      "inactiveFilterValues": [],
+                      "isLookup": false,
+                      "label": "Lead Source",
+                      "uniqueCountable": true
+                    }
+                  }
+                },
+                "reportMetadata": {
+                  "aggregates": [
+                    "RowCount"
+                  ],
+                  "chart": null,
+                  "crossFilters": [],
+                  "currency": null,
+                  "dashboardSetting": null,
+                  "description": null,
+                  "detailColumns": [],
+                  "developerName": "Esf_Sandbox_Leads_Summary",
+                  "division": null,
+                  "folderId": "00D000000000003EAA",
+                  "groupingsAcross": [],
+                  "groupingsDown": [
+                    {
+                      "dateGranularity": "None",
+                      "name": "LEAD_SOURCE",
+                      "sortAggregate": null,
+                      "sortOrder": "Asc"
+                    }
+                  ],
+                  "hasDetailRows": true,
+                  "hasRecordCount": true,
+                  "historicalSnapshotDates": [],
+                  "id": "00O000000000004EAA",
+                  "name": "ESF Sandbox Leads Summary",
+                  "presentationOptions": {
+                    "hasStackedSummaries": false
+                  },
+                  "reportBooleanFilter": null,
+                  "reportFilters": [],
+                  "reportFormat": "SUMMARY",
+                  "reportType": {
+                    "label": "Leads",
+                    "type": "LeadList"
+                  },
+                  "scope": "org",
+                  "showGrandTotal": true,
+                  "showSubtotals": true,
+                  "sortBy": [],
+                  "standardDateFilter": {
+                    "column": "CREATED_DATE",
+                    "durationValue": "CUSTOM",
+                    "endDate": null,
+                    "startDate": null
+                  },
+                  "standardFilters": null,
+                  "supportsRoleHierarchy": false,
+                  "userOrHierarchyFilterId": null
+                }
+              },
+              "status": {
+                "componentDataStatus": "DATA",
+                "errorCode": null,
+                "errorMessage": null,
+                "errorSeverity": null,
+                "refreshDate": "2026-11-11T23:17:05.000+0000",
+                "refreshStatus": "IDLE"
+              }
+            }
+          ],
+          "dashboardMetadata": {
+            "canChangeRunningUser": false,
+            "canUseStickyFilter": true,
+            "chartTheme": null,
+            "colorPalette": null,
+            "components": [
+              {
+                "chartTheme": null,
+                "componentData": 0,
+                "footer": null,
+                "header": "Leads by source",
+                "id": "01a000000000002AAA",
+                "lastModifiedDate": "2026-11-11T22:40:35Z",
+                "properties": {
+                  "aggregates": [
+                    {
+                      "name": "RowCount"
+                    }
+                  ],
+                  "autoSelectColumns": true,
+                  "componentFilters": [],
+                  "drillUrl": null,
+                  "filterColumns": [],
+                  "groupings": [
+                    {
+                      "inheritedReportSort": "reportGrouping",
+                      "name": "LEAD_SOURCE",
+                      "sortAggregate": null,
+                      "sortOrder": null
+                    }
+                  ],
+                  "ignoreDashboardFilters": false,
+                  "maxRows": null,
+                  "reportFormat": "SUMMARY",
+                  "sort": null,
+                  "useReportChart": false,
+                  "visualizationProperties": {
+                    "breakPoints": [
+                      {
+                        "aggregateName": "RowCount",
+                        "breaks": [
+                          {
+                            "color": "c25454",
+                            "lowerBound": null,
+                            "upperBound": null
+                          },
+                          {
+                            "color": "c2c254",
+                            "lowerBound": null,
+                            "upperBound": null
+                          },
+                          {
+                            "color": "54c254",
+                            "lowerBound": null,
+                            "upperBound": null
+                          }
+                        ]
+                      }
+                    ],
+                    "decimalPrecision": null,
+                    "displayUnits": "whole",
+                    "showChatterPhotos": true,
+                    "tableColumns": [
+                      {
+                        "column": "LEAD_SOURCE",
+                        "isPercent": false,
+                        "scale": null,
+                        "showTotal": false,
+                        "type": "grouping"
+                      },
+                      {
+                        "column": "RowCount",
+                        "isPercent": false,
+                        "scale": null,
+                        "showTotal": false,
+                        "type": "aggregate"
+                      }
+                    ]
+                  },
+                  "visualizationType": "Table"
+                },
+                "reportId": "00O000000000004EAA",
+                "title": null,
+                "type": "Report"
+              }
+            ],
+            "dashboardType": "LoggedInUser",
+            "description": null,
+            "developerName": "Esf_Sandbox_Leads_Dashboard",
+            "filters": [],
+            "flexTableImplementation": "REPORT_INSTANCE",
+            "folderId": "00l000000000005AAA",
+            "folderName": "ESF Sandbox Dashboards",
+            "id": "01Z000000000001EAA",
+            "layout": {
+              "columns": [
+                {
+                  "components": [
+                    0
+                  ]
+                }
+              ],
+              "gridLayout": false
+            },
+            "maxFilterOptions": 50,
+            "name": "ESF Sandbox Leads Dashboard",
+            "owner": {
+              "displayName": "User 1",
+              "id": "005000000000006AAA"
+            },
+            "runningUser": {
+              "displayName": "User 1",
+              "id": "005000000000006AAA"
+            }
+          },
+          "picklistColors": {}
         }
       }
-    ],
-    "dashboardMetadata": {
-      "id": "01Zxx0000000001AAA",
-      "name": "Pipeline",
-      "components": [
-        {
-          "id": "01axx0000000001AAA",
-          "header": "Pipeline by stage",
-          "reportId": "00Oxx0000000001AAA",
-          "type": "Report"
-        }
-      ]
-    },
-    "statusUrl": "/services/data/v68.0/analytics/dashboards/01Zxx0000000001AAA/status"
-  }
+    }
+  ]
 }

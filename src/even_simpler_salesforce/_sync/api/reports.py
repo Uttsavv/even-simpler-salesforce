@@ -62,7 +62,7 @@ class Reports:
 
         Returns:
             One dict per report, as Salesforce sends it: ``id``, ``name``, ``url``,
-            ``describeUrl`` and ``instancesUrl``.
+            ``describeUrl``, ``instancesUrl`` and ``fieldsUrl``.
 
         Example:
             for report in sf.reports.recent():
@@ -237,10 +237,16 @@ class Dashboards:
         """``GET analytics/dashboards/{id}``: dashboard metadata, component data and status.
 
         Each entry of ``componentData`` has a ``reportResult`` in the report run format; wrap
-        it in :class:`ReportResult` to read its rows.
+        it in :class:`ReportResult` to read its rows. ``reportResult`` is ``None`` (and
+        ``status.componentDataStatus`` is ``"NO_DATA"``) until the dashboard was refreshed
+        once.
 
         Args:
             dashboard_id: Id of the dashboard (``01Z...``).
+
+        Raises:
+            InvalidReference: no dashboard with this id (Salesforce answers 400
+                ``INVALID_CROSS_REFERENCE_KEY``, not 404).
         """
         raw = self._sf._send(  # pyright: ignore[reportPrivateUsage]
             RequestSpec("GET", dashboard_path(dashboard_id), idempotent=True, operation="dashboards.get")
@@ -257,7 +263,11 @@ class Dashboards:
             dashboard_id: Id of the dashboard (``01Z...``).
 
         Returns:
-            The body: ``id`` and ``statusUrl``.
+            The body: ``{"statusUrl": ...}``, the status resource of the dashboard.
+
+        Raises:
+            Conflict: a refresh of this dashboard is still running (HTTP 409).
+            Forbidden: the dashboard was refreshed less than a minute ago (HTTP 403).
         """
         raw = self._sf._send(  # pyright: ignore[reportPrivateUsage]
             RequestSpec(

@@ -1,0 +1,35 @@
+{
+  "esf_fixture": 1,
+  "note": "recorded with esf.testing.record (tests/sandbox/test_ui_reports.py, API 68.0)",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/ui-api/records/00Q000000000001EAA",
+        "query": [
+          [
+            "fields",
+            "Account.Name"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=3120/15000"
+        },
+        "json": [
+          {
+            "errorCode": "INVALID_INPUT",
+            "message": "The \"fields\" query string parameter contained object api names that do not correspond to the api names of any of the requested record ids. The requested object api names were: [Account], while the requested records had object types: [Lead]"
+          }
+        ]
+      }
+    }
+  ]
+}

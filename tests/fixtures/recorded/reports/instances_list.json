@@ -1,0 +1,116 @@
+{
+  "esf_fixture": 1,
+  "note": "recorded with esf.testing.record (tests/sandbox/test_ui_reports.py, API 68.0)",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/analytics/reports/00O000000000001EAA/instances",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=704/15000"
+        },
+        "json": [
+          {
+            "completionDate": "2026-11-11T23:04:31Z",
+            "hasDetailRows": true,
+            "id": "0LG000000000002GAA",
+            "ownerId": "005000000000003AAA",
+            "queryable": false,
+            "requestDate": "2026-11-11T23:04:31Z",
+            "status": "Success",
+            "url": "/services/data/v68.0/analytics/reports/00O000000000001EAA/instances/0LG000000000002GAA"
+          },
+          {
+            "completionDate": "2026-11-11T23:04:28Z",
+            "hasDetailRows": true,
+            "id": "0LG00000000000AGAQ",
+            "ownerId": "005000000000003AAA",
+            "queryable": false,
+            "requestDate": "2026-11-11T23:04:25Z",
+            "status": "Success",
+            "url": "/services/data/v68.0/analytics/reports/00O000000000001EAA/instances/0LG00000000000AGAQ"
+          },
+          {
+            "completionDate": "2026-11-11T22:59:11Z",
+            "hasDetailRows": true,
+            "id": "0LG00000000000BGAQ",
+            "ownerId": "005000000000003AAA",
+            "queryable": false,
+            "requestDate": "2026-11-11T22:59:10Z",
+            "status": "Success",
+            "url": "/services/data/v68.0/analytics/reports/00O000000000001EAA/instances/0LG00000000000BGAQ"
+          },
+          {
+            "completionDate": "2026-11-11T22:59:08Z",
+            "hasDetailRows": true,
+            "id": "0LG00000000000CGAQ",
+            "ownerId": "005000000000003AAA",
+            "queryable": false,
+            "requestDate": "2026-11-11T22:59:02Z",
+            "status": "Success",
+            "url": "/services/data/v68.0/analytics/reports/00O000000000001EAA/instances/0LG00000000000CGAQ"
+          },
+          {
+            "completionDate": "2026-11-11T22:56:33Z",
+            "hasDetailRows": true,
+            "id": "0LG00000000000DGAQ",
+            "ownerId": "005000000000003AAA",
+            "queryable": false,
+            "requestDate": "2026-11-11T22:56:32Z",
+            "status": "Success",
+            "url": "/services/data/v68.0/analytics/reports/00O000000000001EAA/instances/0LG00000000000DGAQ"
+          },
+          {
+            "completionDate": "2026-11-11T22:56:28Z",
+            "hasDetailRows": true,
+            "id": "0LG00000000000EGAQ",
+            "ownerId": "005000000000003AAA",
+            "queryable": false,
+            "requestDate": "2026-11-11T22:56:23Z",
+            "status": "Success",
+            "url": "/services/data/v68.0/analytics/reports/00O000000000001EAA/instances/0LG00000000000EGAQ"
+          },
+          {
+            "completionDate": "2026-11-11T22:53:39Z",
+            "hasDetailRows": true,
+            "id": "0LG00000000000FGAQ",
+            "ownerId": "005000000000003AAA",
+            "queryable": false,
+            "requestDate": "2026-11-11T22:53:39Z",
+            "status": "Success",
+            "url": "/services/data/v68.0/analytics/reports/00O000000000001EAA/instances/0LG00000000000FGAQ"
+          },
+          {
+            "completionDate": "2026-11-11T22:49:01Z",
+            "hasDetailRows": true,
+            "id": "0LG00000000000GGAQ",
+            "ownerId": "005000000000003AAA",
+            "queryable": false,
+            "requestDate": "2026-11-11T22:48:56Z",
+            "status": "Success",
+            "url": "/services/data/v68.0/analytics/reports/00O000000000001EAA/instances/0LG00000000000GGAQ"
+          },
+          {
+            "completionDate": "2026-11-11T22:48:48Z",
+            "hasDetailRows": true,
+            "id": "0LG00000000000HGAQ",
+            "ownerId": "005000000000003AAA",
+            "queryable": false,
+            "requestDate": "2026-11-11T22:48:47Z",
+            "status": "Success",
+            "url": "/services/data/v68.0/analytics/reports/00O000000000001EAA/instances/0LG00000000000HGAQ"
+          }
+        ]
+      }
+    }
+  ]
+}

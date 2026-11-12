@@ -1067,14 +1067,18 @@ async for row in sf.bulk.query("SELECT Id, Name FROM Lead", parallel_downloads=4
 `record(id, fields=None, layout_types=None, modes=None)`, `object_info(name)`,
 `picklist_values(name, record_type_id)`, `create_defaults(name, record_type_id=None)`,
 `clone_defaults(id)`, `list_views(name)`, `list_records(name, list_view)`. Cached like describe.
+`record()` takes `fields` or `layout_types`, not both: Salesforce answers both with 400
+`INVALID_INPUT_COMBINATION` unless `childRelationships` is also sent (org-observed, V63). An
+unknown object on `object-info` is 403 `INSUFFICIENT_ACCESS` (`Forbidden`), not 404 (V61).
 
 ### 9.14 Reports and dashboards — `sf.reports` (0.4)
 
 `recent()` (`GET analytics/reports`: at most 200 recently viewed reports; to find any report,
 query the `Report` object with SOQL), `describe(report_id)`, `run(report_id, filters=None,
 include_details=True)` (sync run), `run_async(...)` + `instance(report_id, instance_id, *,
-poll=None, timeout=3600)` polling, `dashboards.get(id)`, `dashboards.refresh(id)`. Result
-helpers turn fact maps into rows.
+poll=None, timeout=3600)` polling, `dashboards.get(id)`, `dashboards.refresh(id)` (201 with
+only `statusUrl`; 409 while a refresh runs, 403 within a minute of the last one, V68/V69).
+Result helpers turn fact maps into rows; empty matrix cells come with a zero count (V67).
 
 ### 9.15 Metadata API — `sf.metadata` (0.4)
 

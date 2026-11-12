@@ -1,20 +1,50 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Salesforce Reports and Dashboards REST API Developer Guide (Report List, GET analytics/reports); no org recording yet",
-  "body": [
+  "esf_fixture": 1,
+  "note": "recorded with esf.testing.record (tests/sandbox/test_ui_reports.py, API 68.0)",
+  "interactions": [
     {
-      "describeUrl": "/services/data/v68.0/analytics/reports/00Oxx0000000001AAA/describe",
-      "id": "00Oxx0000000001AAA",
-      "instancesUrl": "/services/data/v68.0/analytics/reports/00Oxx0000000001AAA/instances",
-      "name": "Open Opportunities",
-      "url": "/services/data/v68.0/analytics/reports/00Oxx0000000001AAA"
-    },
-    {
-      "describeUrl": "/services/data/v68.0/analytics/reports/00Oxx0000000002AAA/describe",
-      "id": "00Oxx0000000002AAA",
-      "instancesUrl": "/services/data/v68.0/analytics/reports/00Oxx0000000002AAA/instances",
-      "name": "Pipeline by Stage and Type",
-      "url": "/services/data/v68.0/analytics/reports/00Oxx0000000002AAA"
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/analytics/reports",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=3142/15000"
+        },
+        "json": [
+          {
+            "describeUrl": "/services/data/v68.0/analytics/reports/00O000000000003EAA/describe",
+            "fieldsUrl": "/services/data/v68.0/analytics/reports/00O000000000003EAA/fields",
+            "id": "00O000000000003EAA",
+            "instancesUrl": "/services/data/v68.0/analytics/reports/00O000000000003EAA/instances",
+            "name": "ESF Sandbox Leads Matrix",
+            "url": "/services/data/v68.0/analytics/reports/00O000000000003EAA"
+          },
+          {
+            "describeUrl": "/services/data/v68.0/analytics/reports/00O000000000001EAA/describe",
+            "fieldsUrl": "/services/data/v68.0/analytics/reports/00O000000000001EAA/fields",
+            "id": "00O000000000001EAA",
+            "instancesUrl": "/services/data/v68.0/analytics/reports/00O000000000001EAA/instances",
+            "name": "ESF Sandbox Leads Tabular",
+            "url": "/services/data/v68.0/analytics/reports/00O000000000001EAA"
+          },
+          {
+            "describeUrl": "/services/data/v68.0/analytics/reports/00O000000000004EAA/describe",
+            "fieldsUrl": "/services/data/v68.0/analytics/reports/00O000000000004EAA/fields",
+            "id": "00O000000000004EAA",
+            "instancesUrl": "/services/data/v68.0/analytics/reports/00O000000000004EAA/instances",
+            "name": "ESF Sandbox Leads Summary",
+            "url": "/services/data/v68.0/analytics/reports/00O000000000004EAA"
+          }
+        ]
+      }
     }
   ]
 }

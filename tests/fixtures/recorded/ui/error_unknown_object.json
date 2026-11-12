@@ -1,0 +1,30 @@
+{
+  "esf_fixture": 1,
+  "note": "recorded with esf.testing.record (tests/sandbox/test_ui_reports.py, API 68.0)",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/ui-api/object-info/Esf_Nope__c",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=3124/15000"
+        },
+        "json": [
+          {
+            "errorCode": "INSUFFICIENT_ACCESS",
+            "message": "You don't have access to this record. Ask your administrator for help or to request access."
+          }
+        ]
+      }
+    }
+  ]
+}

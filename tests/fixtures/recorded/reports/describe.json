@@ -1,70 +1,432 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Salesforce Reports and Dashboards REST API Developer Guide (Describe); no org recording yet",
-  "body": {
-    "reportExtendedMetadata": {
-      "aggregateColumnInfo": {
-        "s!AMOUNT": {
-          "label": "Sum of Amount",
-          "dataType": "currency",
-          "downGroupingContext": null,
-          "acrossGroupingContext": null
-        },
-        "RowCount": {
-          "label": "Record Count",
-          "dataType": "int",
-          "downGroupingContext": null,
-          "acrossGroupingContext": null
+  "esf_fixture": 1,
+  "note": "recorded with esf.testing.record (tests/sandbox/test_ui_reports.py, API 68.0); trimmed: reportTypeMetadata.categories (first category, first 5 columns), standardDateFilterDurationGroups (first group), dataTypeFilterOperatorMap (emptied)",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/analytics/reports/00O000000000001EAA/describe",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
         }
       },
-      "detailColumnInfo": {
-        "ACCOUNT_NAME": {
-          "label": "Account Name",
-          "dataType": "string"
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=3145/15000"
         },
-        "OPPORTUNITY_NAME": {
-          "label": "Opportunity Name",
-          "dataType": "string"
-        },
-        "AMOUNT": {
-          "label": "Amount",
-          "dataType": "currency"
+        "json": {
+          "attributes": {
+            "describeUrl": "/services/data/v68.0/analytics/reports/00O000000000001EAA/describe",
+            "instancesUrl": "/services/data/v68.0/analytics/reports/00O000000000001EAA/instances",
+            "reportId": "00O000000000001EAA",
+            "reportName": "ESF Sandbox Leads Tabular",
+            "type": "Report"
+          },
+          "reportExtendedMetadata": {
+            "aggregateColumnInfo": {
+              "RowCount": {
+                "dataType": "int",
+                "label": "Record Count"
+              }
+            },
+            "availableDashboardSettings": null,
+            "detailColumnInfo": {
+              "LAST_NAME": {
+                "dataType": "string",
+                "entityColumnName": "Lead.Name",
+                "filterValues": [],
+                "filterable": true,
+                "fullyQualifiedName": "Lead.LastName",
+                "inactiveFilterValues": [],
+                "isLookup": true,
+                "label": "Last Name",
+                "uniqueCountable": true
+              },
+              "COMPANY": {
+                "dataType": "string",
+                "entityColumnName": "Lead.Company",
+                "filterValues": [],
+                "filterable": true,
+                "fullyQualifiedName": "Lead.Company",
+                "inactiveFilterValues": [],
+                "isLookup": true,
+                "label": "Company / Account",
+                "uniqueCountable": true
+              },
+              "LEAD_SOURCE": {
+                "dataType": "picklist",
+                "entityColumnName": "Lead.LeadSource",
+                "filterValues": [
+                  {
+                    "apiName": "Web",
+                    "label": "Web",
+                    "name": "Web"
+                  },
+                  {
+                    "apiName": "Phone Inquiry",
+                    "label": "Phone Inquiry",
+                    "name": "Phone Inquiry"
+                  },
+                  {
+                    "apiName": "Partner Referral",
+                    "label": "Partner Referral",
+                    "name": "Partner Referral"
+                  },
+                  {
+                    "apiName": "Purchased List",
+                    "label": "Purchased List",
+                    "name": "Purchased List"
+                  },
+                  {
+                    "apiName": "Other",
+                    "label": "Other",
+                    "name": "Other"
+                  }
+                ],
+                "filterable": true,
+                "fullyQualifiedName": "Lead.LeadSource",
+                "inactiveFilterValues": [],
+                "isLookup": false,
+                "label": "Lead Source",
+                "uniqueCountable": true
+              }
+            },
+            "groupingColumnInfo": {}
+          },
+          "reportMetadata": {
+            "aggregates": [
+              "RowCount"
+            ],
+            "chart": null,
+            "crossFilters": [],
+            "currency": null,
+            "dashboardSetting": null,
+            "description": null,
+            "detailColumns": [
+              "LAST_NAME",
+              "COMPANY",
+              "LEAD_SOURCE"
+            ],
+            "developerName": "Esf_Sandbox_Leads_Tabular",
+            "division": null,
+            "folderId": "00D000000000007EAA",
+            "groupingsAcross": [],
+            "groupingsDown": [],
+            "hasDetailRows": true,
+            "hasRecordCount": true,
+            "historicalSnapshotDates": [],
+            "id": "00O000000000001EAA",
+            "name": "ESF Sandbox Leads Tabular",
+            "paletteColors": [
+              "#126afc",
+              "#0b54ca",
+              "#0c3e99",
+              "#062a6c",
+              "#04153d",
+              "#a0a7fd",
+              "#768bfd"
+            ],
+            "presentationOptions": {
+              "hasStackedSummaries": false
+            },
+            "reportBooleanFilter": null,
+            "reportFilters": [],
+            "reportFormat": "TABULAR",
+            "reportType": {
+              "label": "Leads",
+              "type": "LeadList"
+            },
+            "scope": "org",
+            "showGrandTotal": true,
+            "showSubtotals": true,
+            "sortBy": [],
+            "standardDateFilter": {
+              "column": "CREATED_DATE",
+              "durationValue": "CUSTOM",
+              "endDate": null,
+              "startDate": null
+            },
+            "standardFilters": null,
+            "supportsRoleHierarchy": false,
+            "userOrHierarchyFilterId": null
+          },
+          "reportTypeMetadata": {
+            "categories": [
+              {
+                "columns": {
+                  "OWNER": {
+                    "allowedInCustomDetailFormula": true,
+                    "bucketable": true,
+                    "dataType": "string",
+                    "entityColumnName": "Owner.Name",
+                    "fieldToFieldFilterable": false,
+                    "filterValues": [],
+                    "filterable": true,
+                    "fullyQualifiedName": "Lead.Owner.Name",
+                    "inactiveFilterValues": [],
+                    "isCustom": false,
+                    "isLookup": true,
+                    "label": "Lead Owner",
+                    "maxLength": null,
+                    "uniqueCountable": true
+                  },
+                  "ALIAS": {
+                    "allowedInCustomDetailFormula": true,
+                    "bucketable": true,
+                    "dataType": "string",
+                    "entityColumnName": "Owner.Alias",
+                    "fieldToFieldFilterable": false,
+                    "filterValues": [],
+                    "filterable": true,
+                    "fullyQualifiedName": "Lead.Owner.Alias",
+                    "inactiveFilterValues": [],
+                    "isCustom": false,
+                    "isLookup": true,
+                    "label": "Lead Owner Alias",
+                    "maxLength": 8,
+                    "uniqueCountable": true
+                  },
+                  "CREATED": {
+                    "allowedInCustomDetailFormula": true,
+                    "bucketable": true,
+                    "dataType": "string",
+                    "entityColumnName": "User.Name",
+                    "fieldToFieldFilterable": false,
+                    "filterValues": [],
+                    "filterable": true,
+                    "fullyQualifiedName": "Lead.CreatedBy.Name",
+                    "inactiveFilterValues": [],
+                    "isCustom": false,
+                    "isLookup": true,
+                    "label": "Created By",
+                    "maxLength": null,
+                    "uniqueCountable": true
+                  },
+                  "CREATED_ALIAS": {
+                    "allowedInCustomDetailFormula": true,
+                    "bucketable": true,
+                    "dataType": "string",
+                    "entityColumnName": "User.Alias",
+                    "fieldToFieldFilterable": false,
+                    "filterValues": [],
+                    "filterable": true,
+                    "fullyQualifiedName": "Lead.CreatedBy.Alias",
+                    "inactiveFilterValues": [],
+                    "isCustom": false,
+                    "isLookup": true,
+                    "label": "Created Alias",
+                    "maxLength": 8,
+                    "uniqueCountable": true
+                  },
+                  "LAST_UPDATE_BY": {
+                    "allowedInCustomDetailFormula": true,
+                    "bucketable": true,
+                    "dataType": "string",
+                    "entityColumnName": "User.Name",
+                    "fieldToFieldFilterable": false,
+                    "filterValues": [],
+                    "filterable": true,
+                    "fullyQualifiedName": "Lead.LastModifiedBy.Name",
+                    "inactiveFilterValues": [],
+                    "isCustom": false,
+                    "isLookup": true,
+                    "label": "Last Modified By",
+                    "maxLength": null,
+                    "uniqueCountable": true
+                  }
+                },
+                "label": "Lead General",
+                "labelSuffix": null
+              }
+            ],
+            "dataTypeFilterOperatorMap": {},
+            "dateGranularityInfos": [
+              {
+                "label": "Day",
+                "value": "Day"
+              },
+              {
+                "label": "Calendar Week",
+                "value": "Week"
+              },
+              {
+                "label": "Calendar Month",
+                "value": "Month"
+              },
+              {
+                "label": "Calendar Quarter",
+                "value": "Quarter"
+              },
+              {
+                "label": "Calendar Year",
+                "value": "Year"
+              },
+              {
+                "label": "Fiscal Quarter",
+                "value": "FiscalQuarter"
+              },
+              {
+                "label": "Fiscal Year",
+                "value": "FiscalYear"
+              },
+              {
+                "label": "Calendar Month in Year",
+                "value": "MonthInYear"
+              },
+              {
+                "label": "Calendar Day in Month",
+                "value": "DayInMonth"
+              }
+            ],
+            "divisionInfo": null,
+            "hasOuterJoin": false,
+            "isDataCloud": false,
+            "isExternalObjectReport": false,
+            "isHistorical": false,
+            "isSemanticModel": false,
+            "objectRelationships": [
+              {
+                "label": "Leads",
+                "primaryEntityField": "LEAD_ID",
+                "relatedObjects": [
+                  {
+                    "label": "Activities",
+                    "relatedEntity": "Activity",
+                    "relatedEntityJoinField": "WhoId"
+                  },
+                  {
+                    "label": "Campaign History",
+                    "relatedEntity": "CampaignMember-Campaign",
+                    "relatedEntityJoinField": "Lead"
+                  },
+                  {
+                    "label": "Chat Transcripts",
+                    "relatedEntity": "LiveChatTranscript",
+                    "relatedEntityJoinField": "Lead"
+                  },
+                  {
+                    "label": "CollaborationGroupRecord-Group",
+                    "relatedEntity": "CollaborationGroupRecord-Group",
+                    "relatedEntityJoinField": "Record"
+                  },
+                  {
+                    "label": "Duplicate Record Items",
+                    "relatedEntity": "DuplicateRecordItem",
+                    "relatedEntityJoinField": "Record"
+                  },
+                  {
+                    "label": "Email Messages",
+                    "relatedEntity": "EmailMessage-Lead",
+                    "relatedEntityJoinField": "Relation"
+                  },
+                  {
+                    "label": "Integration Rule Info",
+                    "relatedEntity": "CleanInfo-CleanRule",
+                    "relatedEntityJoinField": "TargetEntity"
+                  },
+                  {
+                    "label": "Lead Clean Info",
+                    "relatedEntity": "LeadCleanInfo",
+                    "relatedEntityJoinField": "LeadId"
+                  },
+                  {
+                    "label": "Lead Feed",
+                    "relatedEntity": "LeadFeed",
+                    "relatedEntityJoinField": "ParentId"
+                  },
+                  {
+                    "label": "List Email Sent Results",
+                    "relatedEntity": "ListEmailSentResult",
+                    "relatedEntityJoinField": "Recipient"
+                  },
+                  {
+                    "label": "Service Appointments",
+                    "relatedEntity": "ServiceAppointment",
+                    "relatedEntityJoinField": "ParentRecord"
+                  },
+                  {
+                    "label": "Voice Calls",
+                    "relatedEntity": "VoiceCall",
+                    "relatedEntityJoinField": "RelatedRecordId"
+                  }
+                ]
+              }
+            ],
+            "objects": [
+              {
+                "apiName": "UserRole",
+                "label": "Role"
+              },
+              {
+                "apiName": "Owner",
+                "label": "Owner"
+              },
+              {
+                "apiName": "Lead",
+                "label": "Lead"
+              },
+              {
+                "apiName": "User",
+                "label": "User"
+              }
+            ],
+            "scopeInfo": {
+              "defaultValue": "user",
+              "values": [
+                {
+                  "allowsDivision": false,
+                  "label": "My leads",
+                  "value": "user"
+                },
+                {
+                  "allowsDivision": false,
+                  "label": "My team's leads",
+                  "value": "team"
+                },
+                {
+                  "allowsDivision": true,
+                  "label": "User owned leads",
+                  "value": "allusers"
+                },
+                {
+                  "allowsDivision": false,
+                  "label": "Queue owned leads",
+                  "value": "queue"
+                },
+                {
+                  "allowsDivision": true,
+                  "label": "All leads",
+                  "value": "org"
+                },
+                {
+                  "allowsDivision": false,
+                  "label": "Filter by scope",
+                  "value": "scopingRule"
+                }
+              ]
+            },
+            "standardDateFilterDurationGroups": [
+              {
+                "label": "",
+                "standardDateFilterDurations": [
+                  {
+                    "endDate": "2026-11-10",
+                    "label": "Custom",
+                    "startDate": "2026-11-11",
+                    "value": "CUSTOM"
+                  }
+                ]
+              }
+            ],
+            "standardFilterInfos": null,
+            "supportsJoinedFormat": true
+          }
         }
-      },
-      "groupingColumnInfo": {}
-    },
-    "reportMetadata": {
-      "id": "00Oxx0000000001AAA",
-      "name": "Open Opportunities",
-      "reportFormat": "SUMMARY",
-      "detailColumns": [
-        "ACCOUNT_NAME",
-        "OPPORTUNITY_NAME",
-        "AMOUNT"
-      ],
-      "aggregates": [
-        "s!AMOUNT",
-        "RowCount"
-      ],
-      "groupingsDown": [
-        {
-          "name": "STAGE_NAME",
-          "sortOrder": "Asc",
-          "dateGranularity": "None"
-        }
-      ],
-      "groupingsAcross": [],
-      "reportFilters": [],
-      "reportBooleanFilter": null,
-      "hasDetailRows": true,
-      "reportType": {
-        "type": "Opportunity",
-        "label": "Opportunities"
       }
-    },
-    "reportTypeMetadata": {
-      "categories": [],
-      "dataTypeFilterOperatorMap": {}
     }
-  }
+  ]
 }

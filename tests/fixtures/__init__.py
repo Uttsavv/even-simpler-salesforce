@@ -48,6 +48,18 @@ def is_recorded(name: str) -> bool:
     return "esf_fixture" in _read(name)
 
 
+def is_synthetic(name: str) -> bool:
+    """Whether the fixture is hand-written rather than recorded."""
+    return _read(name).get("synthetic") is True
+
+
+def fixture_status(name: str, index: int = 0) -> int:
+    """The HTTP status of recorded response ``index`` (200 for a synthetic fixture)."""
+    if is_synthetic(name):
+        return 200
+    return int(load_interaction(name, index)["response"]["status"])
+
+
 def load_interactions(name: str) -> list[dict[str, Any]]:
     """A deep copy of a recording's interactions (``request`` / ``response``), token calls skipped."""
     return copy.deepcopy(_calls(name))

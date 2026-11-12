@@ -1,0 +1,206 @@
+{
+  "esf_fixture": 1,
+  "note": "recorded with esf.testing.record (tests/sandbox/test_ui_reports.py, API 68.0)",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/analytics/reports/00O000000000001EAA",
+        "query": [
+          [
+            "includeDetails",
+            "false"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "reportMetadata": {
+            "reportFilters": [
+              {
+                "column": "LAST_NAME",
+                "operator": "startsWith",
+                "value": "esf-sandbox-5d9621e906af-r"
+              }
+            ]
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=3153/15000"
+        },
+        "json": {
+          "attributes": {
+            "describeUrl": "/services/data/v68.0/analytics/reports/00O000000000001EAA/describe",
+            "instancesUrl": "/services/data/v68.0/analytics/reports/00O000000000001EAA/instances",
+            "reportId": "00O000000000001EAA",
+            "reportName": "ESF Sandbox Leads Tabular",
+            "type": "Report"
+          },
+          "allData": true,
+          "factMap": {
+            "T!T": {
+              "aggregates": [
+                {
+                  "label": "5",
+                  "value": 5
+                }
+              ]
+            }
+          },
+          "groupingsAcross": {
+            "groupings": []
+          },
+          "groupingsDown": {
+            "groupings": []
+          },
+          "hasDetailRows": false,
+          "hasExceededTabularRowLimit": false,
+          "picklistColors": {},
+          "reportExtendedMetadata": {
+            "aggregateColumnInfo": {
+              "RowCount": {
+                "dataType": "int",
+                "label": "Record Count"
+              }
+            },
+            "availableDashboardSettings": null,
+            "detailColumnInfo": {
+              "LAST_NAME": {
+                "dataType": "string",
+                "entityColumnName": "Lead.Name",
+                "filterValues": [],
+                "filterable": true,
+                "fullyQualifiedName": "Lead.LastName",
+                "inactiveFilterValues": [],
+                "isLookup": true,
+                "label": "Last Name",
+                "uniqueCountable": true
+              },
+              "COMPANY": {
+                "dataType": "string",
+                "entityColumnName": "Lead.Company",
+                "filterValues": [],
+                "filterable": true,
+                "fullyQualifiedName": "Lead.Company",
+                "inactiveFilterValues": [],
+                "isLookup": true,
+                "label": "Company / Account",
+                "uniqueCountable": true
+              },
+              "LEAD_SOURCE": {
+                "dataType": "picklist",
+                "entityColumnName": "Lead.LeadSource",
+                "filterValues": [
+                  {
+                    "apiName": "Web",
+                    "label": "Web",
+                    "name": "Web"
+                  },
+                  {
+                    "apiName": "Phone Inquiry",
+                    "label": "Phone Inquiry",
+                    "name": "Phone Inquiry"
+                  },
+                  {
+                    "apiName": "Partner Referral",
+                    "label": "Partner Referral",
+                    "name": "Partner Referral"
+                  },
+                  {
+                    "apiName": "Purchased List",
+                    "label": "Purchased List",
+                    "name": "Purchased List"
+                  },
+                  {
+                    "apiName": "Other",
+                    "label": "Other",
+                    "name": "Other"
+                  }
+                ],
+                "filterable": true,
+                "fullyQualifiedName": "Lead.LeadSource",
+                "inactiveFilterValues": [],
+                "isLookup": false,
+                "label": "Lead Source",
+                "uniqueCountable": true
+              }
+            },
+            "groupingColumnInfo": {}
+          },
+          "reportMetadata": {
+            "aggregates": [
+              "RowCount"
+            ],
+            "chart": null,
+            "crossFilters": [],
+            "currency": null,
+            "dashboardSetting": null,
+            "description": null,
+            "detailColumns": [
+              "LAST_NAME",
+              "COMPANY",
+              "LEAD_SOURCE"
+            ],
+            "developerName": "Esf_Sandbox_Leads_Tabular",
+            "division": null,
+            "folderId": "00D000000000007EAA",
+            "groupingsAcross": [],
+            "groupingsDown": [],
+            "hasDetailRows": false,
+            "hasRecordCount": true,
+            "historicalSnapshotDates": [],
+            "id": "00O000000000001EAA",
+            "name": "ESF Sandbox Leads Tabular",
+            "paletteColors": [
+              "#126afc",
+              "#0b54ca",
+              "#0c3e99",
+              "#062a6c",
+              "#04153d",
+              "#a0a7fd",
+              "#768bfd"
+            ],
+            "presentationOptions": {
+              "hasStackedSummaries": false
+            },
+            "reportBooleanFilter": null,
+            "reportFilters": [
+              {
+                "column": "LAST_NAME",
+                "filterType": "fieldValue",
+                "isRunPageEditable": false,
+                "operator": "startsWith",
+                "value": "esf-sandbox-5d9621e906af-r"
+              }
+            ],
+            "reportFormat": "TABULAR",
+            "reportType": {
+              "label": "Leads",
+              "type": "LeadList"
+            },
+            "scope": "org",
+            "showGrandTotal": true,
+            "showSubtotals": true,
+            "sortBy": [],
+            "standardDateFilter": {
+              "column": "CREATED_DATE",
+              "durationValue": "CUSTOM",
+              "endDate": null,
+              "startDate": null
+            },
+            "standardFilters": null,
+            "supportsRoleHierarchy": false,
+            "userOrHierarchyFilterId": null
+          }
+        }
+      }
+    }
+  ]
+}

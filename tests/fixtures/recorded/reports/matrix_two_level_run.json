@@ -1,447 +1,610 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Salesforce Reports and Dashboards REST API Developer Guide (Execute Sync, Decode the Fact Map); no org recording yet",
-  "body": {
-    "attributes": {
-      "describeUrl": "/services/data/v68.0/analytics/reports/00Oxx0000000002AAA/describe",
-      "instancesUrl": "/services/data/v68.0/analytics/reports/00Oxx0000000002AAA/instances",
-      "reportId": "00Oxx0000000002AAA",
-      "reportName": "Pipeline by Stage and Type",
-      "type": "Report"
-    },
-    "allData": true,
-    "hasDetailRows": true,
-    "factMap": {
-      "0!0": {
-        "aggregates": [
-          {
-            "label": "$1,000.00",
-            "value": {
-              "amount": 1000.0,
-              "currency": null
-            }
-          },
-          {
-            "label": "1",
-            "value": 1
-          }
-        ]
-      },
-      "0!1": {
-        "aggregates": [
-          {
-            "label": "$800.00",
-            "value": {
-              "amount": 800.0,
-              "currency": null
-            }
-          },
-          {
-            "label": "2",
-            "value": 2
-          }
-        ]
-      },
-      "0!T": {
-        "aggregates": [
-          {
-            "label": "$1,800.00",
-            "value": {
-              "amount": 1800.0,
-              "currency": null
-            }
-          },
-          {
-            "label": "3",
-            "value": 3
-          }
-        ]
-      },
-      "0_0!0": {
-        "aggregates": [
-          {
-            "label": "$1,000.00",
-            "value": {
-              "amount": 1000.0,
-              "currency": null
-            }
-          },
-          {
-            "label": "1",
-            "value": 1
-          }
+  "esf_fixture": 1,
+  "note": "recorded with esf.testing.record (tests/sandbox/test_ui_reports.py, API 68.0)",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/analytics/reports/00O000000000001EAA",
+        "query": [
+          [
+            "includeDetails",
+            "true"
+          ]
         ],
-        "rows": [
-          {
-            "dataCells": [
-              {
-                "label": "Acme - 200 units",
-                "value": "Acme - 200 units"
-              },
-              {
-                "label": "$1,000.00",
-                "value": {
-                  "amount": 1000.0,
-                  "currency": null
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "0_0!1": {
-        "aggregates": [
-          {
-            "label": "$300.00",
-            "value": {
-              "amount": 300.0,
-              "currency": null
-            }
-          },
-          {
-            "label": "1",
-            "value": 1
-          }
-        ],
-        "rows": [
-          {
-            "dataCells": [
-              {
-                "label": "Hooli expansion",
-                "value": "Hooli expansion"
-              },
-              {
-                "label": "$300.00",
-                "value": {
-                  "amount": 300.0,
-                  "currency": null
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "0_0!T": {
-        "aggregates": [
-          {
-            "label": "$1,300.00",
-            "value": {
-              "amount": 1300.0,
-              "currency": null
-            }
-          },
-          {
-            "label": "2",
-            "value": 2
-          }
-        ]
-      },
-      "0_1!1": {
-        "aggregates": [
-          {
-            "label": "$500.00",
-            "value": {
-              "amount": 500.0,
-              "currency": null
-            }
-          },
-          {
-            "label": "1",
-            "value": 1
-          }
-        ],
-        "rows": [
-          {
-            "dataCells": [
-              {
-                "label": "Initech pilot",
-                "value": "Initech pilot"
-              },
-              {
-                "label": "$500.00",
-                "value": {
-                  "amount": 500.0,
-                  "currency": null
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "0_1!T": {
-        "aggregates": [
-          {
-            "label": "$500.00",
-            "value": {
-              "amount": 500.0,
-              "currency": null
-            }
-          },
-          {
-            "label": "1",
-            "value": 1
-          }
-        ]
-      },
-      "1!0": {
-        "aggregates": [
-          {
-            "label": "$2,500.00",
-            "value": {
-              "amount": 2500.0,
-              "currency": null
-            }
-          },
-          {
-            "label": "1",
-            "value": 1
-          }
-        ]
-      },
-      "1!T": {
-        "aggregates": [
-          {
-            "label": "$2,500.00",
-            "value": {
-              "amount": 2500.0,
-              "currency": null
-            }
-          },
-          {
-            "label": "1",
-            "value": 1
-          }
-        ]
-      },
-      "1_0!0": {
-        "aggregates": [
-          {
-            "label": "$2,500.00",
-            "value": {
-              "amount": 2500.0,
-              "currency": null
-            }
-          },
-          {
-            "label": "1",
-            "value": 1
-          }
-        ],
-        "rows": [
-          {
-            "dataCells": [
-              {
-                "label": "Globex renewal",
-                "value": "Globex renewal"
-              },
-              {
-                "label": "$2,500.00",
-                "value": {
-                  "amount": 2500.0,
-                  "currency": null
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "1_0!T": {
-        "aggregates": [
-          {
-            "label": "$2,500.00",
-            "value": {
-              "amount": 2500.0,
-              "currency": null
-            }
-          },
-          {
-            "label": "1",
-            "value": 1
-          }
-        ]
-      },
-      "T!0": {
-        "aggregates": [
-          {
-            "label": "$3,500.00",
-            "value": {
-              "amount": 3500.0,
-              "currency": null
-            }
-          },
-          {
-            "label": "2",
-            "value": 2
-          }
-        ]
-      },
-      "T!1": {
-        "aggregates": [
-          {
-            "label": "$800.00",
-            "value": {
-              "amount": 800.0,
-              "currency": null
-            }
-          },
-          {
-            "label": "2",
-            "value": 2
-          }
-        ]
-      },
-      "T!T": {
-        "aggregates": [
-          {
-            "label": "$4,300.00",
-            "value": {
-              "amount": 4300.0,
-              "currency": null
-            }
-          },
-          {
-            "label": "4",
-            "value": 4
-          }
-        ]
-      }
-    },
-    "groupingsAcross": {
-      "groupings": [
-        {
-          "key": "0",
-          "label": "October 2026",
-          "value": "2026-10-01",
-          "groupings": [],
-          "dateGranularity": "Month"
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
         },
-        {
-          "key": "1",
-          "label": "November 2026",
-          "value": "2026-11-01",
-          "groupings": [],
-          "dateGranularity": "Month"
+        "json": {
+          "reportMetadata": {
+            "groupingsDown": [
+              {
+                "name": "LEAD_SOURCE",
+                "sortOrder": "Asc",
+                "dateGranularity": "None"
+              },
+              {
+                "name": "CREATED_DATE",
+                "sortOrder": "Asc",
+                "dateGranularity": "Day"
+              }
+            ],
+            "groupingsAcross": [
+              {
+                "name": "STATUS",
+                "sortOrder": "Asc",
+                "dateGranularity": "None"
+              }
+            ],
+            "reportFormat": "MATRIX",
+            "reportFilters": [
+              {
+                "column": "LAST_NAME",
+                "operator": "startsWith",
+                "value": "esf-sandbox-5d9621e906af-r"
+              }
+            ]
+          }
         }
-      ]
-    },
-    "groupingsDown": {
-      "groupings": [
-        {
-          "key": "0",
-          "label": "Prospecting",
-          "value": "Prospecting",
-          "groupings": [
-            {
-              "key": "0_0",
-              "label": "New Business",
-              "value": "New Business",
-              "groupings": [],
-              "dateGranularity": "None"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=3142/15000"
+        },
+        "json": {
+          "attributes": {
+            "describeUrl": "/services/data/v68.0/analytics/reports/00O000000000001EAA/describe",
+            "instancesUrl": "/services/data/v68.0/analytics/reports/00O000000000001EAA/instances",
+            "reportId": "00O000000000001EAA",
+            "reportName": "ESF Sandbox Leads Matrix",
+            "type": "Report"
+          },
+          "allData": true,
+          "factMap": {
+            "0!1": {
+              "aggregates": [
+                {
+                  "label": "1",
+                  "value": 1
+                }
+              ],
+              "rows": []
             },
-            {
-              "key": "0_1",
-              "label": "Existing Business",
-              "value": "Existing Business",
-              "groupings": [],
-              "dateGranularity": "None"
+            "0_0!0": {
+              "aggregates": [
+                {
+                  "label": "2",
+                  "value": 2
+                }
+              ],
+              "rows": [
+                {
+                  "dataCells": [
+                    {
+                      "label": "esf-sandbox-5d9621e906af-r0",
+                      "recordId": "00Q000000000005EAA",
+                      "value": "00Q000000000005EAA"
+                    },
+                    {
+                      "label": "esf-sandbox",
+                      "recordId": "00Q000000000005EAA",
+                      "value": "00Q000000000005EAA"
+                    }
+                  ]
+                },
+                {
+                  "dataCells": [
+                    {
+                      "label": "esf-sandbox-5d9621e906af-r1",
+                      "recordId": "00Q000000000006EAA",
+                      "value": "00Q000000000006EAA"
+                    },
+                    {
+                      "label": "esf-sandbox",
+                      "recordId": "00Q000000000006EAA",
+                      "value": "00Q000000000006EAA"
+                    }
+                  ]
+                }
+              ]
+            },
+            "1!0": {
+              "aggregates": [
+                {
+                  "label": "1",
+                  "value": 1
+                }
+              ],
+              "rows": []
+            },
+            "0_0!1": {
+              "aggregates": [
+                {
+                  "label": "1",
+                  "value": 1
+                }
+              ],
+              "rows": [
+                {
+                  "dataCells": [
+                    {
+                      "label": "esf-sandbox-5d9621e906af-r2",
+                      "recordId": "00Q000000000002EAA",
+                      "value": "00Q000000000002EAA"
+                    },
+                    {
+                      "label": "esf-sandbox",
+                      "recordId": "00Q000000000002EAA",
+                      "value": "00Q000000000002EAA"
+                    }
+                  ]
+                }
+              ]
+            },
+            "1!1": {
+              "aggregates": [
+                {
+                  "label": "0",
+                  "value": 0
+                }
+              ],
+              "rows": []
+            },
+            "2!0": {
+              "aggregates": [
+                {
+                  "label": "0",
+                  "value": 0
+                }
+              ],
+              "rows": []
+            },
+            "2!1": {
+              "aggregates": [
+                {
+                  "label": "1",
+                  "value": 1
+                }
+              ],
+              "rows": []
+            },
+            "T!0": {
+              "aggregates": [
+                {
+                  "label": "3",
+                  "value": 3
+                }
+              ],
+              "rows": []
+            },
+            "0!T": {
+              "aggregates": [
+                {
+                  "label": "3",
+                  "value": 3
+                }
+              ],
+              "rows": []
+            },
+            "0_0!T": {
+              "aggregates": [
+                {
+                  "label": "3",
+                  "value": 3
+                }
+              ],
+              "rows": []
+            },
+            "1!T": {
+              "aggregates": [
+                {
+                  "label": "1",
+                  "value": 1
+                }
+              ],
+              "rows": []
+            },
+            "2!T": {
+              "aggregates": [
+                {
+                  "label": "1",
+                  "value": 1
+                }
+              ],
+              "rows": []
+            },
+            "T!1": {
+              "aggregates": [
+                {
+                  "label": "2",
+                  "value": 2
+                }
+              ],
+              "rows": []
+            },
+            "T!T": {
+              "aggregates": [
+                {
+                  "label": "5",
+                  "value": 5
+                }
+              ],
+              "rows": []
+            },
+            "1_0!T": {
+              "aggregates": [
+                {
+                  "label": "1",
+                  "value": 1
+                }
+              ],
+              "rows": []
+            },
+            "1_0!1": {
+              "aggregates": [
+                {
+                  "label": "0",
+                  "value": 0
+                }
+              ],
+              "rows": []
+            },
+            "1_0!0": {
+              "aggregates": [
+                {
+                  "label": "1",
+                  "value": 1
+                }
+              ],
+              "rows": [
+                {
+                  "dataCells": [
+                    {
+                      "label": "esf-sandbox-5d9621e906af-r3",
+                      "recordId": "00Q000000000003EAA",
+                      "value": "00Q000000000003EAA"
+                    },
+                    {
+                      "label": "esf-sandbox",
+                      "recordId": "00Q000000000003EAA",
+                      "value": "00Q000000000003EAA"
+                    }
+                  ]
+                }
+              ]
+            },
+            "2_0!T": {
+              "aggregates": [
+                {
+                  "label": "1",
+                  "value": 1
+                }
+              ],
+              "rows": []
+            },
+            "2_0!0": {
+              "aggregates": [
+                {
+                  "label": "0",
+                  "value": 0
+                }
+              ],
+              "rows": []
+            },
+            "0!0": {
+              "aggregates": [
+                {
+                  "label": "2",
+                  "value": 2
+                }
+              ],
+              "rows": []
+            },
+            "2_0!1": {
+              "aggregates": [
+                {
+                  "label": "1",
+                  "value": 1
+                }
+              ],
+              "rows": [
+                {
+                  "dataCells": [
+                    {
+                      "label": "esf-sandbox-5d9621e906af-r4",
+                      "recordId": "00Q000000000004EAA",
+                      "value": "00Q000000000004EAA"
+                    },
+                    {
+                      "label": "esf-sandbox",
+                      "recordId": "00Q000000000004EAA",
+                      "value": "00Q000000000004EAA"
+                    }
+                  ]
+                }
+              ]
             }
-          ],
-          "dateGranularity": "None"
-        },
-        {
-          "key": "1",
-          "label": "Closed Won",
-          "value": "Closed Won",
-          "groupings": [
-            {
-              "key": "1_0",
-              "label": "Existing Business",
-              "value": "Existing Business",
-              "groupings": [],
-              "dateGranularity": "None"
+          },
+          "groupingsAcross": {
+            "groupings": [
+              {
+                "groupings": [],
+                "key": "0",
+                "label": "Open - Not Contacted",
+                "value": "Open - Not Contacted"
+              },
+              {
+                "groupings": [],
+                "key": "1",
+                "label": "Working - Contacted",
+                "value": "Working - Contacted"
+              }
+            ]
+          },
+          "groupingsDown": {
+            "groupings": [
+              {
+                "groupings": [
+                  {
+                    "groupings": [],
+                    "key": "0_0",
+                    "label": "11/11/2026",
+                    "value": "2026-11-11"
+                  }
+                ],
+                "key": "0",
+                "label": "Web",
+                "value": "Web"
+              },
+              {
+                "groupings": [
+                  {
+                    "groupings": [],
+                    "key": "1_0",
+                    "label": "11/11/2026",
+                    "value": "2026-11-11"
+                  }
+                ],
+                "key": "1",
+                "label": "Phone Inquiry",
+                "value": "Phone Inquiry"
+              },
+              {
+                "groupings": [
+                  {
+                    "groupings": [],
+                    "key": "2_0",
+                    "label": "11/11/2026",
+                    "value": "2026-11-11"
+                  }
+                ],
+                "key": "2",
+                "label": "Partner Referral",
+                "value": "Partner Referral"
+              }
+            ]
+          },
+          "hasDetailRows": true,
+          "hasExceededTabularRowLimit": false,
+          "picklistColors": {},
+          "reportExtendedMetadata": {
+            "aggregateColumnInfo": {
+              "RowCount": {
+                "dataType": "int",
+                "label": "Record Count"
+              }
+            },
+            "availableDashboardSettings": null,
+            "detailColumnInfo": {
+              "LAST_NAME": {
+                "dataType": "string",
+                "entityColumnName": "Lead.Name",
+                "fieldInfo": {
+                  "entityName": "Lead",
+                  "fieldName": "LastName",
+                  "lookupEntityName": "Lead"
+                },
+                "filterValues": [],
+                "filterable": true,
+                "fullyQualifiedName": "Lead.LastName",
+                "inactiveFilterValues": [],
+                "isLookup": true,
+                "label": "Last Name",
+                "uniqueCountable": true
+              },
+              "COMPANY": {
+                "dataType": "string",
+                "entityColumnName": "Lead.Company",
+                "fieldInfo": {
+                  "entityName": "Lead",
+                  "fieldName": "Company",
+                  "lookupEntityName": "Lead"
+                },
+                "filterValues": [],
+                "filterable": true,
+                "fullyQualifiedName": "Lead.Company",
+                "inactiveFilterValues": [],
+                "isLookup": true,
+                "label": "Company / Account",
+                "uniqueCountable": true
+              }
+            },
+            "groupingColumnInfo": {
+              "LEAD_SOURCE": {
+                "dataType": "picklist",
+                "entityColumnName": "Lead.LeadSource",
+                "filterValues": [
+                  {
+                    "apiName": "Web",
+                    "label": "Web",
+                    "name": "Web"
+                  },
+                  {
+                    "apiName": "Phone Inquiry",
+                    "label": "Phone Inquiry",
+                    "name": "Phone Inquiry"
+                  },
+                  {
+                    "apiName": "Partner Referral",
+                    "label": "Partner Referral",
+                    "name": "Partner Referral"
+                  },
+                  {
+                    "apiName": "Purchased List",
+                    "label": "Purchased List",
+                    "name": "Purchased List"
+                  },
+                  {
+                    "apiName": "Other",
+                    "label": "Other",
+                    "name": "Other"
+                  }
+                ],
+                "filterable": true,
+                "fullyQualifiedName": "Lead.LeadSource",
+                "groupingLevel": 0,
+                "inactiveFilterValues": [],
+                "isLookup": false,
+                "label": "Lead Source",
+                "uniqueCountable": true
+              },
+              "CREATED_DATE": {
+                "dataType": "date",
+                "entityColumnName": "Lead.CreatedDate",
+                "filterValues": [],
+                "filterable": true,
+                "fullyQualifiedName": "Lead.CreatedDate",
+                "groupingLevel": 1,
+                "inactiveFilterValues": [],
+                "isLookup": false,
+                "label": "Create Date",
+                "uniqueCountable": true
+              },
+              "STATUS": {
+                "dataType": "picklist",
+                "entityColumnName": "Lead.Status",
+                "filterValues": [
+                  {
+                    "apiName": "Open - Not Contacted",
+                    "label": "Open - Not Contacted",
+                    "name": "Open - Not Contacted"
+                  },
+                  {
+                    "apiName": "Working - Contacted",
+                    "label": "Working - Contacted",
+                    "name": "Working - Contacted"
+                  },
+                  {
+                    "apiName": "Closed - Converted",
+                    "label": "Closed - Converted",
+                    "name": "Closed - Converted"
+                  },
+                  {
+                    "apiName": "Closed - Not Converted",
+                    "label": "Closed - Not Converted",
+                    "name": "Closed - Not Converted"
+                  }
+                ],
+                "filterable": true,
+                "fullyQualifiedName": "Lead.Status",
+                "groupingLevel": 0,
+                "inactiveFilterValues": [],
+                "isLookup": false,
+                "label": "Lead Status",
+                "uniqueCountable": true
+              }
             }
-          ],
-          "dateGranularity": "None"
+          },
+          "reportMetadata": {
+            "aggregates": [
+              "RowCount"
+            ],
+            "chart": null,
+            "crossFilters": [],
+            "currency": null,
+            "dashboardSetting": null,
+            "description": null,
+            "detailColumns": [
+              "LAST_NAME",
+              "COMPANY"
+            ],
+            "developerName": "Esf_Sandbox_Leads_Matrix",
+            "division": null,
+            "folderId": "00l000000000007AAA",
+            "groupingsAcross": [
+              {
+                "dateGranularity": "None",
+                "name": "STATUS",
+                "sortAggregate": null,
+                "sortOrder": "Asc"
+              }
+            ],
+            "groupingsDown": [
+              {
+                "dateGranularity": "None",
+                "name": "LEAD_SOURCE",
+                "sortAggregate": null,
+                "sortOrder": "Asc"
+              },
+              {
+                "dateGranularity": "Day",
+                "name": "CREATED_DATE",
+                "sortAggregate": null,
+                "sortOrder": "Asc"
+              }
+            ],
+            "hasDetailRows": true,
+            "hasRecordCount": true,
+            "historicalSnapshotDates": [],
+            "id": "00O000000000001EAA",
+            "name": "ESF Sandbox Leads Matrix",
+            "paletteColors": [
+              "#126afc",
+              "#0b54ca",
+              "#0c3e99",
+              "#062a6c",
+              "#04153d",
+              "#a0a7fd",
+              "#768bfd"
+            ],
+            "presentationOptions": {
+              "hasStackedSummaries": false
+            },
+            "reportBooleanFilter": null,
+            "reportFilters": [
+              {
+                "column": "LAST_NAME",
+                "filterType": "fieldValue",
+                "isRunPageEditable": false,
+                "operator": "startsWith",
+                "value": "esf-sandbox-5d9621e906af-r"
+              }
+            ],
+            "reportFormat": "MATRIX",
+            "reportType": {
+              "label": "Leads",
+              "type": "LeadList"
+            },
+            "scope": "org",
+            "showGrandTotal": true,
+            "showSubtotals": true,
+            "sortBy": [],
+            "standardDateFilter": {
+              "column": "CREATED_DATE",
+              "durationValue": "CUSTOM",
+              "endDate": null,
+              "startDate": null
+            },
+            "standardFilters": null,
+            "supportsRoleHierarchy": false,
+            "userOrHierarchyFilterId": null
+          }
         }
-      ]
-    },
-    "reportExtendedMetadata": {
-      "aggregateColumnInfo": {
-        "s!AMOUNT": {
-          "label": "Sum of Amount",
-          "dataType": "currency"
-        },
-        "RowCount": {
-          "label": "Record Count",
-          "dataType": "int"
-        }
-      },
-      "detailColumnInfo": {
-        "OPPORTUNITY_NAME": {
-          "label": "Opportunity Name",
-          "dataType": "string"
-        },
-        "AMOUNT": {
-          "label": "Amount",
-          "dataType": "currency"
-        }
-      },
-      "groupingColumnInfo": {
-        "STAGE_NAME": {
-          "label": "Stage",
-          "dataType": "picklist",
-          "groupingLevel": 0
-        },
-        "TYPE": {
-          "label": "Type",
-          "dataType": "picklist",
-          "groupingLevel": 1
-        },
-        "CLOSE_DATE": {
-          "label": "Close Date",
-          "dataType": "date",
-          "groupingLevel": 0
-        }
-      }
-    },
-    "reportMetadata": {
-      "id": "00Oxx0000000002AAA",
-      "name": "Pipeline by Stage and Type",
-      "reportFormat": "MATRIX",
-      "detailColumns": [
-        "OPPORTUNITY_NAME",
-        "AMOUNT"
-      ],
-      "aggregates": [
-        "s!AMOUNT",
-        "RowCount"
-      ],
-      "groupingsDown": [
-        {
-          "name": "STAGE_NAME",
-          "sortOrder": "Asc",
-          "dateGranularity": "None"
-        },
-        {
-          "name": "TYPE",
-          "sortOrder": "Asc",
-          "dateGranularity": "None"
-        }
-      ],
-      "groupingsAcross": [
-        {
-          "name": "CLOSE_DATE",
-          "sortOrder": "Asc",
-          "dateGranularity": "Month"
-        }
-      ],
-      "reportFilters": [],
-      "reportBooleanFilter": null,
-      "hasDetailRows": true,
-      "reportType": {
-        "type": "Opportunity",
-        "label": "Opportunities"
       }
     }
-  }
+  ]
 }

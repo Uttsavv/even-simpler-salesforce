@@ -1,31 +1,89 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Salesforce User Interface API Developer Guide (Get List Views for an Object; List Info Summary Collection); no org recording yet",
-  "body": {
-    "count": 2,
-    "currentPageToken": "0",
-    "currentPageUrl": "/services/data/v68.0/ui-api/list-info/Lead?pageSize=20&pageToken=0",
-    "nextPageToken": null,
-    "nextPageUrl": null,
-    "pageSize": 20,
-    "previousPageToken": null,
-    "previousPageUrl": null,
-    "lists": [
-      {
-        "apiName": "AllOpenLeads",
-        "id": "00Bxx0000000001AAA",
-        "label": "All Open Leads",
-        "url": "/services/data/v68.0/ui-api/list-info/Lead/AllOpenLeads"
+  "esf_fixture": 1,
+  "note": "recorded with esf.testing.record (tests/sandbox/test_ui_reports.py, API 68.0)",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/ui-api/list-info/Lead",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
       },
-      {
-        "apiName": "MyUnreadLeads",
-        "id": "00Bxx0000000002AAA",
-        "label": "My Unread Leads",
-        "url": "/services/data/v68.0/ui-api/list-info/Lead/MyUnreadLeads"
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=3106/15000",
+          "etag": "\"47c0b6a79716a2dc3439e4fa12dc7ccb--gzip\""
+        },
+        "json": {
+          "count": 8,
+          "currentPageToken": "0",
+          "currentPageUrl": "/services/data/v68.0/ui-api/list-info/Lead?pageSize=20&pageToken=0",
+          "eTag": "47c0b6a79716a2dc3439e4fa12dc7ccb",
+          "lists": [
+            {
+              "apiName": "__Recent",
+              "id": null,
+              "label": "Recently Viewed",
+              "url": "/services/data/v68.0/ui-api/list-info/Lead/__Recent"
+            },
+            {
+              "apiName": "AllOpenLeads",
+              "id": "00B000000000001EAA",
+              "label": "All Open Leads",
+              "url": "/services/data/v68.0/ui-api/list-info/Lead/AllOpenLeads"
+            },
+            {
+              "apiName": "Esf_Sandbox_Queue_Lead",
+              "id": "00B000000000002EAA",
+              "label": "ESF Sandbox Queue",
+              "url": "/services/data/v68.0/ui-api/list-info/Lead/Esf_Sandbox_Queue_Lead"
+            },
+            {
+              "apiName": "MyUnreadLeads",
+              "id": "00B000000000003EAA",
+              "label": "My Unread Leads",
+              "url": "/services/data/v68.0/ui-api/list-info/Lead/MyUnreadLeads"
+            },
+            {
+              "apiName": "RecentlyViewedLeads",
+              "id": "00B000000000004EAA",
+              "label": "Recently Viewed Leads",
+              "url": "/services/data/v68.0/ui-api/list-info/Lead/RecentlyViewedLeads"
+            },
+            {
+              "apiName": "TodaysLeads",
+              "id": "00B000000000005EAA",
+              "label": "Today&#39;s Leads",
+              "url": "/services/data/v68.0/ui-api/list-info/Lead/TodaysLeads"
+            },
+            {
+              "apiName": "ViewCustom1",
+              "id": "00B000000000006EAA",
+              "label": "View - Custom 1",
+              "url": "/services/data/v68.0/ui-api/list-info/Lead/ViewCustom1"
+            },
+            {
+              "apiName": "ViewCustom2",
+              "id": "00B000000000007EAA",
+              "label": "View - Custom 2",
+              "url": "/services/data/v68.0/ui-api/list-info/Lead/ViewCustom2"
+            }
+          ],
+          "nextPageToken": null,
+          "nextPageUrl": null,
+          "objectApiName": "Lead",
+          "pageSize": 20,
+          "previousPageToken": null,
+          "previousPageUrl": null,
+          "queryString": null,
+          "recentListsOnly": false
+        }
       }
-    ],
-    "objectApiName": "Lead",
-    "queryString": null,
-    "recentListsOnly": false
-  }
+    }
+  ]
 }
