@@ -1,13 +1,38 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Tooling API Developer Guide and the ExecuteAnonymousResult reference; no org recording yet (big-bang.md \u00a721 V17, V23, V45-V47)",
-  "body": {
-    "line": 1,
-    "column": 1,
-    "compiled": true,
-    "success": false,
-    "compileProblem": null,
-    "exceptionStackTrace": "AnonymousBlock: line 1, column 1",
-    "exceptionMessage": "System.MathException: Divide by 0"
-  }
+  "esf_fixture": 1,
+  "source": "recorded 2026-11-11 with esf.testing.record from a Developer Edition org (API v68.0)",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/tooling/executeAnonymous/",
+        "query": [
+          [
+            "anonymousBody",
+            "Integer a = 0;\nInteger i = 1 / a;"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=935/15000"
+        },
+        "json": {
+          "line": 2,
+          "column": 1,
+          "compiled": true,
+          "success": false,
+          "compileProblem": null,
+          "exceptionStackTrace": "AnonymousBlock: line 2, column 1",
+          "exceptionMessage": "System.MathException: Divide by 0"
+        }
+      }
+    }
+  ]
 }

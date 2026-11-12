@@ -1,24 +1,1670 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Tooling API Developer Guide and the ExecuteAnonymousResult reference; no org recording yet (big-bang.md \u00a721 V17, V23, V45-V47)",
-  "body": {
-    "publicDeclarations": {
-      "System": {
-        "Math": {
-          "methods": [
-            {
-              "name": "abs",
-              "returnType": "Integer",
-              "parameters": [
-                {
-                  "name": "i",
-                  "type": "Integer"
-                }
-              ]
-            }
+  "esf_fixture": 1,
+  "source": "recorded 2026-11-11 with esf.testing.record from a Developer Edition org (API v68.0); trimmed: the org returned 152 namespaces (about 29 MB); kept System.Math and System.Limits",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/tooling/completions",
+        "query": [
+          [
+            "type",
+            "apex"
           ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1301/15000"
+        },
+        "json": {
+          "publicDeclarations": {
+            "System": {
+              "Math": {
+                "constructors": [
+                  {
+                    "methodDoc": null,
+                    "name": "Math",
+                    "parameters": [],
+                    "references": []
+                  }
+                ],
+                "methods": [
+                  {
+                    "argTypes": [
+                      "Decimal"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "abs",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Decimal"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Decimal"
+                  },
+                  {
+                    "argTypes": [
+                      "Double"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "abs",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Double"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Double"
+                  },
+                  {
+                    "argTypes": [
+                      "Integer"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "abs",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Integer"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [
+                      "Long"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "abs",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Long"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Long"
+                  },
+                  {
+                    "argTypes": [
+                      "Decimal"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "acos",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Decimal"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Decimal"
+                  },
+                  {
+                    "argTypes": [
+                      "Double"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "acos",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Double"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Double"
+                  },
+                  {
+                    "argTypes": [
+                      "Decimal"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "asin",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Decimal"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Decimal"
+                  },
+                  {
+                    "argTypes": [
+                      "Double"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "asin",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Double"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Double"
+                  },
+                  {
+                    "argTypes": [
+                      "Decimal"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "atan",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Decimal"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Decimal"
+                  },
+                  {
+                    "argTypes": [
+                      "Double"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "atan",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Double"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Double"
+                  },
+                  {
+                    "argTypes": [
+                      "Decimal",
+                      "Decimal"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "atan2",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Decimal"
+                      },
+                      {
+                        "name": "y",
+                        "type": "Decimal"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Decimal"
+                  },
+                  {
+                    "argTypes": [
+                      "Double",
+                      "Double"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "atan2",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Double"
+                      },
+                      {
+                        "name": "y",
+                        "type": "Double"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Double"
+                  },
+                  {
+                    "argTypes": [
+                      "Decimal"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "cbrt",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Decimal"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Decimal"
+                  },
+                  {
+                    "argTypes": [
+                      "Double"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "cbrt",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Double"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Double"
+                  },
+                  {
+                    "argTypes": [
+                      "Decimal"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "ceil",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Decimal"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Decimal"
+                  },
+                  {
+                    "argTypes": [
+                      "Double"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "ceil",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Double"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Double"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": false,
+                    "methodDoc": null,
+                    "name": "clone",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Object"
+                  },
+                  {
+                    "argTypes": [
+                      "Decimal"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "cos",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Decimal"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Decimal"
+                  },
+                  {
+                    "argTypes": [
+                      "Double"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "cos",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Double"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Double"
+                  },
+                  {
+                    "argTypes": [
+                      "Decimal"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "cosh",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Decimal"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Decimal"
+                  },
+                  {
+                    "argTypes": [
+                      "Double"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "cosh",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Double"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Double"
+                  },
+                  {
+                    "argTypes": [
+                      "Decimal"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "exp",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Decimal"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Decimal"
+                  },
+                  {
+                    "argTypes": [
+                      "Double"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "exp",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Double"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Double"
+                  },
+                  {
+                    "argTypes": [
+                      "Decimal"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "floor",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Decimal"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Decimal"
+                  },
+                  {
+                    "argTypes": [
+                      "Double"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "floor",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Double"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Double"
+                  },
+                  {
+                    "argTypes": [
+                      "Decimal"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "log",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Decimal"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Decimal"
+                  },
+                  {
+                    "argTypes": [
+                      "Double"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "log",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Double"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Double"
+                  },
+                  {
+                    "argTypes": [
+                      "Decimal"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "log10",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Decimal"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Decimal"
+                  },
+                  {
+                    "argTypes": [
+                      "Double"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "log10",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Double"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Double"
+                  },
+                  {
+                    "argTypes": [
+                      "Decimal",
+                      "Decimal"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "max",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Decimal"
+                      },
+                      {
+                        "name": "y",
+                        "type": "Decimal"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Decimal"
+                  },
+                  {
+                    "argTypes": [
+                      "Double",
+                      "Double"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "max",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Double"
+                      },
+                      {
+                        "name": "y",
+                        "type": "Double"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Double"
+                  },
+                  {
+                    "argTypes": [
+                      "Integer",
+                      "Integer"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "max",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Integer"
+                      },
+                      {
+                        "name": "y",
+                        "type": "Integer"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [
+                      "Long",
+                      "Long"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "max",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Long"
+                      },
+                      {
+                        "name": "y",
+                        "type": "Long"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Long"
+                  },
+                  {
+                    "argTypes": [
+                      "Decimal",
+                      "Decimal"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "min",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Decimal"
+                      },
+                      {
+                        "name": "y",
+                        "type": "Decimal"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Decimal"
+                  },
+                  {
+                    "argTypes": [
+                      "Double",
+                      "Double"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "min",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Double"
+                      },
+                      {
+                        "name": "y",
+                        "type": "Double"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Double"
+                  },
+                  {
+                    "argTypes": [
+                      "Integer",
+                      "Integer"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "min",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Integer"
+                      },
+                      {
+                        "name": "y",
+                        "type": "Integer"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [
+                      "Long",
+                      "Long"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "min",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Long"
+                      },
+                      {
+                        "name": "y",
+                        "type": "Long"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Long"
+                  },
+                  {
+                    "argTypes": [
+                      "Integer",
+                      "Integer"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "mod",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Integer"
+                      },
+                      {
+                        "name": "y",
+                        "type": "Integer"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [
+                      "Long",
+                      "Long"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "mod",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Long"
+                      },
+                      {
+                        "name": "y",
+                        "type": "Long"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Long"
+                  },
+                  {
+                    "argTypes": [
+                      "Double",
+                      "Double"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "pow",
+                    "parameters": [
+                      {
+                        "name": "base",
+                        "type": "Double"
+                      },
+                      {
+                        "name": "exp",
+                        "type": "Double"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Double"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "random",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Double"
+                  },
+                  {
+                    "argTypes": [
+                      "Decimal"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "rint",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Decimal"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Decimal"
+                  },
+                  {
+                    "argTypes": [
+                      "Double"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "rint",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Double"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Double"
+                  },
+                  {
+                    "argTypes": [
+                      "Decimal"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "round",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Decimal"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [
+                      "Double"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "round",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Double"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [
+                      "Decimal"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "roundToLong",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Decimal"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Long"
+                  },
+                  {
+                    "argTypes": [
+                      "Double"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "roundToLong",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Double"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Long"
+                  },
+                  {
+                    "argTypes": [
+                      "Decimal"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "signum",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Decimal"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Decimal"
+                  },
+                  {
+                    "argTypes": [
+                      "Double"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "signum",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Double"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Double"
+                  },
+                  {
+                    "argTypes": [
+                      "Decimal"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "sin",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Decimal"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Decimal"
+                  },
+                  {
+                    "argTypes": [
+                      "Double"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "sin",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Double"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Double"
+                  },
+                  {
+                    "argTypes": [
+                      "Decimal"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "sinh",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Decimal"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Decimal"
+                  },
+                  {
+                    "argTypes": [
+                      "Double"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "sinh",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Double"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Double"
+                  },
+                  {
+                    "argTypes": [
+                      "Decimal"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "sqrt",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Decimal"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Decimal"
+                  },
+                  {
+                    "argTypes": [
+                      "Double"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "sqrt",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Double"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Double"
+                  },
+                  {
+                    "argTypes": [
+                      "Decimal"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "tan",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Decimal"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Decimal"
+                  },
+                  {
+                    "argTypes": [
+                      "Double"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "tan",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Double"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Double"
+                  },
+                  {
+                    "argTypes": [
+                      "Decimal"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "tanh",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Decimal"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Decimal"
+                  },
+                  {
+                    "argTypes": [
+                      "Double"
+                    ],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "tanh",
+                    "parameters": [
+                      {
+                        "name": "x",
+                        "type": "Double"
+                      }
+                    ],
+                    "references": [],
+                    "returnType": "Double"
+                  }
+                ],
+                "properties": [
+                  {
+                    "name": "E",
+                    "references": []
+                  },
+                  {
+                    "name": "PI",
+                    "references": []
+                  }
+                ]
+              },
+              "Limits": {
+                "constructors": [],
+                "methods": [
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getAggregateQueries",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getApexCursorRows",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getApexCursors",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getApexPaginationCursorRows",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getApexPaginationCursors",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getCallouts",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getChildRelationshipsDescribes",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getCpuTime",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getDataCloudCursorRows",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getDataCloudCursors",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getDataCloudFlexCredits",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getDatabaseTime",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getDmlRows",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getDmlStatements",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getEmailInvocations",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getFetchCallsOnApexCursor",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getFieldSetsDescribes",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getFieldsDescribes",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getFindSimilarCalls",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getFutureCalls",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getHeapSize",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitAggregateQueries",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitApexCursorRows",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitApexCursors",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitApexPaginationCursorRows",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitApexPaginationCursors",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitCallouts",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitChildRelationshipsDescribes",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitCpuTime",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitDataCloudCursorRows",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitDataCloudCursors",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitDataCloudFlexCredits",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitDatabaseTime",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitDmlRows",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitDmlStatements",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitEmailInvocations",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitFetchCallsOnApexCursor",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitFieldSetsDescribes",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitFieldsDescribes",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitFindSimilarCalls",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitFutureCalls",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitHeapSize",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitMobilePushApexCalls",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitPicklistDescribes",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitPublishImmediateDML",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitQueries",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitQueryLocatorRows",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitQueryRows",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitQueueableJobs",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitRecordTypesDescribes",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitRunAs",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitSavepointRollbacks",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitSavepoints",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitScriptStatements",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getLimitSoslQueries",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getMobilePushApexCalls",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getPicklistDescribes",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getPublishImmediateDML",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getQueries",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getQueryLocatorRows",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getQueryRows",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getQueueableJobs",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getRecordTypesDescribes",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getRunAs",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getSavepointRollbacks",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getSavepoints",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getScriptStatements",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  },
+                  {
+                    "argTypes": [],
+                    "isStatic": true,
+                    "methodDoc": null,
+                    "name": "getSoslQueries",
+                    "parameters": [],
+                    "references": [],
+                    "returnType": "Integer"
+                  }
+                ],
+                "properties": []
+              }
+            }
+          }
         }
       }
     }
-  }
+  ]
 }

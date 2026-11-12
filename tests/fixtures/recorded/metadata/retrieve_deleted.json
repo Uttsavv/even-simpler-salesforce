@@ -1,0 +1,26 @@
+{
+  "esf_fixture": 1,
+  "source": "recorded 2026-11-11 with esf.testing.record from a Developer Edition org (API v68.0); checkRetrieveStatus(includeZip=true) after the zip was returned",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/Soap/m/68.0",
+        "query": [],
+        "headers": {
+          "accept": "text/xml",
+          "content-type": "text/xml; charset=UTF-8",
+          "sforce-call-options": "client=esf-sandbox"
+        },
+        "text": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><env:Envelope xmlns:env=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:m=\"http://soap.sforce.com/2006/04/metadata\"><env:Header><m:SessionHeader><m:sessionId><redacted></m:sessionId></m:SessionHeader></env:Header><env:Body><m:checkRetrieveStatus><m:asyncProcessId>09S000000000001EAA</m:asyncProcessId><m:includeZip>true</m:includeZip></m:checkRetrieveStatus></env:Body></env:Envelope>"
+      },
+      "response": {
+        "status": 500,
+        "headers": {
+          "content-type": "text/xml; charset=utf-8"
+        },
+        "text": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:sf=\"http://soap.sforce.com/2006/04/metadata\"><soapenv:Body><soapenv:Fault><faultcode>sf:INVALID_LOCATOR</faultcode><faultstring>INVALID_LOCATOR: Retrieve result has been deleted.</faultstring></soapenv:Fault></soapenv:Body></soapenv:Envelope>"
+      }
+    }
+  ]
+}

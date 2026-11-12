@@ -1,0 +1,41 @@
+{
+  "esf_fixture": 1,
+  "source": "recorded 2026-11-11 with esf.testing.record from a Developer Edition org (API v68.0); a second USER_DEBUG TraceFlag for the same user while the first is active",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/tooling/sobjects/TraceFlag/",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "TracedEntityId": "005000000000002AAA",
+          "DebugLevelId": "7dl000000000003AAA",
+          "LogType": "USER_DEBUG",
+          "StartDate": "2026-11-11T22:48:48Z",
+          "ExpirationDate": "2026-11-11T22:58:48Z"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1113/15000"
+        },
+        "json": [
+          {
+            "message": "This entity is already being traced by a trace flag with a start and expiration date that overlap this trace flag's start and expiration date.: Traced Entity ID",
+            "errorCode": "FIELD_INTEGRITY_EXCEPTION",
+            "fields": [
+              "TracedEntityId"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

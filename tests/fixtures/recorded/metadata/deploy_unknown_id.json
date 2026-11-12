@@ -1,0 +1,35 @@
+{
+  "esf_fixture": 1,
+  "source": "recorded 2026-11-11 with esf.testing.record from a Developer Edition org (API v68.0); GET metadata/deployRequest/{id} with a valid id that is no deployment",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/metadata/deployRequest/0Af000000000001CAA",
+        "query": [
+          [
+            "includeDetails",
+            "true"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1507/15000"
+        },
+        "json": [
+          {
+            "message": "invalid cross reference id",
+            "errorCode": "INVALID_CROSS_REFERENCE_KEY"
+          }
+        ]
+      }
+    }
+  ]
+}

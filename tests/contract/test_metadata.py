@@ -1,9 +1,14 @@
 """Metadata API (``sf.metadata``, §9.15) for both clients.
 
-Every response here is **synthetic** (``tests/fixtures/recorded/metadata``), hand-written from
-the Metadata API Developer Guide because no sandbox recording exists yet (V70-V74 in
-big-bang.md §21). developer.salesforce.com returns 403 to non-browser clients, so the pages
-were read from search excerpts on 2026-11-11:
+Responses come from ``tests/fixtures/recorded/metadata``. Most are **recorded** from a Developer
+Edition org (API v68.0) with ``esf.testing.record`` on 2026-11-11 (``tests/sandbox/
+test_tooling_metadata.py``; big-bang.md §21 V70-V74, V85, V86): each deployment there deployed
+or validated one small Apex class. Still **synthetic**, because the org couldn't produce them:
+``cancel_finalizing.json`` and ``deploy_finalizing.json`` (a deployment is in
+``FinalizingDeploy`` for well under a second), ``deploy_unknown_status.json`` (a guard) and
+``retrieve_failed.json`` (an unknown type or member still ends ``Succeeded``, with a message),
+plus the inline bodies marked so below. developer.salesforce.com returns 403 to non-browser
+clients, so the pages were read from search excerpts on 2026-11-11:
 
 - Deploy with REST (multipart ``json`` + ``file`` parts, ``deployOptions``):
   https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_rest_deploy.htm
@@ -45,29 +50,38 @@ import respx
 import even_simpler_salesforce as esf
 
 from ..conftest import API, DATA, INSTANCE, TOKEN_URL, Harness, Recorder, cc_auth, token_body
-from ..fixtures import load_fixture
+from ..fixtures import is_recorded, load_fixture, load_response
 
 SOAP = f"{INSTANCE}/services/Soap/m/{API}"
 DEPLOY = f"{DATA}/metadata/deployRequest"
-DID = "0Afxx0000000001AAA"
-RID = "09Sxx0000000001AAA"
+DID = "0Af000000000001CAA"  # the deployment in every recorded deploy fixture
+QID = "0Af000000000006CAA"  # the deployment a recorded quick deploy started
+RID = "09S000000000001EAA"  # the recorded retrieve
 M = "{http://soap.sforce.com/2006/04/metadata}"
 ENV = "{http://schemas.xmlsoap.org/soap/envelope/}"
-STATUS = re.compile(re.escape(DEPLOY) + r"/0Afxx0000000001AAA(\?.*)?$")
+STATUS = re.compile(re.escape(DEPLOY) + r"/0Af000000000001CAA(\?.*)?$")
 
 posix_only = pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privileges on Windows")
 
 
-def xml(name: str, status: int = 200) -> httpx.Response:
-    """A synthetic SOAP response from ``tests/fixtures/recorded/metadata``."""
+def _status(name: str, status: int | None) -> int:
+    if status is None:
+        return load_response(f"metadata/{name}")["status"] if is_recorded(f"metadata/{name}") else 200
+    return status
+
+
+def xml(name: str, status: int | None = None) -> httpx.Response:
+    """A SOAP response from ``tests/fixtures/recorded/metadata`` (recorded status by default)."""
     return httpx.Response(
-        status, content=load_fixture(f"metadata/{name}").encode(), headers={"Content-Type": "text/xml"}
+        _status(name, status),
+        content=load_fixture(f"metadata/{name}").encode(),
+        headers={"Content-Type": "text/xml"},
     )
 
 
-def js(name: str, status: int = 200) -> httpx.Response:
-    """A synthetic JSON response from ``tests/fixtures/recorded/metadata``."""
-    return httpx.Response(status, json=load_fixture(f"metadata/{name}"))
+def js(name: str, status: int | None = None) -> httpx.Response:
+    """A JSON response from ``tests/fixtures/recorded/metadata`` (recorded status by default)."""
+    return httpx.Response(_status(name, status), json=load_fixture(f"metadata/{name}"))
 
 
 def body_of(request: httpx.Request) -> ET.Element:
@@ -124,7 +138,10 @@ def write_project(root: Path) -> Path:
 def test_deploy_bytes_sends_multipart_and_returns_pending(
     h: Harness, mock: respx.MockRouter, rec: Recorder
 ) -> None:
-    """Synthetic fixture ``metadata/deploy_pending.json``: a ``json`` part, then the zip as ``file``."""
+    """Recorded ``metadata/deploy_pending.json`` (201): a ``json`` part, then the zip as ``file``.
+
+    The org accepted this multipart layout with a quoted ``boundary="..."`` (V70).
+    """
     route = mock.post(DEPLOY).mock(return_value=js("deploy_pending.json", 201))
     sf = h.client(recorder=rec)
     opts = esf.DeployOptions(check_only=True, test_level="RunSpecifiedTests", run_tests=["InvoiceTest"])
@@ -284,69 +301,130 @@ def test_deploy_resends_whole_body_after_token_refresh(h: Harness, mock: respx.M
 
 
 def test_deploy_error_is_typed(h: Harness, mock: respx.MockRouter) -> None:
-    """Synthetic fixture ``metadata/deploy_invalid_zip.json``."""
-    mock.post(DEPLOY).mock(return_value=js("deploy_invalid_zip.json", 400))
+    """Synthetic inline body: a refused deploy request is a typed :class:`RequestError`."""
+    mock.post(DEPLOY).respond(400, json=[{"errorCode": "INVALID_INPUT", "message": "bad options"}])
     sf = h.client()
     with pytest.raises(esf.RequestError) as ei:
         h.run(sf.metadata.deploy(ZIP))
     assert ei.value.error_code == "INVALID_INPUT"
 
 
+def test_deploy_of_a_zip_without_package_xml_fails_in_its_status(h: Harness, mock: respx.MockRouter) -> None:
+    """Recorded ``metadata/deploy_invalid_zip.json``: Salesforce accepts an empty zip (201),
+    then the deployment fails with a component failure for ``package.xml``."""
+    mock.get(STATUS).mock(return_value=js("deploy_invalid_zip.json"))
+    sf = h.client()
+    res = h.run(sf.metadata.deploy_status(DID))
+    assert (res.status, res.done, res.failed) == ("Failed", True, True)
+    assert res.component_failures == (
+        esf.DeployMessage(
+            full_name="package.xml",
+            file_name="package.xml",
+            problem="No package.xml found",
+            problem_type="Error",
+        ),
+    )
+    with pytest.raises(esf.DeployFailed, match="No package.xml found"):
+        res.raise_for_errors()
+
+
+def test_deploy_status_of_an_unknown_id(h: Harness, mock: respx.MockRouter) -> None:
+    """Recorded ``metadata/deploy_unknown_id.json`` (V71): a valid id that is no deployment."""
+    route = mock.get(STATUS).mock(return_value=js("deploy_unknown_id.json"))
+    sf = h.client()
+    with pytest.raises(esf.InvalidReference) as ei:
+        h.run(sf.metadata.deploy_status(DID))
+    assert (ei.value.status, ei.value.error_code) == (400, "INVALID_CROSS_REFERENCE_KEY")
+    assert route.call_count == 1
+
+
 # --- deploy_status --------------------------------------------------------------------------
 
 
 def test_deploy_status_parses_success(h: Harness, mock: respx.MockRouter) -> None:
-    """Synthetic fixture ``metadata/deploy_succeeded.json``."""
+    """Recorded ``metadata/deploy_succeeded.json``: a validation that ran one passing test."""
     route = mock.get(STATUS).mock(return_value=js("deploy_succeeded.json"))
     sf = h.client()
     res = h.run(sf.metadata.deploy_status(DID))
     assert route.calls[0].request.url.params["includeDetails"] == "true"
     assert (res.status, res.done, res.success, res.failed) == ("Succeeded", True, True, False)
-    assert (res.components_total, res.components_deployed) == (2, 2)
-    assert res.component_successes[0] == esf.DeployMessage(
-        component_type="ApexClass", full_name="Invoice", file_name="classes/Invoice.cls"
+    assert res.check_only
+    assert (res.components_total, res.components_deployed) == (1, 1)
+    assert (res.tests_total, res.tests_completed, res.test_errors) == (1, 1, 0)
+    assert res.component_successes == (
+        esf.DeployMessage(
+            component_type="ApexClass",
+            full_name="EsfSandboxActionTest",
+            file_name="classes/EsfSandboxActionTest.cls",
+        ),
+        # package.xml is listed too, with an empty componentType.
+        esf.DeployMessage(full_name="package.xml", file_name="package.xml"),
     )
-    assert res.raw["createdByName"] == "Ada Admin"
+    assert res.raw["createdByName"] == "<redacted>"
+    assert res.raw["details"]["componentFailures"] == []  # a list even when empty (V71)
     res.raise_for_errors()  # no error
 
 
 def test_deploy_status_returns_failures_as_a_typed_result(h: Harness, mock: respx.MockRouter) -> None:
-    """Synthetic fixture ``metadata/deploy_failed.json``: ``componentFailures`` as one object."""
+    """Recorded ``metadata/deploy_failed.json``: a class with a syntax error. Salesforce sent
+    ``componentFailures`` as a list of one (V71); the parser takes one object too (unit tests)."""
     mock.get(STATUS).mock(return_value=js("deploy_failed.json"))
     sf = h.client()
     res = h.run(sf.metadata.deploy_status(DID))
     assert res.failed
+    assert (res.components_total, res.components_deployed, res.component_errors) == (1, 0, 1)
     assert res.component_failures == (
         esf.DeployMessage(
             component_type="ApexClass",
-            full_name="Invoice",
-            file_name="classes/Invoice.cls",
-            problem="Variable does not exist: total",
+            full_name="EsfSandboxBroken",
+            file_name="classes/EsfSandboxBroken.cls",
+            problem="Unexpected token ';'.",
             problem_type="Error",
-            line=12,
-            column=9,
+            line=1,
+            column=45,
         ),
     )
-    assert res.test_failures == (
-        esf.DeployTestFailure(
-            class_name="InvoiceTest",
-            method_name="testTotal",
-            message="System.AssertException: Assertion Failed",
-            stack_trace="Class.InvoiceTest.testTotal: line 5, column 1",
-        ),
-    )
+    assert res.test_failures == ()
     with pytest.raises(esf.DeployFailed) as ei:
         res.raise_for_errors()
     err = ei.value
     assert err.job_id == DID
     assert err.state == "Failed"
     assert err.result is res
-    assert [e.message for e in err.errors] == [
-        "ApexClass Invoice: Variable does not exist: total",
-        "InvoiceTest.testTotal: System.AssertException: Assertion Failed",
-    ]
-    assert err.errors[0].extended == {"file_name": "classes/Invoice.cls", "line": 12, "column": 9}
-    assert "Variable does not exist" in str(err)
+    assert [e.message for e in err.errors] == ["ApexClass EsfSandboxBroken: Unexpected token ';'."]
+    assert err.errors[0].extended == {"file_name": "classes/EsfSandboxBroken.cls", "line": 1, "column": 45}
+    assert "Unexpected token" in str(err)
+
+
+@pytest.mark.parametrize(
+    ("fixture", "status"),
+    [("deploy_test_failure.json", "Succeeded"), ("deploy_test_failure_rollback.json", "Failed")],
+)
+def test_deploy_status_with_a_failed_test_is_failed(
+    h: Harness, mock: respx.MockRouter, fixture: str, status: str
+) -> None:
+    """Recorded: a validation whose only test fails. With ``rollbackOnError`` off (the org's
+    default) Salesforce reports ``Succeeded`` and ``success=true``; with it on, ``Failed``.
+    The client counts both as failed."""
+    mock.get(STATUS).mock(return_value=js(fixture))
+    sf = h.client()
+    res = h.run(sf.metadata.deploy_status(DID))
+    assert (res.status, res.done) == (status, True)
+    assert (res.tests_total, res.test_errors) == (1, 1)
+    assert res.failed
+    assert res.test_failures == (
+        esf.DeployTestFailure(
+            class_name="EsfSandboxFailingTest",
+            method_name="fails",
+            message="System.AssertException: Assertion Failed: esf-sandbox failure: Expected: 1, Actual: 2",
+            stack_trace="Class.EsfSandboxFailingTest.fails: line 1, column 1",
+        ),
+    )
+    with pytest.raises(esf.DeployFailed) as ei:
+        res.raise_for_errors()
+    assert ei.value.state == status
+    assert [e.error_code for e in ei.value.errors] == ["TEST_FAILURE"]
+    assert ei.value.errors[0].message.startswith("EsfSandboxFailingTest.fails: System.AssertException")
 
 
 def test_deploy_status_wait_polls_until_done(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:
@@ -393,11 +471,13 @@ def test_deploy_status_default_timeout_is_an_hour(h: Harness, mock: respx.MockRo
 
 
 def test_quick_deploy_posts_the_validated_id(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:
-    """Synthetic fixture ``metadata/quick_deploy_pending.json``."""
-    route = mock.post(f"{DEPLOY}/{DID}").mock(return_value=js("quick_deploy_pending.json", 201))
+    """Recorded ``metadata/quick_deploy_pending.json`` (V86): 201 with the new deployment's
+    ``id``, ``validatedDeployRequestId`` and ``deployResult: null``."""
+    route = mock.post(f"{DEPLOY}/{DID}").mock(return_value=js("quick_deploy_pending.json"))
     sf = h.client(recorder=rec)
     res = h.run(sf.metadata.quick_deploy(DID))
-    assert (res.id, res.status) == ("0Afxx0000000002AAA", "Pending")
+    assert (res.id, res.status, res.done) == (QID, "Pending", False)
+    assert load_fixture("metadata/quick_deploy_pending.json")["deployResult"] is None
     request = route.calls[0].request
     assert request.method == "POST"
     assert json.loads(request.content) == {"validatedDeployRequestId": DID}
@@ -405,6 +485,27 @@ def test_quick_deploy_posts_the_validated_id(h: Harness, mock: respx.MockRouter,
     (event,) = rec.requests
     assert event["operation"] == "metadata.quick_deploy"
     assert event["path_template"] == "/metadata/deployRequest/:id"
+
+
+@pytest.mark.parametrize(
+    ("fixture", "message"),
+    [
+        (
+            "quick_deploy_refused.json",
+            "There have been deploys in the org since the source validate happened",
+        ),
+        ("quick_deploy_no_tests.json", "Source validate did not run tests in the org"),
+    ],
+)
+def test_quick_deploy_refusals(h: Harness, mock: respx.MockRouter, fixture: str, message: str) -> None:
+    """Recorded (V86): a validation followed by another deployment, and one made with
+    ``NoTestRun``. Both are 400 ``INVALID_ID_FIELD``."""
+    route = mock.post(f"{DEPLOY}/{DID}").mock(return_value=js(fixture))
+    sf = h.client()
+    with pytest.raises(esf.RequestError) as ei:
+        h.run(sf.metadata.quick_deploy(DID))
+    assert (ei.value.status, ei.value.error_code, ei.value.message) == (400, "INVALID_ID_FIELD", message)
+    assert route.call_count == 1
 
 
 def test_quick_deploy_is_never_resent(h: Harness, mock: respx.MockRouter) -> None:
@@ -424,8 +525,8 @@ def test_quick_deploy_validates_the_id(h: Harness, mock: respx.MockRouter) -> No
 
 
 def test_cancel_deploy_patches_canceling(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:
-    """Synthetic fixture ``metadata/deploy_canceling.json``."""
-    route = mock.patch(f"{DEPLOY}/{DID}").mock(return_value=js("deploy_canceling.json", 202))
+    """Recorded ``metadata/deploy_canceling.json`` (V85): 202 with status ``Canceling``."""
+    route = mock.patch(f"{DEPLOY}/{DID}").mock(return_value=js("deploy_canceling.json"))
     sf = h.client(recorder=rec)
     res = h.run(sf.metadata.cancel_deploy(DID))
     assert (res.id, res.status, res.done) == (DID, "Canceling", False)
@@ -433,6 +534,24 @@ def test_cancel_deploy_patches_canceling(h: Harness, mock: respx.MockRouter, rec
     (event,) = rec.requests
     assert event["operation"] == "metadata.cancel_deploy"
     assert event["method"] == "PATCH"
+
+
+def test_cancel_then_wait_ends_canceled(h: Harness, mock: respx.MockRouter) -> None:
+    """Recorded (V85): after the cancel, the status polls say ``Canceling``, then ``Canceled``."""
+    mock.patch(f"{DEPLOY}/{DID}").mock(return_value=js("deploy_canceling.json"))
+    mock.get(STATUS).mock(side_effect=[js("deploy_canceling.json", 200), js("deploy_canceled.json")])
+    sf = h.client()
+    assert h.run(sf.metadata.cancel_deploy(DID)).status == "Canceling"
+    res = h.run(sf.metadata.deploy_status(DID, wait=True))
+    assert (res.status, res.done, res.success, res.failed) == ("Canceled", True, False, True)
+
+
+def test_cancel_deploy_of_a_finished_deployment_returns_it(h: Harness, mock: respx.MockRouter) -> None:
+    """Recorded ``metadata/cancel_finished.json``: 202 and the final status, no error."""
+    mock.patch(f"{DEPLOY}/{DID}").mock(return_value=js("cancel_finished.json"))
+    sf = h.client()
+    res = h.run(sf.metadata.cancel_deploy(DID))
+    assert (res.status, res.done, res.success) == ("Succeeded", True, True)
 
 
 def test_cancel_deploy_while_finalizing_raises(h: Harness, mock: respx.MockRouter) -> None:
@@ -522,10 +641,15 @@ def retrieve_routes(mock: respx.MockRouter, final: str = "retrieve_succeeded.jso
 
 
 def test_retrieve_polls_then_fetches_the_zip_once(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:
-    """Synthetic fixtures ``metadata/retrieve_*.json``."""
+    """Recorded ``metadata/retrieve_*.json`` (V72-V74); the request asks for one class that
+    exists and one that doesn't."""
     route = retrieve_routes(mock)
     sf = h.client(recorder=rec)
-    res = h.run(sf.metadata.retrieve({"ApexClass": ["Invoice", "Missing"], "CustomObject": ["*"]}))
+    res = h.run(
+        sf.metadata.retrieve(
+            {"ApexClass": ["EsfSandboxActionTest", "EsfSandboxNoSuchClass"], "CustomObject": ["*"]}
+        )
+    )
     calls = [body_of(c.request) for c in route.calls]
     assert [c.tag.removeprefix(M) for c in calls] == [
         "retrieve",
@@ -543,20 +667,31 @@ def test_retrieve_polls_then_fetches_the_zip_once(h: Harness, mock: respx.MockRo
         (t.findtext(f"{M}name"), [m.text for m in t.findall(f"{M}members")])
         for t in req.iterfind(f"{M}unpackaged/{M}types")
     ]
-    assert types == [("ApexClass", ["Invoice", "Missing"]), ("CustomObject", ["*"])]
+    assert types == [
+        ("ApexClass", ["EsfSandboxActionTest", "EsfSandboxNoSuchClass"]),
+        ("CustomObject", ["*"]),
+    ]
     assert "authorization" not in route.calls[0].request.headers
     assert session_of(route.calls[0].request) == "AT-initial-0001"
     assert sf.sleeps == [2.0]
     with zipfile.ZipFile(io.BytesIO(res.zip_file)) as zf:
-        assert "classes/Invoice.cls" in zf.namelist()
+        # V74: relative names with "/", package.xml at the root, no folder entries, no Unix
+        # mode bits (so no symlinks).
+        infos = zf.infolist()
+        assert [i.filename for i in infos] == [
+            "classes/EsfSandboxActionTest.cls",
+            "classes/EsfSandboxActionTest.cls-meta.xml",
+            "package.xml",
+        ]
+        assert all(i.external_attr >> 16 == 0 and not i.is_dir() for i in infos)
     assert res.id == RID
-    assert [f.full_name for f in res.file_properties] == ["Invoice", "package.xml"]
+    assert [f.full_name for f in res.file_properties] == ["EsfSandboxActionTest", "package.xml"]
     assert res.file_properties[0].type == "ApexClass"
-    assert res.file_properties[0].last_modified_by_name == "Ada Admin"
-    assert res.file_properties[1].id is None
+    assert res.file_properties[0].last_modified_by_name == "User 1"
+    assert res.file_properties[1].id is None  # <id></id>
     assert res.messages == (
         esf.RetrieveMessage(
-            "unpackaged/package.xml", "Entity of type 'ApexClass' named 'Missing' cannot be found"
+            "package.xml", "Entity of type 'ApexClass' named 'EsfSandboxNoSuchClass' cannot be found"
         ),
     )
     ops = [e["operation"] for e in rec.requests]
@@ -578,8 +713,9 @@ def test_retrieve_accepts_package_xml_text(h: Harness, mock: respx.MockRouter) -
 def test_retrieve_extracts_files(h: Harness, mock: respx.MockRouter, tmp_path: Path) -> None:
     retrieve_routes(mock)
     sf = h.client()
-    h.run(sf.metadata.retrieve({"ApexClass": ["Invoice"]}, extract_to=tmp_path / "out"))
-    assert (tmp_path / "out" / "classes" / "Invoice.cls").read_bytes() == b"public class Invoice {}\n"
+    h.run(sf.metadata.retrieve({"ApexClass": ["EsfSandboxActionTest"]}, extract_to=tmp_path / "out"))
+    source = (tmp_path / "out" / "classes" / "EsfSandboxActionTest.cls").read_text()
+    assert "private class EsfSandboxActionTest" in source
     assert (tmp_path / "out" / "package.xml").exists()
 
 
@@ -661,6 +797,21 @@ def test_retrieve_bad_zip_is_unexpected(h: Harness, mock: respx.MockRouter, tmp_
         h.run(sf.metadata.retrieve({"ApexClass": ["*"]}, extract_to=tmp_path / "out"))
 
 
+def test_zip_fetched_twice_is_gone(h: Harness, mock: respx.MockRouter) -> None:
+    """Recorded ``metadata/retrieve_deleted.json`` (V73): once the zip was returned, the next
+    ``checkRetrieveStatus`` (with or without the zip) is an ``INVALID_LOCATOR`` fault. The client
+    fetches the zip once and never resends that call."""
+    route = mock.post(SOAP).mock(
+        side_effect=[xml("retrieve_started.json"), xml("retrieve_done.json"), xml("retrieve_deleted.json")]
+    )
+    sf = h.client()
+    with pytest.raises(esf.SoapFault) as ei:
+        h.run(sf.metadata.retrieve({"ApexClass": ["*"]}))
+    assert (ei.value.status, ei.value.error_code) == (500, "INVALID_LOCATOR")
+    assert "has been deleted" in ei.value.message
+    assert route.call_count == 3
+
+
 def test_retrieve_failed_raises(h: Harness, mock: respx.MockRouter) -> None:
     """Synthetic fixture ``metadata/retrieve_failed.json``: no zip fetch after ``Failed``."""
     route = mock.post(SOAP).mock(side_effect=[xml("retrieve_started.json"), xml("retrieve_failed.json")])
@@ -688,7 +839,7 @@ def test_retrieve_times_out(h: Harness, mock: respx.MockRouter) -> None:
     sf = h.client()
     with pytest.raises(esf.MetadataTimeout) as ei:
         h.run(sf.metadata.retrieve({"ApexClass": ["*"]}, timeout=3))
-    assert (ei.value.job_id, ei.value.state) == (RID, "InProgress")
+    assert (ei.value.job_id, ei.value.state) == (RID, "Pending")  # recorded: Pending, then Succeeded
 
 
 def test_retrieve_uses_poll(h: Harness, mock: respx.MockRouter) -> None:
@@ -752,7 +903,7 @@ def test_retrieve_rejects_package_xml_with_entities(h: Harness, mock: respx.Mock
 
 
 def test_list_metadata(h: Harness, mock: respx.MockRouter, rec: Recorder) -> None:
-    """Synthetic fixture ``metadata/list_metadata.json``."""
+    """Recorded ``metadata/list_metadata.json``: the org's classes, some from an installed package."""
     route = mock.post(SOAP).mock(return_value=xml("list_metadata.json"))
     sf = h.client(recorder=rec)
     items = h.run(sf.metadata.list_metadata("ApexClass"))
@@ -761,29 +912,37 @@ def test_list_metadata(h: Harness, mock: respx.MockRouter, rec: Recorder) -> Non
     assert q.findtext(f"{M}queries/{M}type") == "ApexClass"
     assert q.find(f"{M}queries/{M}folder") is None
     assert q.findtext(f"{M}asOfVersion") == API
-    assert [(i.full_name, i.namespace_prefix, i.manageable_state) for i in items] == [
-        ("Invoice", None, "unmanaged"),
-        ("acme__Billing", "acme", "installed"),
-    ]
-    assert items[0] == esf.FileProperties(
+    assert len(items) == 7
+    assert (items[0].full_name, items[0].namespace_prefix, items[0].manageable_state) == (
+        "devedapp__DeveloperEditionUtils",
+        "devedapp",
+        "installed",
+    )
+    assert items[2] == esf.FileProperties(
         type="ApexClass",
-        full_name="Invoice",
-        file_name="classes/Invoice.cls",
-        id="01pxx0000000001AAA",
+        full_name="EsfSandboxActionTest",
+        file_name="classes/EsfSandboxActionTest.cls",
+        id="01p000000000005AAA",
         manageable_state="unmanaged",
-        created_by_name="Ada Admin",
-        created_date="2026-11-01T09:00:00.000Z",
-        last_modified_by_name="Ada Admin",
-        last_modified_date="2026-11-02T09:00:00.000Z",
+        created_by_name="User 2",
+        created_date="2026-11-11T22:41:27.000Z",
+        last_modified_by_name="User 2",
+        last_modified_date="2026-11-11T22:53:15.000Z",
     )
     assert rec.requests[0]["operation"] == "metadata.list"
 
 
 def test_list_metadata_with_folder_and_empty_result(h: Harness, mock: respx.MockRouter) -> None:
-    route = mock.post(SOAP).mock(return_value=xml("list_metadata_empty.json"))
+    """Recorded: ``unfiled$public`` (eight reports) and a folder that doesn't exist (empty)."""
+    route = mock.post(SOAP).mock(
+        side_effect=[xml("list_metadata_folder.json"), xml("list_metadata_empty.json")]
+    )
     sf = h.client()
-    assert h.run(sf.metadata.list_metadata("Report", folder="Sales_Reports")) == []
-    assert body_of(route.calls[0].request).findtext(f"{M}queries/{M}folder") == "Sales_Reports"
+    reports = h.run(sf.metadata.list_metadata("Report", folder="unfiled$public"))
+    assert "unfiled$public/Esf_Sandbox_Leads_Tabular" in [r.full_name for r in reports]
+    assert {r.type for r in reports} == {"Report"}
+    assert h.run(sf.metadata.list_metadata("Report", folder="Esf_No_Such_Folder")) == []
+    assert body_of(route.calls[1].request).findtext(f"{M}queries/{M}folder") == "Esf_No_Such_Folder"
 
 
 def test_list_metadata_is_a_read_and_is_retried(h: Harness, mock: respx.MockRouter) -> None:
@@ -794,18 +953,23 @@ def test_list_metadata_is_a_read_and_is_retried(h: Harness, mock: respx.MockRout
         ]
     )
     sf = h.client()
-    assert len(h.run(sf.metadata.list_metadata("ApexClass"))) == 2
+    assert len(h.run(sf.metadata.list_metadata("ApexClass"))) == 7
     assert route.call_count == 2
 
 
 def test_list_metadata_fault_is_typed(h: Harness, mock: respx.MockRouter) -> None:
-    """Synthetic fixture ``metadata/fault_invalid_type.json`` (metadata namespace fault)."""
-    mock.post(SOAP).mock(return_value=xml("fault_invalid_type.json", 500))
+    """Recorded ``metadata/fault_invalid_type.json`` (HTTP 500, metadata namespace fault).
+
+    A fault is Salesforce's answer, not a server failure: it is not resent.
+    """
+    route = mock.post(SOAP).mock(return_value=xml("fault_invalid_type.json"))
     sf = h.client()
     with pytest.raises(esf.InvalidType) as ei:
-        h.run(sf.metadata.list_metadata("ApexKlass"))
+        h.run(sf.metadata.list_metadata("NoSuchType"))
     assert ei.value.error_code == "INVALID_TYPE"
-    assert ei.value.message == "Unknown type: ApexKlass"
+    assert ei.value.status == 500
+    assert "Unknown type:NoSuchType" in ei.value.message
+    assert route.call_count == 1
 
 
 def test_list_metadata_validates_before_sending(h: Harness, mock: respx.MockRouter) -> None:
@@ -819,9 +983,10 @@ def test_list_metadata_validates_before_sending(h: Harness, mock: respx.MockRout
 
 
 def test_invalid_session_fault_refreshes_and_resends(h: Harness, mock: respx.MockRouter) -> None:
-    """Synthetic fixture ``metadata/fault_invalid_session.json``."""
+    """Recorded ``metadata/fault_invalid_session.json``: a bad session is an
+    ``INVALID_SESSION_ID`` fault with HTTP 500, not a 401 (V72)."""
     route = mock.post(SOAP).mock(
-        side_effect=[xml("fault_invalid_session.json", 500), xml("describe_metadata.json")]
+        side_effect=[xml("fault_invalid_session.json"), xml("describe_metadata.json")]
     )
     mock.post(TOKEN_URL).respond(json=token_body("AT-refreshed-0002"))
     sf = h.client(cc_auth())
@@ -830,19 +995,21 @@ def test_invalid_session_fault_refreshes_and_resends(h: Harness, mock: respx.Moc
 
 
 def test_describe_metadata(h: Harness, mock: respx.MockRouter) -> None:
-    """Synthetic fixture ``metadata/describe_metadata.json``."""
+    """Recorded ``metadata/describe_metadata.json`` (285 types in a Developer Edition org)."""
     route = mock.post(SOAP).mock(return_value=xml("describe_metadata.json"))
     sf = h.client()
     d = h.run(sf.metadata.describe_metadata())
     assert body_of(route.calls[0].request).findtext(f"{M}asOfVersion") == API
     assert d.partial_save_allowed is True
     assert d.test_required is False
-    assert d.organization_namespace is None
-    assert d.types[0] == esf.MetadataType(
+    assert d.organization_namespace is None  # <organizationNamespace></organizationNamespace>
+    assert len(d.types) == 285
+    by_name = {t.xml_name: t for t in d.types}
+    assert by_name["ApexClass"] == esf.MetadataType(
         xml_name="ApexClass", directory_name="classes", suffix="cls", in_folder=False, meta_file=True
     )
-    assert d.types[1].child_xml_names == ("CustomField", "RecordType")
-    assert d.types[2].in_folder is True
+    assert "CustomField" in by_name["CustomObject"].child_xml_names
+    assert by_name["Report"].in_folder is True
 
 
 def test_soap_response_without_wrapper_is_unexpected(h: Harness, mock: respx.MockRouter) -> None:

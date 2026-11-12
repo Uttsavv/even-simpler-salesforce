@@ -1,0 +1,219 @@
+{
+  "esf_fixture": 1,
+  "source": "recorded 2026-11-11 with esf.testing.record from a Developer Edition org (API v68.0); execute_anonymous(code, capture_log=True): TraceFlag query, DebugLevel query, TraceFlag create, run, ApexLog query, log body, TraceFlag delete",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/tooling/query",
+        "query": [
+          [
+            "q",
+            "SELECT Id FROM TraceFlag WHERE TracedEntityId = ? AND LogType = ? AND ExpirationDate > ? LIMIT ?"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1057/15000"
+        },
+        "json": {
+          "size": 0,
+          "totalSize": 0,
+          "done": true,
+          "queryLocator": null,
+          "entityTypeName": null,
+          "records": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/tooling/query",
+        "query": [
+          [
+            "q",
+            "SELECT Id FROM DebugLevel WHERE DeveloperName = ? LIMIT ?"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1061/15000"
+        },
+        "json": {
+          "size": 1,
+          "totalSize": 1,
+          "done": true,
+          "queryLocator": null,
+          "entityTypeName": "DebugLevel",
+          "records": [
+            {
+              "attributes": {
+                "type": "DebugLevel",
+                "url": "/services/data/v68.0/tooling/sobjects/DebugLevel/7dl000000000001AAA"
+              },
+              "Id": "7dl000000000001AAA"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/tooling/sobjects/TraceFlag/",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "TracedEntityId": "005000000000002AAA",
+          "DebugLevelId": "7dl000000000001AAA",
+          "LogType": "USER_DEBUG",
+          "StartDate": "2026-11-11T22:48:30Z",
+          "ExpirationDate": "2026-11-11T22:58:30Z"
+        }
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "location": "/services/data/v68.0/tooling/sobjects/TraceFlag/7tf000000000003AAA",
+          "sforce-limit-info": "api-usage=1055/15000"
+        },
+        "json": {
+          "id": "7tf000000000003AAA",
+          "success": true,
+          "errors": [],
+          "warnings": [],
+          "infos": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/tooling/executeAnonymous/",
+        "query": [
+          [
+            "anonymousBody",
+            "System.debug('esf-sandbox capture');"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1077/15000"
+        },
+        "json": {
+          "line": -1,
+          "column": -1,
+          "compiled": true,
+          "success": true,
+          "compileProblem": null,
+          "exceptionStackTrace": null,
+          "exceptionMessage": null
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/tooling/query",
+        "query": [
+          [
+            "q",
+            "SELECT Id, Operation, StartTime FROM ApexLog WHERE LogUserId = ? AND StartTime >= ? ORDER BY StartTime DESC LIMIT ?"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1067/15000"
+        },
+        "json": {
+          "size": 1,
+          "totalSize": 1,
+          "done": true,
+          "queryLocator": null,
+          "entityTypeName": "ApexLog",
+          "records": [
+            {
+              "attributes": {
+                "type": "ApexLog",
+                "url": "/services/data/v68.0/tooling/sobjects/ApexLog/07L000000000004EAA"
+              },
+              "Id": "07L000000000004EAA",
+              "Operation": "/services/data/v68.0/tooling/executeAnonymous/",
+              "StartTime": "2026-11-11T22:48:32.000+0000"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/tooling/sobjects/ApexLog/07L000000000004EAA/Body",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/plain",
+          "sforce-limit-info": "api-usage=1079/15000"
+        },
+        "text": "68.0 APEX_CODE,DEBUG;APEX_PROFILING,INFO;CALLOUT,INFO;DATA_ACCESS,INFO;DB,INFO;NBA,INFO;SYSTEM,INFO;VALIDATION,INFO;VISUALFORCE,INFO;WAVE,INFO;WORKFLOW,INFO\nExecute Anonymous: System.debug('esf-sandbox capture');\n14:48:32.4 (4333511)|USER_INFO|[EXTERNAL]|005000000000002|user1@example.com|(GMT-08:00) Pacific Standard Time (America/Los_Angeles)|GMT-08:00\n14:48:32.4 (4371452)|EXECUTION_STARTED\n14:48:32.4 (4400542)|CODE_UNIT_STARTED|[EXTERNAL]|execute_anonymous_apex\n14:48:32.4 (4970287)|USER_DEBUG|[1]|DEBUG|esf-sandbox capture\n14:48:32.5 (5038338)|CUMULATIVE_LIMIT_USAGE\n14:48:32.5 (5038338)|LIMIT_USAGE_FOR_NS|(default)|\n  Number of SOQL queries: 0 out of 100\n  Number of query rows: 0 out of 50000\n  Number of SOSL queries: 0 out of 20\n  Number of DML statements: 0 out of 150\n  Number of Publish Immediate DML: 0 out of 150\n  Number of DML rows: 0 out of 10000\n  Maximum CPU time: 0 out of 10000\n  Maximum heap size: 0 out of 10000000\n  Number of callouts: 0 out of 100\n  Number of Email Invocations: 0 out of 10\n  Number of future calls: 0 out of 50\n  Number of queueable jobs added to the queue: 0 out of 50\n  Number of Mobile Apex push calls: 0 out of 10\n\n14:48:32.5 (5038338)|CUMULATIVE_LIMIT_USAGE_END\n\n14:48:32.4 (5118289)|CODE_UNIT_FINISHED|execute_anonymous_apex\n14:48:32.4 (5128249)|EXECUTION_FINISHED\n"
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "path": "/services/data/v68.0/tooling/sobjects/TraceFlag/7tf000000000003AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 204,
+        "headers": {
+          "sforce-limit-info": "api-usage=1075/15000"
+        }
+      }
+    }
+  ]
+}

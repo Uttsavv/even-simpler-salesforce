@@ -1,0 +1,113 @@
+{
+  "esf_fixture": 1,
+  "source": "recorded 2026-11-11 with esf.testing.record from a Developer Edition org (API v68.0)",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/metadata/deployRequest/0Af000000000006CAA",
+        "query": [
+          [
+            "includeDetails",
+            "true"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1531/15000"
+        },
+        "json": {
+          "deployOptions": null,
+          "deployResult": {
+            "canceledBy": null,
+            "canceledByName": null,
+            "checkOnly": false,
+            "completedDate": "2026-11-11T22:53:16.000+0000",
+            "createdBy": "005000000000002",
+            "createdByName": "<redacted>",
+            "createdDate": "2026-11-11T22:53:15.000+0000",
+            "deployExtensionResults": [],
+            "details": {
+              "componentFailures": [],
+              "componentSuccesses": [
+                {
+                  "changed": false,
+                  "columnNumber": null,
+                  "componentType": "ApexClass",
+                  "created": false,
+                  "createdDate": "2026-11-11T22:53:15.000+0000",
+                  "deleted": false,
+                  "fileName": "classes/EsfSandboxActionTest.cls",
+                  "fullName": "EsfSandboxActionTest",
+                  "id": "01p000000000003AAA",
+                  "lineNumber": null,
+                  "problem": null,
+                  "problemType": null,
+                  "success": true
+                },
+                {
+                  "changed": true,
+                  "columnNumber": null,
+                  "componentType": "",
+                  "created": false,
+                  "createdDate": "2026-11-11T22:53:15.000+0000",
+                  "deleted": false,
+                  "fileName": "package.xml",
+                  "fullName": "package.xml",
+                  "id": null,
+                  "lineNumber": null,
+                  "problem": null,
+                  "problemType": null,
+                  "success": true
+                }
+              ],
+              "retrieveResult": null,
+              "runTestResult": {
+                "apexLogId": null,
+                "codeCoverage": [],
+                "codeCoverageWarnings": [],
+                "failures": [],
+                "flowCoverage": [],
+                "flowCoverageWarnings": [],
+                "numFailures": 0,
+                "numTestsRun": 0,
+                "successes": [],
+                "totalTime": 0.0
+              }
+            },
+            "done": true,
+            "errorMessage": null,
+            "errorStatusCode": null,
+            "id": "0Af000000000006CAA",
+            "ignoreWarnings": false,
+            "lastModifiedDate": "2026-11-11T22:53:16.000+0000",
+            "notifications": [],
+            "numberComponentErrors": 0,
+            "numberComponentsDeployed": 1,
+            "numberComponentsTotal": 1,
+            "numberFiles": 3,
+            "numberTestErrors": 0,
+            "numberTestsCompleted": 0,
+            "numberTestsTotal": 0,
+            "rollbackOnError": true,
+            "runTestsEnabled": false,
+            "startDate": "2026-11-11T22:53:15.000+0000",
+            "stateDetail": null,
+            "status": "Succeeded",
+            "success": true,
+            "zipSize": 829
+          },
+          "id": "0Af000000000006CAA",
+          "validatedDeployRequestId": null
+        }
+      }
+    }
+  ]
+}

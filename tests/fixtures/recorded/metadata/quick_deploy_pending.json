@@ -1,41 +1,45 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Metadata API Developer Guide; response shape assumed to match POST metadata/deployRequest (V86): https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_rest_deploy_recentvalidation.htm",
-  "body": {
-    "id": "0Afxx0000000002AAA",
-    "validatedDeployRequestId": "0Afxx0000000001AAA",
-    "deployOptions": {
-      "checkOnly": false,
-      "ignoreWarnings": false,
-      "purgeOnDelete": false,
-      "allowMissingFiles": false,
-      "autoUpdatePackage": false,
-      "singlePackage": true,
-      "rollbackOnError": true,
-      "testLevel": "NoTestRun",
-      "runTests": null
-    },
-    "deployResult": {
-      "id": "0Afxx0000000002AAA",
-      "checkOnly": false,
-      "createdBy": "005xx0000000001AAA",
-      "createdByName": "Ada Admin",
-      "createdDate": "2026-11-11T10:00:00.000+0000",
-      "ignoreWarnings": false,
-      "rollbackOnError": true,
-      "runTestsEnabled": false,
-      "numberComponentErrors": 0,
-      "numberComponentsDeployed": 0,
-      "numberComponentsTotal": 0,
-      "numberTestErrors": 0,
-      "numberTestsCompleted": 0,
-      "numberTestsTotal": 0,
-      "errorMessage": null,
-      "errorStatusCode": null,
-      "details": null,
-      "status": "Pending",
-      "done": false,
-      "success": false
+  "esf_fixture": 1,
+  "source": "recorded 2026-11-11 with esf.testing.record from a Developer Edition org (API v68.0)",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/metadata/deployRequest/0Af000000000001CAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "validatedDeployRequestId": "0Af000000000001CAA"
+        }
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1535/15000"
+        },
+        "json": {
+          "deployOptions": {
+            "allowMissingFiles": false,
+            "autoUpdatePackage": false,
+            "checkOnly": false,
+            "ignoreWarnings": false,
+            "performRetrieve": false,
+            "purgeOnDelete": false,
+            "rollbackOnError": true,
+            "runTests": null,
+            "singlePackage": true,
+            "testLevel": null
+          },
+          "deployResult": null,
+          "id": "0Af000000000006CAA",
+          "validatedDeployRequestId": "0Af000000000001CAA"
+        }
+      }
     }
-  }
+  ]
 }
