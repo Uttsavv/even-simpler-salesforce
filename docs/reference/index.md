@@ -34,6 +34,10 @@ The reasons behind the design are written down in the
 
 ::: even_simpler_salesforce.AsyncIngestJob
 
+::: even_simpler_salesforce.AsyncQueryJob
+
+::: even_simpler_salesforce.AsyncResultPage
+
 ::: even_simpler_salesforce._async.api.ui.AsyncUi
 
 ::: even_simpler_salesforce._async.api.auth_api.AsyncAuthApi

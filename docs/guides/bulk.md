@@ -133,6 +133,62 @@ async for row in sf.bulk.query("SELECT Id FROM Lead", parallel_downloads=4):
     count += 1
 ```
 
+## Run a query in a worker
+
+`sf.bulk.query()` waits and reads in one call, so the job id stays inside it. For an export
+that a worker runs, use `start_query()`. It creates the job and returns at once. Store
+`job.id`, then open the job again with `query_job()`, in the same process or another one.
+
+```python
+job = await sf.bulk.start_query("SELECT Id, Name FROM Lead WHERE Status = {}", "Open")
+job_id = job.id  # store it, for example in your queue message
+
+# Later, in the worker:
+job = await sf.bulk.query_job(job_id)
+await job.wait()
+async for row in job.rows(parallel_downloads=4):
+    print(row["Id"], row["Name"])
+```
+
+`rows()` and `pages()` read the results of a job that is `JobComplete`. If the job isn't
+finished, they raise `esf.BulkJobNotComplete`, so call `wait()` first. If the job failed or
+was aborted, they raise `esf.BulkJobFailed`. Salesforce keeps the results for 7 days after the
+job completes, then deletes the job. After that, `query_job()` raises `esf.NotFound`.
+
+An ingest job can be opened again too. Pass all of its `ids`: a large upload runs as several
+Salesforce jobs.
+
+```python
+job = await sf.bulk.ingest("Lead", "insert", rows=[{"LastName": "Doe", "Company": "Acme"}])
+saved_ids = list(job.ids)
+
+job = await sf.bulk.ingest_job(saved_ids)
+info = await job.wait()
+print(info.records_processed)
+```
+
+## Resume a download
+
+`pages()` yields the results one page at a time. After you handle a page, save its
+`next_locator`. If the worker restarts, open the job and pass the saved locator. The download
+goes on from the next page.
+
+```python
+checkpoint: dict[str, str | None] = {"job_id": job_id, "locator": None}
+
+job = await sf.bulk.query_job(checkpoint["job_id"])
+async for page in job.pages(locator=checkpoint["locator"], max_records=50_000):
+    async for row in page.rows():
+        print(row["Id"])
+    checkpoint["locator"] = page.next_locator  # None after the last page
+```
+
+The client downloads each page to a temporary file before it yields the page. `page.size` is
+the number of rows that Salesforce reported for it. Read the rows before you ask for the next
+page: the client deletes the file when the iteration moves on. With `max_records`, pages are
+smaller, so less is downloaded again after a restart. A locator stays valid as long as the job
+exists.
+
 ## Compound fields
 
 Bulk queries can't read compound address and geolocation fields, such as `BillingAddress`.
@@ -177,6 +233,12 @@ See [Create a Query Job](https://developer.salesforce.com/docs/atlas.en-us.api_a
 | `job.failed_results()` | `BulkFailure` items | rejected rows with the parsed error |
 | `job.unprocessed_records()` | rows | rows that Salesforce didn't process |
 | `sf.bulk.query(soql, include_deleted=, parallel_downloads=)` | rows | run a query job and stream the rows |
+| `sf.bulk.start_query(soql, include_deleted=)` | query job | create a query job without waiting |
+| `sf.bulk.query_job(job_id)` | query job | open a query job by its id |
+| `sf.bulk.ingest_job(job_ids)` | ingest job | open an ingest job by its ids |
+| `job.rows(parallel_downloads=)` | rows | stream the rows of a complete query job |
+| `job.pages(locator=, max_records=)` | pages | read a complete query job page by page |
+| `page.rows()` | rows | the rows of one page |
 | `sf.bulk.expand_compound_fields(sobject, fields)` | `list[str]` | swap compound fields for their components |
 
 ## Errors
@@ -185,13 +247,17 @@ See [Create a Query Job](https://developer.salesforce.com/docs/atlas.en-us.api_a
 |---|---|
 | `esf.BulkJobFailed` | the job ended `Failed` or `Aborted`; `.job_id`, `.state`, `.error_message` |
 | `esf.BulkJobTimeout` | `wait()` ran out of time; the job keeps running |
+| `esf.BulkJobNotComplete` | `rows()` or `pages()` on a query job that isn't `JobComplete`; call `wait()` first |
+| `esf.NotFound` | `query_job()` or `ingest_job()` with an unknown id, the id of the other job kind, or a job that Salesforce deleted |
 | `esf.UnexpectedResponse` | Salesforce reported a job state that the client doesn't know |
 | `ValueError` | invalid arguments or data, raised before anything is sent |
 
 ## Testing
 
 `FakeSalesforce` supports `bulk`. An ingest job applies its rows to the fake's records at once and
-is `JobComplete`. A query returns the rows you scripted with `on_query()`, as strings.
+is `JobComplete`. A query returns the rows you scripted with `on_query()`, as strings. The fake
+keeps its jobs, so `query_job()` and `ingest_job()` return them by id. In `pages()`, the fake
+uses the row offset as the locator.
 
 ```python
 from even_simpler_salesforce.testing import FakeSalesforce
@@ -212,7 +278,8 @@ def test_import(esf_fake: FakeSalesforce) -> None:
 - If an upload fails, the client aborts that job and raises the error. Jobs it uploaded before
   keep running, and the error message names them.
 - Results must be read with the API version that created the job, or Salesforce returns `409`.
-  The job keeps that version for every later call.
+  The job keeps that version for every later call. A job opened with `query_job()` or
+  `ingest_job()` takes the version from the job's status.
 - The client sends uploads as `text/csv; charset=UTF-8`. It reads result files as UTF-8,
   whatever charset the response names.
 - An upload over 64 KiB is sent gzipped, with chunked transfer encoding. The 100 MB split

@@ -688,6 +688,8 @@ SalesforceError
 │                                        not retryable)
 ├── PartialFailure                       allOrNone=false batches; .results: BatchResult
 ├── BulkJobFailed                        (.job_id, .state, .error_message)
+├── BulkJobTimeout                       wait() ran out of time; the job keeps running (.job_id, .state)
+├── BulkJobNotComplete                   query results asked for before JobComplete (.job_id, .state)
 ├── ApexError                            APEX_ERROR / Apex REST errors (.status, .body)
 ├── GraphQLError                         (.errors from the GraphQL `errors` array)
 ├── PubSubError                          other Pub/Sub gRPC errors; error_code = trailer code, request_id = rpcId
@@ -1028,7 +1030,38 @@ await job.abort()
 
 async for row in sf.bulk.query("SELECT Id, Name FROM Lead", parallel_downloads=4):
     ...                                              # streams result locators, CSV → dict
+
+job = await sf.bulk.start_query("SELECT Id, Name FROM Lead")   # returns at once; job.id
+job = await sf.bulk.query_job(job_id)                # open again, e.g. in a worker
+await job.wait(); await job.abort(); await job.refresh()
+async for row in job.rows(parallel_downloads=4): ...
+async for page in job.pages(locator=saved, max_records=50_000):
+    async for row in page.rows(): ...
+    saved = page.next_locator                        # None after the last page
+job = await sf.bulk.ingest_job(saved_ids)            # every id of a split upload
 ```
+
+- **Job handles for long-running work**: `sf.bulk.query()` is `start_query()` + `wait()` +
+  `rows()` in one call; the handle exists so a job can outlive the process that created it
+  (submit in a web request, collect in a worker, resume after a restart), which `query()`
+  can't do (D29). `rows()` and `pages()` need `JobComplete` (*Get Results for a Query Job*:
+  "The job must have the state JobComplete") and raise `BulkJobNotComplete` otherwise; they
+  never poll, because `wait()` already does. `Failed`/`Aborted` raise `BulkJobFailed`.
+- **Reopen by id**: `query_job(id)` and `ingest_job(ids)` `GET jobs/{kind}/{id}` and keep the
+  `apiVersion` of the job for later calls. `ingest_job` takes a sequence (a string is a
+  `TypeError`), because an upload over 100 MB is several jobs; pass all of `job.ids`. An
+  unknown or deleted job, and the id of the other job kind, are `NotFound` (404 `NOT_FOUND`,
+  *Get Information About a Query Job*; other kind org-observed, V88). The status call works in
+  any API version, so a client on another version can open the job (V88). Salesforce deletes jobs in a terminal state after 7 days
+  and serves query results within 7 days of completion (*Developer Limits and Allocations
+  Quick Reference*, Bulk API 2.0 "Batch and job lifespan", "Results lifespan").
+- **Resumable pages**: `pages()` downloads each page (`?locator=&maxRecords=`) to a spooled
+  temporary file, then yields a `ResultPage` with `locator`, `next_locator` and `size`
+  (`Sforce-NumberOfRecords`). The file is closed when the iteration moves on. "As long as the
+  associated job exists, the locator string for a set of results does not change. You can use
+  the locator to retrieve a set of results multiple times" (*Get Results for a Query Job*), so a
+  saved `next_locator` is a safe checkpoint. Queues, storage and checkpoint persistence stay in
+  the application.
 
 - **Parameter names match REST** (#510, #760): `sf.bulk.query(soql, include_deleted=False)` uses the
   `queryAll` operation when `True`; iterators are named `*_iter` like `query_iter` where they are
@@ -2012,6 +2045,7 @@ before the release named.
 | V85 | Cancel a deployment over REST (`PATCH metadata/deployRequest/{id}`, body `{"deployResult": {"status": "Canceling"}}`): the HTTP status and body of a successful request (the client parses it as a deploy result with status `Canceling` or `Canceled`), and the error a deployment in `FinalizingDeploy` gets from API 65.0. The client maps a 4xx whose message mentions "finaliz" (as the SOAP `cancelDeploy()` `INVALID_ID_FIELD` fault does) and a 2xx that still says `FinalizingDeploy` to `DeployNotCancelable` | 0.4 | **Done** (DE org, API v68.0, 2026-11-12): PATCH → 202 `Canceling` → `Canceled`; cancelling a finished deployment returns its final state. `FinalizingDeploy` not reached; a quick deploy reported the undocumented status `Finalizing` (now accepted as in progress) |
 | V86 | Quick deploy over REST (`POST metadata/deployRequest/{validatedId}`, body `{"validatedDeployRequestId": id}`): the response has the shape of the `POST metadata/deployRequest` response (`id` of the new deployment, `deployResult`), and the error bodies for a validation that failed, ran no tests, is older than 10 days, or was followed by another deployment | 0.4 | **Done** (DE org, API v68.0, 2026-11-12): 201 `{id, validatedDeployRequestId}`; `NoTestRun` validations and stale validations → 400 `INVALID_ID_FIELD` |
 | V87 | `GET analytics/reports` (*Report List*, `sforce_analytics_rest_api_recentreportslist.htm`) returns a JSON array of at most 200 recently viewed reports, each with `id`, `name`, `url`, `describeUrl` and `instancesUrl`; `sf.reports.recent()` returns the entries as sent | 0.4 | **Done** (DE org, API v68.0, 2026-11-12): array of recent reports with an extra `fieldsUrl` (org-observed) |
+| V88 | Bulk API 2.0 job handles: `GET jobs/query/{id}` and `GET jobs/ingest/{id}` with a client API version other than the one that created the job (the docs name 409 only for results), what `GET jobs/query/{id}` returns for an ingest job id (and the reverse), and `Sforce-NumberOfRecords` on a results page with `maxRecords` | 0.5 | **Done** (DE org, API v68.0, 2026-11-12): a v60.0 client opens a v68.0 query job (no 409; `apiVersion` stays 68.0); the query id on `jobs/ingest/{id}` is 404 `NOT_FOUND`; `maxRecords=1` pages send `Sforce-NumberOfRecords: 1`; a saved locator resumes. The reverse kind (ingest id on `jobs/query`) was not tried |
 
 Remaining open (after the real-org run of 2026-11-12, issue #33): V3 (record the exact error body; the probe can revoke the token chain), V20 (where admins see `client=`), V26 (needs a namespace), V29 (`API_DISABLED_FOR_ORG`), V36 (`LIMIT_EXCEEDED` / `PLATFORM_EVENT_PUBLISHING_UNAVAILABLE` statuses), V69 (a report the user can't access: needs a second user) and V78 (needs a sandbox with enough storage). Untested limits are noted in their rows (V40, V70, V74, V85).
 

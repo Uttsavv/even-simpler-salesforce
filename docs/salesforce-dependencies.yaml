@@ -168,12 +168,12 @@ rest_endpoints:
     checked: null
   - path: "jobs/{}"
     methods: [POST]
-    used_by: "sf.bulk.ingest() (jobs/ingest), sf.bulk.query() (jobs/query, operation query or queryAll)"
+    used_by: "sf.bulk.ingest() (jobs/ingest), sf.bulk.query() and sf.bulk.start_query() (jobs/query, operation query or queryAll)"
     docs: https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/create_job.htm
     checked: 2026-11-10
   - path: "jobs/ingest/{}"
     methods: [GET, PATCH]
-    used_by: "job.wait(), job.refresh() (job info); upload close and job.abort() (state UploadComplete / Aborted)"
+    used_by: "job.wait(), job.refresh(), sf.bulk.ingest_job() (job info); upload close and job.abort() (state UploadComplete / Aborted)"
     dynamic: true  # built in the API version of the job (_job_path)
     docs: https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/get_job_info.htm
     checked: null
@@ -190,14 +190,14 @@ rest_endpoints:
     docs: https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/get_job_successful_results.htm
     checked: null
   - path: "jobs/query/{}"
-    methods: [GET]
-    used_by: "sf.bulk.query() polling"
+    methods: [GET, PATCH]
+    used_by: "sf.bulk.query() and job.wait() polling, sf.bulk.query_job() (job info); job.abort() (state Aborted)"
     dynamic: true
     docs: https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/query_get_one_job.htm
     checked: null
   - path: "jobs/query/{}/results"
     methods: [GET]
-    used_by: "sf.bulk.query() result pages (?locator=, Sforce-Locator; same API version or 409)"
+    used_by: "sf.bulk.query(), job.rows() and job.pages() result pages (?locator=&maxRecords=, Sforce-Locator; same API version or 409)"
     dynamic: true
     docs: https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/query_get_job_results.htm
     checked: null
@@ -446,6 +446,11 @@ headers:
   - name: Sforce-Locator
     direction: response
     used_for: "next Bulk query result page; the string null on the last page"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/query_get_job_results.htm
+    checked: null
+  - name: Sforce-NumberOfRecords
+    direction: response
+    used_for: "ResultPage.size: the number of rows in a Bulk query result page"
     docs: https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/query_get_job_results.htm
     checked: null
   - name: Sforce-Request-Id
