@@ -62,10 +62,10 @@ rest_endpoints:
     used_by: "sf.ui.record() (fields, layoutTypes, modes)"
     dynamic: true  # built by core/ui.py, not a literal in the area code
     docs: https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_record_get.htm
-    checked: null
+    checked: 2026-11-12
   - path: "ui-api/object-info/{}"
     methods: [GET]
-    used_by: "sf.ui.object_info() (describe cache; If-Modified-Since, V62)"
+    used_by: "sf.ui.object_info() (describe cache; If-Modified-Since is ignored: always 200, V62)"
     dynamic: true  # built by core/ui.py, not a literal in the area code
     docs: https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_object_info.htm
     checked: null
@@ -293,7 +293,7 @@ rest_endpoints:
     used_by: "sf.reports.recent (up to 200 recently viewed reports; all reports need SOQL on Report)"
     dynamic: true
     docs: https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/sforce_analytics_rest_api_recentreportslist.htm
-    checked: null
+    checked: 2026-11-12
   - path: "analytics/reports/{}"
     methods: [GET, POST]
     used_by: "sf.reports.run (?includeDetails=; POST with reportMetadata.reportFilters; read, resent)"
@@ -323,7 +323,7 @@ rest_endpoints:
     used_by: "sf.reports.dashboards.get (GET), sf.reports.dashboards.refresh (PUT; never resent)"
     dynamic: true
     docs: https://developer.salesforce.com/docs/atlas.en-us.api_analytics.meta/api_analytics/analytics_api_dashboard_results_resource.htm
-    checked: null
+    checked: 2026-11-12
   - path: metadata/deployRequest
     methods: [POST]
     used_by: "sf.metadata.deploy() (multipart: json deployOptions + file zip; never resent)"
@@ -480,11 +480,11 @@ response_shapes:
   - resource: GraphQL
     fields: [data, "errors[]: message, locations, path, extensions.ErrorType", "connections: edges[].node, pageInfo {hasNextPage, endCursor}"]
   - resource: UI API
-    fields: ["record: apiName, id, fields {Name: {value, displayValue}}, childRelationships, recordTypeId", "list-records: records, count, nextPageToken", "picklist-values: picklistFieldValues {field: {values, defaultValue, controllerValues}}", "errors: REST error body"]
+    fields: ["record: apiName, id, fields {Name: {value, displayValue}}, childRelationships, recordTypeId, eTag, lastModifiedDate, systemModstamp", "list-info: lists[] {apiName, id, label, url}, pageSize 20, nextPageToken", "list-records: records, count, pageSize, currentPageToken, nextPageToken (null on the last page)", "picklist-values: picklistFieldValues {field: {values[] {label, value, validFor}, defaultValue, controllerValues}}", "errors: REST error body; unknown object 403 INSUFFICIENT_ACCESS"]
   - resource: Report run / report instance
-    fields: [attributes, allData, hasDetailRows, "factMap {'<row>!<col>': {aggregates[], rows[].dataCells[]}}", "groupingsDown/groupingsAcross.groupings[] {key, value, groupings}", "reportMetadata {reportFormat, detailColumns, aggregates, groupingsDown, groupingsAcross}", "attributes.status (instances)"]
+    fields: [attributes, allData, hasDetailRows, "factMap {'<row>!<col>': {aggregates[], rows[].dataCells[]}}", "groupingsDown/groupingsAcross.groupings[] {key, value, groupings}", "reportMetadata {reportFormat, detailColumns, aggregates, groupingsDown, groupingsAcross}", "attributes.status (instances)", "empty matrix cells sent with a zero count", "currency detail cell {amount, currency}; currency aggregate a number"]
   - resource: Dashboard results / refresh
-    fields: [dashboardMetadata, "componentData[] {componentId, reportResult, status.refreshStatus}", statusUrl]
+    fields: [attributes, dashboardMetadata, "componentData[] {componentId, reportResult (null before the first refresh), status {refreshStatus, componentDataStatus}}", "refresh: 201 {statusUrl}; 409 CONFLICT while running, 403 FORBIDDEN within a minute"]
   - resource: REST error body
     fields: ["list of {message, errorCode or statusCode, fields}", "extras such as duplicateResult"]
   - resource: OAuth error body
