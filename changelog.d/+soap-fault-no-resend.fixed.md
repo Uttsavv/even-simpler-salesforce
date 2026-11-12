@@ -1,0 +1,1 @@
+A SOAP fault (always HTTP 500), such as `INVALID_TYPE` from `sf.metadata.list_metadata()` or `INVALID_LOCATOR` from a retrieve, is no longer resent as if the server had failed. `SERVER_UNAVAILABLE` and 500 responses without a fault are still retried.

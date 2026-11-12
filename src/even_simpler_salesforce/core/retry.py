@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from .. import errors as E
 from ..config import RetryPolicy
 from .http import RequestSpec
+from .soap import is_soap_path
 
 __all__ = ["RetryDecision", "backoff_delay", "decide_retry", "resend_after_401"]
 
@@ -50,11 +51,28 @@ def decide_retry(spec: RequestSpec, exc: E.SalesforceError, *, sent: bool) -> Re
         return _NO
 
     status = exc.status
+    if _is_soap_fault(spec, exc):
+        return _NO
     is_server = (status in _SERVER_RETRY_STATUS) or exc.error_code == "SERVER_UNAVAILABLE"
     if is_server and status != 420:
         return RetryDecision(True, f"http_{status}") if idem else _NO
 
     return _NO
+
+
+def _is_soap_fault(spec: RequestSpec, exc: E.SalesforceError) -> bool:
+    """A SOAP fault other than ``SERVER_UNAVAILABLE``: an answer, not a server failure.
+
+    Salesforce sends every SOAP fault with HTTP 500, so the status doesn't mean the server
+    failed. A fault such as ``INVALID_TYPE`` or ``INVALID_LOCATOR`` gets the same answer when
+    resent (recorded in ``tests/fixtures/recorded/metadata``, V72/V73).
+    """
+    return (
+        exc.status == 500
+        and exc.error_code is not None
+        and exc.error_code != "SERVER_UNAVAILABLE"
+        and is_soap_path(spec.path)
+    )
 
 
 # Error codes that say Salesforce rejected the access token itself, before running anything.
