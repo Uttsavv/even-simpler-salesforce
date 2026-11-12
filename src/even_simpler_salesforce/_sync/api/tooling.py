@@ -126,8 +126,9 @@ class Tooling:
 
         Raises:
             ValueError: ``code`` is blank.
-            RequestTooLarge: Salesforce rejected the URL as too long (HTTP 414); the code
-                didn't run.
+            RequestTooLarge: Salesforce rejected the URL as too long (HTTP 414 or 431); the
+                code didn't run. The code travels URL-encoded in the query string; a Developer
+                Edition org accepted about 18,500 encoded characters (V45).
         """
         check_apex_code(code)
         if not capture_log:
@@ -243,8 +244,8 @@ class Tooling:
             class_ids: Ids of the Apex test classes (``ApexClass`` ids, ``01p...``).
 
         Returns:
-            The ``ApexJob`` id. Query ``ApexTestResult`` with ``ApexJobId`` for the
-            outcome.
+            The ``ApexJob`` id as Salesforce sends it (15 characters). Query
+            ``ApexTestResult`` with ``ApexJobId`` for the outcome.
         """
         content, ctype = self._sf._transport.encode(run_tests_body(class_ids))
         raw = self._sf._send(
@@ -261,6 +262,13 @@ class Tooling:
 
     def completions(self, type: Literal["apex", "visualforce"]) -> dict[str, Any]:
         """``GET tooling/completions?type=``: the symbols editors offer for code completion.
+
+        The JSON object comes back unchanged. For ``"apex"`` it is
+        ``{"publicDeclarations": {namespace: {class: {"constructors", "methods",
+        "properties"}}}}``; for ``"visualforce"`` it is ``{"completions": {tag: {"simple",
+        "attribs"}}}``. The Apex answer is large (about 29 MB in a Developer Edition org) and
+        can take longer than the default 60-second read timeout; give the client a longer
+        ``timeout=esf.Timeouts(read=...)`` if it times out.
 
         Args:
             type: ``"apex"`` (system classes and methods) or ``"visualforce"`` (components).
