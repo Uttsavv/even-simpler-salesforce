@@ -1,0 +1,25 @@
+{
+  "esf_fixture": 1,
+  "recorded": "2026-11-12, Developer Edition org, API v68.0; tests/sandbox/test_files_soap.py::test_download[sync] (esf.testing.record)",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/sobjects/Attachment/00P000000000004EAA/Body",
+        "query": [],
+        "headers": {
+          "accept": "*/*",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/plain",
+          "sforce-limit-info": "api-usage=1789/15000"
+        },
+        "text": "esf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\nesf sandbox file\n"
+      }
+    }
+  ]
+}

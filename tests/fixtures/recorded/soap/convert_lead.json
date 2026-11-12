@@ -1,5 +1,26 @@
 {
-  "synthetic": true,
-  "source": "hand-written from the SOAP API Developer Guide, convertLead() and LeadConvertResult: https://developer.salesforce.com/docs/atlas.en-us.api.meta/api/sforce_api_calls_convertlead.htm and https://developer.salesforce.com/docs/atlas.en-us.api.meta/api/sforce_api_calls_convertlead_leadconvertresult.htm",
-  "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns=\"urn:partner.soap.sforce.com\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:sf=\"urn:fault.partner.soap.sforce.com\"><soapenv:Body><convertLeadResponse><result><accountId>001xx0000000001AAA</accountId><contactId>003xx0000000001AAA</contactId><leadId>00Qxx0000000001AAA</leadId><opportunityId>006xx0000000001AAA</opportunityId><relatedPersonAccountId xsi:nil=\"true\"/><success>true</success></result><result><accountId xsi:nil=\"true\"/><contactId xsi:nil=\"true\"/><errors><fields>Status</fields><message>invalid convertedStatus: Qualified</message><statusCode>INVALID_STATUS</statusCode></errors><leadId xsi:nil=\"true\"/><opportunityId xsi:nil=\"true\"/><success>false</success></result></convertLeadResponse></soapenv:Body></soapenv:Envelope>"
+  "esf_fixture": 1,
+  "recorded": "2026-11-12, Developer Edition org, API v68.0; tests/sandbox/test_files_soap.py::test_convert_many_mixed[sync] (esf.testing.record)",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/Soap/u/68.0",
+        "query": [],
+        "headers": {
+          "accept": "text/xml",
+          "content-type": "text/xml; charset=UTF-8",
+          "sforce-call-options": "client=esf-sandbox"
+        },
+        "text": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><env:Envelope xmlns:env=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:p=\"urn:partner.soap.sforce.com\" xmlns:o=\"urn:sobject.partner.soap.sforce.com\"><env:Header><p:SessionHeader><p:sessionId><redacted></p:sessionId></p:SessionHeader></env:Header><env:Body><p:convertLead><p:leadConverts><p:convertedStatus>Closed - Converted</p:convertedStatus><p:doNotCreateOpportunity>false</p:doNotCreateOpportunity><p:leadId>00Q000000000001EAA</p:leadId><p:opportunityName>esf-sandbox-146ca6e61b9d-opp-sync</p:opportunityName><p:overwriteLeadSource>false</p:overwriteLeadSource><p:sendNotificationEmail>false</p:sendNotificationEmail></p:leadConverts><p:leadConverts><p:convertedStatus>Open - Not Contacted</p:convertedStatus><p:doNotCreateOpportunity>false</p:doNotCreateOpportunity><p:leadId>00Q000000000002EAA</p:leadId><p:overwriteLeadSource>false</p:overwriteLeadSource><p:sendNotificationEmail>false</p:sendNotificationEmail></p:leadConverts></p:convertLead></env:Body></env:Envelope>"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/xml; charset=utf-8"
+        },
+        "text": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns=\"urn:partner.soap.sforce.com\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"><soapenv:Header><LimitInfoHeader><limitInfo><current>1656</current><limit>15000</limit><type>API REQUESTS</type></limitInfo></LimitInfoHeader></soapenv:Header><soapenv:Body><convertLeadResponse><result><accountId>001000000000003AAA</accountId><contactId>003000000000004AAA</contactId><leadId>00Q000000000001EAA</leadId><opportunityId>006000000000005AAA</opportunityId><success>true</success></result><result><accountId xsi:nil=\"true\"/><contactId xsi:nil=\"true\"/><errors><fields>Status</fields><message>invalid convertedStatus: Open - Not Contacted</message><statusCode>INVALID_STATUS</statusCode></errors><leadId>00Q000000000002EAA</leadId><opportunityId xsi:nil=\"true\"/><success>false</success></result></convertLeadResponse></soapenv:Body></soapenv:Envelope>"
+      }
+    }
+  ]
 }

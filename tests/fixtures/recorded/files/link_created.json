@@ -1,5 +1,37 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic): sObject create response shape for ContentDocumentLink, REST API Developer Guide, Create a Record",
-  "body": {"id": "06Axx0000000001AAA", "success": true, "errors": []}
+  "esf_fixture": 1,
+  "recorded": "2026-11-12, Developer Edition org, API v68.0; tests/sandbox/test_files_soap.py::test_first_publish_location_link[sync] (esf.testing.record)",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/sobjects/ContentDocumentLink",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "ContentDocumentId": "069000000000004AAA",
+          "LinkedEntityId": "00Q000000000001EAA",
+          "ShareType": "I",
+          "Visibility": "AllUsers"
+        }
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "location": "/services/data/v68.0/sobjects/ContentDocumentLink/06A000000000005EAA",
+          "sforce-limit-info": "api-usage=1768/15000"
+        },
+        "json": {
+          "id": "06A000000000005EAA",
+          "success": true,
+          "errors": []
+        }
+      }
+    }
+  ]
 }
