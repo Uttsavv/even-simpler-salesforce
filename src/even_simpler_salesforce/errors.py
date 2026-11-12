@@ -520,10 +520,17 @@ class ApexError(SalesforceError):
 class GraphQLError(SalesforceError):
     """GraphQL response with an ``errors`` array.
 
+    Salesforce answers ``200 OK`` with an ``errors`` array for a syntax error
+    (``InvalidSyntax``), an unknown object or field (``ValidationError``, also for a field the
+    user can't read) and a failure while fetching data or saving a mutation
+    (``DataFetchingException``).
+
     ``.graphql_errors`` holds the entries as Salesforce sent them (``message``, ``locations``,
-    ``path``, ``extensions``). ``.errors`` holds them as :class:`ErrorDetail`, with
-    ``extensions.ErrorType`` as the error code. ``.data`` holds the partial ``data`` that came
-    with the errors, or ``None``.
+    ``paths``, ``extensions``). ``.errors`` holds them as :class:`ErrorDetail`, with
+    ``extensions.ErrorType`` as the error code, the message HTML-unescaped and the field path
+    in ``extended["path"]``. ``.data`` holds the ``data`` that came with the errors: ``{}``
+    when the document was rejected, or the fields that did resolve (the failed one is
+    ``None``) after a ``DataFetchingException``.
     """
 
     graphql_errors: tuple[Mapping[str, Any], ...]

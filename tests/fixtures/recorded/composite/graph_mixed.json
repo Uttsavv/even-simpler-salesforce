@@ -1,61 +1,200 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Salesforce REST API Developer Guide, Composite Graph; no org recording yet",
-  "body": {
-    "graphs": [
-      {
-        "graphId": "g1",
-        "graphResponse": {
-          "compositeResponse": [
-            {
-              "body": {
-                "id": "001xx0000000002AAA",
-                "success": true,
-                "errors": []
-              },
-              "httpHeaders": {
-                "Location": "/services/data/v68.0/sobjects/Account/001xx0000000002AAA"
-              },
-              "httpStatusCode": 201,
-              "referenceId": "acc"
-            }
-          ]
+  "esf_fixture": 1,
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/composite/graph",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
         },
-        "isSuccessful": true
-      },
-      {
-        "graphId": "g2",
-        "graphResponse": {
-          "compositeResponse": [
+        "json": {
+          "graphs": [
             {
-              "body": [
+              "graphId": "g1",
+              "compositeRequest": [
                 {
-                  "errorCode": "PROCESSING_HALTED",
-                  "message": "The transaction was rolled back since another operation in the same transaction failed."
+                  "method": "POST",
+                  "url": "/services/data/v68.0/sobjects/Lead",
+                  "referenceId": "lead",
+                  "body": {
+                    "LastName": "esf-sandbox-66b81d44a6df-g1-sync",
+                    "Company": "esf-sandbox"
+                  }
+                },
+                {
+                  "method": "PATCH",
+                  "url": "/services/data/v68.0/sobjects/Lead/@{lead.id}",
+                  "referenceId": "titled",
+                  "body": {
+                    "Title": "esf-sandbox"
+                  }
                 }
-              ],
-              "httpHeaders": {},
-              "httpStatusCode": 400,
-              "referenceId": "acc2"
+              ]
             },
             {
-              "body": [
+              "graphId": "g2",
+              "compositeRequest": [
                 {
-                  "message": "Required fields are missing: [LastName]",
-                  "errorCode": "REQUIRED_FIELD_MISSING",
-                  "fields": [
-                    "LastName"
-                  ]
+                  "method": "POST",
+                  "url": "/services/data/v68.0/sobjects/Lead",
+                  "referenceId": "ok",
+                  "body": {
+                    "LastName": "esf-sandbox-66b81d44a6df-g2-sync",
+                    "Company": "esf-sandbox"
+                  }
+                },
+                {
+                  "method": "POST",
+                  "url": "/services/data/v68.0/sobjects/Lead",
+                  "referenceId": "bad",
+                  "body": {
+                    "LastName": "esf-sandbox-66b81d44a6df-g2-sync",
+                    "Company": "ESF_VR"
+                  }
                 }
-              ],
-              "httpHeaders": {},
-              "httpStatusCode": 400,
-              "referenceId": "Contact2"
+              ]
             }
           ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1624/15000"
         },
-        "isSuccessful": false
+        "json": {
+          "graphs": [
+            {
+              "graphId": "g1",
+              "graphResponse": {
+                "compositeResponse": [
+                  {
+                    "body": {
+                      "id": "00Q000000000001EAA",
+                      "success": true,
+                      "errors": []
+                    },
+                    "httpHeaders": {
+                      "Location": "/services/data/v68.0/sobjects/Lead/00Q000000000001EAA"
+                    },
+                    "httpStatusCode": 201,
+                    "referenceId": "lead"
+                  },
+                  {
+                    "body": null,
+                    "httpHeaders": {},
+                    "httpStatusCode": 204,
+                    "referenceId": "titled"
+                  }
+                ]
+              },
+              "isSuccessful": true
+            },
+            {
+              "graphId": "g2",
+              "graphResponse": {
+                "compositeResponse": [
+                  {
+                    "body": [
+                      {
+                        "errorCode": "PROCESSING_HALTED",
+                        "message": "The transaction was rolled back since another operation in the same transaction failed."
+                      }
+                    ],
+                    "httpHeaders": {},
+                    "httpStatusCode": 400,
+                    "referenceId": "ok"
+                  },
+                  {
+                    "body": [
+                      {
+                        "message": "esf-sandbox: validation rule probe",
+                        "errorCode": "FIELD_CUSTOM_VALIDATION_EXCEPTION",
+                        "fields": []
+                      }
+                    ],
+                    "httpHeaders": {},
+                    "httpStatusCode": 400,
+                    "referenceId": "bad"
+                  }
+                ]
+              },
+              "isSuccessful": false
+            }
+          ]
+        }
       }
-    ]
-  }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/query",
+        "query": [
+          [
+            "q",
+            "SELECT Id, LastName, Title FROM Lead WHERE LastName LIKE ? ORDER BY LastName"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1625/15000"
+        },
+        "json": {
+          "totalSize": 1,
+          "done": true,
+          "records": [
+            {
+              "attributes": {
+                "type": "Lead",
+                "url": "/services/data/v68.0/sobjects/Lead/00Q000000000001EAA"
+              },
+              "Id": "00Q000000000001EAA",
+              "LastName": "LastName 1",
+              "Title": "Title 1"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/query",
+        "query": [
+          [
+            "q",
+            "SELECT Id, LastName, Title FROM Lead WHERE LastName LIKE ? ORDER BY LastName"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1629/15000"
+        },
+        "json": {
+          "totalSize": 0,
+          "done": true,
+          "records": []
+        }
+      }
+    }
+  ]
 }

@@ -1,0 +1,105 @@
+{
+  "esf_fixture": 1,
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/graphql",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "query": "\nmutation Create($input: LeadCreateInput!) {\n  uiapi { LeadCreate(input: $input) { Record { Id LastName { value } } } }\n}\n",
+          "variables": {
+            "input": {
+              "Lead": {
+                "LastName": "esf-sandbox-66b81d44a6df-gmf-sync",
+                "Company": "ESF_VR"
+              }
+            }
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1719/15000"
+        },
+        "json": {
+          "data": {
+            "uiapi": {
+              "LeadCreate": null
+            }
+          },
+          "errors": [
+            {
+              "extensions": {
+                "ErrorType": "DataFetchingException"
+              },
+              "locations": [
+                {
+                  "column": 11,
+                  "line": 3
+                }
+              ],
+              "message": "esf-sandbox: validation rule probe",
+              "paths": [
+                "uiapi",
+                "LeadCreate"
+              ]
+            },
+            {
+              "extensions": {
+                "ErrorType": "DataFetchingException"
+              },
+              "locations": [
+                {
+                  "column": 11,
+                  "line": 3
+                }
+              ],
+              "message": "The transaction was rolled back since another operation in the same transaction failed.",
+              "paths": [
+                "uiapi",
+                "LeadCreate"
+              ]
+            }
+          ],
+          "extensions": {}
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/query",
+        "query": [
+          [
+            "q",
+            "SELECT Id, LastName, Title FROM Lead WHERE LastName LIKE ? ORDER BY LastName"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1716/15000"
+        },
+        "json": {
+          "totalSize": 0,
+          "done": true,
+          "records": []
+        }
+      }
+    }
+  ]
+}

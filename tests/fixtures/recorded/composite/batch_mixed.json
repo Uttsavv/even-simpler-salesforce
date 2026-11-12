@@ -1,38 +1,141 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Salesforce REST API Developer Guide, Batch (Execute Multiple Requests) and Batch Request Body; no org recording yet",
-  "body": {
-    "hasErrors": true,
-    "results": [
-      {
-        "statusCode": 200,
-        "result": {
-          "attributes": {
-            "type": "Account",
-            "url": "/services/data/v68.0/sobjects/Account/001xx0000000001AAA"
-          },
-          "Id": "001xx0000000001AAA",
-          "Name": "Acme"
+  "esf_fixture": 1,
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/composite/batch",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "batchRequests": [
+            {
+              "method": "POST",
+              "url": "v68.0/sobjects/Lead",
+              "richInput": {
+                "LastName": "esf-sandbox-66b81d44a6df-b0-sync",
+                "Company": "esf-sandbox"
+              }
+            },
+            {
+              "method": "POST",
+              "url": "v68.0/sobjects/Lead",
+              "richInput": {
+                "LastName": "esf-sandbox-66b81d44a6df-b0-sync",
+                "Company": "ESF_VR"
+              }
+            },
+            {
+              "method": "GET",
+              "url": "v68.0/query?q=SELECT%20Id%20FROM%20Lead%20LIMIT%201"
+            },
+            {
+              "method": "PATCH",
+              "url": "v68.0/sobjects/Lead/00Q000000000001EAA",
+              "richInput": {
+                "Title": "x"
+              }
+            }
+          ],
+          "haltOnError": false
         }
       },
-      {
-        "statusCode": 404,
-        "result": [
-          {
-            "errorCode": "NOT_FOUND",
-            "message": "The requested resource does not exist"
-          }
-        ]
-      },
-      {
-        "statusCode": 412,
-        "result": [
-          {
-            "errorCode": "BATCH_PROCESSING_HALTED",
-            "message": "Batch processing halted per request"
-          }
-        ]
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1661/15000"
+        },
+        "json": {
+          "hasErrors": true,
+          "results": [
+            {
+              "statusCode": 201,
+              "result": {
+                "id": "00Q000000000002EAA",
+                "success": true,
+                "errors": []
+              }
+            },
+            {
+              "result": [
+                {
+                  "errorCode": "FIELD_CUSTOM_VALIDATION_EXCEPTION",
+                  "message": "esf-sandbox: validation rule probe"
+                }
+              ],
+              "statusCode": 400
+            },
+            {
+              "statusCode": 200,
+              "result": {
+                "totalSize": 1,
+                "done": true,
+                "records": [
+                  {
+                    "attributes": {
+                      "type": "Lead",
+                      "url": "/services/data/v68.0/sobjects/Lead/00Q000000000003EAA"
+                    },
+                    "Id": "00Q000000000003EAA"
+                  }
+                ]
+              }
+            },
+            {
+              "result": [
+                {
+                  "errorCode": "MALFORMED_ID",
+                  "message": "Lead ID: id value of incorrect type: 00Q000000000001EAA"
+                }
+              ],
+              "statusCode": 400
+            }
+          ]
+        }
       }
-    ]
-  }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/query",
+        "query": [
+          [
+            "q",
+            "SELECT Id, LastName, Title FROM Lead WHERE LastName LIKE ? ORDER BY LastName"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=1668/15000"
+        },
+        "json": {
+          "totalSize": 1,
+          "done": true,
+          "records": [
+            {
+              "attributes": {
+                "type": "Lead",
+                "url": "/services/data/v68.0/sobjects/Lead/00Q000000000002EAA"
+              },
+              "Id": "00Q000000000002EAA",
+              "LastName": "LastName 1",
+              "Title": null
+            }
+          ]
+        }
+      }
+    }
+  ]
 }
