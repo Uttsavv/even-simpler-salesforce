@@ -20,6 +20,7 @@ __all__ = [
     "AuthError",
     "BudgetExceeded",
     "BulkJobFailed",
+    "BulkJobNotComplete",
     "BulkJobTimeout",
     "Conflict",
     "ConnectError",
@@ -494,6 +495,24 @@ class BulkJobTimeout(SalesforceError):
     """A Bulk 2.0 job didn't finish within the ``timeout`` of ``wait()``.
 
     The job keeps running in Salesforce. ``state`` is the last state the client saw.
+    """
+
+    job_id: str | None
+    state: str | None
+
+    def __init__(
+        self, message: str = "", *, job_id: str | None = None, state: str | None = None, **kw: Any
+    ) -> None:
+        super().__init__(message, **kw)
+        self.job_id = job_id
+        self.state = state
+
+
+class BulkJobNotComplete(SalesforceError):
+    """Results were asked for before the Bulk 2.0 query job was ``JobComplete``.
+
+    Salesforce serves query results only for a complete job. Call ``wait()`` first. ``state``
+    is the last state the client saw.
     """
 
     job_id: str | None

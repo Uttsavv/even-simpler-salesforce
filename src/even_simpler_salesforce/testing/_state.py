@@ -293,6 +293,7 @@ class FakeState:
         self.events: dict[str, list[dict[str, Any]]] = {}  # published platform events
         self.tooling: Any = None  # state of ``fake.tooling`` (testing/_tooling.py), made on first use
         self.reports: dict[str, Any] = {}  # ReportScript by report id (testing/_reports.py)
+        self.bulk_jobs: dict[str, Any] = {}  # FakeIngestJob or FakeQueryJob by id (testing/_bulk.py)
         self.report_instances: dict[str, tuple[str, dict[str, Any]]] = {}  # id -> (report id, body)
         self.dashboards: dict[str, dict[str, Any]] = {}  # dashboard results by id
         # Metadata API (testing/_metadata.py): seeded components, deployments, scripted outcomes

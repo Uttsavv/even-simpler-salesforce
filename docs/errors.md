@@ -261,6 +261,7 @@ SalesforceError
 ├── PartialFailure                 some records or chunks failed; .results
 ├── BulkJobFailed                  Bulk 2.0 job failed or was aborted; .job_id, .state, .error_message
 ├── BulkJobTimeout                 Bulk 2.0 job not finished within wait(timeout=); .job_id, .state
+├── BulkJobNotComplete             results asked for before the query job was JobComplete; .job_id, .state
 ├── ApexError                      APEX_ERROR, or an error from an Apex REST class; .body
 ├── GraphQLError                   GraphQL errors array; .graphql_errors, .data
 ├── ReportRunFailed                asynchronous report run ended with Error; .report_id, .instance_id
@@ -503,6 +504,12 @@ A Bulk API 2.0 job ended in the `Failed` or `Aborted` state. `exc.state` says wh
 
 A Bulk API 2.0 job didn't finish within the `timeout` of `wait()`. The job keeps running in
 Salesforce. Call `wait()` again with a longer `timeout`, or call `job.abort()` to stop it.
+
+### BulkJobNotComplete
+
+You called `rows()` or `pages()` on a query job that isn't `JobComplete`. Salesforce serves
+results only for a complete job. Call `job.wait()` first. `exc.state` is the state the client
+saw last. See [Run a query in a worker](guides/bulk.md#run-a-query-in-a-worker).
 
 ### ApexError
 
