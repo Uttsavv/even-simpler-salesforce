@@ -157,7 +157,8 @@ class Files:
             title: Title shown in Salesforce. Defaults to ``filename``.
             link_to: Record id to share the file with. Without ``share_type`` and
                 ``visibility`` the client sets ``FirstPublishLocationId``, and Salesforce links
-                the file in the same request.
+                the file in the same request (as a viewer link, ``"V"``, visible to
+                ``"AllUsers"`` in a test org; the documentation doesn't say).
             share_type: ``"V"`` (viewer), ``"C"`` (collaborator) or ``"I"`` (inferred) for the
                 link to ``link_to``. Defaults to ``"V"`` if only ``visibility`` is given.
             visibility: ``"AllUsers"``, ``"InternalUsers"`` or ``"SharedUsers"`` for the link.

@@ -109,6 +109,10 @@ and sends the call again.
 
 - The client posts a Partner SOAP envelope to `/services/Soap/u/{api_version}`. The access
   token goes in `SessionHeader`. It never appears in logs or errors.
+- The client never calls SOAP `login()`, which Salesforce retires in Summer '27. Any OAuth
+  access token works as the session.
+- Salesforce reports an expired or invalid session as an HTTP 500 fault with
+  `INVALID_SESSION_ID`, not as a 401. The client treats it like a 401.
 - The client parses the reply with the standard library. It refuses any reply that declares a
   DTD or entities.
 - A SOAP fault maps to the same error classes as REST errors. See
