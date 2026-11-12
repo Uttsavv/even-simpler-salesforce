@@ -64,6 +64,18 @@ short sentences, no detours. Every page follows the same shape.
 6. Edge cases, limits and internals last, under headings such as `## Limitations` or
    `## How it works`.
 
+**Tutorial pages**
+
+A tutorial builds one small app from start to finish. It follows the page shape loosely:
+
+- Say what the reader builds and how long it takes. Link to the guides for setup steps, such as
+  login, instead of repeating them.
+- Mark each step the reader does with a bold line that starts with 👉 and a verb:
+  `👉 **Add a route that gets one lead**`. The text between the steps explains what happened.
+- After a step, show what the reader sees: a command and its output.
+- Show a change to code from an earlier step as a `diff` block, so `tests/docs` doesn't run it twice.
+- End with `## Recap`, a list of what the reader can now do, and `## Next steps`.
+
 **Sentences**
 
 These rules take the parts of ASD-STE100 Simplified Technical English that suit developer

@@ -19,6 +19,7 @@ site_dir = "site"
 nav = [
   { "Home" = "index.md" },
   { "Getting started" = "getting-started.md" },
+  { "Tutorial" = "tutorial.md" },
   { "Authentication" = [
     { "Overview" = "authentication/index.md" },
     { "Salesforce setup" = "authentication/salesforce-setup.md" },
