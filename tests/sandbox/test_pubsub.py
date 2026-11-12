@@ -6,6 +6,11 @@ Needs the ``[pubsub]`` extra, writes, and two pieces of org setup:
   names with ``ESF_SANDBOX_PUBSUB_EVENT=<Event__e>.<Field__c>``);
 - Change Data Capture on Account (Setup > Change Data Capture), for the CDC test.
 
+The Date test also needs ``tests/sandbox/org/pubsub`` deployed (platform event
+``ESF_Sandbox_Date_Event__e`` with Date ``Day__c`` and DateTime ``When__c``; Date and DateTime
+fields on Account; permission set ``Esf_Sandbox_PubSub``); it skips when the event is missing.
+Deploy that folder with ``sf.metadata.deploy`` as ``scripts/sandbox_setup_org.py`` does.
+
 Set ``ESF_SANDBOX_PUBSUB=1`` to run these tests. Run with ``-s`` to print the schemas and raw
 ``ChangeEventHeader`` bitmaps, the evidence for V27 and V28.
 
@@ -147,9 +152,18 @@ def test_platform_event_resumes_after_a_forced_disconnect(sb: Driver, tag: str) 
 def test_change_event_for_an_account_update(sb: Driver, tag: str) -> None:
     sf = sb.client()
     accounts = sf.sobject("Account")
-    acc_id = sb.run(accounts.create({"Name": f"{tag}-{sb.kind}"}))
+    acc_id = sb.run(
+        accounts.create(
+            {"Name": f"{tag}-{sb.kind}", "Description": "to be nulled", "BillingStreet": "1 Main"}
+        )
+    )
     try:
-        sb.run(accounts.update(acc_id, {"Phone": "555-0100", "BillingCity": "Paris"}))
+        sb.run(
+            accounts.update(
+                acc_id,
+                {"Phone": "555-0100", "BillingCity": "Paris", "Description": None, "BillingStreet": None},
+            )
+        )
 
         def update_of_mine(ev: esf.PubSubEvent) -> bool:
             ch = ev.change
@@ -161,10 +175,61 @@ def test_change_event_for_an_account_update(sb: Driver, tag: str) -> None:
         assert ch is not None
         print("\nraw header", json.dumps(ev.payload["ChangeEventHeader"], default=str))
         print("decoded changed_fields", ch.changed_fields)
-        assert ev.event_id is None
+        # Salesforce sets ConsumerEvent.event.id on change events too (a UUID), although the
+        # docs describe it for platform events only; the client passes it through.
+        assert ev.event_id
         assert "Phone" in ch.changed_fields
         assert "BillingAddress.City" in ch.changed_fields
+        assert "Description" in ch.nulled_fields
+        assert "BillingAddress.Street" in ch.nulled_fields
         assert ch.entity_name == "Account"
         assert ch.transaction_key
     finally:
         sb.run(accounts.delete(acc_id))
+
+
+@pytest.mark.usefixtures("writes")
+def test_platform_event_date_and_datetime_fields(sb: Driver, tag: str) -> None:
+    """V28/V77: a Date field arrives as epoch ms with ``doc`` ``Data:DateOnly:…`` and decodes to
+    a ``date``; a DateTime field (``Data:DateTime:…``) decodes to an aware UTC ``datetime``."""
+    from datetime import date, datetime, timezone
+
+    sf = sb.client()
+    msg = f"{tag}-{sb.kind}-date"
+    try:
+        result = sb.run(
+            sf.platform_events.publish(
+                "ESF_Sandbox_Date_Event__e",
+                {"Message__c": msg, "Day__c": "2026-11-12", "When__c": "2026-11-12T10:30:00.000Z"},
+            )
+        )
+    except esf.NotFound:
+        pytest.skip("sandbox: deploy tests/sandbox/org/pubsub for ESF_Sandbox_Date_Event__e")
+    assert result.ok
+    sub = sf.pubsub.subscribe("/event/ESF_Sandbox_Date_Event__e", replay="earliest")
+    with Stream(sb, sub) as s:
+        ev = s.until(lambda e: e.payload.get("Message__c") == msg)
+    print("\nschema", json.dumps(sf._transport.pubsub.schemas[ev.schema_id].json))
+    assert ev.event_id
+    assert ev.payload["Day__c"] == date(2026, 11, 12)
+    assert ev.payload["When__c"] == datetime(2026, 11, 12, 10, 30, tzinfo=timezone.utc)
+
+
+def test_unknown_topic_raises_not_found(sb: Driver) -> None:
+    """V75: ``NOT_FOUND`` with ``error-code`` ``…topic.not.found`` and an ``rpc-id`` trailer."""
+    sf = sb.client()
+    with pytest.raises(esf.NotFound) as ei, Stream(sb, sf.pubsub.subscribe("/event/No_Such_Event__e")) as s:
+        s.next()
+    assert ei.value.error_code == "sfdc.platform.eventbus.grpc.topic.not.found"
+    assert ei.value.request_id
+
+
+def test_corrupted_replay_id_raises_replay_unavailable(sb: Driver) -> None:
+    """V75: ``INVALID_ARGUMENT`` with ``…subscription.fetch.replayid.corrupted``."""
+    sf = sb.client()
+    sub = sf.pubsub.subscribe(TOPIC, replay=b"\x00\x01garbage")
+    with pytest.raises(esf.ReplayUnavailable) as ei, Stream(sb, sub) as s:
+        s.next()
+    assert ei.value.error_code == "sfdc.platform.eventbus.grpc.subscription.fetch.replayid.corrupted"
+    assert ei.value.replay_id == b"\x00\x01garbage"
+    assert ei.value.request_id

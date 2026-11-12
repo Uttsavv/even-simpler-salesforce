@@ -1087,8 +1087,10 @@ class PubSubEvent:
         topic: The topic you subscribed to, e.g. ``"/data/AccountChangeEvent"``.
         replay_id: Opaque position of the event in the stream. Store it to resume after it.
             Replay ids are not unique across org migrations: never de-duplicate on them.
-        event_id: ``EventUuid`` of a platform event, the key to de-duplicate on. ``None`` for
-            change events: de-duplicate those on ``(change.transaction_key,
+        event_id: ``ConsumerEvent.event.id`` as Salesforce sent it, or ``None`` when it was
+            empty. On a platform event it is the ``EventUuid``, the key to de-duplicate on.
+            Change events carry one too, but Salesforce documents it for platform events
+            only: de-duplicate change events on ``(change.transaction_key,
             change.sequence_number)``.
         schema_id: Id of the Avro schema the payload was written with.
         payload: The decoded event. Change events keep their ``ChangeEventHeader`` here too.

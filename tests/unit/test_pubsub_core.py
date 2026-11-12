@@ -3,7 +3,8 @@ failure classification, Avro and bitmap decoding.
 
 Bitmap rules from *Event Deserialization Considerations* (Pub/Sub API Developer Guide, read
 2026-11-09): https://developer.salesforce.com/docs/platform/pub-sub-api/guide/event-deserialization-considerations.html
-Bit order (bit 0 = least-significant bit) is still to be confirmed on a recorded event (V27).
+Bit order (bit 0 = least-significant bit) is confirmed by the recorded CDC events replayed in
+``tests/contract/pubsub/test_recorded.py`` (V27).
 The schemas below are **synthetic**.
 """
 
@@ -11,7 +12,7 @@ from __future__ import annotations
 
 import io
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 
 import pytest
@@ -251,6 +252,8 @@ PE_SCHEMA: dict[str, Any] = {
         {"name": "Count__c", "type": ["null", "long"], "default": None, "doc": "Data:Number:00N"},
         {"name": "When__c", "type": ["null", "long"], "default": None, "doc": "Data:DateTime:00N"},
         {"name": "Day__c", "type": ["null", {"type": "int", "logicalType": "date"}], "default": None},
+        {"name": "Due__c", "type": ["null", "long"], "default": None, "doc": "Data:DateOnly:00N"},
+        {"name": "Plain__c", "type": ["null", "long"], "default": None, "doc": "Data:DateOnlyish"},
         {
             "name": "Meta",
             "type": [
@@ -272,8 +275,17 @@ PE_SCHEMA: dict[str, Any] = {
 def test_parse_schema_and_datetime_paths() -> None:
     schema = ps.parse_schema("s1", json.dumps(PE_SCHEMA), json.loads)
     assert schema.schema_id == "s1"
-    assert schema.field_names == ("CreatedDate", "Count__c", "When__c", "Day__c", "Meta")
+    assert schema.field_names == (
+        "CreatedDate",
+        "Count__c",
+        "When__c",
+        "Day__c",
+        "Due__c",
+        "Plain__c",
+        "Meta",
+    )
     assert schema.datetimes == (("CreatedDate",), ("When__c",), ("Meta", "At"))
+    assert schema.dates == (("Due__c",),)
 
 
 @pytest.mark.parametrize("text", ["not json", "[]", '{"type": "record"}', '{"type": "nope", "fields": []}'])
@@ -289,6 +301,8 @@ def test_decode_payload_converts_marked_datetimes_only() -> None:
         "Count__c": 1_767_225_600_000,
         "When__c": None,
         "Day__c": 20454,
+        "Due__c": 1_794_441_600_000,  # recorded: a Date is epoch ms at midnight UTC
+        "Plain__c": 1_794_441_600_000,
         "Meta": {"At": 0},
     }
     out = ps.decode_payload(schema, encode(PE_SCHEMA, record))
@@ -296,6 +310,8 @@ def test_decode_payload_converts_marked_datetimes_only() -> None:
     assert out["Count__c"] == 1_767_225_600_000
     assert out["When__c"] is None
     assert out["Day__c"].isoformat() == "2026-01-01"
+    assert out["Due__c"] == date(2026, 11, 12)
+    assert out["Plain__c"] == 1_794_441_600_000
     assert out["Meta"]["At"] == datetime(1970, 1, 1, tzinfo=timezone.utc)
 
     out = ps.decode_payload(schema, encode(PE_SCHEMA, {**record, "Meta": None}))

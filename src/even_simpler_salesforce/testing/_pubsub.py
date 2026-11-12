@@ -82,8 +82,8 @@ class FakePubSub:
         Args:
             topic: ``"/event/Order_Event__e"`` or a change event channel.
             payload: The decoded event fields.
-            event_id: The ``EventUuid``. Platform events get a random one by default; events on
-                ``/data/`` channels get ``None``, as from Salesforce.
+            event_id: The event's ``id`` (``EventUuid``). Defaults to a random UUID, on change
+                event channels too, as Salesforce sends.
             schema_id: Reported as :attr:`PubSubEvent.schema_id`.
             change: The decoded header of a change event; prefer :meth:`emit_change`.
 
@@ -91,7 +91,7 @@ class FakePubSub:
             The event as subscriptions will yield it, with a fresh replay id.
         """
         ps.check_subscribe(topic, "latest", "raise", 1)
-        if event_id is None and topic.startswith("/event/"):
+        if event_id is None:
             event_id = str(uuid.uuid4())
         with self._state.lock:
             self._state.pubsub_seq += 1

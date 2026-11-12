@@ -51,13 +51,14 @@ Each event is a `PubSubEvent`:
 |---|---|
 | `topic` | the topic you subscribed to |
 | `replay_id` | position of the event in the stream (`bytes`) |
-| `event_id` | `EventUuid` of a platform event; `None` for a change event |
+| `event_id` | the event's `id` (the `EventUuid` of a platform event); `None` if Salesforce sent none |
 | `schema_id` | id of the Avro schema of the payload |
 | `payload` | the decoded event (`dict`) |
 | `change` | a `ChangeHeader` for a change event; `None` for a platform event |
 
 The client gets each Avro schema once and caches it for the life of the client. A field that
-the schema marks as a DateTime becomes an aware UTC `datetime`. Other numbers stay `int`.
+the schema marks as a DateTime becomes an aware UTC `datetime`, and a field it marks as a Date
+becomes a `date`. Other numbers stay `int`.
 
 If a payload doesn't match its schema, the client raises `UnexpectedResponse`, with
 `event_id` and `replay_id` set. Salesforce doesn't check payloads on publish, so this can
@@ -282,7 +283,9 @@ the whole object once instead of each record.
 Replay ids aren't unique across org migrations. Never use them as a key to find duplicates.
 
 - Platform events: use `ev.event_id`.
-- Change events: use `(ev.change.transaction_key, ev.change.sequence_number)`.
+- Change events: use `(ev.change.transaction_key, ev.change.sequence_number)`. Change events
+  also carry an `ev.event_id`, but Salesforce documents the id for platform events only, so
+  don't rely on it.
 
 ## Errors and reconnects
 
@@ -421,10 +424,13 @@ code that stores the replay id with a replay store.
   `/services/oauth2/userinfo` once and caches the result.
 - All subscriptions of a client and its `with_auth()` children share one gRPC channel. Closing
   the client closes it.
-- Salesforce sends an empty response about every 270 seconds as a keepalive. The client never
-  yields it. If nothing is buffered, the client saves its `latest_replay_id`, so a restart
+- While events are requested but none arrive, Salesforce sends an empty response as a
+  keepalive at least every 270 seconds. The client never yields it. If nothing is buffered, the client saves its `latest_replay_id`, so a restart
   doesn't go back far.
 - Only the first request of a stream sets the start position. Later requests ask for more
   events only.
-- A field is a DateTime when its Avro `doc` attribute says so, such as
-  `"CreatedDate:DateTime"`, or when it has a `timestamp-millis` logical type.
+- Salesforce sends Date and DateTime values as a `long` of epoch milliseconds. Only the Avro
+  `doc` attribute says which is which. A field is a DateTime when its `doc` is
+  `"CreatedDate:DateTime"`, `"Data:DateTime"` or `"Data:DateTime:00N…"`, or when it has a
+  `timestamp-millis` logical type. A field is a Date when its `doc` is `"Data:DateOnly:00N…"`
+  (the value is midnight UTC of that day), or when it has a `date` logical type.
