@@ -863,13 +863,19 @@ class DeployResult:
 
     @property
     def failed(self) -> bool:
-        """Whether the deployment finished without fully succeeding."""
+        """Whether the deployment finished without fully succeeding.
+
+        A finished deployment with failed Apex tests counts as failed too. With
+        ``rollback_on_error`` off (the default in non-production orgs) Salesforce reports such a
+        deployment as ``Succeeded``, with the failures under ``test_failures``.
+        """
         if self.status in _DEPLOY_FAILED_STATES:
             return True
-        return self.done and not self.success
+        return self.done and (not self.success or self.test_errors > 0 or bool(self.test_failures))
 
     def raise_for_errors(self) -> None:
-        """Raise :class:`DeployFailed` if the deployment failed or deployed only some components.
+        """Raise :class:`DeployFailed` if the deployment failed, deployed only some components,
+        or ran Apex tests that failed.
 
         Does nothing while the deployment is still running.
         """

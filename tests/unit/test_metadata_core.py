@@ -114,6 +114,13 @@ def test_deploy_result_failed_states() -> None:
     assert esf.DeployResult("0Af", "Succeeded", done=True, success=False).failed
     assert not esf.DeployResult("0Af", "InProgress").failed
     esf.DeployResult("0Af", "InProgress").raise_for_errors()  # still running: nothing to raise
+    # Recorded (metadata/deploy_test_failure.json): with rollbackOnError off Salesforce says
+    # Succeeded and success=true although a test failed.
+    assert esf.DeployResult("0Af", "Succeeded", done=True, success=True, test_errors=1).failed
+    failure = esf.DeployTestFailure(class_name="T", method_name="m", message="boom")
+    assert esf.DeployResult("0Af", "Succeeded", done=True, success=True, test_failures=(failure,)).failed
+    assert not esf.DeployResult("0Af", "Succeeded", done=True, success=True).failed
+    assert not esf.DeployResult("0Af", "InProgress", test_errors=1).failed  # not done yet
 
 
 def test_deploy_failed_from_error_message_only() -> None:
