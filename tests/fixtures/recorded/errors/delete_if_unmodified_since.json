@@ -1,0 +1,56 @@
+{
+  "esf_fixture": 1,
+  "source": "recorded by tests/sandbox/test_core_rest.py::test_delete_with_if_unmodified_since (esf.testing.record, Developer Edition org, API v68.0, 2026-11-12)",
+  "interactions": [
+    {
+      "request": {
+        "method": "DELETE",
+        "path": "/services/data/v68.0/sobjects/Lead/00Q000000000001EAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "if-unmodified-since": "Sun, 13 Nov 2016 23:00:33 GMT",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 500,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=2693/15000"
+        },
+        "json": [
+          {
+            "message": "An unexpected error occurred. Please include this ErrorId if you contact support: 692094345-1578699 (618775979)",
+            "errorCode": "UNKNOWN_EXCEPTION"
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "path": "/services/data/v68.0/sobjects/Lead/00Q000000000001EAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "if-unmodified-since": "Thu, 12 Nov 2026 23:00:33 GMT",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=2687/15000"
+        },
+        "json": [
+          {
+            "errorCode": "BAD_HEADER",
+            "message": "[If-Unmodified-Since]"
+          }
+        ]
+      }
+    }
+  ]
+}

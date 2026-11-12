@@ -3,29 +3,47 @@
 from __future__ import annotations
 
 import datetime as _dt
+import re
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from typing import Any, TypeVar, cast
 
-from ..errors import ErrorDetail, UnexpectedResponse
+from ..errors import ErrorDetail, InvalidField, MultipleMatches, UnexpectedResponse
 from ..models import QueryPlan, QueryPlanNote, RecordResult, UpsertResult
 from .classify import parse_details
+from .http import check_record_id
+from .soql import quote, soql_identifier
 
 __all__ = [
     "COLLECTION_READ_CHUNK",
     "COLLECTION_WRITE_CHUNK",
     "apply_model",
     "chunked",
+    "duplicate_matches",
     "duplicate_rule_header",
+    "external_id_in_data",
+    "external_id_lookup_soql",
     "flatten",
     "format_sf_datetime",
+    "needs_external_id_fallback",
     "parse_query_plans",
     "parse_record_results",
     "parse_upsert",
+    "query_ids",
     "with_type",
+    "write_headers",
 ]
 
 COLLECTION_WRITE_CHUNK = 200
 COLLECTION_READ_CHUNK = 2000
+
+# Salesforce still reads these endings of a REST path as a response format, even on API
+# versions where format suffixes are no longer documented (58.0+). An external id value that
+# ends in one of them can't be used in ``sobjects/{o}/{field}/{value}``: the lookup returns 404
+# NOT_FOUND, also with the dot percent-encoded. Observed on a v68.0 org for ``.json``, ``.xml``
+# and ``.html`` (lower case; other endings, ``.JSON`` included, work). Matched case-insensitively
+# to be safe: the fallback returns the same result, only with one more request.
+_FORMAT_SUFFIXES = (".json", ".xml", ".html")
+_ID_IN_MESSAGE = re.compile(r"\b[a-zA-Z0-9]{15}(?:[a-zA-Z0-9]{3})?\b")
 
 T = TypeVar("T")
 
@@ -94,6 +112,72 @@ def duplicate_rule_header(
         f"allowSave={b(allow_save)}; includeRecordDetails={b(include_record_details)}; "
         f"runAsCurrentUser={b(run_as_current_user)}"
     )
+
+
+def needs_external_id_fallback(value: str) -> bool:
+    """Whether ``value`` can't go in an external id path (it ends like a format suffix)."""
+    return value.lower().endswith(_FORMAT_SUFFIXES)
+
+
+def external_id_lookup_soql(sobject: str, field: str, value: str) -> str:
+    """SOQL that finds the ids of the records whose external id ``field`` equals ``value``."""
+    # Both names are validated identifiers and the value is quoted, so joining them is safe.
+    parts = ("SELECT Id FROM", soql_identifier(sobject), "WHERE", soql_identifier(field), "=", quote(value))
+    return " ".join(parts)
+
+
+def query_ids(body: Any) -> list[str]:
+    """The ``Id`` of every record in a query response body."""
+    records: Any = body.get("records") if isinstance(body, Mapping) else None  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+    if not isinstance(records, list):
+        raise UnexpectedResponse("query response has no records list", raw=repr(body)[:4096])  # pyright: ignore[reportUnknownArgumentType]
+    rows = cast("list[Any]", records)
+    return [str(r["Id"]) for r in rows if isinstance(r, Mapping) and r.get("Id")]  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
+
+
+def external_id_in_data(field: str, data: Mapping[str, Any]) -> InvalidField | None:
+    """The error Salesforce returns when an upsert body also sets its external id field.
+
+    ``PATCH sobjects/{o}/{field}/{value}`` rejects that with ``INVALID_FIELD``; the Collections
+    upsert, which the fallback uses, takes the field from the body instead. Field names are
+    case-insensitive, as in Salesforce.
+    """
+    if not any(str(k).lower() == field.lower() for k in data):
+        return None
+    return InvalidField(
+        f"The {field} field should not be specified in the sobject data.",
+        error_code="INVALID_FIELD",
+        status=400,
+    )
+
+
+def duplicate_matches(detail: ErrorDetail, api_version: str, sobject: str) -> MultipleMatches | None:
+    """:class:`MultipleMatches` for a Collections ``DUPLICATE_EXTERNAL_ID`` error, else ``None``.
+
+    The single-record upsert answers HTTP 300 with the record URLs; the Collections upsert
+    reports the same case as ``DUPLICATE_EXTERNAL_ID`` with the ids in the message. The URLs
+    are rebuilt from those ids so both paths give the same ``matches``.
+    """
+    if detail.error_code != "DUPLICATE_EXTERNAL_ID":
+        return None
+    ids = _ID_IN_MESSAGE.findall(detail.message.rsplit(":", 1)[-1])
+    matches = tuple(f"/services/data/v{api_version}/sobjects/{sobject}/{i}" for i in ids)
+    return MultipleMatches(
+        f"external id matched {len(matches) or 'several'} records", matches=matches, status=300
+    )
+
+
+def write_headers(assignment_rule_id: str | bool | None, allow_save: bool | None) -> dict[str, str]:
+    """``Sforce-Auto-Assign`` and ``Sforce-Duplicate-Rule-Header`` for a write (``None``: not sent)."""
+    h: dict[str, str] = {}
+    if assignment_rule_id is not None:
+        if isinstance(assignment_rule_id, bool):
+            h["Sforce-Auto-Assign"] = "TRUE" if assignment_rule_id else "FALSE"
+        else:
+            h["Sforce-Auto-Assign"] = check_record_id(assignment_rule_id)
+    if allow_save is not None:
+        h["Sforce-Duplicate-Rule-Header"] = duplicate_rule_header(allow_save=allow_save)
+    return h
 
 
 def format_sf_datetime(value: _dt.datetime) -> str:

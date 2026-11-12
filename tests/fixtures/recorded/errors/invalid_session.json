@@ -1,10 +1,28 @@
 {
-  "synthetic": true,
-  "source": "hand-written from Salesforce REST API Developer Guide examples",
-  "body": [
+  "esf_fixture": 1,
+  "source": "recorded by tests/sandbox/test_core_rest.py::test_invalid_session_body (esf.testing.record, Developer Edition org, API v68.0, 2026-11-12)",
+  "interactions": [
     {
-      "message": "Session expired or invalid",
-      "errorCode": "INVALID_SESSION_ID"
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/limits",
+        "query": [],
+        "headers": {
+          "accept": "application/json"
+        }
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8"
+        },
+        "json": [
+          {
+            "message": "Session expired or invalid",
+            "errorCode": "INVALID_SESSION_ID"
+          }
+        ]
+      }
     }
   ]
 }

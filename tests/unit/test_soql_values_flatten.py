@@ -126,9 +126,13 @@ def test_flatten_many_rows_points_to_comprehension(rows: object) -> None:
 def test_parse_query_plans_keeps_order_and_fields() -> None:
     plans = parse_query_plans(load_fixture("query/explain.json"))
     assert [p.leading_operation for p in plans] == ["Index", "TableScan"]
-    first, second = plans
-    assert first == esf.QueryPlan("Index", 0.0, 1, 120000, "Lead", ("Email",), ())
-    assert second.relative_cost == 2.8
+    first, second = plans  # recorded: WHERE Esf_Ext__c = ? (a unique external id)
+    unindexed = "Not considering filter for optimization because unindexed"
+    note = esf.QueryPlanNote(unindexed, ("IsDeleted",), "Lead")
+    rows = first.sobject_cardinality
+    assert first == esf.QueryPlan("Index", 0.0, 0, rows, "Lead", ("Esf_Ext__c",), (note,))
+    assert rows > 0
+    assert second.relative_cost > 0
     assert second.notes == (
         esf.QueryPlanNote(
             "Not considering filter for optimization because unindexed", ("IsDeleted",), "Lead"

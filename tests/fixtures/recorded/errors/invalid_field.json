@@ -1,10 +1,35 @@
 {
-  "synthetic": true,
-  "source": "hand-written from Salesforce REST API Developer Guide examples",
-  "body": [
+  "esf_fixture": 1,
+  "source": "recorded by tests/sandbox/test_core_rest.py::test_invalid_field_message_shapes (esf.testing.record, Developer Edition org, API v68.0, 2026-11-12)",
+  "interactions": [
     {
-      "message": "\nSELECT Nope FROM Lead\n       ^\nERROR at Row:1:Column:8\nNo such column 'Nope' on entity 'Lead'.",
-      "errorCode": "INVALID_FIELD"
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/query",
+        "query": [
+          [
+            "q",
+            "SELECT Nope__x FROM Lead"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=2749/15000"
+        },
+        "json": [
+          {
+            "message": "\nSELECT Nope__x FROM Lead\n       ^\nERROR at Row:1:Column:8\nNo such column 'Nope__x' on entity 'Lead'. If you are attempting to use a custom field, be sure to append the '__c' after the custom field name. Please reference your WSDL or the describe call for the appropriate names.",
+            "errorCode": "INVALID_FIELD"
+          }
+        ]
+      }
     }
   ]
 }

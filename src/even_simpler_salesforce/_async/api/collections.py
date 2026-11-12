@@ -15,6 +15,7 @@ from ...core.records import (
     chunked,
     parse_record_results,
     with_type,
+    write_headers,
 )
 from ...core.soql import soql_identifier
 from ...errors import (
@@ -80,12 +81,32 @@ class AsyncCollections:
         sobject: str | None = None,
         all_or_none: bool = False,
         concurrency: int | None = None,
+        assignment_rule_id: str | bool | None = None,
+        allow_save: bool | None = None,
     ) -> BatchResult[RecordResult]:
-        """``POST composite/sobjects`` in chunks of 200. Rows need ``attributes.type`` or ``sobject=``."""
+        """``POST composite/sobjects`` in chunks of 200. Rows need ``attributes.type`` or ``sobject=``.
+
+        Args:
+            rows: Field values, one mapping per record.
+            sobject: The sObject type of rows without ``attributes.type``.
+            all_or_none: Roll back a chunk when one of its rows fails.
+            concurrency: Chunks in flight at once (default: the client's setting).
+            assignment_rule_id: ``Sforce-Auto-Assign`` on every chunk: an AssignmentRule id, or
+                ``True``/``False``. ``None`` sends nothing (Salesforce runs the active rule).
+            allow_save: ``Sforce-Duplicate-Rule-Header: allowSave=...`` on every chunk: save
+                rows despite a duplicate-rule alert.
+        """
         name = check_sobject(sobject) if sobject else None
         typed = [with_type(r, name) for r in rows]
         return await self._write(
-            "POST", "composite/sobjects", typed, "collections.create", sobject, all_or_none, concurrency
+            "POST",
+            "composite/sobjects",
+            typed,
+            "collections.create",
+            sobject,
+            all_or_none,
+            concurrency,
+            headers=write_headers(assignment_rule_id, allow_save),
         )
 
     async def update(
@@ -95,8 +116,23 @@ class AsyncCollections:
         *,
         all_or_none: bool = False,
         concurrency: int | None = None,
+        assignment_rule_id: str | bool | None = None,
+        allow_save: bool | None = None,
     ) -> BatchResult[RecordResult]:
-        """``PATCH composite/sobjects`` in chunks of 200. Each row needs ``Id``."""
+        """``PATCH composite/sobjects`` in chunks of 200. Each row needs ``Id``.
+
+        A key set to ``None`` clears the field; a key left out keeps its value.
+
+        Args:
+            sobject: The sObject type of every row.
+            rows: Field values with the ``Id`` of the record to change.
+            all_or_none: Roll back a chunk when one of its rows fails.
+            concurrency: Chunks in flight at once (default: the client's setting).
+            assignment_rule_id: ``Sforce-Auto-Assign`` on every chunk: an AssignmentRule id, or
+                ``True``/``False``. ``None`` sends nothing (Salesforce runs the active rule).
+            allow_save: ``Sforce-Duplicate-Rule-Header: allowSave=...`` on every chunk: save
+                rows despite a duplicate-rule alert.
+        """
         check_sobject(sobject)
         typed: list[dict[str, Any]] = []
         for r in rows:
@@ -104,7 +140,14 @@ class AsyncCollections:
                 raise ValueError("each row needs an Id for update")
             typed.append(with_type(r, sobject))
         return await self._write(
-            "PATCH", "composite/sobjects", typed, "collections.update", sobject, all_or_none, concurrency
+            "PATCH",
+            "composite/sobjects",
+            typed,
+            "collections.update",
+            sobject,
+            all_or_none,
+            concurrency,
+            headers=write_headers(assignment_rule_id, allow_save),
         )
 
     async def upsert(
@@ -115,8 +158,22 @@ class AsyncCollections:
         *,
         all_or_none: bool = False,
         concurrency: int | None = None,
+        assignment_rule_id: str | bool | None = None,
+        allow_save: bool | None = None,
     ) -> BatchResult[RecordResult]:
-        """``PATCH composite/sobjects/{o}/{field}`` in chunks of 200."""
+        """``PATCH composite/sobjects/{o}/{field}`` in chunks of 200.
+
+        Args:
+            sobject: The sObject type of every row.
+            field: The external id field that matches rows to records; each row sets it.
+            rows: Field values, one mapping per record.
+            all_or_none: Roll back a chunk when one of its rows fails.
+            concurrency: Chunks in flight at once (default: the client's setting).
+            assignment_rule_id: ``Sforce-Auto-Assign`` on every chunk: an AssignmentRule id, or
+                ``True``/``False``. ``None`` sends nothing (Salesforce runs the active rule).
+            allow_save: ``Sforce-Duplicate-Rule-Header: allowSave=...`` on every chunk: save
+                rows despite a duplicate-rule alert.
+        """
         check_sobject(sobject)
         soql_identifier(field)
         typed = [with_type(r, sobject) for r in rows]
@@ -128,6 +185,7 @@ class AsyncCollections:
             sobject,
             all_or_none,
             concurrency,
+            headers=write_headers(assignment_rule_id, allow_save),
         )
 
     async def delete(
@@ -310,6 +368,7 @@ class AsyncCollections:
         concurrency: int | None,
         *,
         idempotent: bool | None = None,
+        headers: Mapping[str, str] | None = None,
     ) -> BatchResult[RecordResult]:
         if not rows:
             return BatchResult([], operation=operation, sobject=sobject)
@@ -323,6 +382,7 @@ class AsyncCollections:
                     path,
                     content=content,
                     content_type=ctype,
+                    headers=dict(headers or {}),
                     idempotent=idempotent,
                     operation=operation,
                     sobject=sobject,

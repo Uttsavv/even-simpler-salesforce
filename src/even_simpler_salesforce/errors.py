@@ -336,8 +336,9 @@ class RequestTooLarge(RequestError):
 class UnsupportedApiVersion(RequestError):
     """The API version doesn't fit the call. Two sources, told apart by ``error_code``:
 
-    - ``"UNSUPPORTED_API_VERSION"``: Salesforce rejected the configured ``api_version`` (e.g. the
-      org doesn't offer it yet).
+    - ``"UNSUPPORTED_API_VERSION"``: Salesforce rejected the configured ``api_version``. A version
+      newer than the org's release is not reported this way: Salesforce answers 404
+      ``NOT_FOUND`` (:class:`NotFound`) on every resource (observed on a v68.0 org).
     - ``"API_VERSION_TOO_OLD"``: raised by the library before sending, because a feature needs
       a newer ``api_version`` than configured.
     """
