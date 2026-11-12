@@ -15,7 +15,10 @@ permission set to the logged-in user:
   Apex REST class ``EsfSandboxRest`` (``/services/apexrest/esf-sandbox/``) and the invocable
   action ``EsfSandboxAction``;
 - extras: a before-save Lead flow with a Custom Error (V5b) and a tabular and a summary Lead
-  report in ``unfiled$public``.
+  report in ``unfiled$public``;
+- every other folder in ``tests/sandbox/org/`` (one per test area, each with its own
+  ``package.xml``), in name order. ``graphql``: ``Lead.Esf_GraphQL_Hidden__c``, a field
+  deployed without field-level security (V51).
 
 It refuses to run against a production org: ``Organization.IsSandbox`` must be true or the
 org must be a Developer Edition. The fixtures change org behaviour on purpose (Leads with
@@ -95,6 +98,9 @@ def main() -> int:
         print(f"org: {_guard(sf)}")
         ok = _deploy(sf, "core", args.check_only)
         ok = _deploy(sf, "extras", args.check_only) and ok
+        for area in sorted(p.name for p in ORG_DIR.iterdir() if (p / "package.xml").is_file()):
+            if area not in ("core", "extras"):
+                ok = _deploy(sf, area, args.check_only) and ok
         if not args.check_only:
             _assign_permission_set(sf)
     return 0 if ok else 1

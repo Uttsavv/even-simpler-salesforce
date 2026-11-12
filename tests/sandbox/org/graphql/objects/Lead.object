@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- V51: a Lead field that no profile or permission set can read (no field-level security is
+     deployed), so a GraphQL query that selects it shows what Salesforce returns for it. -->
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fields>
+        <fullName>Esf_GraphQL_Hidden__c</fullName>
+        <label>ESF GraphQL Hidden</label>
+        <type>Text</type>
+        <length>40</length>
+        <required>false</required>
+        <externalId>false</externalId>
+        <unique>false</unique>
+        <description>even-simpler-salesforce sandbox tests (V51): deployed without field-level security.</description>
+    </fields>
+</CustomObject>
