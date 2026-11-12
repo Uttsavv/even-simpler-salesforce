@@ -6,6 +6,7 @@ answer ``200 OK``: the body then holds an ``errors`` array, sometimes next to pa
 
 from __future__ import annotations
 
+import html
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -207,14 +208,23 @@ def graphql_sobject(path: Sequence[str]) -> str | None:
 
 
 def _detail(item: Mapping[str, Any]) -> ErrorDetail:
+    """One ``errors[]`` entry as an :class:`ErrorDetail`.
+
+    Salesforce sends the field path as ``paths`` (the GraphQL spec calls it ``path``) and
+    HTML-escapes the message (``Field &#39;Nmae&#39;``), as recorded in
+    ``tests/fixtures/recorded/graphql``. ``extended["path"]`` holds the path under either
+    name, and ``message`` is unescaped; ``GraphQLError.graphql_errors`` keeps the raw entries.
+    """
     extensions: Any = item.get("extensions")
     code: Any = (
         cast("Mapping[str, Any]", extensions).get("ErrorType") if isinstance(extensions, Mapping) else None
     )
     extended = {k: item[k] for k in ("path", "locations", "extensions") if k in item}
+    if "path" not in extended and "paths" in item:
+        extended["path"] = item["paths"]
     return ErrorDetail(
         error_code=str(code) if code is not None else None,
-        message=str(item.get("message") or ""),
+        message=html.unescape(str(item.get("message") or "")),
         extended=extended,
     )
 

@@ -154,6 +154,31 @@ def test_graphql_error_shape() -> None:
     assert not err.retryable
 
 
+def test_graphql_error_salesforce_shape() -> None:
+    """Salesforce sends ``paths`` (not ``path``) and HTML-escapes the message (org, V50)."""
+    body = {
+        "data": {},
+        "errors": [
+            {
+                "extensions": {"ErrorType": "InvalidSyntax"},
+                "locations": [{"column": 66, "line": 1}],
+                "message": "Invalid syntax with offending token &#39;&lt;EOF&gt;&#39; at line 1 column 66",
+                "paths": [],
+            },
+            {"message": "x", "path": ["a"], "paths": ["b"]},
+        ],
+        "extensions": {},
+    }
+    err = graphql_error(_resp(body), SPEC)
+    assert err is not None
+    assert err.errors[0].message == "Invalid syntax with offending token '<EOF>' at line 1 column 66"
+    assert err.message.startswith("Invalid syntax with offending token '<EOF>'")
+    assert err.graphql_errors[0]["message"].startswith("Invalid syntax with offending token &#39;")
+    assert err.errors[0].extended["path"] == []
+    assert err.errors[1].extended["path"] == ["a"]  # the spec's name wins when both are sent
+    assert err.data == {}
+
+
 def test_graphql_error_without_message() -> None:
     err = graphql_error(_resp({"errors": [{}]}), SPEC)
     assert err is not None
