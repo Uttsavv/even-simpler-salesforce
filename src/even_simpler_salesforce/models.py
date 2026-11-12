@@ -825,8 +825,9 @@ class DeployResult:
 
     Attributes:
         id: The deployment id (``0Af...``).
-        status: ``Pending``, ``InProgress``, ``FinalizingDeploy``, ``FinalizingDeployFailed``,
-            ``Succeeded``, ``SucceededPartial``, ``Failed``, ``Canceling`` or ``Canceled``.
+        status: ``Pending``, ``InProgress``, ``Finalizing``, ``FinalizingDeploy``,
+            ``FinalizingDeployFailed``, ``Succeeded``, ``SucceededPartial``, ``Failed``,
+            ``Canceling`` or ``Canceled``.
         done: Whether Salesforce has finished the deployment.
         success: Whether the deployment succeeded.
         check_only: Whether this was a validation that saves nothing.

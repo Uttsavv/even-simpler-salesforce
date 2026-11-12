@@ -103,6 +103,15 @@ def test_parse_deploy_result_tolerates_missing_and_text_values() -> None:
     assert res.test_failures == ()
 
 
+def test_parse_deploy_result_accepts_finalizing_as_in_progress() -> None:
+    """Org-observed (DE org, API v68.0, 2026-11-12): a REST quick deploy reported ``Finalizing``
+    while finishing; ``tests/sandbox/test_tooling_metadata.py::test_quick_deploy`` hit it."""
+    res = md.parse_deploy_result({"id": "0Af000000000001AAA", "deployResult": {"status": "Finalizing"}})
+    assert res.status == "Finalizing"
+    assert not res.done
+    assert not res.failed
+
+
 def test_parse_deploy_result_without_result_defaults_to_pending() -> None:
     res = md.parse_deploy_result({"id": "0Afxx0000000001AAA"})
     assert (res.status, res.done, res.failed) == ("Pending", False, False)

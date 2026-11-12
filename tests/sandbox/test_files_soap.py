@@ -387,7 +387,9 @@ def test_download(sb: Driver, tag: str, cleanup: Cleanup, wired: Callable[[], tu
         assert req.headers["accept"] == "*/*"
         assert "gzip" in req.headers["accept-encoding"]
         assert resp.headers["content-type"] == "application/octetstream"
-        assert resp.headers["content-length"] == str(len(FILE))
+        # Org-observed: usually Content-Length, but one run (2026-11-12) answered without it
+        # (chunked). The client doesn't rely on either; the body above is complete.
+        assert resp.headers.get("content-length") in (str(len(FILE)), None)
         assert "content-encoding" not in resp.headers
 
         if sb.is_async:
@@ -405,7 +407,7 @@ def test_download(sb: Driver, tag: str, cleanup: Cleanup, wired: Callable[[], tu
         assert sb.run(sf.files.download_attachment(att)) == FILE
         _, resp = wire.last("/Body")
         assert resp.headers["content-type"] == "text/plain"
-        assert resp.headers["content-length"] == str(len(FILE))
+        assert resp.headers.get("content-length") in (str(len(FILE)), None)
         assert "content-encoding" not in resp.headers
     finally:
         _delete(sb, sf, cleanup, [doc, lead])  # deleting the lead deletes the attachment
