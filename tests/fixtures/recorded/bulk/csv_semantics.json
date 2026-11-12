@@ -1,0 +1,1943 @@
+{
+  "esf_fixture": 1,
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/jobs/ingest",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "object": "Lead",
+          "operation": "insert",
+          "contentType": "CSV",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=45/15000"
+        },
+        "json": {
+          "id": "750000000000001AAA",
+          "operation": "insert",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:49:37.000+0000",
+          "systemModstamp": "2026-11-12T07:49:37.000+0000",
+          "state": "Open",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "contentUrl": "services/data/v68.0/jobs/ingest/750000000000001AAA/batches",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "path": "/services/data/v68.0/jobs/ingest/750000000000001AAA/batches",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "text/csv; charset=UTF-8"
+        },
+        "text": "LastName,Company,FirstName,Status,Description,Title\nesf-sandbox-886d8ad50a80-a-sync,esf-sandbox,Zoë Ünïcødé,Working - Contacted,\"日本語 🙂 «q» \"\"x\"\", y\nz\",Dr. Ø\nesf-sandbox-886d8ad50a80-b-sync,esf-sandbox,,,,\nesf-sandbox-886d8ad50a80-c-sync,esf-sandbox,#N/A,#N/A,#N/A,#N/A\n"
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "sforce-limit-info": "api-usage=51/15000"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "path": "/services/data/v68.0/jobs/ingest/750000000000001AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "state": "UploadComplete"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=54/15000"
+        },
+        "json": {
+          "id": "750000000000001AAA",
+          "operation": "insert",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:49:37.000+0000",
+          "systemModstamp": "2026-11-12T07:49:37.000+0000",
+          "state": "UploadComplete",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/750000000000001AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=43/15000"
+        },
+        "json": {
+          "id": "750000000000001AAA",
+          "operation": "insert",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:49:37.000+0000",
+          "systemModstamp": "2026-11-12T07:49:38.000+0000",
+          "state": "InProgress",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 0,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 0,
+          "apiActiveProcessingTime": 0,
+          "apexProcessingTime": 0,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/750000000000001AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=43/15000"
+        },
+        "json": {
+          "id": "750000000000001AAA",
+          "operation": "insert",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:49:37.000+0000",
+          "systemModstamp": "2026-11-12T07:49:38.000+0000",
+          "state": "InProgress",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 0,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 0,
+          "apiActiveProcessingTime": 0,
+          "apexProcessingTime": 0,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/750000000000001AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=51/15000"
+        },
+        "json": {
+          "id": "750000000000001AAA",
+          "operation": "insert",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:49:37.000+0000",
+          "systemModstamp": "2026-11-12T07:49:38.000+0000",
+          "state": "InProgress",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 0,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 0,
+          "apiActiveProcessingTime": 0,
+          "apexProcessingTime": 0,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/750000000000001AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=54/15000"
+        },
+        "json": {
+          "id": "750000000000001AAA",
+          "operation": "insert",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:49:37.000+0000",
+          "systemModstamp": "2026-11-12T07:49:38.000+0000",
+          "state": "InProgress",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 0,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 0,
+          "apiActiveProcessingTime": 0,
+          "apexProcessingTime": 0,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/750000000000001AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=58/15000"
+        },
+        "json": {
+          "id": "750000000000001AAA",
+          "operation": "insert",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:49:37.000+0000",
+          "systemModstamp": "2026-11-12T07:49:38.000+0000",
+          "state": "InProgress",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 3,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 275,
+          "apiActiveProcessingTime": 168,
+          "apexProcessingTime": 91,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/750000000000001AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=81/15000"
+        },
+        "json": {
+          "id": "750000000000001AAA",
+          "operation": "insert",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:49:37.000+0000",
+          "systemModstamp": "2026-11-12T07:49:52.000+0000",
+          "state": "JobComplete",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 3,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 275,
+          "apiActiveProcessingTime": 168,
+          "apexProcessingTime": 91,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/750000000000001AAA/successfulResults/",
+        "query": [],
+        "headers": {
+          "accept": "text/csv",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/csv; charset=UTF-8",
+          "sforce-limit-info": "api-usage=86/15000"
+        },
+        "text": "\"sf__Id\",\"sf__Created\",LastName,Company,FirstName,Status,Description,Title\n\"00Q000000000003EAA\",\"true\",\"esf-sandbox-886d8ad50a80-a-sync\",\"esf-sandbox\",\"Zoë Ünïcødé\",\"Working - Contacted\",\"日本語 🙂 «q» \"\"x\"\", y\nz\",\"Dr. Ø\"\n\"00Q000000000004EAA\",\"true\",\"esf-sandbox-886d8ad50a80-b-sync\",\"esf-sandbox\",\"\",\"\",\"\",\"\"\n\"00Q000000000005EAA\",\"true\",\"esf-sandbox-886d8ad50a80-c-sync\",\"esf-sandbox\",\"\",\"\",\"\",\"\"\n"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/jobs/ingest",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "object": "Lead",
+          "operation": "update",
+          "contentType": "CSV",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=86/15000"
+        },
+        "json": {
+          "id": "750000000000006AAA",
+          "operation": "update",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:49:58.000+0000",
+          "systemModstamp": "2026-11-12T07:49:58.000+0000",
+          "state": "Open",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "contentUrl": "services/data/v68.0/jobs/ingest/750000000000006AAA/batches",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "path": "/services/data/v68.0/jobs/ingest/750000000000006AAA/batches",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "text/csv; charset=UTF-8"
+        },
+        "text": "Id,FirstName,Title\n00Q000000000004EAA,Ann,Prof\n00Q000000000003EAA,,#N/A\n"
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "sforce-limit-info": "api-usage=81/15000"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "path": "/services/data/v68.0/jobs/ingest/750000000000006AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "state": "UploadComplete"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=93/15000"
+        },
+        "json": {
+          "id": "750000000000006AAA",
+          "operation": "update",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:49:58.000+0000",
+          "systemModstamp": "2026-11-12T07:49:58.000+0000",
+          "state": "UploadComplete",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/750000000000006AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=88/15000"
+        },
+        "json": {
+          "id": "750000000000006AAA",
+          "operation": "update",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:49:58.000+0000",
+          "systemModstamp": "2026-11-12T07:49:59.000+0000",
+          "state": "UploadComplete",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 0,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 0,
+          "apiActiveProcessingTime": 0,
+          "apexProcessingTime": 0,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/750000000000006AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=92/15000"
+        },
+        "json": {
+          "id": "750000000000006AAA",
+          "operation": "update",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:49:58.000+0000",
+          "systemModstamp": "2026-11-12T07:49:59.000+0000",
+          "state": "InProgress",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 0,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 0,
+          "apiActiveProcessingTime": 0,
+          "apexProcessingTime": 0,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/750000000000006AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=92/15000"
+        },
+        "json": {
+          "id": "750000000000006AAA",
+          "operation": "update",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:49:58.000+0000",
+          "systemModstamp": "2026-11-12T07:49:59.000+0000",
+          "state": "InProgress",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 0,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 0,
+          "apiActiveProcessingTime": 0,
+          "apexProcessingTime": 0,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/750000000000006AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=93/15000"
+        },
+        "json": {
+          "id": "750000000000006AAA",
+          "operation": "update",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:49:58.000+0000",
+          "systemModstamp": "2026-11-12T07:49:59.000+0000",
+          "state": "InProgress",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 0,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 0,
+          "apiActiveProcessingTime": 0,
+          "apexProcessingTime": 0,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/750000000000006AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=97/15000"
+        },
+        "json": {
+          "id": "750000000000006AAA",
+          "operation": "update",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:49:58.000+0000",
+          "systemModstamp": "2026-11-12T07:49:59.000+0000",
+          "state": "InProgress",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 0,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 0,
+          "apiActiveProcessingTime": 0,
+          "apexProcessingTime": 0,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/750000000000006AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=109/15000"
+        },
+        "json": {
+          "id": "750000000000006AAA",
+          "operation": "update",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:49:58.000+0000",
+          "systemModstamp": "2026-11-12T07:49:59.000+0000",
+          "state": "InProgress",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 0,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 0,
+          "apiActiveProcessingTime": 0,
+          "apexProcessingTime": 0,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/750000000000006AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=117/15000"
+        },
+        "json": {
+          "id": "750000000000006AAA",
+          "operation": "update",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:49:58.000+0000",
+          "systemModstamp": "2026-11-12T07:49:59.000+0000",
+          "state": "InProgress",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 0,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 0,
+          "apiActiveProcessingTime": 0,
+          "apexProcessingTime": 0,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/750000000000006AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=111/15000"
+        },
+        "json": {
+          "id": "750000000000006AAA",
+          "operation": "update",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:49:58.000+0000",
+          "systemModstamp": "2026-11-12T07:49:59.000+0000",
+          "state": "InProgress",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 0,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 0,
+          "apiActiveProcessingTime": 0,
+          "apexProcessingTime": 0,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/750000000000006AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=137/15000"
+        },
+        "json": {
+          "id": "750000000000006AAA",
+          "operation": "update",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:49:58.000+0000",
+          "systemModstamp": "2026-11-12T07:49:59.000+0000",
+          "state": "InProgress",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 0,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 0,
+          "apiActiveProcessingTime": 0,
+          "apexProcessingTime": 0,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/750000000000006AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=149/15000"
+        },
+        "json": {
+          "id": "750000000000006AAA",
+          "operation": "update",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:49:58.000+0000",
+          "systemModstamp": "2026-11-12T07:49:59.000+0000",
+          "state": "InProgress",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 2,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 196,
+          "apiActiveProcessingTime": 84,
+          "apexProcessingTime": 8,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/750000000000006AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=159/15000"
+        },
+        "json": {
+          "id": "750000000000006AAA",
+          "operation": "update",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:49:58.000+0000",
+          "systemModstamp": "2026-11-12T07:49:59.000+0000",
+          "state": "InProgress",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 2,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 196,
+          "apiActiveProcessingTime": 84,
+          "apexProcessingTime": 8,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/750000000000006AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=155/15000"
+        },
+        "json": {
+          "id": "750000000000006AAA",
+          "operation": "update",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:49:58.000+0000",
+          "systemModstamp": "2026-11-12T07:50:37.000+0000",
+          "state": "JobComplete",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 2,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 196,
+          "apiActiveProcessingTime": 84,
+          "apexProcessingTime": 8,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/750000000000006AAA/successfulResults/",
+        "query": [],
+        "headers": {
+          "accept": "text/csv",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/csv; charset=UTF-8",
+          "sforce-limit-info": "api-usage=155/15000"
+        },
+        "text": "\"sf__Id\",\"sf__Created\",Id,FirstName,Title\n\"00Q000000000004EAA\",\"false\",\"00Q000000000004EAA\",\"Ann\",\"Prof\"\n\"00Q000000000003EAA\",\"false\",\"00Q000000000003EAA\",\"\",\"\"\n"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/jobs/ingest",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "object": "Lead",
+          "operation": "upsert",
+          "contentType": "CSV",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "externalIdFieldName": "Esf_Ext__c"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=161/15000"
+        },
+        "json": {
+          "id": "750000000000007AAA",
+          "operation": "upsert",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:50:43.000+0000",
+          "systemModstamp": "2026-11-12T07:50:43.000+0000",
+          "state": "Open",
+          "externalIdFieldName": "Esf_Ext__c",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "contentUrl": "services/data/v68.0/jobs/ingest/750000000000007AAA/batches",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "path": "/services/data/v68.0/jobs/ingest/750000000000007AAA/batches",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "text/csv; charset=UTF-8"
+        },
+        "text": "Esf_Ext__c,LastName,Company,Status\nesf-sandbox-886d8ad50a80-x1-sync,esf-sandbox-886d8ad50a80-u1-sync,esf-sandbox,#N/A\nesf-sandbox-886d8ad50a80-x2-sync,esf-sandbox-886d8ad50a80-u2-sync,esf-sandbox,\n"
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "sforce-limit-info": "api-usage=160/15000"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "path": "/services/data/v68.0/jobs/ingest/750000000000007AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "state": "UploadComplete"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=155/15000"
+        },
+        "json": {
+          "id": "750000000000007AAA",
+          "operation": "upsert",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:50:43.000+0000",
+          "systemModstamp": "2026-11-12T07:50:43.000+0000",
+          "state": "UploadComplete",
+          "externalIdFieldName": "Esf_Ext__c",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/750000000000007AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=161/15000"
+        },
+        "json": {
+          "id": "750000000000007AAA",
+          "operation": "upsert",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:50:43.000+0000",
+          "systemModstamp": "2026-11-12T07:50:45.000+0000",
+          "state": "UploadComplete",
+          "externalIdFieldName": "Esf_Ext__c",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 0,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 0,
+          "apiActiveProcessingTime": 0,
+          "apexProcessingTime": 0,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/750000000000007AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=167/15000"
+        },
+        "json": {
+          "id": "750000000000007AAA",
+          "operation": "upsert",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:50:43.000+0000",
+          "systemModstamp": "2026-11-12T07:50:45.000+0000",
+          "state": "InProgress",
+          "externalIdFieldName": "Esf_Ext__c",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 2,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 277,
+          "apiActiveProcessingTime": 166,
+          "apexProcessingTime": 72,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/750000000000007AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=166/15000"
+        },
+        "json": {
+          "id": "750000000000007AAA",
+          "operation": "upsert",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:50:43.000+0000",
+          "systemModstamp": "2026-11-12T07:50:47.000+0000",
+          "state": "JobComplete",
+          "externalIdFieldName": "Esf_Ext__c",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 2,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 277,
+          "apiActiveProcessingTime": 166,
+          "apexProcessingTime": 72,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/750000000000007AAA/successfulResults/",
+        "query": [],
+        "headers": {
+          "accept": "text/csv",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/csv; charset=UTF-8",
+          "sforce-limit-info": "api-usage=166/15000"
+        },
+        "text": "\"sf__Id\",\"sf__Created\",Esf_Ext__c,LastName,Company,Status\n\"00Q000000000008EAA\",\"true\",\"esf-sandbox-886d8ad50a80-x1-sync\",\"esf-sandbox-886d8ad50a80-u1-sync\",\"esf-sandbox\",\"\"\n\"00Q000000000009EAA\",\"true\",\"esf-sandbox-886d8ad50a80-x2-sync\",\"esf-sandbox-886d8ad50a80-u2-sync\",\"esf-sandbox\",\"\"\n"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/jobs/ingest",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "object": "Lead",
+          "operation": "upsert",
+          "contentType": "CSV",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "externalIdFieldName": "Esf_Ext__c"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=167/15000"
+        },
+        "json": {
+          "id": "75000000000000AAAQ",
+          "operation": "upsert",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:50:51.000+0000",
+          "systemModstamp": "2026-11-12T07:50:51.000+0000",
+          "state": "Open",
+          "externalIdFieldName": "Esf_Ext__c",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "contentUrl": "services/data/v68.0/jobs/ingest/75000000000000AAAQ/batches",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "path": "/services/data/v68.0/jobs/ingest/75000000000000AAAQ/batches",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "text/csv; charset=UTF-8"
+        },
+        "text": "Esf_Ext__c,Title\nesf-sandbox-886d8ad50a80-x1-sync,T\n"
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "sforce-limit-info": "api-usage=169/15000"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "path": "/services/data/v68.0/jobs/ingest/75000000000000AAAQ",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "state": "UploadComplete"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=167/15000"
+        },
+        "json": {
+          "id": "75000000000000AAAQ",
+          "operation": "upsert",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:50:51.000+0000",
+          "systemModstamp": "2026-11-12T07:50:51.000+0000",
+          "state": "UploadComplete",
+          "externalIdFieldName": "Esf_Ext__c",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/75000000000000AAAQ",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=172/15000"
+        },
+        "json": {
+          "id": "75000000000000AAAQ",
+          "operation": "upsert",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:50:51.000+0000",
+          "systemModstamp": "2026-11-12T07:50:52.000+0000",
+          "state": "UploadComplete",
+          "externalIdFieldName": "Esf_Ext__c",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 0,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 0,
+          "apiActiveProcessingTime": 0,
+          "apexProcessingTime": 0,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/75000000000000AAAQ",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=167/15000"
+        },
+        "json": {
+          "id": "75000000000000AAAQ",
+          "operation": "upsert",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:50:51.000+0000",
+          "systemModstamp": "2026-11-12T07:50:52.000+0000",
+          "state": "UploadComplete",
+          "externalIdFieldName": "Esf_Ext__c",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 0,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 0,
+          "apiActiveProcessingTime": 0,
+          "apexProcessingTime": 0,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/75000000000000AAAQ",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=166/15000"
+        },
+        "json": {
+          "id": "75000000000000AAAQ",
+          "operation": "upsert",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:50:51.000+0000",
+          "systemModstamp": "2026-11-12T07:50:55.000+0000",
+          "state": "InProgress",
+          "externalIdFieldName": "Esf_Ext__c",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 1,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 248,
+          "apiActiveProcessingTime": 120,
+          "apexProcessingTime": 15,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/75000000000000AAAQ",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=173/15000"
+        },
+        "json": {
+          "id": "75000000000000AAAQ",
+          "operation": "upsert",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:50:51.000+0000",
+          "systemModstamp": "2026-11-12T07:50:58.000+0000",
+          "state": "JobComplete",
+          "externalIdFieldName": "Esf_Ext__c",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 1,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 248,
+          "apiActiveProcessingTime": 120,
+          "apexProcessingTime": 15,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/75000000000000AAAQ/successfulResults/",
+        "query": [],
+        "headers": {
+          "accept": "text/csv",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/csv; charset=UTF-8",
+          "sforce-limit-info": "api-usage=175/15000"
+        },
+        "text": "\"sf__Id\",\"sf__Created\",Esf_Ext__c,Title\n\"00Q000000000008EAA\",\"false\",\"esf-sandbox-886d8ad50a80-x1-sync\",\"T\"\n"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/jobs/ingest",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "object": "Lead",
+          "operation": "insert",
+          "contentType": "CSV",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=177/15000"
+        },
+        "json": {
+          "id": "75000000000000BAAQ",
+          "operation": "insert",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:51:03.000+0000",
+          "systemModstamp": "2026-11-12T07:51:03.000+0000",
+          "state": "Open",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "contentUrl": "services/data/v68.0/jobs/ingest/75000000000000BAAQ/batches",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "path": "/services/data/v68.0/jobs/ingest/75000000000000BAAQ/batches",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "text/csv; charset=UTF-8"
+        },
+        "text": "LastName,Company\nesf-sandbox-886d8ad50a80-bom-sync,esf-sandbox\n"
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "sforce-limit-info": "api-usage=178/15000"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "path": "/services/data/v68.0/jobs/ingest/75000000000000BAAQ",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "state": "UploadComplete"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=184/15000"
+        },
+        "json": {
+          "id": "75000000000000BAAQ",
+          "operation": "insert",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:51:03.000+0000",
+          "systemModstamp": "2026-11-12T07:51:03.000+0000",
+          "state": "UploadComplete",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/75000000000000BAAQ",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=182/15000"
+        },
+        "json": {
+          "id": "75000000000000BAAQ",
+          "operation": "insert",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:51:03.000+0000",
+          "systemModstamp": "2026-11-12T07:51:04.000+0000",
+          "state": "InProgress",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 0,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 0,
+          "apiActiveProcessingTime": 0,
+          "apexProcessingTime": 0,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/75000000000000BAAQ",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=184/15000"
+        },
+        "json": {
+          "id": "75000000000000BAAQ",
+          "operation": "insert",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:51:03.000+0000",
+          "systemModstamp": "2026-11-12T07:51:04.000+0000",
+          "state": "InProgress",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 1,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 0,
+          "apiActiveProcessingTime": 158,
+          "apexProcessingTime": 71,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/75000000000000BAAQ",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=188/15000"
+        },
+        "json": {
+          "id": "75000000000000BAAQ",
+          "operation": "insert",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:51:03.000+0000",
+          "systemModstamp": "2026-11-12T07:51:04.000+0000",
+          "state": "InProgress",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 1,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 0,
+          "apiActiveProcessingTime": 158,
+          "apexProcessingTime": 71,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/75000000000000BAAQ",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=189/15000"
+        },
+        "json": {
+          "id": "75000000000000BAAQ",
+          "operation": "insert",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:51:03.000+0000",
+          "systemModstamp": "2026-11-12T07:51:04.000+0000",
+          "state": "InProgress",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 1,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 0,
+          "apiActiveProcessingTime": 158,
+          "apexProcessingTime": 71,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/75000000000000BAAQ",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=188/15000"
+        },
+        "json": {
+          "id": "75000000000000BAAQ",
+          "operation": "insert",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:51:03.000+0000",
+          "systemModstamp": "2026-11-12T07:51:04.000+0000",
+          "state": "InProgress",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 1,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 9056,
+          "apiActiveProcessingTime": 158,
+          "apexProcessingTime": 71,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/75000000000000BAAQ",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=189/15000"
+        },
+        "json": {
+          "id": "75000000000000BAAQ",
+          "operation": "insert",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:51:03.000+0000",
+          "systemModstamp": "2026-11-12T07:51:04.000+0000",
+          "state": "InProgress",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 1,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 9056,
+          "apiActiveProcessingTime": 158,
+          "apexProcessingTime": 71,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/75000000000000BAAQ",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=194/15000"
+        },
+        "json": {
+          "id": "75000000000000BAAQ",
+          "operation": "insert",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:51:03.000+0000",
+          "systemModstamp": "2026-11-12T07:51:04.000+0000",
+          "state": "InProgress",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 1,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 9056,
+          "apiActiveProcessingTime": 158,
+          "apexProcessingTime": 71,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/75000000000000BAAQ",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=192/15000"
+        },
+        "json": {
+          "id": "75000000000000BAAQ",
+          "operation": "insert",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:51:03.000+0000",
+          "systemModstamp": "2026-11-12T07:51:04.000+0000",
+          "state": "InProgress",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 1,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 9056,
+          "apiActiveProcessingTime": 158,
+          "apexProcessingTime": 71,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/75000000000000BAAQ",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=195/15000"
+        },
+        "json": {
+          "id": "75000000000000BAAQ",
+          "operation": "insert",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:51:03.000+0000",
+          "systemModstamp": "2026-11-12T07:51:29.000+0000",
+          "state": "JobComplete",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 68.0,
+          "jobType": "V2Ingest",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 1,
+          "numberRecordsFailed": 0,
+          "retries": 0,
+          "totalProcessingTime": 9056,
+          "apiActiveProcessingTime": 158,
+          "apexProcessingTime": 71,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/jobs/ingest/75000000000000BAAQ/successfulResults/",
+        "query": [],
+        "headers": {
+          "accept": "text/csv",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/csv; charset=UTF-8",
+          "sforce-limit-info": "api-usage=194/15000"
+        },
+        "text": "\"sf__Id\",\"sf__Created\",LastName,Company\n\"00Q00000000000CEAQ\",\"true\",\"esf-sandbox-886d8ad50a80-bom-sync\",\"esf-sandbox\"\n"
+      }
+    }
+  ]
+}

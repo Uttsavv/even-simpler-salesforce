@@ -1,0 +1,209 @@
+{
+  "esf_fixture": 1,
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v60.0/jobs/query",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "operation": "query",
+          "query": "SELECT Id, LastName FROM Lead WHERE LastName LIKE 'esf-sandbox-49e5433d26a2-rp%-60.0-sync' ORDER BY LastName",
+          "contentType": "CSV",
+          "columnDelimiter": "COMMA",
+          "lineEnding": "LF"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=648/15000"
+        },
+        "json": {
+          "id": "750000000000001AAA",
+          "operation": "query",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:56:38.000+0000",
+          "systemModstamp": "2026-11-12T07:56:38.000+0000",
+          "state": "UploadComplete",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 60.0,
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v60.0/jobs/query/750000000000001AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=648/15000"
+        },
+        "json": {
+          "id": "750000000000001AAA",
+          "operation": "query",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:56:38.000+0000",
+          "systemModstamp": "2026-11-12T07:56:39.000+0000",
+          "state": "InProgress",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 60.0,
+          "jobType": "V2Query",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 0,
+          "retries": 0,
+          "totalProcessingTime": 0,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v60.0/jobs/query/750000000000001AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=649/15000"
+        },
+        "json": {
+          "id": "750000000000001AAA",
+          "operation": "query",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:56:38.000+0000",
+          "systemModstamp": "2026-11-12T07:56:39.000+0000",
+          "state": "InProgress",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 60.0,
+          "jobType": "V2Query",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 0,
+          "retries": 0,
+          "totalProcessingTime": 0,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v60.0/jobs/query/750000000000001AAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=644/15000"
+        },
+        "json": {
+          "id": "750000000000001AAA",
+          "operation": "query",
+          "object": "Lead",
+          "createdById": "005000000000002AAA",
+          "createdDate": "2026-11-12T07:56:38.000+0000",
+          "systemModstamp": "2026-11-12T07:56:45.000+0000",
+          "state": "JobComplete",
+          "concurrencyMode": "Parallel",
+          "contentType": "CSV",
+          "apiVersion": 60.0,
+          "jobType": "V2Query",
+          "lineEnding": "LF",
+          "columnDelimiter": "COMMA",
+          "numberRecordsProcessed": 3,
+          "retries": 0,
+          "totalProcessingTime": 177,
+          "isPkChunkingSupported": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v60.0/jobs/query/750000000000001AAA/resultPages",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=641/15000"
+        },
+        "json": {
+          "done": true,
+          "nextRecordsUrl": null,
+          "resultChunks": [
+            {
+              "resultLink": "/jobs/query/750000000000001AAA/results?locator=MDowR2FnNzAwMDAwN2hvMGpDQUE"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v60.0/jobs/query/750000000000001AAA/results",
+        "query": [
+          [
+            "locator",
+            "MDowR2FnNzAwMDAwN2hvMGpDQUE"
+          ]
+        ],
+        "headers": {
+          "accept": "text/csv",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/csv",
+          "sforce-limit-info": "api-usage=640/15000",
+          "sforce-locator": "null",
+          "sforce-numberofrecords": "3"
+        },
+        "text": "\"Id\",\"LastName\"\n\"00Q000000000003EAA\",\"esf-sandbox-49e5433d26a2-rp0-60.0-sync\"\n\"00Q000000000004EAA\",\"esf-sandbox-49e5433d26a2-rp1-60.0-sync\"\n\"00Q000000000005EAA\",\"esf-sandbox-49e5433d26a2-rp2-60.0-sync\"\n"
+      }
+    }
+  ]
+}

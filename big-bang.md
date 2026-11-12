@@ -1030,22 +1030,25 @@ async for row in sf.bulk.query("SELECT Id, Name FROM Lead", parallel_downloads=4
   plain iterators.
 - **Encoding** (#706, #710): uploads are sent as `Content-Type: text/csv; charset=UTF-8`; result
   CSVs are always decoded as UTF-8, whatever charset httpx guesses.
-- **Nulls** (#309, #769): in Bulk 2.0 CSV an empty cell leaves the field unchanged and `#N/A` sets it
-  to null. Rows given as dicts map `None` → `#N/A` and a missing key → empty cell; a literal
-  string `"#N/A"` value is rejected with `ValueError` (ambiguous). ⚠️ **VERIFY** against the official
-  Bulk 2.0 docs and a sandbox (V18).
+- **Nulls** (#309, #769): in Bulk 2.0 CSV an empty cell leaves the field unchanged on update and `#N/A`
+  sets it to null. On insert (and an upsert that inserts) both give the field its default (e.g.
+  `Lead.Status`) or null (org-observed, V18). Rows given as dicts map `None` → `#N/A` and a missing
+  key → empty cell; a literal string `"#N/A"` value is rejected with `ValueError` (ambiguous). A
+  UTF-8 BOM is stripped from uploads: the org reads it as part of the first field name and fails
+  the job (`InvalidBatch : Field name not found : \ufeffLastName`, V18).
 - **Streaming uploads** (#738, #629): `rows=csv_path` and iterables are streamed in ≤ 100 MB parts;
   the client never reads a whole file into memory before uploading. Benchmarks assert flat memory.
 - **Job states** (#517): states parse into an enum (`Open`, `UploadComplete`, `InProgress`,
   `JobComplete`, `Failed`, `Aborted`). An unknown state raises `UnexpectedResponse` instead of being
   polled forever, and `wait()` always has a timeout (default 3600 s).
-- **Compound fields** (#182): Bulk query rejects address and geolocation compound fields. The
-  client maps that job failure to `BulkJobFailed` with a hint naming the component fields, and
+- **Compound fields** (#182): Bulk query rejects address and geolocation compound fields at job
+  creation with `400 API_ERROR` "Selecting compound data not supported in Bulk Query" (V42). The
+  client adds a hint naming the component fields to that `RequestError` (or to `BulkJobFailed`), and
   offers `sf.bulk.expand_compound_fields(sobject, fields)` (describe-based) to rewrite a field list.
-- **`FIELDS()`**: `sf.bulk.query` raises `ValueError` before creating a job when the SOQL selects `FIELDS(ALL)` or `FIELDS(CUSTOM)` (string literals ignored). *Create a Query Job* says Bulk 2.0 doesn't support `FIELDS()` at all, while the SOQL *SELECT* page lists `FIELDS(STANDARD)` as supported; both agree on ALL and CUSTOM, so `FIELDS(STANDARD)` is passed to Salesforce (V81).
-- Ingest uploads: one request may carry at most 150 MB **after** Salesforce's base64 conversion, so the client splits raw CSV at **100 MB** per job, as the docs advise. Gzip request compression is still applied on the wire.
+- **`FIELDS()`**: `sf.bulk.query` raises `ValueError` before creating a job when the SOQL selects `FIELDS(ALL)` or `FIELDS(CUSTOM)` (string literals ignored). *Create a Query Job* says Bulk 2.0 doesn't support `FIELDS()` at all, while the SOQL *SELECT* page lists `FIELDS(STANDARD)` as supported; both agree on ALL and CUSTOM, so `FIELDS(STANDARD)` is passed to Salesforce. The org runs it on objects without compound fields (`Campaign`, `Opportunity`) and rejects it like a compound field on `Account` or `Lead`; the hint then says so (V81).
+- Ingest uploads: one request may carry at most 150 MB **after** Salesforce's base64 conversion, so the client splits raw CSV at **100 MB** per job, as the docs advise. A part over 64 KiB is gzipped on the wire and sent chunked; the org accepts gzipped uploads with `Content-Length` and chunked (V40).
 - Results are fetched with `?locator=&maxRecords=` using the **same API version that created the job**; a different version returns 409, so the job object pins its version.
-- Query results use `Sforce-Locator` pagination; with `parallel_downloads>1`, locators are fetched ahead with bounded concurrency while preserving order.
+- Query results use `Sforce-Locator` pagination; with `parallel_downloads>1`, locators are fetched ahead with bounded concurrency while preserving order. `resultPages` answers `resultPages[].resultUrl` (full path, job's version) from API 63.0 and `resultChunks[].resultLink` (relative to `/services/data/vXX.X`) at 58.0–62.0; the client reads both (V43).
 - `BulkJobFailed` on `state=Failed`; `job.info` exposes counts and timing.
 
 ### 9.12 Tooling — `sf.tooling` (0.3)

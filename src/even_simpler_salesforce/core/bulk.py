@@ -23,12 +23,19 @@ under https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asyn
 - *Get Job Successful/Failed/Unprocessed Record Results*: CSV with ``sf__Id`` and
   ``sf__Created`` (successful), ``sf__Id`` and ``sf__Error`` (failed), then the uploaded
   columns. The Bulk API 1.0 result example shows the error format
-  ``REQUIRED_FIELD_MISSING:Required fields are missing: [LastName]:LastName --``.
+  ``REQUIRED_FIELD_MISSING:Required fields are missing: [LastName]:LastName --``. A Developer
+  Edition org (API 68.0, 2026-11-12) separates several fields with spaces
+  (``...:LastName Company --``), ends a cell without fields in ``:--``, and sends ``sf__Created``
+  as ``"true"``/``"false"`` (big-bang.md §21 V41).
+- The org fails a job whose CSV starts with a UTF-8 byte order mark (the mark becomes part of
+  the first field name), so :class:`CsvCutter` drops it (V18, org-observed).
 - *Get Results for a Query Job*: ``Sforce-Locator`` names the next set of results; on the last
   set its value is the string ``null``. "Use the same API version to get query results that
   you used to create the query. Otherwise, the call returns a 409 error."
 - *Get Parallel Results for a Query Job* (``GET jobs/query/{id}/resultPages``, API 58.0+):
   ``resultPages[].resultUrl``, ``nextRecordsUrl`` and ``done``; up to five URLs per response.
+  Older guides (252.0) show ``resultLink``. The org answers ``resultChunks[].resultLink``
+  (relative paths) at API 58.0-62.0 and ``resultPages[].resultUrl`` from 63.0 (V43).
 - *Understanding Bulk API 2.0 Query*: queries can't include compound address or geolocation
   fields. Query the components instead.
 - *Create a Query Job* (``query_create_job.htm``): "Bulk API 2.0 doesn't support SOQL queries
@@ -164,6 +171,7 @@ def ingest_job_body(
 
 _QUOTED = re.compile(r"'(?:\\.|[^'\\])*'")
 _UNBOUNDED_FIELDS = re.compile(r"\bFIELDS\s*\(\s*(ALL|CUSTOM)\s*\)", re.I)
+_STANDARD_FIELDS = re.compile(r"\bFIELDS\s*\(\s*STANDARD\s*\)", re.I)
 
 
 def check_bulk_query(soql: str) -> None:
@@ -501,12 +509,16 @@ class CsvReader:
 # --- responses -----------------------------------------------------------------------------
 
 _ERROR = re.compile(r"^(?P<code>[A-Z][A-Z0-9_]*):(?P<rest>.*)$", re.S)
-_FIELD_LIST = re.compile(r"[A-Za-z][A-Za-z0-9_.]*(?:,\s*[A-Za-z][A-Za-z0-9_.]*)*")
+#: The field list after the last colon: ``LastName Company`` (what Salesforce sends) or
+#: ``LastName, Company``. It starts right after the colon; a space there means message text.
+_FIELD_LIST = re.compile(r"[A-Za-z][A-Za-z0-9_.]*(?:(?:,\s*|\s+)[A-Za-z][A-Za-z0-9_.]*)*")
 
 
 def parse_bulk_error(text: str) -> ErrorDetail:
-    """Parse an ``sf__Error`` cell (``CODE:message:Field1,Field2 --``) into an :class:`ErrorDetail`.
+    """Parse an ``sf__Error`` cell into an :class:`ErrorDetail`.
 
+    Salesforce writes ``CODE:message:Field1 Field2 --``: the fields are separated by spaces,
+    and a cell without fields ends in ``:--``. Comma-separated field lists are accepted too.
     A cell that doesn't start with a status code keeps its whole text as the message.
     """
     t = text.strip()
@@ -520,7 +532,7 @@ def parse_bulk_error(text: str) -> ErrorDetail:
     head, sep, tail = rest.rpartition(":")
     if sep and (tail == "" or _FIELD_LIST.fullmatch(tail)):
         rest = head
-        fields = tuple(f.strip() for f in tail.split(",") if f.strip())
+        fields = tuple(tail.replace(",", " ").split())
     return ErrorDetail(m.group("code"), rest.strip(), fields)
 
 
@@ -650,6 +662,12 @@ def parse_locator(headers: Mapping[str, str]) -> str | None:
 def parse_result_pages(body: Any, prefix: str) -> tuple[list[str], str | None]:
     """The result URLs and the next ``resultPages`` URL of a ``resultPages`` response.
 
+    API 63.0 and later send ``resultPages[].resultUrl`` with the full path
+    (``/services/data/vXX.X/jobs/query/{id}/results?locator=...``). API 58.0 to 62.0 send
+    ``resultChunks[].resultLink`` with a path relative to the version root
+    (``/jobs/query/{id}/results?locator=...``); the client puts the job's version root in
+    front (both recorded from a Developer Edition org, big-bang.md §21 V43).
+
     Args:
         body: The decoded JSON body.
         prefix: ``/services/data/vXX.X/jobs/query/{id}/`` of the job. Every URL must start with
@@ -662,19 +680,26 @@ def parse_result_pages(body: Any, prefix: str) -> tuple[list[str], str | None]:
         raise UnexpectedResponse("unexpected resultPages response", raw=repr(body)[:4096])
     data = cast("dict[str, Any]", body)
     pages: Any = data.get("resultPages")
+    key = "resultUrl"
+    if pages is None:
+        pages, key = data.get("resultChunks"), "resultLink"
     if not isinstance(pages, list):
         raise UnexpectedResponse("resultPages response has no resultPages list", raw=repr(data)[:4096])
+    root = prefix[: prefix.lower().find("/jobs/")] if "/jobs/" in prefix.lower() else ""
 
     def checked(url: Any) -> str:
+        if isinstance(url, str) and url.lower().startswith("/jobs/"):
+            url = root + url
         if not isinstance(url, str) or not url.lower().startswith(prefix.lower()) or ".." in url:
             raise UnexpectedResponse("resultPages URL is not a result of this job", raw=repr(url)[:500])
         return url
 
     urls = [
-        checked(cast("dict[str, Any]", p).get("resultUrl") if isinstance(p, dict) else None)
+        checked(cast("dict[str, Any]", p).get(key) if isinstance(p, dict) else None)
         for p in cast("list[Any]", pages)
     ]
-    # The reference names the field ``nextRecordUrl``; its example shows ``nextRecordsUrl``.
+    # The org sends ``nextRecordsUrl`` (null on the last set); the reference's field table
+    # names it ``nextRecordUrl``, so both are read.
     nxt: Any = data.get("nextRecordsUrl") or data.get("nextRecordUrl")
     done = data.get("done")
     if done is True or not nxt:
@@ -742,6 +767,12 @@ def compound_hint(soql: str, describe: Mapping[str, Any] | None, error_message: 
                 "sf.bulk.expand_compound_fields() rewrites a field list for you"
             )
     if error_message and "compound" in error_message.lower():
+        if _STANDARD_FIELDS.search(_QUOTED.sub("''", soql)):
+            return (
+                "FIELDS(STANDARD) includes the object's compound address or geolocation fields, "
+                "which Bulk queries can't read. List the fields instead: build the list from "
+                "sf.sobject(name).describe() and pass it through sf.bulk.expand_compound_fields()"
+            )
         return (
             "Bulk queries can't read compound address or geolocation fields. Select their components, "
             "for example with sf.bulk.expand_compound_fields()"
