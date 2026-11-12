@@ -3,19 +3,25 @@
 
 Usage (after ``scripts/sandbox_login.py``)::
 
-    uv run python scripts/sandbox_setup_org.py              # deploy core + extras
+    uv run python scripts/sandbox_setup_org.py              # deploy core, extras, records
     uv run python scripts/sandbox_setup_org.py --check-only # validate, save nothing
+    uv run python scripts/sandbox_setup_org.py --folder records   # deploy one folder only
 
-It deploys ``tests/sandbox/org/core`` and then ``tests/sandbox/org/extras`` with
-``sf.metadata.deploy`` (so the deploy path is exercised too), and assigns the ``Esf_Sandbox``
-permission set to the logged-in user:
+It deploys ``tests/sandbox/org/core``, ``extras`` and ``records`` in that order with
+``sf.metadata.deploy`` (so the deploy path is exercised too), and assigns the ``Esf_Sandbox`` and
+``Esf_Sandbox_Records`` permission sets to the logged-in user:
 
 - core: ``Lead.Esf_Ext__c`` (external id), the V5b validation rule and Apex trigger, the
   platform event ``ESF_Sandbox_Event__e`` (``Message__c``), Change Data Capture on Account, the
   Apex REST class ``EsfSandboxRest`` (``/services/apexrest/esf-sandbox/``) and the invocable
   action ``EsfSandboxAction``;
 - extras: a before-save Lead flow with a Custom Error (V5b) and a tabular and a summary Lead
-  report in ``unfiled$public``.
+  report in ``unfiled$public``;
+- records: ``Lead.Esf_Ext_Multi__c`` (a non-unique external id, V19), the ``Esf_Sandbox_Queue``
+  Lead queue and an active Lead assignment rule ``Esf_Sandbox`` that sends Leads with
+  ``Company`` = ``ESF_ASSIGN`` to that queue (V24; it replaces the org's active Lead rule), and
+  the custom object ``Esf_Sandbox_Item__c`` with a required, a defaulted and two picklist
+  fields (V30), plus the ``Esf_Sandbox_Records`` permission set.
 
 It refuses to run against a production org: ``Organization.IsSandbox`` must be true or the
 org must be a Developer Edition. The fixtures change org behaviour on purpose (Leads with
@@ -44,7 +50,8 @@ from tests.sandbox.settings import load_settings  # noqa: E402
 import even_simpler_salesforce as esf  # noqa: E402
 
 ORG_DIR = ROOT / "tests" / "sandbox" / "org"
-PERMISSION_SET = "Esf_Sandbox"
+FOLDERS = ("core", "extras", "records")
+PERMISSION_SETS = {"core": "Esf_Sandbox", "records": "Esf_Sandbox_Records"}
 
 
 def _guard(sf: esf.Salesforce) -> str:
@@ -64,10 +71,10 @@ def _deploy(sf: esf.Salesforce, name: str, check_only: bool) -> bool:
     return result.success
 
 
-def _assign_permission_set(sf: esf.Salesforce) -> None:
-    ps = sf.query(f"SELECT Id FROM PermissionSet WHERE Name = '{PERMISSION_SET}'").records
+def _assign_permission_set(sf: esf.Salesforce, name: str) -> None:
+    ps = sf.query(esf.soql("SELECT Id FROM PermissionSet WHERE Name = {}", name)).records
     if not ps:
-        print(f"permission set {PERMISSION_SET} not found; not assigned")
+        print(f"permission set {name} not found; not assigned")
         return
     user_id = sf.auth.userinfo()["user_id"]
     existing = sf.count(
@@ -75,15 +82,18 @@ def _assign_permission_set(sf: esf.Salesforce) -> None:
         f"WHERE AssigneeId = '{user_id}' AND PermissionSetId = '{ps[0]['Id']}'"
     )
     if existing:
-        print(f"permission set {PERMISSION_SET}: already assigned")
+        print(f"permission set {name}: already assigned")
         return
     sf.sobject("PermissionSetAssignment").create({"AssigneeId": user_id, "PermissionSetId": ps[0]["Id"]})
-    print(f"permission set {PERMISSION_SET}: assigned to the logged-in user")
+    print(f"permission set {name}: assigned to the logged-in user")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n\n")[0])
     parser.add_argument("--check-only", action="store_true", help="validate the deploy; save nothing")
+    parser.add_argument(
+        "--folder", action="append", choices=FOLDERS, help="deploy only this folder (repeatable)"
+    )
     args = parser.parse_args()
 
     settings = load_settings()
@@ -93,10 +103,11 @@ def main() -> int:
     store = settings.sync_store() if settings.web_server else None
     with esf.Salesforce(settings.auth(), store=store, **kwargs) as sf:
         print(f"org: {_guard(sf)}")
-        ok = _deploy(sf, "core", args.check_only)
-        ok = _deploy(sf, "extras", args.check_only) and ok
-        if not args.check_only:
-            _assign_permission_set(sf)
+        ok = True
+        for folder in args.folder or FOLDERS:
+            ok = _deploy(sf, folder, args.check_only) and ok
+            if not args.check_only and folder in PERMISSION_SETS:
+                _assign_permission_set(sf, PERMISSION_SETS[folder])
     return 0 if ok else 1
 
 

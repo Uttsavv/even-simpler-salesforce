@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fieldPermissions><editable>true</editable><field>Lead.Esf_Ext_Multi__c</field><readable>true</readable></fieldPermissions>
+    <fieldPermissions><editable>true</editable><field>Esf_Sandbox_Item__c.Esf_Defaulted__c</field><readable>true</readable></fieldPermissions>
+    <fieldPermissions><editable>true</editable><field>Esf_Sandbox_Item__c.Esf_Restricted__c</field><readable>true</readable></fieldPermissions>
+    <fieldPermissions><editable>true</editable><field>Esf_Sandbox_Item__c.Esf_Open__c</field><readable>true</readable></fieldPermissions>
+    <hasActivationRequired>false</hasActivationRequired>
+    <label>ESF Sandbox Records</label>
+    <objectPermissions>
+        <allowCreate>true</allowCreate><allowDelete>true</allowDelete><allowEdit>true</allowEdit>
+        <allowRead>true</allowRead><modifyAllRecords>false</modifyAllRecords>
+        <object>Esf_Sandbox_Item__c</object><viewAllRecords>false</viewAllRecords>
+    </objectPermissions>
+</PermissionSet>
