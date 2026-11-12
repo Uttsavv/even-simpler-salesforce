@@ -1,0 +1,75 @@
+{
+  "esf_fixture": 1,
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v68.0/actions/custom/apex/EsfSandboxAction",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=205/15000"
+        },
+        "json": {
+          "allowsTransactionControl": true,
+          "capabilityTypes": null,
+          "category": null,
+          "configurationEditor": null,
+          "description": "esf-sandbox probe",
+          "genericTypes": [],
+          "hasCallout": false,
+          "iconId": null,
+          "iconName": null,
+          "inputs": [
+            {
+              "apexClass": null,
+              "bytelength": 0,
+              "configuration": false,
+              "defaultValue": null,
+              "description": null,
+              "label": "Name",
+              "maxOccurs": 1,
+              "name": "name",
+              "picklistValues": null,
+              "placeholderText": null,
+              "required": true,
+              "sObjectType": null,
+              "setupReferenceType": null,
+              "toolingType": null,
+              "type": "STRING"
+            }
+          ],
+          "label": "ESF Sandbox Echo",
+          "methodDescription": "Executes the action.",
+          "methodLabel": "Execute.",
+          "methodName": "Execute.",
+          "name": "EsfSandboxAction",
+          "outputs": [
+            {
+              "additionalAttributes": null,
+              "apexClass": null,
+              "description": null,
+              "label": "Greeting",
+              "maxOccurs": 1,
+              "name": "greeting",
+              "picklistValues": null,
+              "sobjectType": null,
+              "type": "STRING"
+            }
+          ],
+          "standard": false,
+          "systemGeneratedOuput": false,
+          "targetEntityName": null,
+          "type": "APEX"
+        }
+      }
+    }
+  ]
+}

@@ -1,27 +1,65 @@
 {
-  "synthetic": true,
-  "source": "hand-written from the Platform Events Developer Guide, Publish Event Messages with Salesforce APIs and Identify and Match Event Messages with the EventUuid Field: https://developer.salesforce.com/docs/atlas.en-us.platform_events.meta/platform_events/platform_events_publish_api.htm and https://developer.salesforce.com/docs/atlas.en-us.platform_events.meta/platform_events/platform_events_event_uuid.htm",
-  "body": [
+  "esf_fixture": 1,
+  "interactions": [
     {
-      "id": "e00xx0000000001AAA",
-      "success": true,
-      "errors": [
-        {
-          "statusCode": "OPERATION_ENQUEUED",
-          "message": "5e4b3c2a-1d0e-4f9a-8b7c-6d5e4f3a2b1c",
-          "fields": []
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/composite/sobjects",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "allOrNone": false,
+          "records": [
+            {
+              "attributes": {
+                "type": "ESF_Sandbox_Event__e"
+              },
+              "Message__c": "esf-sandbox 1"
+            },
+            {
+              "attributes": {
+                "type": "ESF_Sandbox_Event__e"
+              },
+              "Message__c": "esf-sandbox 2"
+            }
+          ]
         }
-      ]
-    },
-    {
-      "success": false,
-      "errors": [
-        {
-          "statusCode": "LIMIT_EXCEEDED",
-          "message": "The number of published platform event messages exceeded the hourly publishing limit.",
-          "fields": []
-        }
-      ]
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=231/15000"
+        },
+        "json": [
+          {
+            "id": "e00000000000001AAA",
+            "success": true,
+            "errors": [
+              {
+                "statusCode": "OPERATION_ENQUEUED",
+                "message": "bed40404-2b79-4e50-8587-4c4daf9c75d6",
+                "fields": []
+              }
+            ]
+          },
+          {
+            "id": "e00000000000002AAA",
+            "success": true,
+            "errors": [
+              {
+                "statusCode": "OPERATION_ENQUEUED",
+                "message": "82511e3d-0bf3-4b10-ab3f-2a5ba4510cfd",
+                "fields": []
+              }
+            ]
+          }
+        ]
+      }
     }
   ]
 }

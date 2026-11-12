@@ -1,15 +1,39 @@
 {
-  "synthetic": true,
-  "source": "hand-written from the Platform Events Developer Guide, Publish Event Messages with Salesforce APIs and Identify and Match Event Messages with the EventUuid Field: https://developer.salesforce.com/docs/atlas.en-us.platform_events.meta/platform_events/platform_events_publish_api.htm and https://developer.salesforce.com/docs/atlas.en-us.platform_events.meta/platform_events/platform_events_event_uuid.htm",
-  "body": {
-    "id": "e00xx0000000001AAA",
-    "success": true,
-    "errors": [
-      {
-        "statusCode": "OPERATION_ENQUEUED",
-        "message": "5e4b3c2a-1d0e-4f9a-8b7c-6d5e4f3a2b1c",
-        "fields": []
+  "esf_fixture": 1,
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/sobjects/ESF_Sandbox_Event__e",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "Message__c": "esf-sandbox probe"
+        }
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "location": "/services/data/v68.0/sobjects/ESF_Sandbox_Event__e/e00000000000001AAA",
+          "sforce-limit-info": "api-usage=217/15000"
+        },
+        "json": {
+          "id": "e00000000000001AAA",
+          "success": true,
+          "errors": [
+            {
+              "statusCode": "OPERATION_ENQUEUED",
+              "message": "6dc846c4-d286-4dd7-b8a8-6266d1e79674",
+              "fields": []
+            }
+          ]
+        }
       }
-    ]
-  }
+    }
+  ]
 }

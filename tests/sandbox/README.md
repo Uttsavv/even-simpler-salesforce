@@ -127,8 +127,9 @@ uv run python scripts/sandbox_setup_org.py              # or --check-only to val
 It deploys `tests/sandbox/org/core` (the `Lead.Esf_Ext__c` external id, the V5b validation
 rule and Apex trigger, the platform event `ESF_Sandbox_Event__e`, Change Data Capture on
 Account, the Apex REST class `EsfSandboxRest` and the invocable action `EsfSandboxAction`) and
-`tests/sandbox/org/extras` (a before-save Lead flow with a Custom Error and two Lead reports),
-then assigns the `Esf_Sandbox` permission set to you. It refuses to run against production.
+`tests/sandbox/org/extras` (a before-save Lead flow with a Custom Error and two Lead reports)
+and `tests/sandbox/org/actions` (the autolaunched Flow `Esf_Sandbox_Action_Flow` for the action
+tests), then assigns the `Esf_Sandbox` permission set to you. It refuses to run against production.
 The fixtures make some Lead inserts fail on purpose, so never deploy them to an org people use.
 The script's docstring lists the `ESF_SANDBOX_*` variables to set afterwards.
 

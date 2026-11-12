@@ -1,0 +1,48 @@
+{
+  "esf_fixture": 1,
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/actions/custom/apex/EsfSandboxAction",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "inputs": [
+            {}
+          ]
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=214/15000"
+        },
+        "json": [
+          {
+            "actionName": "EsfSandboxAction",
+            "errors": [
+              {
+                "statusCode": "REQUIRED_FIELD_MISSING",
+                "message": "Missing required input parameter: name",
+                "fields": []
+              }
+            ],
+            "expectedError": false,
+            "invocationId": null,
+            "isSuccess": false,
+            "outcome": null,
+            "outputValues": null,
+            "sortOrder": 0,
+            "version": 1
+          }
+        ]
+      }
+    }
+  ]
+}

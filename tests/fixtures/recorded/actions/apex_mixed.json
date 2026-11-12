@@ -1,0 +1,90 @@
+{
+  "esf_fixture": 1,
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/actions/custom/apex/EsfSandboxAction",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "inputs": [
+            {
+              "name": "a"
+            },
+            {
+              "name": "fail"
+            },
+            {
+              "name": "c"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=217/15000"
+        },
+        "json": [
+          {
+            "actionName": "EsfSandboxAction",
+            "errors": [
+              {
+                "statusCode": "APEX_FAILED",
+                "message": "An Apex error occurred: System.IllegalArgumentException: esf-sandbox: action failure probe",
+                "fields": []
+              }
+            ],
+            "expectedError": false,
+            "invocationId": null,
+            "isSuccess": false,
+            "outcome": null,
+            "outputValues": null,
+            "sortOrder": 0,
+            "version": 1
+          },
+          {
+            "actionName": "EsfSandboxAction",
+            "errors": [
+              {
+                "statusCode": "APEX_FAILED",
+                "message": "An Apex error occurred: System.IllegalArgumentException: esf-sandbox: action failure probe",
+                "fields": []
+              }
+            ],
+            "expectedError": false,
+            "invocationId": null,
+            "isSuccess": false,
+            "outcome": null,
+            "outputValues": null,
+            "sortOrder": 1,
+            "version": 1
+          },
+          {
+            "actionName": "EsfSandboxAction",
+            "errors": [
+              {
+                "statusCode": "APEX_FAILED",
+                "message": "An Apex error occurred: System.IllegalArgumentException: esf-sandbox: action failure probe",
+                "fields": []
+              }
+            ],
+            "expectedError": false,
+            "invocationId": null,
+            "isSuccess": false,
+            "outcome": null,
+            "outputValues": null,
+            "sortOrder": 2,
+            "version": 1
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -41,7 +41,10 @@ A failed publish raises a `RecordError` subclass.
 |---|---|
 | `PLATFORM_EVENT_PUBLISHING_UNAVAILABLE` | `EventPublishUnavailable` (`retryable`) |
 | `LIMIT_EXCEEDED`, `PLATFORM_EVENT_PUBLISH_FAILED`, other codes | `EventPublishFailed` |
-| a known record error, such as `REQUIRED_FIELD_MISSING` | its usual class |
+| a known record error, such as `REQUIRED_FIELD_MISSING`, `INVALID_FIELD` or `STRING_TOO_LONG` | its usual class |
+
+A field the event doesn't have or a value that is too long fails with HTTP 400, as for a
+record. In `publish_many()`, such an event fails alone and the other events are still queued.
 
 ```python
 try:

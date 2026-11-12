@@ -1,0 +1,246 @@
+{
+  "esf_fixture": 1,
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/actions/custom/flow/Esf_Sandbox_Action_Flow",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "inputs": [
+            {
+              "name": "n00"
+            },
+            {
+              "name": "n01"
+            },
+            {
+              "name": "n02"
+            },
+            {
+              "name": "n03"
+            },
+            {
+              "name": "n04"
+            },
+            {
+              "name": "n05"
+            },
+            {
+              "name": "n06"
+            },
+            {
+              "name": "n07"
+            },
+            {
+              "name": "n08"
+            },
+            {
+              "name": "n09"
+            },
+            {
+              "name": "n10"
+            },
+            {
+              "name": "n11"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=216/15000"
+        },
+        "json": [
+          {
+            "actionName": "Esf_Sandbox_Action_Flow",
+            "errors": null,
+            "expectedError": false,
+            "invocationId": null,
+            "isSuccess": true,
+            "outcome": null,
+            "outputValues": {
+              "Flow__InterviewGuid": "666507894cfb7257872c5f0966431a1cc6d5097-7d68",
+              "greeting": "hello n00",
+              "Flow__InterviewStatus": "Finished"
+            },
+            "sortOrder": -1,
+            "version": 1
+          },
+          {
+            "actionName": "Esf_Sandbox_Action_Flow",
+            "errors": null,
+            "expectedError": false,
+            "invocationId": null,
+            "isSuccess": true,
+            "outcome": null,
+            "outputValues": {
+              "Flow__InterviewGuid": "666607894cfb7257872c5f0966431a1cc6d5097-7d69",
+              "greeting": "hello n01",
+              "Flow__InterviewStatus": "Finished"
+            },
+            "sortOrder": -1,
+            "version": 1
+          },
+          {
+            "actionName": "Esf_Sandbox_Action_Flow",
+            "errors": null,
+            "expectedError": false,
+            "invocationId": null,
+            "isSuccess": true,
+            "outcome": null,
+            "outputValues": {
+              "Flow__InterviewGuid": "666707894cfb7257872c5f0966431a1cc6d5097-7d6a",
+              "greeting": "hello n02",
+              "Flow__InterviewStatus": "Finished"
+            },
+            "sortOrder": -1,
+            "version": 1
+          },
+          {
+            "actionName": "Esf_Sandbox_Action_Flow",
+            "errors": null,
+            "expectedError": false,
+            "invocationId": null,
+            "isSuccess": true,
+            "outcome": null,
+            "outputValues": {
+              "Flow__InterviewGuid": "666807894cfb7257872c5f0966431a1cc6d5097-7d6b",
+              "greeting": "hello n03",
+              "Flow__InterviewStatus": "Finished"
+            },
+            "sortOrder": -1,
+            "version": 1
+          },
+          {
+            "actionName": "Esf_Sandbox_Action_Flow",
+            "errors": null,
+            "expectedError": false,
+            "invocationId": null,
+            "isSuccess": true,
+            "outcome": null,
+            "outputValues": {
+              "Flow__InterviewGuid": "666907894cfb7257872c5f0966431a1cc6d5097-7d6c",
+              "greeting": "hello n04",
+              "Flow__InterviewStatus": "Finished"
+            },
+            "sortOrder": -1,
+            "version": 1
+          },
+          {
+            "actionName": "Esf_Sandbox_Action_Flow",
+            "errors": null,
+            "expectedError": false,
+            "invocationId": null,
+            "isSuccess": true,
+            "outcome": null,
+            "outputValues": {
+              "Flow__InterviewGuid": "667007894cfb7257872c5f0966431a1cc6d5097-7d6d",
+              "greeting": "hello n05",
+              "Flow__InterviewStatus": "Finished"
+            },
+            "sortOrder": -1,
+            "version": 1
+          },
+          {
+            "actionName": "Esf_Sandbox_Action_Flow",
+            "errors": null,
+            "expectedError": false,
+            "invocationId": null,
+            "isSuccess": true,
+            "outcome": null,
+            "outputValues": {
+              "Flow__InterviewGuid": "667107894cfb7257872c5f0966431a1cc6d5097-7d6e",
+              "greeting": "hello n06",
+              "Flow__InterviewStatus": "Finished"
+            },
+            "sortOrder": -1,
+            "version": 1
+          },
+          {
+            "actionName": "Esf_Sandbox_Action_Flow",
+            "errors": null,
+            "expectedError": false,
+            "invocationId": null,
+            "isSuccess": true,
+            "outcome": null,
+            "outputValues": {
+              "Flow__InterviewGuid": "667207894cfb7257872c5f0966431a1cc6d5097-7d6f",
+              "greeting": "hello n07",
+              "Flow__InterviewStatus": "Finished"
+            },
+            "sortOrder": -1,
+            "version": 1
+          },
+          {
+            "actionName": "Esf_Sandbox_Action_Flow",
+            "errors": null,
+            "expectedError": false,
+            "invocationId": null,
+            "isSuccess": true,
+            "outcome": null,
+            "outputValues": {
+              "Flow__InterviewGuid": "667307894cfb7257872c5f0966431a1cc6d5097-7d70",
+              "greeting": "hello n08",
+              "Flow__InterviewStatus": "Finished"
+            },
+            "sortOrder": -1,
+            "version": 1
+          },
+          {
+            "actionName": "Esf_Sandbox_Action_Flow",
+            "errors": null,
+            "expectedError": false,
+            "invocationId": null,
+            "isSuccess": true,
+            "outcome": null,
+            "outputValues": {
+              "Flow__InterviewGuid": "667407894cfb7257872c5f0966431a1cc6d5097-7d71",
+              "greeting": "hello n09",
+              "Flow__InterviewStatus": "Finished"
+            },
+            "sortOrder": -1,
+            "version": 1
+          },
+          {
+            "actionName": "Esf_Sandbox_Action_Flow",
+            "errors": null,
+            "expectedError": false,
+            "invocationId": null,
+            "isSuccess": true,
+            "outcome": null,
+            "outputValues": {
+              "Flow__InterviewGuid": "667507894cfb7257872c5f0966431a1cc6d5097-7d72",
+              "greeting": "hello n10",
+              "Flow__InterviewStatus": "Finished"
+            },
+            "sortOrder": -1,
+            "version": 1
+          },
+          {
+            "actionName": "Esf_Sandbox_Action_Flow",
+            "errors": null,
+            "expectedError": false,
+            "invocationId": null,
+            "isSuccess": true,
+            "outcome": null,
+            "outputValues": {
+              "Flow__InterviewGuid": "667607894cfb7257872c5f0966431a1cc6d5097-7d73",
+              "greeting": "hello n11",
+              "Flow__InterviewStatus": "Finished"
+            },
+            "sortOrder": -1,
+            "version": 1
+          }
+        ]
+      }
+    }
+  ]
+}

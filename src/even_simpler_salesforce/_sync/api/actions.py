@@ -30,6 +30,8 @@ class Actions:
       raises the typed error for its first error entry (for example ``ValidationRuleFailed``).
     - a list returns a ``BatchResult`` of ``ActionResult``, one per input, in input order.
       Failed invocations don't raise; call ``raise_for_errors()`` to raise ``PartialFailure``.
+      The list is sent in one request: Salesforce runs at most 2,000 inputs per request and
+      fails the rest. An uncaught Apex exception fails every input of the request.
 
     A call that runs an action is never resent after it may have reached Salesforce, because
     the action could run twice.

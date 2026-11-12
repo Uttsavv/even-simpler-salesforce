@@ -1,17 +1,48 @@
 {
-  "synthetic": true,
-  "source": "hand-written (synthetic) from the Salesforce Actions Developer Guide, Invoking Actions and Flow Actions pages; no org recording yet",
-  "body": [
+  "esf_fixture": 1,
+  "interactions": [
     {
-      "actionName": "Assign_Lead",
-      "errors": null,
-      "isSuccess": true,
-      "outputValues": {
-        "assignedTo": "005xx0000000001AAA",
-        "Flow__InterviewGuid": "0Foxx0000000001",
-        "Flow__InterviewStatus": "Finished"
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/actions/custom/flow/Esf_Sandbox_Action_Flow",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "inputs": [
+            {
+              "name": "esf"
+            }
+          ]
+        }
       },
-      "version": 1
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=213/15000"
+        },
+        "json": [
+          {
+            "actionName": "Esf_Sandbox_Action_Flow",
+            "errors": null,
+            "expectedError": false,
+            "invocationId": null,
+            "isSuccess": true,
+            "outcome": null,
+            "outputValues": {
+              "Flow__InterviewGuid": "6458b616df164d9b29ae714819741a1ccb6082a-4c3f",
+              "greeting": "hello esf",
+              "Flow__InterviewStatus": "Finished"
+            },
+            "sortOrder": -1,
+            "version": 1
+          }
+        ]
+      }
     }
   ]
 }

@@ -1,0 +1,32 @@
+{
+  "esf_fixture": 1,
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/apexrest/esf-sandbox/x",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "name": "esf"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8"
+        },
+        "json": {
+          "params": null,
+          "ok": true,
+          "name": "esf",
+          "method": "POST"
+        }
+      }
+    }
+  ]
+}

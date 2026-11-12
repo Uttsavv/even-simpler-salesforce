@@ -58,7 +58,10 @@ for res in results:
 ```
 
 A failed input does not raise. Check `res.ok`, or call `results.raise_for_errors()` to raise
-`esf.PartialFailure`:
+`esf.PartialFailure`. Salesforce answers with HTTP 400 when every input failed and with 200
+otherwise; the client treats both the same. Each Flow input runs as its own interview, so one
+input can fail alone. An Apex action gets all inputs in one call, so an exception that the
+method doesn't catch fails every input of the request:
 
 ```python
 try:
@@ -72,7 +75,7 @@ except esf.PartialFailure as exc:
 | Attribute | Type | Description |
 |---|---|---|
 | `ok` | `bool` | `isSuccess` from Salesforce |
-| `outputs` | `Mapping[str, Any]` | the output values; empty if the input failed |
+| `outputs` | `Mapping[str, Any]` | the output values. For a failed Flow interview, only `Flow__InterviewGuid` and `Flow__InterviewStatus` (`"Error"`) |
 | `errors` | `tuple[ErrorDetail, ...]` | the errors if the input failed |
 | `action_name` | `str \| None` | the action name that Salesforce reports |
 
@@ -166,8 +169,10 @@ The kind is `"standard"`, `"flow"`, `"apex"` or another custom action type such 
 
 - The client does not resend a call that runs an action after a timeout or a 5xx. The action
   could already have run, and a resend would run it twice.
-- The client sends a list of inputs in one request and does not split it. Salesforce limits
-  the number of inputs per request.
+- The client sends a list of inputs in one request and does not split it. Salesforce accepts
+  at most 2,000 inputs per request for Apex and Flow actions. With more, Salesforce runs the
+  first 2,000 and fails each extra input with `UNKNOWN_EXCEPTION` ("Cannot specify more than
+  2000 requests"), so send at most 2,000 inputs per call.
 - Triggers can't be called. They run when records change, so create, update or delete the
   records instead.
 - To run anonymous Apex, wait for the Tooling API area in 0.3.

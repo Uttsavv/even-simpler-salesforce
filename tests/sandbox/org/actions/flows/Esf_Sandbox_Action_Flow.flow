@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- esf-sandbox: autolaunched Flow action probe (V31-V33). Input name, output greeting.
+     name = 'fail' creates a Lead without its required fields, so that one interview fails. -->
+<Flow xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>66.0</apiVersion>
+    <assignments>
+        <name>Set_Greeting</name>
+        <label>Set Greeting</label>
+        <locationX>0</locationX>
+        <locationY>0</locationY>
+        <assignmentItems>
+            <assignToReference>greeting</assignToReference>
+            <operator>Assign</operator>
+            <value><elementReference>Greeting_Text</elementReference></value>
+        </assignmentItems>
+    </assignments>
+    <decisions>
+        <name>Is_Fail</name>
+        <label>Is Fail</label>
+        <locationX>0</locationX>
+        <locationY>0</locationY>
+        <defaultConnector><targetReference>Set_Greeting</targetReference></defaultConnector>
+        <defaultConnectorLabel>Default</defaultConnectorLabel>
+        <rules>
+            <name>Fail</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>name</leftValueReference>
+                <operator>EqualTo</operator>
+                <rightValue><stringValue>fail</stringValue></rightValue>
+            </conditions>
+            <connector><targetReference>Create_Bad_Lead</targetReference></connector>
+            <label>Fail</label>
+        </rules>
+    </decisions>
+    <formulas>
+        <name>Greeting_Text</name>
+        <dataType>String</dataType>
+        <expression>&quot;hello &quot; &amp; {!name}</expression>
+    </formulas>
+    <label>ESF Sandbox Action Flow</label>
+    <processType>AutoLaunchedFlow</processType>
+    <recordCreates>
+        <name>Create_Bad_Lead</name>
+        <label>Create Bad Lead</label>
+        <locationX>0</locationX>
+        <locationY>0</locationY>
+        <inputAssignments>
+            <field>FirstName</field>
+            <value><stringValue>esf-sandbox-fail</stringValue></value>
+        </inputAssignments>
+        <object>Lead</object>
+    </recordCreates>
+    <start>
+        <locationX>0</locationX>
+        <locationY>0</locationY>
+        <connector><targetReference>Is_Fail</targetReference></connector>
+    </start>
+    <status>Active</status>
+    <variables>
+        <name>greeting</name>
+        <dataType>String</dataType>
+        <isCollection>false</isCollection>
+        <isInput>false</isInput>
+        <isOutput>true</isOutput>
+    </variables>
+    <variables>
+        <name>name</name>
+        <dataType>String</dataType>
+        <isCollection>false</isCollection>
+        <isInput>true</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+</Flow>

@@ -94,7 +94,8 @@ class ActionResult:
 
     Attributes:
         ok: ``isSuccess`` from Salesforce.
-        outputs: ``outputValues`` (empty when the invocation failed).
+        outputs: ``outputValues``. Usually empty when the invocation failed; a failed Flow
+            interview still has ``Flow__InterviewGuid`` and ``Flow__InterviewStatus``.
         errors: The error entries when it failed.
         action_name: ``actionName`` as Salesforce reports it.
     """

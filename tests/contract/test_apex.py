@@ -1,7 +1,8 @@
 """Apex REST: ``sf.apex`` (§9.7, §8.3), on both clients.
 
-Responses are **synthetic** (``tests/fixtures/recorded/apex/*.json`` and inline bodies),
-hand-written from the Apex Developer Guide because no org recording exists yet:
+``tests/fixtures/recorded/apex/*.json`` are recorded from a Developer Edition org (API v68.0,
+2026-11-12, V34 in big-bang.md §21) against ``tests/sandbox/org/core/classes/EsfSandboxRest.cls``
+(``@RestResource(urlMapping='/esf-sandbox/*')``). Inline bodies are **synthetic**. Sources:
 
 - Exposing Apex classes as REST web services (``/services/apexrest/{urlMapping}``; the class
   sets ``RestContext.response.statusCode`` and body; an unhandled exception returns
@@ -22,7 +23,7 @@ import respx
 import even_simpler_salesforce as esf
 
 from ..conftest import INSTANCE, Harness, Recorder
-from ..fixtures import load_fixture
+from ..fixtures import load_response
 
 APEX = f"{INSTANCE}/services/apexrest"
 
@@ -49,12 +50,29 @@ def test_put_patch_delete_and_bodies(h: Harness, mock: respx.MockRouter) -> None
     assert h.run(sf.apex.delete("/orders/1")) is None
 
 
+def test_recorded_get_and_post(h: Harness, mock: respx.MockRouter) -> None:
+    """Recorded: the class's return value is the JSON body, serialised by Salesforce."""
+    _, got = load_response("apex/get.json")
+    _, posted = load_response("apex/post.json")
+    mock.get(f"{APEX}/esf-sandbox/x").respond(json=got)
+    post = mock.post(f"{APEX}/esf-sandbox/x").respond(json=posted)
+    sf = h.client()
+    assert h.run(sf.apex.get("/esf-sandbox/x", params={"a": "1"}))["params"] == {"a": "1"}
+    assert h.run(sf.apex.post("/esf-sandbox/x", {"name": "esf"}))["name"] == "esf"
+    assert json.loads(post.calls[0].request.content) == {"name": "esf"}
+
+
 def test_unhandled_exception_is_apex_error(h: Harness, mock: respx.MockRouter) -> None:
-    mock.post(f"{APEX}/orders/submit").respond(500, json=load_fixture("apex/unhandled.json"))
+    """Recorded: an unhandled ``MathException`` is HTTP 500 ``[{"errorCode": "APEX_ERROR"}]``."""
+    status, body = load_response("apex/unhandled.json")
+    assert status == 500
+    route = mock.get(f"{APEX}/esf-sandbox/x").respond(status, json=body)
     sf = h.client()
     with pytest.raises(esf.ApexError) as ei:
-        h.run(sf.apex.post("/orders/submit", {}))
+        h.run(sf.apex.get("/esf-sandbox/x", params={"mode": "throw"}))
+    assert route.call_count == 1  # Apex REST GET is not resent after a 500 by default
     assert ei.value.error_code == "APEX_ERROR"
+    assert ei.value.message.startswith("System.MathException: Divide by 0")
     assert ei.value.status == 500
     assert ei.value.retryable is False
     assert ei.value.body[0]["errorCode"] == "APEX_ERROR"
@@ -72,11 +90,16 @@ def test_class_error_body_is_kept(h: Harness, mock: respx.MockRouter) -> None:
 
 
 def test_unknown_url_mapping_is_apex_error(h: Harness, mock: respx.MockRouter) -> None:
-    mock.get(f"{APEX}/nope").respond(404, json=load_fixture("apex/not_found.json"))
+    """Recorded: a path no class maps is HTTP 404 ``NOT_FOUND`` "Could not find a match for URL"."""
+    status, body = load_response("apex/not_found.json")
+    assert status == 404
+    mock.get(f"{APEX}/esf-sandbox-nope/x").respond(status, json=body)
     sf = h.client()
     with pytest.raises(esf.ApexError) as ei:
-        h.run(sf.apex.get("/nope"))
+        h.run(sf.apex.get("/esf-sandbox-nope/x"))
     assert ei.value.error_code == "NOT_FOUND"
+    assert ei.value.status == 404
+    assert ei.value.message == "Could not find a match for URL"
 
 
 def test_auth_limit_and_gateway_errors_keep_their_class(h: Harness, mock: respx.MockRouter) -> None:
