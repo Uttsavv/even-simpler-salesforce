@@ -3,13 +3,14 @@
 
 Usage (after ``scripts/sandbox_login.py``)::
 
-    uv run python scripts/sandbox_setup_org.py              # deploy core, extras, records
+    uv run python scripts/sandbox_setup_org.py              # deploy every folder
     uv run python scripts/sandbox_setup_org.py --check-only # validate, save nothing
     uv run python scripts/sandbox_setup_org.py --folder records   # deploy one folder only
 
-It deploys ``tests/sandbox/org/core``, ``extras`` and ``records`` in that order with
-``sf.metadata.deploy`` (so the deploy path is exercised too), and assigns the ``Esf_Sandbox`` and
-``Esf_Sandbox_Records`` permission sets to the logged-in user:
+It deploys every folder under ``tests/sandbox/org`` (``core`` and ``extras`` first, then the
+others in name order) with ``sf.metadata.deploy`` (so the deploy path is exercised too), and
+assigns each folder's permission sets (``<folder>/permissionsets/*.permissionset``) to the
+logged-in user. The main folders:
 
 - core: ``Lead.Esf_Ext__c`` (external id), the V5b validation rule and Apex trigger, the
   platform event ``ESF_Sandbox_Event__e`` (``Message__c``), Change Data Capture on Account, the
@@ -21,7 +22,11 @@ It deploys ``tests/sandbox/org/core``, ``extras`` and ``records`` in that order 
   Lead queue and an active Lead assignment rule ``Esf_Sandbox`` that sends Leads with
   ``Company`` = ``ESF_ASSIGN`` to that queue (V24; it replaces the org's active Lead rule), and
   the custom object ``Esf_Sandbox_Item__c`` with a required, a defaulted and two picklist
-  fields (V30), plus the ``Esf_Sandbox_Records`` permission set.
+  fields (V30), plus the ``Esf_Sandbox_Records`` permission set;
+- actions: the autolaunched Flow ``Esf_Sandbox_Action_Flow`` (V31-V33);
+- graphql: ``Lead.Esf_GraphQL_Hidden__c``, a field with no field-level security (V51);
+- pubsub: the platform event ``ESF_Sandbox_Date_Event__e`` and Date/DateTime fields on Account
+  (V77), plus the ``Esf_Sandbox_PubSub`` permission set.
 
 It refuses to run against a production org: ``Organization.IsSandbox`` must be true or the
 org must be a Developer Edition. The fixtures change org behaviour on purpose (Leads with
@@ -50,8 +55,15 @@ from tests.sandbox.settings import load_settings  # noqa: E402
 import even_simpler_salesforce as esf  # noqa: E402
 
 ORG_DIR = ROOT / "tests" / "sandbox" / "org"
-FOLDERS = ("core", "extras", "records")
-PERMISSION_SETS = {"core": "Esf_Sandbox", "records": "Esf_Sandbox_Records"}
+FIRST = ("core", "extras")
+FOLDERS = (
+    *FIRST,
+    *sorted(p.name for p in ORG_DIR.iterdir() if (p / "package.xml").is_file() and p.name not in FIRST),
+)
+
+
+def _permission_sets(folder: str) -> list[str]:
+    return sorted(p.stem for p in (ORG_DIR / folder / "permissionsets").glob("*.permissionset"))
 
 
 def _guard(sf: esf.Salesforce) -> str:
@@ -106,8 +118,9 @@ def main() -> int:
         ok = True
         for folder in args.folder or FOLDERS:
             ok = _deploy(sf, folder, args.check_only) and ok
-            if not args.check_only and folder in PERMISSION_SETS:
-                _assign_permission_set(sf, PERMISSION_SETS[folder])
+            if not args.check_only:
+                for name in _permission_sets(folder):
+                    _assign_permission_set(sf, name)
     return 0 if ok else 1
 
 
