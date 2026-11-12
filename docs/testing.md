@@ -421,7 +421,8 @@ The recorder redacts before it writes anything to disk:
 - OAuth secrets anywhere in JSON or form bodies become `"<redacted>"`. Examples are
   `access_token`, `refresh_token`, `id_token`, `client_secret`, `assertion`, `code`,
   `code_verifier`, `signature` and `password`. Add your own keys with `extra_keys=`.
-- Session ids and `Bearer ...` values inside any string are redacted.
+- Session ids and `Bearer ...` values inside any string are redacted, and so is the text of
+  every XML `sessionId` element (the `SessionHeader` of a SOAP call).
 - E-mail addresses become `user<N>@example.com`, and phone and fax values become `555-01NN`. The
   values stay consistent within a file. Turn this off with `mask_emails=` and `mask_phones=`.
 - In sObject records, names and postal addresses become `<Field> <N>`. Examples are `Name`,
