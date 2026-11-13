@@ -133,7 +133,7 @@ class BatchResult(Generic[T]):
 
     @property
     def ok(self) -> list[T]:
-        """Deprecated alias of :attr:`succeeded`; removed in 0.2.
+        """Deprecated alias of :attr:`succeeded`; to be removed in 0.7.
 
         It reads like a bool (``if batch.ok:``) but is a list, true when *any* record succeeded.
         """
