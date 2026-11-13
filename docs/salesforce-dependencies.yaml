@@ -420,9 +420,9 @@ headers:
     checked: null
   - name: Sforce-Duplicate-Rule-Header
     direction: request
-    used_for: "allow_save= → allowSave=true/false"
+    used_for: "duplicate_rules=DuplicateRules(...) → allowSave, includeRecordDetails, runAsCurrentUser (allow_save= deprecated); sObject + Collections create/update/upsert"
     docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/headers_duplicaterules.htm
-    checked: null
+    checked: 2026-11-13
   - name: If-Modified-Since
     direction: request
     used_for: "describe revalidation, get(if_modified_since=) → 304"

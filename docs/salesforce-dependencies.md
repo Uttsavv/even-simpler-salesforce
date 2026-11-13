@@ -117,7 +117,7 @@ Behaviour relied on:
 | `Sforce-Call-Options` | request | client_name= → client=<name> | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/headers_calloptions.htm) |  |
 | `Sforce-Query-Options` | request | page_size= → batchSize=200..2000 | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/headers_queryoptions.htm) |  |
 | `Sforce-Auto-Assign` | request | assignment_rule_id= (TRUE / FALSE / rule id) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/headers_autoassign.htm) |  |
-| `Sforce-Duplicate-Rule-Header` | request | allow_save= → allowSave=true/false | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/headers_duplicaterules.htm) |  |
+| `Sforce-Duplicate-Rule-Header` | request | duplicate_rules=DuplicateRules(...) → allowSave, includeRecordDetails, runAsCurrentUser (allow_save= deprecated); sObject + Collections create/update/upsert | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/headers_duplicaterules.htm) | 2026-11-13 |
 | `If-Modified-Since` | request | describe revalidation, get(if_modified_since=) → 304 | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/intro_rest_conditional_requests.htm) |  |
 | `If-None-Match` | request | describe cache revalidation with a stored ETag (UI API object-info and picklist-values, V62) → 304 | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/intro_rest_conditional_requests.htm) |  |
 | `If-Unmodified-Since` | request | update(if_unmodified_since=) → 412 | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/intro_rest_conditional_requests.htm) |  |

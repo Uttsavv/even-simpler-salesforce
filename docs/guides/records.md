@@ -176,13 +176,41 @@ Datetimes must be timezone-aware. A naive `datetime` raises `ValueError`.
 
 ## Assignment and duplicate rules
 
-To run an assignment rule, pass `assignment_rule_id=` to `create`, `update` or `upsert`. To
-save despite a duplicate-rule alert, pass `allow_save=True`. See
+To run an assignment rule, pass `assignment_rule_id=` to `create`, `update` or `upsert`. See
 [Request options](#request-options) for every value.
 
 ```python
 lead_id = await leads.create({"LastName": "Hamilton", "Company": "NASA"}, assignment_rule_id=True)
 ```
+
+To control the org's duplicate rules, pass `duplicate_rules=esf.DuplicateRules(...)` to the
+same methods. It has three flags. All of them are `False` by default, as in Salesforce:
+
+| Flag | Effect |
+|---|---|
+| `allow_save` | Save the record despite a duplicate-rule alert. A rule that blocks still blocks. |
+| `include_record_details` | In `esf.DuplicateDetected`, return fields of the matched records, not only their ids. |
+| `run_as_current_user` | Find duplicates with the running user's sharing rules. |
+
+When a rule stops the write, the client raises `esf.DuplicateDetected`. `exc.duplicates` is
+the `duplicateResult` that Salesforce returns.
+
+```python
+details = esf.DuplicateRules(include_record_details=True)
+try:
+    lead_id = await leads.create({"LastName": "Hamilton", "Company": "NASA"}, duplicate_rules=details)
+except esf.DuplicateDetected as exc:
+    for match in exc.duplicates["matchResults"]:
+        for found in match["matchRecords"]:
+            print(found["record"]["Id"], found["record"].get("Company"))
+    lead_id = await leads.create(
+        {"LastName": "Hamilton", "Company": "NASA"},
+        duplicate_rules=esf.DuplicateRules(allow_save=True),
+    )
+```
+
+`allow_save=True` is deprecated: use `duplicate_rules=esf.DuplicateRules(allow_save=True)`.
+It still works, but it emits `esf.EsfDeprecationWarning`. It will be removed in 0.7.
 
 ## Describe an object
 
@@ -218,11 +246,11 @@ print(len(changed["ids"]), len(removed["deletedRecords"]))
 
 | Method | REST call | Returns |
 |---|---|---|
-| `create(data, *, assignment_rule_id=None, allow_save=None)` | `POST sobjects/{o}` | the new id (`str`) |
+| `create(data, *, assignment_rule_id=None, duplicate_rules=None)` | `POST sobjects/{o}` | the new id (`str`) |
 | `get(record_id, fields=None, *, model=None, if_modified_since=None)` | `GET sobjects/{o}/{id}` | the record (`None` on `304`) |
-| `update(record_id, data, *, assignment_rule_id=None, allow_save=None, if_unmodified_since=None)` | `PATCH sobjects/{o}/{id}` | `None` |
+| `update(record_id, data, *, assignment_rule_id=None, duplicate_rules=None, if_unmodified_since=None)` | `PATCH sobjects/{o}/{id}` | `None` |
 | `delete(record_id)` | `DELETE sobjects/{o}/{id}` | `None` |
-| `upsert(field, value, data, *, assignment_rule_id=None, allow_save=None)` | `PATCH sobjects/{o}/{field}/{value}` | `UpsertResult(id, created)` |
+| `upsert(field, value, data, *, assignment_rule_id=None, duplicate_rules=None)` | `PATCH sobjects/{o}/{field}/{value}` | `UpsertResult(id, created)` |
 | `get_by_external_id(field, value, fields=None, *, model=None)` | `GET sobjects/{o}/{field}/{value}` | the record |
 | `describe(*, cached=True)` | `GET sobjects/{o}/describe` | describe `dict` (cached) |
 | `metadata()` | `GET sobjects/{o}` | basic info and recent items |
@@ -235,7 +263,7 @@ print(len(changed["ids"]), len(removed["deletedRecords"]))
 |---|---|---|
 | `assignment_rule_id="01Q..."` | `Sforce-Auto-Assign: 01Q...` | run that assignment rule |
 | `assignment_rule_id=True` / `False` | `Sforce-Auto-Assign: TRUE` / `FALSE` | run the default rule, or none |
-| `allow_save=True` / `False` | `Sforce-Duplicate-Rule-Header: allowSave=...` | save despite a duplicate-rule alert (or not) |
+| `duplicate_rules=esf.DuplicateRules(...)` | `Sforce-Duplicate-Rule-Header: allowSave=...; includeRecordDetails=...; runAsCurrentUser=...` | how duplicate rules apply (all three flags are sent) |
 | `if_modified_since=dt` (get) | `If-Modified-Since` | returns `None` when the record hasn't changed (`304`) |
 | `if_unmodified_since=dt` (update) | `If-Unmodified-Since` | `esf.Conflict` (`412`) if the record changed after `dt` |
 

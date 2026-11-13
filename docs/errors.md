@@ -415,8 +415,12 @@ A required field has no value. `exc.fields` names the fields.
 
 ### DuplicateDetected
 
-A duplicate rule blocked the record. `exc.duplicates` holds the matching records when
-Salesforce returns them.
+A duplicate rule blocked the record, or alerted and the write didn't allow the save.
+`exc.duplicates` is the `duplicateResult` from Salesforce: the rule name and, in
+`matchResults[].matchRecords[].record`, the matched records. Each record holds only its `Id`,
+unless the write passed `duplicate_rules=esf.DuplicateRules(include_record_details=True)`.
+sObject Collections return no duplicate result, so `exc.duplicates` is `None` there. To save
+despite an alert, pass `duplicate_rules=esf.DuplicateRules(allow_save=True)`.
 
 ### InvalidReference
 

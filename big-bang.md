@@ -299,7 +299,7 @@ all `Auth` classes and `AuthStart`, `Token`, `AsyncTokenStore` / `TokenStore`,
 `Cursor`, all exceptions, result models (`QueryResult`, `BatchResult`, `RecordResult`,
 `UpsertResult`, `UsageSnapshot`, `Limit`), config (`Budget`, `RetryPolicy`, `Timeouts`,
 `DescribeCacheConfig`), `Cache` / `MemoryCache`, `Event`, `Observer`, `capture`,
-`call_context`, `EsfDeprecationWarning`, `__version__`. (`DuplicateRules` and `SalesforceWarning` are planned, not shipped: §9.1, §7.1 step 7.) 0.5 adds `PubSubEvent`, `ChangeHeader`,
+`call_context`, `EsfDeprecationWarning`, `__version__`. (`SalesforceWarning` is planned, not shipped: §7.1 step 7.) 0.5 adds `DuplicateRules` (§9.1), `PubSubEvent`, `ChangeHeader`,
 `ChangeType`, `AsyncReplayStore` / `ReplayStore` and `AsyncInMemoryReplayStore` /
 `InMemoryReplayStore` (§9.16). Naming rule: the async variant carries the
 `Async` prefix, like `AsyncSalesforce` / `Salesforce`.
@@ -801,14 +801,12 @@ Salesforce's default applies.
 | Kwarg | Methods | Header | Notes |
 |---|---|---|---|
 | `assignment_rule_id: str \| bool \| None` | `create`, `update`, `upsert` | `Sforce-Auto-Assign` | `True`/`False` → `TRUE`/`FALSE`; a string must be an AssignmentRule id (validated with `check_record_id`). Salesforce defaults to `TRUE` and applies it to Accounts, Cases and Leads, including ones written indirectly by triggers. |
-| `allow_save: bool \| None` | `create`, `update`, `upsert` | `Sforce-Duplicate-Rule-Header` | API 52.0+. Sends `allowSave=…; includeRecordDetails=false; runAsCurrentUser=false`. See below. |
+| `duplicate_rules: DuplicateRules \| None` | `create`, `update`, `upsert` | `Sforce-Duplicate-Rule-Header` | API 52.0+. Sends `allowSave=…; includeRecordDetails=…; runAsCurrentUser=…`. See below. `allow_save: bool \| None` is its deprecated alias. |
 | `if_modified_since: datetime \| None` | `get` | `If-Modified-Since` | 304 handling as before. The describe cache sends it internally (§12). |
 | `if_unmodified_since: datetime \| None` | `update` | `If-Unmodified-Since` | `Conflict` on 412. |
 
-**Shipped:** `allow_save=` (spec-vs-code check, 2026-11-13). `core/records.duplicate_rule_header` already takes all
-three flags, but only `allowSave` is exposed. **Planned, not shipped:** `esf.DuplicateRules`, a
-frozen dataclass in `config.py` (no I/O) that would replace `allow_save=` as `duplicate_rules=`.
-Because 0.5 ships `allow_save=`, the change then needs a deprecation (D29):
+`esf.DuplicateRules` is a frozen dataclass in `config.py` (no I/O), serialised by
+`core/records.duplicate_rule_header`:
 
 ```python
 @dataclass(frozen=True)
@@ -821,6 +819,18 @@ class DuplicateRules:
 All three fields are always sent (`allowSave=true; includeRecordDetails=false;
 runAsCurrentUser=false`); the defaults equal Salesforce's documented defaults, so
 `DuplicateRules()` behaves like sending no header.
+
+`DuplicateDetected.duplicates` is Salesforce's `duplicateResult` dict; with
+`include_record_details=True` each `matchResults[].matchRecords[].record` carries fields of the
+matched record, not only `Id` (the org returns a subset of the fields; the docs say "all
+fields"). sObject Collections errors carry no `duplicateResult` at all, with or without the flag,
+so there `duplicates` is `None` (org-observed, DE org v68.0, 2026-11-13).
+
+**Deprecated: `allow_save=`.** 0.1.0rc1 shipped `allow_save: bool | None` on the same methods
+(§9.1, §9.3) and on `FakeSalesforce`. It stays as an alias until **0.7** (D29, §17.1): passing it
+emits `esf.EsfDeprecationWarning` naming `duplicate_rules=esf.DuplicateRules(allow_save=...)`,
+pointing at the caller's line, and sends the same header as before; passing both raises
+`TypeError`. `FakeCall.args` records `duplicate_rules` (and `allow_save`, derived from it).
 
 **No conditional headers on delete.** The REST API Developer Guide (*Conditional Request
 Headers*) says DELETE requests don't support them. An earlier 0.1 draft accepted
@@ -905,7 +915,8 @@ which validates `^[A-Za-z][A-Za-z0-9_]*(__[a-z]+)?$` (dotted paths allowed).
   *Headers* pages don't limit these two headers to particular resources, and the Collections
   example responses show `DUPLICATES_DETECTED`, but no page says Collections honours them. V24
   (sandbox) confirmed both on create, update and upsert, so they ship as
-  `assignment_rule_id=` and `allow_save=`, like §9.1 (`duplicate_rules=` is planned, §9.1). `delete` and `retrieve` take neither.
+  `assignment_rule_id=` and `duplicate_rules=`, like §9.1 (`allow_save=` is the deprecated alias).
+  Collections errors carry no `duplicateResult`, so `include_record_details` has no visible effect there. `delete` and `retrieve` take neither.
 - Returns `BatchResult` (ordered as input): `.results: list[RecordResult(ok, id, created, errors)]`, `.ok`, `.failed`, `.raise_for_errors()` → `PartialFailure`.
 - **Failures can't go unnoticed** (simple-salesforce #817, #544, #502, #442): every
   Collections `sf.request` event carries `records_failed`, so partial failures show up in logs and

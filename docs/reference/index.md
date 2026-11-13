@@ -179,6 +179,8 @@ The reasons behind the design are written down in the
 
 ::: even_simpler_salesforce.DescribeCacheConfig
 
+::: even_simpler_salesforce.DuplicateRules
+
 ::: even_simpler_salesforce.Backoff
 
 ::: even_simpler_salesforce.Cache
