@@ -20,7 +20,7 @@ from ..context import current_call_context
 from ..core import jsonlib
 from ..core.actions import Action, action_inputs, action_result_type, build_action_result
 from ..core.cursor import Cursor, decode_cursor, encode_cursor
-from ..core.http import RawResponse, RequestSpec, check_sobject
+from ..core.http import MRU_MIN_API_VERSION, RawResponse, RequestSpec, check_namespace, check_sobject
 from ..core.pubsub import check_endpoint
 from ..core.records import apply_model, parse_query_plans
 from ..core.soql import soql_values
@@ -143,6 +143,21 @@ class AsyncSalesforce:
         pubsub_endpoint: ``host:port`` of the Pub/Sub API for ``sf.pubsub``. Defaults to
             ``api.pubsub.salesforce.com:443``; use ``api.deu.pubsub.salesforce.com:443`` to keep
             data in transit in the EU.
+        default_namespace: Namespace prefix of a managed package, sent as
+            ``Sforce-Call-Options: defaultNamespace=<ns>`` on every API call. SOQL and record
+            data can then name the package's fields without the prefix (``botId__c``, not
+            ``battle__botId__c``), and Salesforce leaves the prefix out of the field names in
+            responses, so the keys of returned dicts change. Ignored by describe calls. 1-15
+            letters, digits or ``_``, starting with a letter, without ``__``.
+        update_mru: Sent as ``Sforce-Mru: updateMru=true|false`` on ``sf.sobject(...)``
+            create, get, get-by-external-id, update and upsert. ``False`` stops these calls
+            from adding records to the user's Recently Viewed list, which Salesforce recommends
+            for integration users. ``None`` (default) sends no header, and Salesforce updates
+            the list. Needs ``api_version`` 60.0 or newer.
+
+    Raises:
+        ValueError: An option is not valid, or ``update_mru`` is set with an ``api_version``
+            older than 60.0.
     """
 
     def __init__(
@@ -168,19 +183,27 @@ class AsyncSalesforce:
         http2: bool = False,
         client_name: str | None = None,
         pubsub_endpoint: str | None = None,
+        default_namespace: str | None = None,
+        update_mru: bool | None = None,
     ) -> None:
         for tag, cls in (error_tags or {}).items():
             if not (isinstance(cls, type) and issubclass(cls, SalesforceError)):  # pyright: ignore[reportUnnecessaryIsInstance]
                 raise TypeError(f"error_tags[{tag!r}] must be a SalesforceError subclass")
         if client_name is not None and not _CLIENT_NAME.fullmatch(client_name):
             raise ValueError("client_name may only contain letters, digits, '_', '.', ':', '-' (max 64)")
+        api_version = _check_version(api_version)
+        if default_namespace is not None:
+            check_namespace(default_namespace)
+        if update_mru is not None and tuple(int(x) for x in api_version.split(".")) < MRU_MIN_API_VERSION:
+            minimum = ".".join(str(x) for x in MRU_MIN_API_VERSION)
+            raise ValueError(f"update_mru needs api_version v{minimum} or newer, got {api_version}")
         dc = describe_cache or DescribeCacheConfig()
         level = debug_level()
         hub = ObserverHub(observers)
         if level:
             hub.add(DebugPrinter(level))
         self._transport = AsyncTransport(
-            api_version=_check_version(api_version),
+            api_version=api_version,
             http_client=http_client,
             timeout=timeout or Timeouts(),
             retry=retry or RetryPolicy(),
@@ -199,6 +222,8 @@ class AsyncSalesforce:
             debug=level,
             client_name=client_name,
             pubsub_endpoint=check_endpoint(pubsub_endpoint) if pubsub_endpoint is not None else None,
+            default_namespace=default_namespace,
+            update_mru=update_mru,
         )
         self._store: AsyncTokenStore = store if store is not None else AsyncInMemoryTokenStore()
         self._runtime = AsyncAuthRuntime(auth, self._transport, self._store, instance_url=instance_url)

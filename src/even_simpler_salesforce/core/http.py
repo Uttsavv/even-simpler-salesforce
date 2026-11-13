@@ -20,11 +20,15 @@ __all__ = [
     "RawResponse",
     "RequestSpec",
     "build_url",
+    "call_options",
+    "check_namespace",
     "check_record_id",
     "check_sobject",
     "gzip_body",
     "json_body",
     "merge_call_options",
+    "mru_header",
+    "parse_warning",
     "path_template",
     "url_segment",
 ]
@@ -37,6 +41,18 @@ _SOBJECT_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 _ID_SEGMENT = re.compile(r"(?<=/)(?=[a-zA-Z0-9]*\d)[a-zA-Z0-9]{15}(?:[a-zA-Z0-9]{3})?(?=/|$)")
 _LOCATOR_SEGMENT = re.compile(r"(?<=/)[0-9A-Za-z]{15,18}-\d+(?=/|$)")
 _VERSION_PREFIX = re.compile(r"^/services/data/v\d+\.\d")
+#: A namespace prefix: 1-15 letters, digits or underscores, starting with a letter (no ``__``).
+_NAMESPACE_RE = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,14}")
+#: ``Warning: 299 - "text"`` (RFC 7234 ``warn-code warn-agent "warn-text"``); the agent is optional.
+_WARNING_RE = re.compile(r'^\s*(\d{3})\s+(?:(\S+)\s+)?"((?:[^"\\]|\\.)*)"')
+_WARNING_CODE_RE = re.compile(r"^\s*\d{3}\s+(?:-\s+)?")
+#: First API version that accepts ``Sforce-Mru`` (REST API Developer Guide, *MRU Header*).
+MRU_MIN_API_VERSION = (60, 0)
+#: Operations whose resources document ``Sforce-Mru``: sObject Basic Information (POST),
+#: sObject Rows and sObject Rows by External ID. SOQL never updates the MRU list.
+_MRU_OPERATIONS = frozenset(
+    {"sobject.create", "sobject.get", "sobject.get_by_external_id", "sobject.update", "sobject.upsert"}
+)
 _RUNS_CODE = re.compile(r"(^|/)services/apexrest(/|$)|(^|/)tooling/executeAnonymous(/|$)", re.IGNORECASE)
 
 Params = Mapping[str, Any] | list[tuple[str, Any]]
@@ -214,6 +230,70 @@ def merge_call_options(headers: Mapping[str, str], ours: str) -> dict[str, str]:
     ] + caller
     out["Sforce-Call-Options"] = "; ".join(merged)
     return out
+
+
+def check_namespace(namespace: str) -> str:
+    """Validate a namespace prefix for ``defaultNamespace``.
+
+    The rule comes from Salesforce's *Register a Namespace* page: up to 15 letters, digits or
+    underscores, starting with a letter, with no two consecutive underscores.
+
+    Raises:
+        ValueError: ``namespace`` is not a valid prefix.
+    """
+    if (
+        not isinstance(namespace, str)  # pyright: ignore[reportUnnecessaryIsInstance]
+        or not _NAMESPACE_RE.fullmatch(namespace)
+        or "__" in namespace
+    ):
+        raise ValueError(
+            "default_namespace must be 1-15 letters, digits or '_', start with a letter "
+            f"and contain no '__', got {namespace!r}"
+        )
+    return namespace
+
+
+def call_options(client_name: str | None, default_namespace: str | None) -> str | None:
+    """The client-wide ``Sforce-Call-Options`` value, or ``None`` when there is nothing to send.
+
+    Options are joined with ``; ``, as in the Salesforce *Call Options Header* example
+    (``client=caseSensitiveToken; defaultNamespace=battle``).
+    """
+    parts: list[str] = []
+    if client_name:
+        parts.append(f"client={client_name}")
+    if default_namespace:
+        parts.append(f"defaultNamespace={default_namespace}")
+    return "; ".join(parts) or None
+
+
+def mru_header(spec: RequestSpec, update_mru: bool | None) -> dict[str, str]:
+    """The ``Sforce-Mru`` header for ``spec``, or ``{}`` when it isn't sent.
+
+    Sent only when ``update_mru`` is set and ``spec`` targets a resource that documents the
+    header (REST API Developer Guide, *MRU Header*): ``sf.sobject(...)`` create, get,
+    get-by-external-id, update and upsert. Never on query, Tooling objects or Collections.
+    """
+    if update_mru is None or spec.operation not in _MRU_OPERATIONS or not spec.path.startswith("sobjects/"):
+        return {}
+    return {"Sforce-Mru": f"updateMru={'true' if update_mru else 'false'}"}
+
+
+def parse_warning(value: str | None) -> str | None:
+    """The text of a ``Warning`` response header, or ``None`` when there is none.
+
+    Salesforce sends ``Warning: 299 - "<text>"`` when a request uses a deprecated API version
+    (REST API Developer Guide, *Warning Header*). The quoted text is returned unescaped. A value
+    without quotes is returned without its leading code.
+    """
+    if not value or not value.strip():
+        return None
+    m = _WARNING_RE.match(value)
+    if m:
+        text = re.sub(r"\\(.)", r"\1", m.group(3)).strip()
+    else:
+        text = _WARNING_CODE_RE.sub("", value).strip().strip('"').strip()
+    return text or None
 
 
 def _split_options(value: str) -> list[str]:
