@@ -6,7 +6,13 @@ import builtins
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any, cast, overload
 
-from ...core.actions import action_error, action_list_path, action_path, parse_action_results
+from ...core.actions import (
+    action_error,
+    action_list_path,
+    action_path,
+    check_action_inputs,
+    parse_action_results,
+)
 from ...core.http import RequestSpec
 from ...errors import UnexpectedResponse
 from ...models import ActionResult, BatchResult
@@ -28,8 +34,9 @@ class AsyncActions:
       raises the typed error for its first error entry (for example ``ValidationRuleFailed``).
     - a list returns a ``BatchResult`` of ``ActionResult``, one per input, in input order.
       Failed invocations don't raise; call ``raise_for_errors()`` to raise ``PartialFailure``.
-      The list is sent in one request: Salesforce runs at most 2,000 inputs per request and
-      fails the rest. An uncaught Apex exception fails every input of the request.
+      The list is sent in one request. Salesforce runs at most 2,000 inputs per request and
+      fails the rest, so a list of more than 2,000 for an Apex or Flow action raises
+      ``ValueError`` before anything is sent. An uncaught Apex exception fails every input of the request.
 
     A call that runs an action is never resent after it may have reached Salesforce, because
     the action could run twice.
@@ -126,6 +133,7 @@ class AsyncActions:
             if not items:
                 empty: BatchResult[ActionResult] = BatchResult([], operation=operation)
                 return empty
+        check_action_inputs(kind, len(items))
         content, ctype = self._sf._transport.encode({"inputs": items})
         spec = RequestSpec(
             "POST",

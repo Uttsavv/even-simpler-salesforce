@@ -172,7 +172,9 @@ The kind is `"standard"`, `"flow"`, `"apex"` or another custom action type such 
 - The client sends a list of inputs in one request and does not split it. Salesforce accepts
   at most 2,000 inputs per request for Apex and Flow actions. With more, Salesforce runs the
   first 2,000 and fails each extra input with `UNKNOWN_EXCEPTION` ("Cannot specify more than
-  2000 requests"), so send at most 2,000 inputs per call.
+  2000 requests"). So the client raises `ValueError` before it sends a list of more than 2,000
+  inputs to an Apex or Flow action. Split the list into calls of at most 2,000. The limit for
+  standard actions is not verified, so the client doesn't check it.
 - Triggers can't be called. They run when records change, so create, update or delete the
   records instead.
 - To run anonymous Apex, wait for the Tooling API area in 0.3.

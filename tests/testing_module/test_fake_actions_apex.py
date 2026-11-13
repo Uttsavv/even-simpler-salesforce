@@ -132,3 +132,11 @@ def test_views_share_handlers() -> None:
     fake.on_action("flow", "F", {"a": 1})
     assert fake.tagged("job").actions.flow("F", {}) == {"a": 1}
     assert fake.calls[-1].caller == "job"
+
+
+def test_fake_refuses_more_than_2000_inputs_like_the_client() -> None:
+    fake = FakeSalesforce()
+    fake.on_action("apex", "Calc", {"total": 1})
+    with pytest.raises(ValueError, match="at most 2000"):
+        fake.actions.apex("Calc", [{}] * 2001)
+    assert len(fake.actions.apex("Calc", [{}] * 2000)) == 2000

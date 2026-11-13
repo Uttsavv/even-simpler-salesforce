@@ -185,3 +185,12 @@ def test_classify_apex() -> None:
     )
     assert isinstance(classify(_resp(502, text="<html>", ctype="text/html"), APEX), esf.UnexpectedResponse)
     assert classify(_resp(200, {"ok": True}), APEX) is None
+
+
+def test_check_action_inputs_caps_apex_and_flow_only() -> None:
+    A.check_action_inputs("apex", A.ACTION_INPUT_LIMIT)
+    A.check_action_inputs("flow", 0)
+    A.check_action_inputs("standard", A.ACTION_INPUT_LIMIT + 1)  # not verified: not checked
+    for kind in ("apex", "flow"):
+        with pytest.raises(ValueError, match="at most 2000"):
+            A.check_action_inputs(kind, A.ACTION_INPUT_LIMIT + 1)

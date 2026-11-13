@@ -174,6 +174,16 @@ def test_bulk_empty_sends_nothing(h: Harness, mock: respx.MockRouter) -> None:
         h.run(sf.actions.apex("bad name", []))  # the name is checked also when nothing is sent
 
 
+def test_more_than_2000_inputs_raise_before_sending(h: Harness, mock: respx.MockRouter) -> None:
+    """V32: Salesforce runs the first 2,000 inputs and fails the rest, so nothing is sent."""
+    sf = h.client()
+    with pytest.raises(ValueError, match="2001 inputs for a flow action"):
+        h.run(sf.actions.flow("Assign_Lead", [{"leadId": str(i)} for i in range(2001)]))
+    with pytest.raises(ValueError, match="apex"):
+        h.run(sf.actions.apex("OrderService", [{}] * 2001))
+    assert not mock.calls
+
+
 def test_inputs_must_be_dicts(h: Harness) -> None:
     sf = h.client()
     with pytest.raises(TypeError):

@@ -109,17 +109,28 @@ def test_results_keep_input_order(sb: Driver, kind: str) -> None:
 
 @pytest.mark.parametrize("kind", ["apex", "flow"])
 def test_more_than_2000_inputs_runs_the_first_2000(sb: Driver, kind: str, heavy_writes: None) -> None:
-    """Org-observed: 2,001 inputs → HTTP 400; the first 2,000 run, the last fails."""
+    """Org-observed: 2,001 inputs → HTTP 400; the first 2,000 run, the last fails.
+
+    So the client refuses such a list before sending it; the raw request shows the org still
+    behaves this way.
+    """
     sf = sb.client()
     if kind == "flow":
         _needs_flow(sb, sf)
+    name = APEX_ACTION if kind == "apex" else FLOW
     call = sf.actions.apex if kind == "apex" else sf.actions.flow
-    res = sb.run(call(APEX_ACTION if kind == "apex" else FLOW, [{"name": f"n{i}"} for i in range(2001)]))
-    assert len(res) == 2001
-    assert all(r.ok for r in res.results[:2000])
-    (last,) = res.failed
-    assert last.errors[0].error_code == "UNKNOWN_EXCEPTION"
-    assert last.errors[0].message == "Cannot specify more than 2000 requests"
+    inputs = [{"name": f"n{i}"} for i in range(2001)]
+    with pytest.raises(ValueError, match="2001 inputs"):
+        sb.run(call(name, inputs))
+    with pytest.raises(esf.SalesforceError) as ei:
+        sb.run(sf.request("POST", f"actions/custom/{kind}/{name}", json={"inputs": inputs}))
+    assert ei.value.status == 400
+    # A list of results: the first inputs ran. The error keeps only the first 4 KiB of the body,
+    # so the failed last entry ("Cannot specify more than 2000 requests") is not in it; that
+    # message was seen in the 2026-11-12 run (big-bang.md §21 V32).
+    raw = ei.value.raw.decode() if isinstance(ei.value.raw, bytes) else str(ei.value.raw)
+    assert raw.startswith('[{"actionName":')
+    assert '"isSuccess":true' in raw
 
 
 # --- V33: list and describe -----------------------------------------------------------------
