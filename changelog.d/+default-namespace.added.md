@@ -1,0 +1,1 @@
+Added `default_namespace=` to `AsyncSalesforce` and `Salesforce`. It sends `defaultNamespace=<ns>` in `Sforce-Call-Options` (with `client=` when `client_name` is set), so code can name a managed package's fields without the prefix. Salesforce also leaves the prefix out of the field names it returns, so dict keys change.

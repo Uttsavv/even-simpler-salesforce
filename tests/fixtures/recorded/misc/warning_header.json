@@ -1,0 +1,8 @@
+{
+  "synthetic": true,
+  "source": "Hand-written from the REST API Developer Guide, 'Warning Header' (https://developer.salesforce.com/docs/platform/api-rest/guide/headers-warning.html: code 299 for a deprecated API version) and the Bulk API 2.0 'Headers' sample (https://developer.salesforce.com/docs/platform/api-asynch/guide/bulk-api-2-0-headers-warnings.html). A real-org probe on 2026-11-13 (Developer Edition, Winter '27) got no Warning header for API v31.0 or v40.0 (limits, query, describe, sobjects), so there is nothing to record yet.",
+  "headers": {
+    "Warning": "299 - \"This API is deprecated and will be removed by Summer '22. Please see https://help.salesforce.com/articleView?id=000351312 for details.\""
+  },
+  "body": {}
+}

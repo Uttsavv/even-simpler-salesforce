@@ -63,6 +63,7 @@ __all__ = [
     "RetrieveFailed",
     "RowLocked",
     "SalesforceError",
+    "SalesforceWarning",
     "ServerError",
     "SessionExpired",
     "SoapFault",
@@ -758,3 +759,15 @@ class UnexpectedResponse(SalesforceError):
         super().__init__(message, **kw)
         self.event_id = event_id
         self.replay_id = replay_id
+
+
+class SalesforceWarning(UserWarning):
+    """A warning Salesforce sent in a ``Warning`` response header.
+
+    Salesforce adds ``Warning: 299 - "<text>"`` to responses for requests that use a
+    deprecated API version (REST API Developer Guide, *Warning Header*). The client calls
+    ``warnings.warn(text, SalesforceWarning)`` once per distinct text per client family, so the
+    notice is seen once and not on every call. The text is also in the ``sf_warning`` field of
+    the ``sf.request`` event. Silence it or turn it into an error with the standard
+    :mod:`warnings` filters, for example ``warnings.simplefilter("error", esf.SalesforceWarning)``.
+    """

@@ -405,8 +405,13 @@ oauth:
 headers:
   - name: Sforce-Call-Options
     direction: request
-    used_for: "client_name= → client=<name>"
+    used_for: "client_name= → client=<name>; default_namespace= → defaultNamespace=<ns> (joined with '; ')"
     docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/headers_calloptions.htm
+    checked: null
+  - name: Sforce-Mru
+    direction: request
+    used_for: "update_mru= → updateMru=true/false (API 60.0+) on sobject create, get, get_by_external_id, update, upsert"
+    docs: https://developer.salesforce.com/docs/platform/api-rest/guide/headers-mru.html
     checked: null
   - name: Sforce-Query-Options
     direction: request
@@ -468,6 +473,11 @@ headers:
     used_for: "429 / REQUEST_LIMIT_EXCEEDED back-off (seconds or HTTP date)"
     docs: null
     checked: null
+  - name: Warning
+    direction: response
+    used_for: "299 - \"<text>\" (deprecated API version) → warnings.warn(text, SalesforceWarning) once per text per client family; sf_warning on sf.request"
+    docs: https://developer.salesforce.com/docs/platform/api-rest/guide/headers-warning.html
+    checked: 2026-11-13
   - name: Last-Modified
     direction: response
     used_for: describe cache revalidation

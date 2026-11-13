@@ -114,7 +114,8 @@ Behaviour relied on:
 
 | Header | Direction | Used for | Docs | Checked |
 |---|---|---|---|---|
-| `Sforce-Call-Options` | request | client_name= → client=<name> | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/headers_calloptions.htm) |  |
+| `Sforce-Call-Options` | request | client_name= → client=<name>; default_namespace= → defaultNamespace=<ns> (joined with '; ') | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/headers_calloptions.htm) |  |
+| `Sforce-Mru` | request | update_mru= → updateMru=true/false (API 60.0+) on sobject create, get, get_by_external_id, update, upsert | [docs](https://developer.salesforce.com/docs/platform/api-rest/guide/headers-mru.html) |  |
 | `Sforce-Query-Options` | request | page_size= → batchSize=200..2000 | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/headers_queryoptions.htm) |  |
 | `Sforce-Auto-Assign` | request | assignment_rule_id= (TRUE / FALSE / rule id) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/headers_autoassign.htm) |  |
 | `Sforce-Duplicate-Rule-Header` | request | duplicate_rules=DuplicateRules(...) → allowSave, includeRecordDetails, runAsCurrentUser (allow_save= deprecated); sObject + Collections create/update/upsert | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/headers_duplicaterules.htm) | 2026-11-13 |
@@ -127,6 +128,7 @@ Behaviour relied on:
 | `Sforce-NumberOfRecords` | response | ResultPage.size: the number of rows in a Bulk query result page | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/query_get_job_results.htm) |  |
 | `Sforce-Request-Id` | response | error.request_id, sf.request events |  |  |
 | `Retry-After` | response | 429 / REQUEST_LIMIT_EXCEEDED back-off (seconds or HTTP date) |  |  |
+| `Warning` | response | 299 - "<text>" (deprecated API version) → warnings.warn(text, SalesforceWarning) once per text per client family; sf_warning on sf.request | [docs](https://developer.salesforce.com/docs/platform/api-rest/guide/headers-warning.html) | 2026-11-13 |
 | `Last-Modified` | response | describe cache revalidation |  |  |
 | `ETag` | response | describe cache revalidation (stored, sent back as If-None-Match) |  |  |
 

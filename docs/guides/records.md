@@ -257,6 +257,22 @@ print(len(changed["ids"]), len(removed["deletedRecords"]))
 | `updated(start, end)` / `deleted(start, end)` | `GET sobjects/{o}/updated/` / `deleted/` | ids changed or deleted in the window |
 | `sf.describe_global(*, cached=True)` | `GET sobjects` | list of sObjects (cached) |
 
+## Recently viewed records
+
+By default, Salesforce adds every record that the API creates, reads or updates to the user's
+Recently Viewed list. For an integration user, that list is noise. Salesforce recommends
+turning it off for integrations, and so do we: pass `update_mru=False` to the client.
+
+```python
+integration = esf.AsyncSalesforce(auth, update_mru=False)
+await integration.aclose()
+```
+
+The client then sends `Sforce-Mru: updateMru=false` on `create`, `get`, `get_by_external_id`,
+`update` and `upsert`. Queries never update the list, so they don't need the header. The option
+needs `api_version` 60.0 or newer; with an older version the client raises `ValueError`. The
+default, `None`, sends no header and keeps Salesforce's behaviour.
+
 ## Request options
 
 | Keyword | Header | Effect |

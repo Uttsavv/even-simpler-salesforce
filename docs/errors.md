@@ -192,6 +192,30 @@ warnings.filterwarnings("error", category=esf.EsfDeprecationWarning)
 await sf.aclose()
 ```
 
+## Salesforce warnings
+
+Salesforce adds a `Warning` response header when a request uses a deprecated API version
+(`Warning: 299 - "<text>"`). The client turns the text into a Python warning of class
+`esf.SalesforceWarning`, a subclass of `UserWarning`. It warns once for each distinct text per
+client family, so you don't get the same notice on every call. The text is also in the
+`sf_warning` field of the [`sf.request` event](logging.md).
+
+Use the standard `warnings` filters to hide the warning or make it fail your tests:
+
+```python
+import warnings
+
+warnings.filterwarnings("error", category=esf.SalesforceWarning)  # fail fast in CI
+warnings.filterwarnings("ignore", category=esf.SalesforceWarning)  # or hide it
+await sf.aclose()
+```
+
+When you see this warning, move to a newer `api_version` before Salesforce retires the old one.
+
+With the `"error"` filter, the warning is raised after the response arrives. For a write,
+Salesforce has already saved the change, so don't treat the exception as a failed write. Use the
+`"error"` filter in tests, not in production code that writes records.
+
 ## Attributes
 
 | Attribute | Description |

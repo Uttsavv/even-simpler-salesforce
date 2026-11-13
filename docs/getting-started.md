@@ -159,6 +159,28 @@ await sf.aclose()
 | `log_soql` | `"hash"` | `"redacted"` also logs SOQL with literals replaced by `?` |
 | `http2` | `False` | HTTP/2 on the owned client (`[http2]` extra) |
 | `client_name` | `None` | sent as `Sforce-Call-Options: client=<name>` so admins can attribute API usage |
+| `default_namespace` | `None` | namespace prefix of a managed package, sent as `Sforce-Call-Options: defaultNamespace=<ns>`. Salesforce then leaves the prefix out of field names in responses, so the keys of returned dicts change. See [Default namespace](#default-namespace) |
+| `update_mru` | `None` | `False` stops `sf.sobject(...)` calls from adding records to the Recently Viewed list (`Sforce-Mru`); needs `api_version` 60.0 or newer. See [Recently viewed records](guides/records.md#recently-viewed-records) |
+| `pubsub_endpoint` | `api.pubsub.salesforce.com:443` | Pub/Sub API host for `sf.pubsub` |
+
+### Default namespace
+
+If your code works with one managed package, set `default_namespace` to the package's
+namespace prefix. Then SOQL and record data can name the package's fields without the prefix:
+`botId__c` instead of `battle__botId__c`.
+
+```python
+packaged = esf.AsyncSalesforce(auth, default_namespace="battle")
+await packaged.aclose()
+```
+
+Salesforce also leaves the prefix out of the field names it returns, so the dict keys change:
+a record has `"botId__c"`, not `"battle__botId__c"`. Code that reads the prefixed keys breaks
+when you turn this on. Describe calls ignore the option.
+
+The prefix must have 1 to 15 letters, digits or underscores, start with a letter, and contain
+no `__`. Otherwise the client raises `ValueError`. An org without a namespace accepts any value
+and ignores it.
 
 ## Child clients
 
