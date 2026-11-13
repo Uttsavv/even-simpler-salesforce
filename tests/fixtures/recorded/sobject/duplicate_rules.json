@@ -1,0 +1,532 @@
+{
+  "esf_fixture": 1,
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/sobjects/Lead/",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-auto-assign": "FALSE",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "FirstName": "Esfdup",
+          "LastName": "esf-sandbox-36f7f2d56c19-one-sync",
+          "Company": "esf-sandbox-duprule",
+          "Email": "esf-sandbox-36f7f2d56c19-one-sync@example.com"
+        }
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "location": "/services/data/v68.0/sobjects/Lead/00Q000000000001EAA",
+          "sforce-limit-info": "api-usage=107/15000"
+        },
+        "json": {
+          "id": "00Q000000000001EAA",
+          "success": true,
+          "errors": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/sobjects/Lead/",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-auto-assign": "FALSE",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "FirstName": "Esfdup",
+          "LastName": "esf-sandbox-36f7f2d56c19-one-sync",
+          "Company": "esf-sandbox-duprule",
+          "Email": "esf-sandbox-36f7f2d56c19-one-sync@example.com"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=107/15000"
+        },
+        "json": [
+          {
+            "duplicateResult": {
+              "allowSave": true,
+              "duplicateRule": "Standard_Lead_Duplicate_Rule",
+              "duplicateRuleEntityType": "Lead",
+              "errorMessage": "Use one of these records?",
+              "matchResults": [
+                {
+                  "entityType": "Lead",
+                  "errors": [],
+                  "matchEngine": "FuzzyMatchEngine",
+                  "matchRecords": [
+                    {
+                      "additionalInformation": [],
+                      "fieldDiffs": [],
+                      "matchConfidence": 100.0,
+                      "record": {
+                        "attributes": {
+                          "type": "Lead",
+                          "url": "/services/data/v68.0/sobjects/Lead/00Q000000000001EAA"
+                        },
+                        "Id": "00Q000000000001EAA"
+                      }
+                    }
+                  ],
+                  "rule": "Standard_Lead_Match_Rule_v1_0",
+                  "size": 1,
+                  "success": true
+                }
+              ]
+            },
+            "errorCode": "DUPLICATES_DETECTED",
+            "message": "Use one of these records?"
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/sobjects/Lead/",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-duplicate-rule-header": "allowSave=false; includeRecordDetails=true; runAsCurrentUser=false",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "FirstName": "Esfdup",
+          "LastName": "esf-sandbox-36f7f2d56c19-one-sync",
+          "Company": "esf-sandbox-duprule",
+          "Email": "esf-sandbox-36f7f2d56c19-one-sync@example.com"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=105/15000"
+        },
+        "json": [
+          {
+            "duplicateResult": {
+              "allowSave": true,
+              "duplicateRule": "Standard_Lead_Duplicate_Rule",
+              "duplicateRuleEntityType": "Lead",
+              "errorMessage": "Use one of these records?",
+              "matchResults": [
+                {
+                  "entityType": "Lead",
+                  "errors": [],
+                  "matchEngine": "FuzzyMatchEngine",
+                  "matchRecords": [
+                    {
+                      "additionalInformation": [],
+                      "fieldDiffs": [
+                        {
+                          "difference": "Same",
+                          "name": "Company"
+                        },
+                        {
+                          "difference": "Same",
+                          "name": "Email"
+                        },
+                        {
+                          "difference": "Same",
+                          "name": "FirstName"
+                        },
+                        {
+                          "difference": "Null",
+                          "name": "Phone"
+                        },
+                        {
+                          "difference": "Null",
+                          "name": "Title"
+                        },
+                        {
+                          "difference": "Null",
+                          "name": "Street"
+                        },
+                        {
+                          "difference": "Null",
+                          "name": "PostalCode"
+                        },
+                        {
+                          "difference": "Same",
+                          "name": "LastName"
+                        },
+                        {
+                          "difference": "Null",
+                          "name": "City"
+                        }
+                      ],
+                      "matchConfidence": 100.0,
+                      "record": {
+                        "attributes": {
+                          "type": "Lead",
+                          "url": "/services/data/v68.0/sobjects/Lead/00Q000000000001EAA"
+                        },
+                        "Name": "Name 1",
+                        "Company": "esf-sandbox-duprule",
+                        "Email": "esf-sandbox-36f7f2d56c19-one-sync@example.com",
+                        "Phone": null,
+                        "Title": null,
+                        "Street": null,
+                        "PostalCode": null,
+                        "City": null,
+                        "OwnerId": "005000000000002AAA",
+                        "LastModifiedDate": "2026-11-13T12:23:03.000+0000",
+                        "Id": "00Q000000000001EAA"
+                      }
+                    }
+                  ],
+                  "rule": "Standard_Lead_Match_Rule_v1_0",
+                  "size": 1,
+                  "success": true
+                }
+              ]
+            },
+            "errorCode": "DUPLICATES_DETECTED",
+            "message": "Use one of these records?"
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/sobjects/Lead/",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-auto-assign": "FALSE",
+          "sforce-duplicate-rule-header": "allowSave=true; includeRecordDetails=false; runAsCurrentUser=true",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "FirstName": "Esfdup",
+          "LastName": "esf-sandbox-36f7f2d56c19-one-sync",
+          "Company": "esf-sandbox-duprule",
+          "Email": "esf-sandbox-36f7f2d56c19-one-sync@example.com"
+        }
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "location": "/services/data/v68.0/sobjects/Lead/00Q000000000003EAA",
+          "sforce-limit-info": "api-usage=107/15000"
+        },
+        "json": {
+          "id": "00Q000000000003EAA",
+          "success": true,
+          "errors": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v68.0/sobjects/Lead/",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-auto-assign": "FALSE",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "FirstName": "Esfdup",
+          "LastName": "esf-sandbox-36f7f2d56c19-one-other-sync",
+          "Company": "esf-sandbox-duprule",
+          "Email": "esf-sandbox-36f7f2d56c19-one-other-sync@example.com"
+        }
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "location": "/services/data/v68.0/sobjects/Lead/00Q000000000004EAA",
+          "sforce-limit-info": "api-usage=110/15000"
+        },
+        "json": {
+          "id": "00Q000000000004EAA",
+          "success": true,
+          "errors": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "path": "/services/data/v68.0/sobjects/Lead/00Q000000000004EAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "Email": "esf-sandbox-36f7f2d56c19-one-sync@example.com"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=109/15000"
+        },
+        "json": [
+          {
+            "duplicateResult": {
+              "allowSave": true,
+              "duplicateRule": "Esf_Sandbox_Lead_Duplicates",
+              "duplicateRuleEntityType": "Lead",
+              "errorMessage": "esf-sandbox: duplicate Lead email.",
+              "matchResults": [
+                {
+                  "entityType": "Lead",
+                  "errors": [],
+                  "matchEngine": "ExactMatchEngine",
+                  "matchRecords": [
+                    {
+                      "additionalInformation": [],
+                      "fieldDiffs": [],
+                      "matchConfidence": 100.0,
+                      "record": {
+                        "attributes": {
+                          "type": "Lead",
+                          "url": "/services/data/v68.0/sobjects/Lead/00Q000000000001EAA"
+                        },
+                        "Id": "00Q000000000001EAA"
+                      }
+                    },
+                    {
+                      "additionalInformation": [],
+                      "fieldDiffs": [],
+                      "matchConfidence": 100.0,
+                      "record": {
+                        "attributes": {
+                          "type": "Lead",
+                          "url": "/services/data/v68.0/sobjects/Lead/00Q000000000003EAA"
+                        },
+                        "Id": "00Q000000000003EAA"
+                      }
+                    }
+                  ],
+                  "rule": "Esf_Sandbox_Lead_Email_Match",
+                  "size": 2,
+                  "success": true
+                }
+              ]
+            },
+            "errorCode": "DUPLICATES_DETECTED",
+            "message": "esf-sandbox: duplicate Lead email."
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "path": "/services/data/v68.0/sobjects/Lead/00Q000000000004EAA",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-duplicate-rule-header": "allowSave=true; includeRecordDetails=false; runAsCurrentUser=false",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "Email": "esf-sandbox-36f7f2d56c19-one-sync@example.com"
+        }
+      },
+      "response": {
+        "status": 204,
+        "headers": {
+          "sforce-limit-info": "api-usage=109/15000"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "path": "/services/data/v68.0/sobjects/Lead/Esf_Ext__c/esf-sandbox-36f7f2d56c19-dup-sync",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "FirstName": "Esfdup",
+          "LastName": "esf-sandbox-36f7f2d56c19-one-sync",
+          "Company": "esf-sandbox-duprule",
+          "Email": "esf-sandbox-36f7f2d56c19-one-sync@example.com"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=113/15000"
+        },
+        "json": [
+          {
+            "duplicateResult": {
+              "allowSave": true,
+              "duplicateRule": "Standard_Lead_Duplicate_Rule",
+              "duplicateRuleEntityType": "Lead",
+              "errorMessage": "Use one of these records?",
+              "matchResults": [
+                {
+                  "entityType": "Lead",
+                  "errors": [],
+                  "matchEngine": "FuzzyMatchEngine",
+                  "matchRecords": [
+                    {
+                      "additionalInformation": [],
+                      "fieldDiffs": [],
+                      "matchConfidence": 100.0,
+                      "record": {
+                        "attributes": {
+                          "type": "Lead",
+                          "url": "/services/data/v68.0/sobjects/Lead/00Q000000000001EAA"
+                        },
+                        "Id": "00Q000000000001EAA"
+                      }
+                    },
+                    {
+                      "additionalInformation": [],
+                      "fieldDiffs": [],
+                      "matchConfidence": 100.0,
+                      "record": {
+                        "attributes": {
+                          "type": "Lead",
+                          "url": "/services/data/v68.0/sobjects/Lead/00Q000000000003EAA"
+                        },
+                        "Id": "00Q000000000003EAA"
+                      }
+                    },
+                    {
+                      "additionalInformation": [],
+                      "fieldDiffs": [],
+                      "matchConfidence": 100.0,
+                      "record": {
+                        "attributes": {
+                          "type": "Lead",
+                          "url": "/services/data/v68.0/sobjects/Lead/00Q000000000004EAA"
+                        },
+                        "Id": "00Q000000000004EAA"
+                      }
+                    }
+                  ],
+                  "rule": "Standard_Lead_Match_Rule_v1_0",
+                  "size": 3,
+                  "success": true
+                }
+              ]
+            },
+            "errorCode": "DUPLICATES_DETECTED",
+            "message": "Use one of these records?"
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "path": "/services/data/v68.0/sobjects/Lead/Esf_Ext__c/esf-sandbox-36f7f2d56c19-dup-sync",
+        "query": [],
+        "headers": {
+          "accept": "application/json",
+          "sforce-duplicate-rule-header": "allowSave=true; includeRecordDetails=false; runAsCurrentUser=false",
+          "sforce-call-options": "client=esf-sandbox",
+          "content-type": "application/json"
+        },
+        "json": {
+          "FirstName": "Esfdup",
+          "LastName": "esf-sandbox-36f7f2d56c19-one-sync",
+          "Company": "esf-sandbox-duprule",
+          "Email": "esf-sandbox-36f7f2d56c19-one-sync@example.com"
+        }
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "location": "/services/data/v68.0/sobjects/Lead/00Q000000000005EAA",
+          "sforce-limit-info": "api-usage=112/15000"
+        },
+        "json": {
+          "id": "00Q000000000005EAA",
+          "success": true,
+          "errors": [],
+          "created": true
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "path": "/services/data/v68.0/composite/sobjects",
+        "query": [
+          [
+            "ids",
+            "00Q000000000001EAA,00Q000000000003EAA,00Q000000000004EAA,00Q000000000005EAA"
+          ],
+          [
+            "allOrNone",
+            "false"
+          ]
+        ],
+        "headers": {
+          "accept": "application/json",
+          "sforce-call-options": "client=esf-sandbox"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json;charset=UTF-8",
+          "sforce-limit-info": "api-usage=110/15000"
+        },
+        "json": [
+          {
+            "id": "00Q000000000001EAA",
+            "success": true,
+            "errors": []
+          },
+          {
+            "id": "00Q000000000003EAA",
+            "success": true,
+            "errors": []
+          },
+          {
+            "id": "00Q000000000004EAA",
+            "success": true,
+            "errors": []
+          },
+          {
+            "id": "00Q000000000005EAA",
+            "success": true,
+            "errors": []
+          }
+        ]
+      }
+    }
+  ]
+}

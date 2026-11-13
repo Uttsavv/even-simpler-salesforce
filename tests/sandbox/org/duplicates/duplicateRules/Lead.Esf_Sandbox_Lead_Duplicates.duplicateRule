@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DuplicateRule xmlns="http://soap.sforce.com/2006/04/metadata">
+    <actionOnInsert>Allow</actionOnInsert>
+    <actionOnUpdate>Allow</actionOnUpdate>
+    <alertText>esf-sandbox: duplicate Lead email.</alertText>
+    <description>esf-sandbox: alerts on create and edit, only for Leads with Company = esf-sandbox-duprule.</description>
+    <duplicateRuleFilter>
+        <booleanFilter xsi:nil="true" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"/>
+        <duplicateRuleFilterItems>
+            <field>Company</field>
+            <operation>equals</operation>
+            <value>esf-sandbox-duprule</value>
+            <sortOrder>1</sortOrder>
+            <table>Lead</table>
+        </duplicateRuleFilterItems>
+    </duplicateRuleFilter>
+    <duplicateRuleMatchRules>
+        <matchRuleSObjectType>Lead</matchRuleSObjectType>
+        <matchingRule>Esf_Sandbox_Lead_Email_Match</matchingRule>
+        <objectMapping xsi:nil="true" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"/>
+    </duplicateRuleMatchRules>
+    <isActive>true</isActive>
+    <masterLabel>Esf Sandbox Lead Duplicates</masterLabel>
+    <operationsOnInsert>Alert</operationsOnInsert>
+    <operationsOnUpdate>Alert</operationsOnUpdate>
+    <securityOption>EnforceSharingRules</securityOption>
+    <sortOrder>2</sortOrder>
+</DuplicateRule>
