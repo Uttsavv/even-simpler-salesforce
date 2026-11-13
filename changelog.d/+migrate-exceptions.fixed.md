@@ -1,1 +1,0 @@
-`esf migrate` marks simple-salesforce exceptions constructed with arguments and the `content`, `resource_name` and `url` attributes of caught exceptions with a TODO. It now removes a rewritten exception import that is no longer used, and puts markers for `except*` handlers above the handler.

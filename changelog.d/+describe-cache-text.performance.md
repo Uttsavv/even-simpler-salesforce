@@ -1,1 +1,0 @@
-The describe cache stores the JSON text and each cache hit decodes its own copy after the cache lock is released, instead of deep-copying the cached dict inside the lock. A hit on a large describe is several times faster, and concurrent hits no longer queue behind each other.

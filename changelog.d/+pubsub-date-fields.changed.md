@@ -1,1 +1,0 @@
-`sf.pubsub` now decodes Date fields (Avro `doc` `…:DateOnly…`) to `datetime.date` instead of leaving the epoch-millisecond `int`. `FakeSalesforce.pubsub` gives change events a random `event_id`, as Salesforce does.

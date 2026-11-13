@@ -1,1 +1,0 @@
-`esf migrate` puts a TODO on a `query()` call whose result it can't follow, for example a result that is returned, passed on or assigned twice. `QueryResult` is not a dict, so these uses broke without a marker.

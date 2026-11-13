@@ -1,1 +1,0 @@
-Docs synced with the implementation: the changelog page explains how pre-releases (0.1.0rcN) are recorded, install instructions use `pip install --pre` until 0.1.0 final, the `migrate` and `all` extras are listed, and parameter names, event fields, error mapping, `esf migrate` options and exit codes and the API reference now match the code.

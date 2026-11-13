@@ -1,1 +1,0 @@
-`sf.request()` returns `bytes` for binary bodies (any content type that is not text, XML, JSON or declared with a `charset=`), so file contents such as `ContentVersion/{id}/VersionData` arrive intact instead of being decoded with replacement characters. Text bodies are decoded with their declared charset.

@@ -1,1 +1,0 @@
-`esf migrate --write` keeps each file's line endings and writes atomically through a uniquely named temporary file. A file it can't write is reported as an error in the results instead of aborting the run.

@@ -1,1 +1,0 @@
-Add `sf.reports.recent()`: the reports the user viewed most recently (`GET analytics/reports`, at most 200). To find any report, query the `Report` object with SOQL. `FakeSalesforce` lists the scripted reports.

@@ -1,1 +1,0 @@
-`BatchResult.ok` is deprecated in favour of `BatchResult.succeeded`, because `if batch.ok:` reads like "all succeeded" but is true when *any* record succeeded. `.ok` emits `EsfDeprecationWarning` and goes away in 0.2; use `not batch.failed` to check that every record succeeded.

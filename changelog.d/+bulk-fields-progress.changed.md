@@ -1,1 +1,0 @@
-`sf.bulk.query()` now raises `ValueError` before it creates a job if the SOQL selects `FIELDS(ALL)` or `FIELDS(CUSTOM)`, which Bulk API 2.0 query jobs don't support. The `sf.bulk.job` event is now also emitted when a `wait()` poll sees `records_failed` change (it already did for `records_processed`), and its `records_failed` is `None` for query jobs instead of `0`.

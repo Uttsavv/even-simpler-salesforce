@@ -1,1 +1,0 @@
-Added `update_mru=` to `AsyncSalesforce` and `Salesforce`. `update_mru=False` sends `Sforce-Mru: updateMru=false` on `sf.sobject(...)` create, get, get-by-external-id, update and upsert, so an integration doesn't fill the user's Recently Viewed list. It needs `api_version` 60.0 or newer.

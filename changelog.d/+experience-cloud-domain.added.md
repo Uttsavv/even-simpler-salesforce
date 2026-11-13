@@ -1,1 +1,0 @@
-Login flows accept an Experience Cloud site URL with a path prefix as `domain=`, such as `https://acme.my.site.com/partners`; the client calls the authorize, token, revoke and introspect endpoints under that URL, and `JwtBearer` uses the site URL as the `aud` claim. `ClientCredentials` still needs the My Domain URL.

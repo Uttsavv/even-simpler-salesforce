@@ -1,1 +1,0 @@
-A refresh failure that running calls may need to share stays in memory until they finish, so a waiter can't retry with an already-rotated refresh token. Idle per-token-key locks are dropped, so a client per user no longer keeps a lock per user forever.

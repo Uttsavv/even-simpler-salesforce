@@ -1,1 +1,0 @@
-`esf migrate` codemod (`[migrate]` extra, libcst): rewrites simple-salesforce code (sync and `simple_salesforce.aio`) to even-simpler-salesforce, marks what it can't with `# esf-migrate: TODO|REVIEW[rule]` comments, writes a JSON report (`--report`), and has a CI mode (`--check`). See the `esf migrate` docs page.

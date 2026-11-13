@@ -1,1 +1,0 @@
-The client now raises the new `esf.TokenIdentityChanged` (an `AuthError`) when a refreshed token, or a token it re-reads from the token store, belongs to another org or user than the token it replaces. Before, it used the new token and acted as the other user.

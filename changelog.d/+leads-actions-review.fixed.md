@@ -1,1 +1,0 @@
-`LeadConvert` rejects text with control characters and values of the wrong type before building the SOAP envelope. `sf.actions` checks the action name also for an empty batch, and `FakeSalesforce` records no call for one.

@@ -74,6 +74,6 @@ esf POST  oauth.refresh  rotated  240ms</code></pre>
   </a>
 </section>
 
-!!! note "Alpha (0.1)"
-    Breaking changes are possible in 0.x releases. See the
+!!! note "Beta (0.5)"
+    Breaking changes are still possible in 0.x releases. See the
     [project status](getting-started.md#project-status) for what is covered and where it has been tested.

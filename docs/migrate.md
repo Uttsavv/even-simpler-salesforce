@@ -313,7 +313,7 @@ TODO.
 
 `X.apexecute(path, method=..., data=...)` becomes
 `X.request(METHOD, "/services/apexrest/<path>", json=data)`. The codemod rewrites only a literal
-path. Other paths get a TODO. The dedicated `sf.apex.*` helpers arrive in 0.2.
+path. Other paths get a TODO. You can also call Apex REST with the `sf.apex.*` helpers.
 
 ### `exceptions`
 
