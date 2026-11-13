@@ -51,19 +51,26 @@ await sf.collections.upsert(
 
 ## Assignment and duplicate rules
 
-`create`, `update` and `upsert` take `assignment_rule_id=` and `allow_save=`, with the same
-values as [single-record writes](records.md#assignment-and-duplicate-rules). The client sends
-them on every chunk. `assignment_rule_id=False` stops the org's active assignment rule from
-running; `allow_save=True` saves rows despite a duplicate-rule alert.
+`create`, `update` and `upsert` take `assignment_rule_id=` and `duplicate_rules=`, with the
+same values as [single-record writes](records.md#assignment-and-duplicate-rules). The client
+sends them on every chunk. `assignment_rule_id=False` stops the org's active assignment rule
+from running. `duplicate_rules=esf.DuplicateRules(allow_save=True)` saves rows despite a
+duplicate-rule alert.
 
 ```python
 await sf.collections.create(
     [{"LastName": "Lovelace", "Company": "Analytical Engines"}],
     sobject="Lead",
     assignment_rule_id=False,
-    allow_save=True,
+    duplicate_rules=esf.DuplicateRules(allow_save=True),
 )
 ```
+
+A row that a duplicate rule stops fails with the error code `DUPLICATES_DETECTED`. Its error
+has no matched records: Salesforce doesn't return a duplicate result from sObject
+Collections, also with `include_record_details=True`. To see the matches, write that record
+alone with `sf.sobject(...)`. The deprecated `allow_save=` still works here too, with an
+`esf.EsfDeprecationWarning`.
 
 In an update, a key set to `None` clears the field. A key you leave out keeps its value.
 
@@ -216,9 +223,9 @@ a thread pool of the same size. `capture()` and `call_context()` still apply ins
 
 | Method | REST call | Chunk size | Returns |
 |---|---|---|---|
-| `create(rows, *, sobject=None, all_or_none=False, concurrency=None, assignment_rule_id=None, allow_save=None)` | `POST composite/sobjects` | 200 | `BatchResult[RecordResult]` |
-| `update(sobject, rows, *, all_or_none=False, concurrency=None, assignment_rule_id=None, allow_save=None)` | `PATCH composite/sobjects` | 200 | `BatchResult[RecordResult]` |
-| `upsert(sobject, field, rows, *, all_or_none=False, concurrency=None, assignment_rule_id=None, allow_save=None)` | `PATCH composite/sobjects/{o}/{field}` | 200 | `BatchResult[RecordResult]` |
+| `create(rows, *, sobject=None, all_or_none=False, concurrency=None, assignment_rule_id=None, duplicate_rules=None)` | `POST composite/sobjects` | 200 | `BatchResult[RecordResult]` |
+| `update(sobject, rows, *, all_or_none=False, concurrency=None, assignment_rule_id=None, duplicate_rules=None)` | `PATCH composite/sobjects` | 200 | `BatchResult[RecordResult]` |
+| `upsert(sobject, field, rows, *, all_or_none=False, concurrency=None, assignment_rule_id=None, duplicate_rules=None)` | `PATCH composite/sobjects/{o}/{field}` | 200 | `BatchResult[RecordResult]` |
 | `delete(ids, *, all_or_none=False, concurrency=None)` | `DELETE composite/sobjects?ids=` | 200 | `BatchResult[RecordResult]` |
 | `retrieve(sobject, ids, fields, *, concurrency=None)` | `POST composite/sobjects/{o}` | 2,000 | `list[dict \| None]` |
 

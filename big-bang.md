@@ -299,7 +299,7 @@ all `Auth` classes and `AuthStart`, `Token`, `AsyncTokenStore` / `TokenStore`,
 `Cursor`, all exceptions, result models (`QueryResult`, `BatchResult`, `RecordResult`,
 `UpsertResult`, `UsageSnapshot`, `Limit`), config (`Budget`, `RetryPolicy`, `Timeouts`,
 `DescribeCacheConfig`), `Cache` / `MemoryCache`, `Event`, `Observer`, `capture`,
-`call_context`, `EsfDeprecationWarning`, `__version__`. (`DuplicateRules` and `SalesforceWarning` are planned, not shipped: §9.1, §7.1 step 7.) 0.5 adds `PubSubEvent`, `ChangeHeader`,
+`call_context`, `EsfDeprecationWarning`, `__version__`. 0.5 adds `DuplicateRules` (§9.1), `SalesforceWarning` (§7.1 step 7), `PubSubEvent`, `ChangeHeader`,
 `ChangeType`, `AsyncReplayStore` / `ReplayStore` and `AsyncInMemoryReplayStore` /
 `InMemoryReplayStore` (§9.16). Naming rule: the async variant carries the
 `Async` prefix, like `AsyncSalesforce` / `Salesforce`.
@@ -334,7 +334,7 @@ all `Auth` classes and `AuthStart`, `Token`, `AsyncTokenStore` / `TokenStore`,
 
 ### 5.2 Client lifecycle
 
-- `AsyncSalesforce(auth, *, api_version="68.0", http_client=None, store=None, cache=None, observers=(), budget=None, retry=None, timeout=None, max_concurrency=None, user_agent=None, json=None, error_tags=None, cursor_key=None, instance_url=None, describe_cache=None, log_soql="hash", http2=False, client_name=None, pubsub_endpoint=None)` (`None` means the default config object). `default_namespace=` and `update_mru=` (§10.2) are planned, not shipped.
+- `AsyncSalesforce(auth, *, api_version="68.0", http_client=None, store=None, cache=None, observers=(), budget=None, retry=None, timeout=None, max_concurrency=None, user_agent=None, json=None, error_tags=None, cursor_key=None, instance_url=None, describe_cache=None, log_soql="hash", http2=False, client_name=None, pubsub_endpoint=None, default_namespace=None, update_mru=None)` (`None` means the default config object; `default_namespace` and `update_mru`: §10.2).
 - If `http_client` is not given, the client creates one (`httpx.AsyncClient` with HTTP/1.1, pool limits, timeouts, `Accept-Encoding: gzip`) and **owns** it: `aclose()` / `async with` closes it. An injected client is never closed by the library.
 - `with_auth(auth)` returns a child client sharing transport, caches, observers, usage counters and budget, with its own auth runtime. Children are cheap (no new pool) and SHOULD NOT be closed individually; closing the parent closes the pool.
 - Clients are safe to share across tasks (async) or threads (sync).
@@ -564,7 +564,7 @@ hard-coded (#506, #78, #268). Both rules are enforced by an AST test (`tests/uni
 4. **Concurrency gate**: optional `max_concurrency` semaphore per client family.
 5. **Compression**: always send `Accept-Encoding: gzip`. Gzip request bodies over 64 KiB (`Content-Encoding: gzip`) for Bulk ingest, Collections and Composite.
 6. **Send** via httpx.
-7. **Parse `Sforce-Limit-Info`** (`api-usage=used/max`, and `api-bursts=used/max` when present) into usage counters. Parse a `Warning` response header (`<code> - "<text>"`; code `299` = deprecated API version) and emit `warnings.warn(text, esf.SalesforceWarning)` **once per distinct text per client family** (**planned, not shipped** (spec-vs-code check, 2026-11-13): the client doesn't read `Warning` today), so a deprecation notice is not lost or repeated on every call. `SalesforceWarning` subclasses `UserWarning`; users silence or escalate it with the standard `warnings` filters.
+7. **Parse `Sforce-Limit-Info`** (`api-usage=used/max`, and `api-bursts=used/max` when present) into usage counters. Parse a `Warning` response header (`<code> - "<text>"`; code `299` = deprecated API version) and emit `warnings.warn(text, esf.SalesforceWarning)` **once per distinct text per client family** (the set of seen texts lives on the family's transport), so a deprecation notice is not lost or repeated on every call. `SalesforceWarning` subclasses `UserWarning`; users silence or escalate it with the standard `warnings` filters.
 8. **Classify** the response (§8.2) into success or a typed error.
 9. **Refresh** on `INVALID_SESSION_ID` (§6.4).
 10. **Retry** per policy (§7.4).
@@ -801,14 +801,12 @@ Salesforce's default applies.
 | Kwarg | Methods | Header | Notes |
 |---|---|---|---|
 | `assignment_rule_id: str \| bool \| None` | `create`, `update`, `upsert` | `Sforce-Auto-Assign` | `True`/`False` → `TRUE`/`FALSE`; a string must be an AssignmentRule id (validated with `check_record_id`). Salesforce defaults to `TRUE` and applies it to Accounts, Cases and Leads, including ones written indirectly by triggers. |
-| `allow_save: bool \| None` | `create`, `update`, `upsert` | `Sforce-Duplicate-Rule-Header` | API 52.0+. Sends `allowSave=…; includeRecordDetails=false; runAsCurrentUser=false`. See below. |
+| `duplicate_rules: DuplicateRules \| None` | `create`, `update`, `upsert` | `Sforce-Duplicate-Rule-Header` | API 52.0+. Sends `allowSave=…; includeRecordDetails=…; runAsCurrentUser=…`. See below. `allow_save: bool \| None` is its deprecated alias. |
 | `if_modified_since: datetime \| None` | `get` | `If-Modified-Since` | 304 handling as before. The describe cache sends it internally (§12). |
 | `if_unmodified_since: datetime \| None` | `update` | `If-Unmodified-Since` | `Conflict` on 412. |
 
-**Shipped:** `allow_save=` (spec-vs-code check, 2026-11-13). `core/records.duplicate_rule_header` already takes all
-three flags, but only `allowSave` is exposed. **Planned, not shipped:** `esf.DuplicateRules`, a
-frozen dataclass in `config.py` (no I/O) that would replace `allow_save=` as `duplicate_rules=`.
-Because 0.5 ships `allow_save=`, the change then needs a deprecation (D29):
+`esf.DuplicateRules` is a frozen dataclass in `config.py` (no I/O), serialised by
+`core/records.duplicate_rule_header`:
 
 ```python
 @dataclass(frozen=True)
@@ -822,6 +820,18 @@ All three fields are always sent (`allowSave=true; includeRecordDetails=false;
 runAsCurrentUser=false`); the defaults equal Salesforce's documented defaults, so
 `DuplicateRules()` behaves like sending no header.
 
+`DuplicateDetected.duplicates` is Salesforce's `duplicateResult` dict; with
+`include_record_details=True` each `matchResults[].matchRecords[].record` carries fields of the
+matched record, not only `Id` (the org returns a subset of the fields; the docs say "all
+fields"). sObject Collections errors carry no `duplicateResult` at all, with or without the flag,
+so there `duplicates` is `None` (org-observed, DE org v68.0, 2026-11-13).
+
+**Deprecated: `allow_save=`.** 0.1.0rc1 shipped `allow_save: bool | None` on the same methods
+(§9.1, §9.3) and on `FakeSalesforce`. It stays as an alias until **0.7** (D29, §17.1): passing it
+emits `esf.EsfDeprecationWarning` naming `duplicate_rules=esf.DuplicateRules(allow_save=...)`,
+pointing at the caller's line, and sends the same header as before; passing both raises
+`TypeError`. `FakeCall.args` records `duplicate_rules` (and `allow_save`, derived from it).
+
 **No conditional headers on delete.** The REST API Developer Guide (*Conditional Request
 Headers*) says DELETE requests don't support them. An earlier 0.1 draft accepted
 `delete(id, if_unmodified_since=)`; the docs suggested Salesforce would ignore the header and
@@ -830,9 +840,8 @@ in REST; the records guide says so and shows a read-then-delete pattern with its
 (sandbox): Salesforce does not ignore the header, it rejects the DELETE (500 `UNKNOWN_EXCEPTION`
 for a past date, 400 `BAD_HEADER` for a future one) and keeps the record.
 
-**Client-wide headers** (§10.2): `client_name` (`Sforce-Call-Options`) ships.
-`default_namespace` (`Sforce-Call-Options`) and `update_mru` (`Sforce-Mru`) are planned, not
-shipped (spec-vs-code check, 2026-11-13).
+**Client-wide headers** (§10.2): `client_name` and `default_namespace` (`Sforce-Call-Options`)
+and `update_mru` (`Sforce-Mru`).
 
 ### 9.2 Query and search (0.1)
 
@@ -905,7 +914,8 @@ which validates `^[A-Za-z][A-Za-z0-9_]*(__[a-z]+)?$` (dotted paths allowed).
   *Headers* pages don't limit these two headers to particular resources, and the Collections
   example responses show `DUPLICATES_DETECTED`, but no page says Collections honours them. V24
   (sandbox) confirmed both on create, update and upsert, so they ship as
-  `assignment_rule_id=` and `allow_save=`, like §9.1 (`duplicate_rules=` is planned, §9.1). `delete` and `retrieve` take neither.
+  `assignment_rule_id=` and `duplicate_rules=`, like §9.1 (`allow_save=` is the deprecated alias).
+  Collections errors carry no `duplicateResult`, so `include_record_details` has no visible effect there. `delete` and `retrieve` take neither.
 - Returns `BatchResult` (ordered as input): `.results: list[RecordResult(ok, id, created, errors)]`, `.ok`, `.failed`, `.raise_for_errors()` → `PartialFailure`.
 - **Failures can't go unnoticed** (simple-salesforce #817, #544, #502, #442): every
   Collections `sf.request` event carries `records_failed`, so partial failures show up in logs and
@@ -1534,7 +1544,7 @@ sf_client.sobject("Lead").update.assert_awaited_once_with(LEAD_ID, {"Status": "W
 attributed to this integration on the Salesforce side. Opt-in; validated to
 `[A-Za-z0-9_.:-]{1,64}`.
 
-**Default namespace** (managed-package orgs; **planned, not shipped** (spec-vs-code check, 2026-11-13)): `AsyncSalesforce(..., default_namespace="battle")`
+**Default namespace** (managed-package orgs): `AsyncSalesforce(..., default_namespace="battle")`
 adds `defaultNamespace=battle`, so SOQL and records can name `botId__c` instead of
 `battle__botId__c`. Per the REST API Developer Guide (*Call Options Header*): Salesforce strips the
 prefix from response field names when this is set, and ignores it for describe calls; it is not
@@ -1555,18 +1565,19 @@ case-insensitively), and an option key the caller sets for one call (`client=`,
 `defaultNamespace=`) wins for that call. Pure function in `core/http.py`, unit-tested.
 
 Salesforce documents `Sforce-Call-Options` for sObject Basic Information, sObject Rows, sObject
-Rows by External ID, Query, QueryAll, Search and Bulk. We send it on every REST data call; V20
+Rows by External ID, Query, QueryAll, Search and Bulk. We send it on every REST data call; SOAP calls (convert, merge) get only `client=`, because `defaultNamespace` is documented for REST resources and the SOAP API has its own `CallOptions` envelope element (Codex review, 2026-11-13); V20
 checks it is accepted (or ignored, not rejected) on Collections and Composite and where admins see
 the `client` value.
 
-**MRU updates** (**planned, not shipped** (spec-vs-code check, 2026-11-13)): `AsyncSalesforce(..., update_mru=False)` would send `Sforce-Mru: updateMru=false`
+**MRU updates**: `AsyncSalesforce(..., update_mru=False)` sends `Sforce-Mru: updateMru=false`
 (API 60.0+; `ValueError` at construction if `api_version` is older). Salesforce defaults to
 `true` and recommends `false` for integration users, who never see Recent Items. Default `None`
 (no header, Salesforce's behaviour) so the library doesn't silently change what users see in
 the UI; the records guide recommends `update_mru=False` for integrations. Sent only on the
 resources Salesforce documents for it: `sf.sobject(...)` create, get, get-by-external-id,
 update and upsert (sObject Basic Information POST, Rows, Rows by External ID). SOQL never updates
-the MRU, so it is not sent on query.
+the MRU, so it is not sent on query. Sandbox (2026-11-13, `tests/sandbox/test_client_headers.py`): with `update_mru=False`,
+create, get and update leave the Lead out of `RecentlyViewed`; a get with `True` or with no header adds it.
 
 
 `sf.tagged(caller="job:backfill", priority="low")` returns a child view whose calls carry those
@@ -1634,7 +1645,7 @@ opaque positions, not secrets). Payloads and decoded field values are never logg
 `priority`, `soql_hash` (SHA-256 of normalised SOQL, first 12 hex), `soql` (only if
 `log_soql="redacted"`: string/number literals and SOSL `FIND {...}` terms replaced by `?`),
 `request_id`, `api_version`, `client_id_hash`, `records_failed` (Collections only),
-`sf_warning` (text of a `Warning` response header, when present; planned with `SalesforceWarning`),
+`sf_warning` (text of a `Warning` response header; `None` when absent),
 `error_message` (only with `ESF_DEBUG`: Salesforce messages can quote record values).
 
 **Never logged:** access/refresh tokens, `Authorization` headers, client secrets, private keys,
@@ -1875,7 +1886,7 @@ Scope:
 - Errors: §8 complete including custom error tags.
 - Areas: Records (§9.1), Query/Search + `soql` + Cursor (§9.2) incl. values in SOQL methods, `query_one`, `query_first`, `explain`, `esf.flatten`, Collections (§9.3), raw `request` (§9.5), `limits()` (§9.17).
 - CLI: `esf query`, `whoami`, `limits`, `version`, and `esf migrate` (§9.19) so users moving off simple-salesforce have it from the first release.
-- Request headers (D30, ADR 0012): fixes (no conditional headers on delete; `"; "` in `Sforce-Call-Options`); Collections write headers (V24 passed: `assignment_rule_id=`, `allow_save=`). Not shipped, moved to planned (2026-11-13): `DuplicateRules`, `default_namespace`, `update_mru`, `Warning` → `SalesforceWarning`.
+- Request headers (D30, ADR 0012): fixes (no conditional headers on delete; `"; "` in `Sforce-Call-Options`); Collections write headers (V24 passed: `assignment_rule_id=`, `allow_save=`). Not shipped, moved to planned (2026-11-13): `DuplicateRules`. Shipped in 0.5: `default_namespace`, `update_mru`, `Warning` → `SalesforceWarning`.
 - Usage (§10) and observability (§11) complete, stdlib observer; structlog/otel adapters.
 - Testing module (§14) for the areas above.
 - Docs: getting started, auth pages, records/query/collections guides, errors, logging, usage, migration guide (partial).
@@ -1987,9 +1998,9 @@ before the release named.
 | V21 | HTTP status and body for `UNSUPPORTED_API_VERSION` (configured version not offered by the org); message seen elsewhere: "Invalid Api version specified on URL" | 0.1 | **Done (discrepancy)** (DE org, API v68.0, 2026-11-12): a version newer than the org's returns 404 `NOT_FOUND`, not `UNSUPPORTED_API_VERSION`; retired versions are refused by the client before sending. Fixture `errors/api_version_not_offered.json` |
 | V22 | `GET query?explain=` response fields (`plans[]`: `cardinality`, `fields`, `leadingOperationType`, `relativeCost`, `sobjectCardinality`, `sobjectType`, `notes`) | 0.1 | **Done** (DE org, API v68.0, 2026-11-12): `plans[]` fields as listed; `leadingOperationType` `Index`/`TableScan`; ordered by cost. Fixture `query/explain.json` (recorded) |
 | V23 | Debug-log capture for anonymous Apex: `TraceFlag`/`DebugLevel` fields and permissions, `ApexLog` body endpoint, fields to match the log to the run | 0.3 | **Done** (DE org, API v68.0, 2026-11-12): log `Operation` is the request path, `Request=Api`; queryable within ~0.3 s; a second overlapping `USER_DEBUG` flag → 400 `FIELD_INTEGRITY_EXCEPTION`. Non-admin permissions not tested. Evidence: `tests/sandbox/test_tooling_metadata.py` |
-| V24 | `Sforce-Auto-Assign` and `Sforce-Duplicate-Rule-Header` take effect on sObject Collections create/update/upsert | 0.1 | **Done (shipped)** (DE org, API v68.0, 2026-11-12): `Sforce-Auto-Assign` and `allowSave` take effect via `composite/sobjects`; Collections `create/update/upsert` take `assignment_rule_id=` and `allow_save=` |
+| V24 | `Sforce-Auto-Assign` and `Sforce-Duplicate-Rule-Header` take effect on sObject Collections create/update/upsert | 0.1 | **Done (shipped)** (DE org, API v68.0, 2026-11-12): `Sforce-Auto-Assign` and `allowSave` take effect via `composite/sobjects`; Collections `create/update/upsert` take `assignment_rule_id=` and, since 0.5, `duplicate_rules=` (`allow_save=` is a deprecated alias until 0.7; re-verified 2026-11-13) |
 | V25 | `If-Unmodified-Since` on `DELETE sobjects/{o}/{id}` is ignored (record deleted) or rejected | 0.1 | **Done (discrepancy)** (DE org, API v68.0, 2026-11-12): not ignored — a past date gives 500 `UNKNOWN_EXCEPTION`, a future one 400 `BAD_HEADER`; the record is kept. Fixture `errors/delete_if_unmodified_since.json` |
-| V26 | Namespace prefix format accepted by `defaultNamespace` | 0.1 | **Not testable** in an org without a namespace: the DE org accepts and ignores any value. Needs an org with a registered namespace or a managed package |
+| V26 | Namespace prefix format accepted by `defaultNamespace` | 0.1 | **Not testable** in an org without a namespace: the DE org accepts and ignores any value (2026-11-13: `defaultNamespace=esfns` merged with `client=` is accepted on create, get and query, with no effect). Client-side validation follows the docs. Needs an org with a registered namespace or a managed package |
 | V27 | CDC bitmap bit order (bit 0 = least-significant bit of the hex value) and compound `{pos}-0x…` decoding | 0.5 | **Done** (DE org, API v68.0, 2026-11-12): bit 0 = least-significant bit; compound entries `{pos}-0x…`; a nulled-only compound field sends no leading `0x…` entry. Fixture `pubsub/events_account_change_update.json` |
 | V28 | How Pub/Sub Avro schemas mark Date/DateTime fields (logicalType or otherwise), so epoch values are converted only where the type is known | 0.5 | **Done (org-observed)** (DE org, API v68.0, 2026-11-12): DateTime is a `long` (epoch ms) with `doc` `…:DateTime[:00N…]`; no logical types. Fixtures `pubsub/schema_*.json` |
 | V29 | Error hints (§8.5): exact `INVALID_FIELD` message shapes ("No such column 'X' on entity 'Y'" for queries, "... on sobject of type Y" for DML), the `API_DISABLED_FOR_ORG` body, and the common causes of `INVALID_SESSION_ID` right after a successful refresh (missing `api` scope, IP or session policies) | 0.2 | **Partly done** (DE org, API v68.0, 2026-11-12): query "No such column 'X' on entity 'Lead'…", DML "No such column 'X' on sobject of type Lead" (both 400); bad token → 401 `INVALID_SESSION_ID`; post-refresh 401s explained by rotation (V2). `API_DISABLED_FOR_ORG` not reproducible (stays synthetic) |
@@ -2047,6 +2058,9 @@ before the release named.
 | V86 | Quick deploy over REST (`POST metadata/deployRequest/{validatedId}`, body `{"validatedDeployRequestId": id}`): the response has the shape of the `POST metadata/deployRequest` response (`id` of the new deployment, `deployResult`), and the error bodies for a validation that failed, ran no tests, is older than 10 days, or was followed by another deployment | 0.4 | **Done** (DE org, API v68.0, 2026-11-12): 201 `{id, validatedDeployRequestId}`; `NoTestRun` validations and stale validations → 400 `INVALID_ID_FIELD` |
 | V87 | `GET analytics/reports` (*Report List*, `sforce_analytics_rest_api_recentreportslist.htm`) returns a JSON array of at most 200 recently viewed reports, each with `id`, `name`, `url`, `describeUrl` and `instancesUrl`; `sf.reports.recent()` returns the entries as sent | 0.4 | **Done** (DE org, API v68.0, 2026-11-12): array of recent reports with an extra `fieldsUrl` (org-observed) |
 | V88 | Bulk API 2.0 job handles: `GET jobs/query/{id}` and `GET jobs/ingest/{id}` with a client API version other than the one that created the job (the docs name 409 only for results), what `GET jobs/query/{id}` returns for an ingest job id (and the reverse), and `Sforce-NumberOfRecords` on a results page with `maxRecords` | 0.5 | **Done** (DE org, API v68.0, 2026-11-12): a v60.0 client opens a v68.0 query job (no 409; `apiVersion` stays 68.0); the query id on `jobs/ingest/{id}` is 404 `NOT_FOUND`; `maxRecords=1` pages send `Sforce-NumberOfRecords: 1`; a saved locator resumes. The reverse kind (ingest id on `jobs/query`) was not tried |
+| V89 | `Sforce-Duplicate-Rule-Header` flags (`DuplicateRules`) on sObject and Collections writes | 0.5 | **Done (shipped)** (DE org, API v68.0, 2026-11-13): no header → `DuplicateDetected`; `allowSave=true` saves on sObject and Collections create/update/upsert; `runAsCurrentUser=true` accepted; `includeRecordDetails=true` adds fields to `matchRecords[].record` on single-record writes. **Discrepancy:** the docs say "all fields", the org returns a subset (Name, Company, Email, Phone, Title, address, OwnerId, LastModifiedDate, Id). **Org-observed:** Collections errors carry no `duplicateResult`, so `duplicates` is `None` there. `tests/sandbox/test_duplicate_rules.py` |
+| V90 | `Sforce-Mru: updateMru=false` keeps records out of Recent Items | 0.5 | **Done (shipped)** (DE org, API v68.0, 2026-11-13): with `update_mru=False`, a created, read and updated Lead is not in `RecentlyViewed`; `true` or no header adds it. `tests/sandbox/test_client_headers.py` |
+| V91 | `Warning` 299 header on deprecated API versions (`SalesforceWarning`) | 0.5 | **Not observed** (DE org, 2026-11-13): v31.0–v59.0 sent no `Warning` header on limits, query, describe, sobjects or the version root; v30.0 is 410 `GONE`. Tested with a synthetic fixture from the docs. Re-probe after Summer '27, when v31–v40 are deprecated |
 
 Remaining open (after the real-org run of 2026-11-12, issue #33): V3 (record the exact error body; the probe can revoke the token chain), V20 (where admins see `client=`), V26 (needs a namespace), V29 (`API_DISABLED_FOR_ORG`), V36 (`LIMIT_EXCEEDED` / `PLATFORM_EVENT_PUBLISHING_UNAVAILABLE` statuses), V69 (a report the user can't access: needs a second user) and V78 (needs a sandbox with enough storage). Untested limits are noted in their rows (V40, V70, V74, V85).
 

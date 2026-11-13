@@ -16,6 +16,9 @@ logged-in user. The main folders:
   platform event ``ESF_Sandbox_Event__e`` (``Message__c``), Change Data Capture on Account, the
   Apex REST class ``EsfSandboxRest`` (``/services/apexrest/esf-sandbox/``) and the invocable
   action ``EsfSandboxAction``;
+- duplicates: the Lead matching rule ``Esf_Sandbox_Lead_Email_Match`` (same email) and the
+  duplicate rule ``Esf_Sandbox_Lead_Duplicates`` (allow with an alert on create and edit, only
+  for Leads with ``Company`` = ``esf-sandbox-duprule``);
 - extras: a before-save Lead flow with a Custom Error (V5b) and a tabular and a summary Lead
   report in ``unfiled$public``;
 - records: ``Lead.Esf_Ext_Multi__c`` (a non-unique external id, V19), the ``Esf_Sandbox_Queue``

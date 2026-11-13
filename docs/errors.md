@@ -192,6 +192,31 @@ warnings.filterwarnings("error", category=esf.EsfDeprecationWarning)
 await sf.aclose()
 ```
 
+## Salesforce warnings
+
+Salesforce adds a `Warning` response header when a request uses a deprecated API version
+(`Warning: 299 - "<text>"`). The client turns the text into a Python warning of class
+`esf.SalesforceWarning`, a subclass of `UserWarning`. It warns once for each distinct text per
+client family, so you don't get the same notice on every call. The text is also in the
+`sf_warning` field of the [`sf.request` event](logging.md).
+
+Use the standard `warnings` filters to hide the warning or make it fail your tests:
+
+```python
+import warnings
+
+warnings.filterwarnings("error", category=esf.SalesforceWarning)  # fail fast in CI
+warnings.filterwarnings("ignore", category=esf.SalesforceWarning)  # or hide it
+await sf.aclose()
+```
+
+When you see this warning, move to a newer `api_version` before Salesforce retires the old one.
+
+With the `"error"` filter, the warning is raised as soon as the response arrives, before the
+client reads the status. So the exception doesn't tell you whether a write was saved or
+rejected: check the record before you retry. Use the `"error"` filter in tests, not in
+production code that writes records.
+
 ## Attributes
 
 | Attribute | Description |
@@ -415,8 +440,12 @@ A required field has no value. `exc.fields` names the fields.
 
 ### DuplicateDetected
 
-A duplicate rule blocked the record. `exc.duplicates` holds the matching records when
-Salesforce returns them.
+A duplicate rule blocked the record, or alerted and the write didn't allow the save.
+`exc.duplicates` is the `duplicateResult` from Salesforce: the rule name and, in
+`matchResults[].matchRecords[].record`, the matched records. Each record holds only its `Id`,
+unless the write passed `duplicate_rules=esf.DuplicateRules(include_record_details=True)`.
+sObject Collections return no duplicate result, so `exc.duplicates` is `None` there. To save
+despite an alert, pass `duplicate_rules=esf.DuplicateRules(allow_save=True)`.
 
 ### InvalidReference
 

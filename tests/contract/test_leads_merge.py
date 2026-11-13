@@ -388,3 +388,13 @@ def test_server_side_fault_marks_rows_unknown(h: Harness, mock: respx.MockRouter
     results = ei.value.results
     assert results is not None
     assert results.results[100].errors[0].extended["outcome"] == "unknown"
+
+
+def test_soap_calls_send_client_but_not_default_namespace(h: Harness, mock: respx.MockRouter) -> None:
+    """``defaultNamespace`` is a REST option; SOAP calls keep only ``client=``."""
+    route = mock.post(SOAP).mock(return_value=xml("convert_lead_one.json"))
+    sf = h.client(client_name="acme", default_namespace="battle")
+    h.run(sf.leads.convert(LEAD, converted_status="Closed - Converted", account_id=ACC))
+    assert route.calls[0].request.headers["Sforce-Call-Options"] == "client=acme"
+    h.run(h.client(default_namespace="battle").leads.convert(LEAD, converted_status="Closed - Converted"))
+    assert "sforce-call-options" not in route.calls.last.request.headers

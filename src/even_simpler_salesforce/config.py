@@ -5,7 +5,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-__all__ = ["Backoff", "Budget", "DescribeCacheConfig", "Priority", "RetryPolicy", "Timeouts"]
+__all__ = [
+    "Backoff",
+    "Budget",
+    "DescribeCacheConfig",
+    "DuplicateRules",
+    "Priority",
+    "RetryPolicy",
+    "Timeouts",
+]
 
 Priority = Literal["low", "normal", "high"]
 
@@ -110,3 +118,30 @@ class Backoff:
     def delay(self, attempt: int) -> float:
         """The wait before poll number ``attempt`` (0-based)."""
         return min(self.max, self.start * self.factor ** min(attempt, 64))
+
+
+@dataclass(frozen=True, slots=True)
+class DuplicateRules:
+    """How a write handles the org's duplicate rules: ``Sforce-Duplicate-Rule-Header``.
+
+    Pass it as ``duplicate_rules=`` to ``create``, ``update`` and ``upsert`` (single records and
+    sObject Collections). All three flags are always sent. The defaults equal Salesforce's, so
+    ``DuplicateRules()`` behaves like sending no header. Needs API 52.0 or later.
+
+    See the REST API Developer Guide, *Duplicate Rule Header*:
+    https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/headers_duplicaterules.htm
+
+    Attributes:
+        allow_save: Save the record even when a duplicate rule alerts. A rule that blocks
+            still blocks.
+        include_record_details: In a ``DUPLICATES_DETECTED`` error, return fields of the
+            matched records, not only their ids. :attr:`DuplicateDetected.duplicates` then
+            carries them. Single-record writes only: sObject Collections errors carry no
+            duplicate result.
+        run_as_current_user: Find duplicates with the sharing rules of the running user, not
+            with system access.
+    """
+
+    allow_save: bool = False
+    include_record_details: bool = False
+    run_as_current_user: bool = False

@@ -78,7 +78,11 @@ def test_external_id_suffix_upsert_request(h: Harness, mock: respx.MockRouter) -
     sf = h.client()
     out = h.run(
         sf.sobject("Lead").upsert(
-            EXT, "a/b.XML", {"LastName": "x"}, assignment_rule_id=False, allow_save=True
+            EXT,
+            "a/b.XML",
+            {"LastName": "x"},
+            assignment_rule_id=False,
+            duplicate_rules=esf.DuplicateRules(allow_save=True),
         )
     )
     assert out == esf.UpsertResult(LEAD_ID, True)
@@ -152,13 +156,23 @@ def test_collections_write_headers(h: Harness, mock: respx.MockRouter, method: s
     rule = "01Qxx0000000001AAA"
     call = {
         "create": lambda: sf.collections.create(
-            [{"LastName": "x"}], sobject="Lead", assignment_rule_id=rule, allow_save=True
+            [{"LastName": "x"}],
+            sobject="Lead",
+            assignment_rule_id=rule,
+            duplicate_rules=esf.DuplicateRules(allow_save=True),
         ),
         "update": lambda: sf.collections.update(
-            "Lead", [{"Id": LEAD_ID}], assignment_rule_id=True, allow_save=True
+            "Lead",
+            [{"Id": LEAD_ID}],
+            assignment_rule_id=True,
+            duplicate_rules=esf.DuplicateRules(allow_save=True),
         ),
         "upsert": lambda: sf.collections.upsert(
-            "Lead", EXT, [{EXT: "a"}], assignment_rule_id=True, allow_save=True
+            "Lead",
+            EXT,
+            [{EXT: "a"}],
+            assignment_rule_id=True,
+            duplicate_rules=esf.DuplicateRules(allow_save=True),
         ),
     }[method]
     h.run(call())
@@ -177,7 +191,9 @@ def test_collections_duplicate_alert_replayed(h: Harness) -> None:
     row = {"LastName": "x", "Company": "esf-sandbox-dup"}
     blocked = h.run(sf.collections.create([row], sobject="Lead"))
     assert [e.error_code for e in blocked.results[0].errors] == ["DUPLICATES_DETECTED"]
-    saved = h.run(sf.collections.create([row], sobject="Lead", allow_save=True))
+    saved = h.run(
+        sf.collections.create([row], sobject="Lead", duplicate_rules=esf.DuplicateRules(allow_save=True))
+    )
     assert not saved.failed
     assert transport.handler.remaining == 0  # type: ignore[attr-defined]
 

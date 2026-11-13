@@ -31,7 +31,7 @@ from .auth import (
     WebServerFlow,
 )
 from .cache import Cache, MemoryCache
-from .config import Backoff, Budget, DescribeCacheConfig, RetryPolicy, Timeouts
+from .config import Backoff, Budget, DescribeCacheConfig, DuplicateRules, RetryPolicy, Timeouts
 from .context import call_context
 from .core.actions import Action
 from .core.composite import Reference
@@ -86,6 +86,7 @@ from .errors import (
     RetrieveFailed,
     RowLocked,
     SalesforceError,
+    SalesforceWarning,
     ServerError,
     SessionExpired,
     SoapFault,
@@ -186,6 +187,7 @@ __all__ = [
     "DeployTestFailure",
     "DescribeCacheConfig",
     "DuplicateDetected",
+    "DuplicateRules",
     "ErrorDetail",
     "EsfDeprecationWarning",
     "Event",
@@ -255,6 +257,7 @@ __all__ = [
     "RowLocked",
     "Salesforce",
     "SalesforceError",
+    "SalesforceWarning",
     "ServerError",
     "SessionExpired",
     "SoapFault",

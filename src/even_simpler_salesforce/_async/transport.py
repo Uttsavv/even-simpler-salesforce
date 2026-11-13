@@ -11,6 +11,7 @@ import hashlib
 import random
 import threading
 import time
+import warnings
 from collections import OrderedDict
 from collections.abc import AsyncIterator, Callable, Mapping
 from datetime import datetime, timezone
@@ -30,9 +31,12 @@ from ..core.http import (
     RawResponse,
     RequestSpec,
     build_url,
+    call_options,
     check_instance_url,
     gzip_body,
     merge_call_options,
+    mru_header,
+    parse_warning,
     path_template,
 )
 from ..core.limits import parse_limit_info
@@ -43,6 +47,7 @@ from ..errors import (
     ConnectError,
     RequestTimeout,
     SalesforceError,
+    SalesforceWarning,
     SessionExpired,
     TransportError,
 )
@@ -243,6 +248,8 @@ class AsyncTransport:
         debug: int,
         client_name: str | None = None,
         pubsub_endpoint: str | None = None,
+        default_namespace: str | None = None,
+        update_mru: bool | None = None,
     ) -> None:
         self.api_version = api_version
         if http_client is None:
@@ -275,7 +282,12 @@ class AsyncTransport:
         self.log_soql = log_soql
         self.instance_url = check_instance_url(instance_url) if instance_url else None
         self.debug = debug
-        self.call_options = f"client={client_name}" if client_name else None
+        self.call_options = call_options(client_name, default_namespace)
+        self.soap_call_options = call_options(client_name, None)
+        self.update_mru = update_mru
+        # Texts of Warning response headers already passed to warnings.warn (once per family).
+        self.warned: set[str] = set()
+        self._warned_guard = threading.Lock()
         # Bounded so per-user clients (with_auth per request) don't keep every token in memory;
         # an evicted token is reloaded from the store on its next use.
         self.tokens: LruDict[str, Token] = LruDict(MAX_TOKENS_IN_MEMORY)
@@ -602,8 +614,12 @@ class AsyncTransport:
             del headers["Authorization"]
             content = spec.session_body(token.access_token)
         headers.update(spec.headers)
-        if self.call_options:
-            headers = merge_call_options(headers, self.call_options)
+        # SOAP calls get only ``client=``: ``defaultNamespace`` is documented for REST resources,
+        # and the SOAP API takes its own CallOptions element in the envelope.
+        options = self.soap_call_options if spec.session_body is not None else self.call_options
+        if options:
+            headers = merge_call_options(headers, options)
+        headers.update(mru_header(spec, self.update_mru))
         sent_bytes = [0]
         body: Any = content
         chunks: Any = None
@@ -660,6 +676,14 @@ class AsyncTransport:
         info = parse_limit_info(response.headers.get("sforce-limit-info"))
         if info is not None:
             self.usage.observe(info, org=org_key(token))
+        try:
+            self._warn_once(parse_warning(response.headers.get("warning")))
+        except BaseException:
+            # A warnings filter set to "error" raises here; a streamed response is still open
+            # and nothing else holds it, so close it before the exception leaves.
+            if not response.is_closed:
+                await response.aclose()
+            raise
         if self.debug >= 2:
             self.emit(
                 "sf.debug.attempt",
@@ -690,6 +714,16 @@ class AsyncTransport:
             return raw, 0, out
         raw = RawResponse(response.status_code, response.headers, response.content, url, loads=self.loads)
         return raw, response.num_bytes_downloaded, out
+
+    def _warn_once(self, text: str | None) -> None:
+        """``warnings.warn(text, SalesforceWarning)`` the first time this family sees ``text``."""
+        if text is None:
+            return
+        with self._warned_guard:
+            if text in self.warned:
+                return
+            self.warned.add(text)
+        warnings.warn(text, SalesforceWarning, stacklevel=2)
 
     def _error_message(self, spec: RequestSpec, error: SalesforceError | None) -> str | None:
         # Salesforce DML messages can quote record values (e.g. STRING_TOO_LONG), and §11.3 says
@@ -767,6 +801,7 @@ class AsyncTransport:
             "request_id": (raw.request_id if raw is not None else (error.request_id if error else None)),
             "api_version": self.api_version,
             "client_id_hash": runtime.auth.client_id_hash or None,
+            "sf_warning": parse_warning(raw.headers.get("warning")) if raw is not None else None,
         }
         if spec.soql and self.log_soql == "redacted":
             fields["soql"] = redact_soql(spec.soql)

@@ -247,7 +247,9 @@ def test_collections_duplicate_rule_header(sb: Driver, tag: str, cleanup: Cleanu
     cleanup.add(first)
     blocked = sb.run(sf.collections.create([dup], sobject="Lead"))
     assert [e.error_code for e in blocked.results[0].errors] == ["DUPLICATES_DETECTED"]
-    saved = sb.run(sf.collections.create([dup], sobject="Lead", allow_save=True))
+    saved = sb.run(
+        sf.collections.create([dup], sobject="Lead", duplicate_rules=esf.DuplicateRules(allow_save=True))
+    )
     assert saved.results[0].ok
     cleanup.add(saved.results[0].id)
     sb.run(sf.collections.delete([first, str(saved.results[0].id)]))

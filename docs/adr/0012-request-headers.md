@@ -1,10 +1,10 @@
 # ADR 0012: Request headers are keyword arguments, scoped to the resources that document them
 
 - **Status:** accepted, 2026-11-09
-- **Implementation (2026-11-13):** partly shipped. The delete fix, the `; ` separator,
-  `assignment_rule_id`, `client_name` and Collections write headers ship. Duplicate rules ship as
-  `allow_save=`, not `DuplicateRules`. `default_namespace`, `update_mru` and
-  `SalesforceWarning` are planned, not shipped (`big-bang.md` §9.1, §10.2).
+- **Implementation (2026-11-13):** shipped in 0.5.0. The delete fix, the `; ` separator,
+  `assignment_rule_id`, `client_name`, `default_namespace`, `update_mru`, `SalesforceWarning`,
+  Collections write headers and `DuplicateRules` (`duplicate_rules=`; `allow_save=` is a
+  deprecated alias until 0.7) ship.
 - **Source:** [`big-bang.md`](https://github.com/Uttsavv/even-simpler-salesforce/blob/main/big-bang.md) §2, decision D30 (details in §7.1, §9.1, §9.3, §10.2, §21 V20/V24–V26)
 - **Supersedes:** `delete(id, if_unmodified_since=)` and the comma separator for
   `Sforce-Call-Options` in the 0.1 drafts of §9.1 and §10.2.
@@ -59,7 +59,10 @@ Bulk-only headers are designed with Bulk in 0.3.
   page.
 - Two public symbols are added: `DuplicateRules` and `SalesforceWarning`.
 - `include_record_details=True` makes `DuplicateDetected.duplicates` carry the matched records'
-  fields.
+  fields on single-record writes. sObject Collections return no duplicate result (observed on a
+  v68.0 org), so the flag has no visible effect there.
+- `allow_save=` shipped in 0.1.0rc1, so it stays as a deprecated alias (`EsfDeprecationWarning`)
+  until 0.7.
 - Users who relied on `delete(if_unmodified_since=)` get a `TypeError` instead of an unsafe
   no-op. 0.1 is unreleased, so no deprecation is needed.
 - Collections write headers depend on V24. If Salesforce ignores them there, the Collections

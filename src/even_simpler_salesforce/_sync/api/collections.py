@@ -9,12 +9,14 @@ import logging
 from collections.abc import Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
+from ...config import DuplicateRules
 from ...core.classify import error_from_detail
 from ...core.http import RequestSpec, check_record_id, check_sobject
 from ...core.records import (
     COLLECTION_READ_CHUNK,
     COLLECTION_WRITE_CHUNK,
     chunked,
+    duplicate_rules_arg,
     parse_record_results,
     with_type,
     write_headers,
@@ -84,6 +86,7 @@ class Collections:
         all_or_none: bool = False,
         concurrency: int | None = None,
         assignment_rule_id: str | bool | None = None,
+        duplicate_rules: DuplicateRules | None = None,
         allow_save: bool | None = None,
     ) -> BatchResult[RecordResult]:
         """``POST composite/sobjects`` in chunks of 200. Rows need ``attributes.type`` or ``sobject=``.
@@ -95,9 +98,15 @@ class Collections:
             concurrency: Chunks in flight at once (default: the client's setting).
             assignment_rule_id: ``Sforce-Auto-Assign`` on every chunk: an AssignmentRule id, or
                 ``True``/``False``. ``None`` sends nothing (Salesforce runs the active rule).
-            allow_save: ``Sforce-Duplicate-Rule-Header: allowSave=...`` on every chunk: save
-                rows despite a duplicate-rule alert.
+            duplicate_rules: ``Sforce-Duplicate-Rule-Header`` on every chunk
+                (:class:`~even_simpler_salesforce.DuplicateRules`). ``None`` sends nothing.
+            allow_save: Deprecated (removed in 0.7): use
+                ``duplicate_rules=DuplicateRules(allow_save=...)``.
+
+        Raises:
+            TypeError: Both ``duplicate_rules`` and ``allow_save`` are passed.
         """
+        rules = duplicate_rules_arg(duplicate_rules, allow_save)
         name = check_sobject(sobject) if sobject else None
         typed = [with_type(r, name) for r in rows]
         return self._write(
@@ -108,7 +117,7 @@ class Collections:
             sobject,
             all_or_none,
             concurrency,
-            headers=write_headers(assignment_rule_id, allow_save),
+            headers=write_headers(assignment_rule_id, rules),
         )
 
     def update(
@@ -119,6 +128,7 @@ class Collections:
         all_or_none: bool = False,
         concurrency: int | None = None,
         assignment_rule_id: str | bool | None = None,
+        duplicate_rules: DuplicateRules | None = None,
         allow_save: bool | None = None,
     ) -> BatchResult[RecordResult]:
         """``PATCH composite/sobjects`` in chunks of 200. Each row needs ``Id``.
@@ -132,9 +142,15 @@ class Collections:
             concurrency: Chunks in flight at once (default: the client's setting).
             assignment_rule_id: ``Sforce-Auto-Assign`` on every chunk: an AssignmentRule id, or
                 ``True``/``False``. ``None`` sends nothing (Salesforce runs the active rule).
-            allow_save: ``Sforce-Duplicate-Rule-Header: allowSave=...`` on every chunk: save
-                rows despite a duplicate-rule alert.
+            duplicate_rules: ``Sforce-Duplicate-Rule-Header`` on every chunk
+                (:class:`~even_simpler_salesforce.DuplicateRules`). ``None`` sends nothing.
+            allow_save: Deprecated (removed in 0.7): use
+                ``duplicate_rules=DuplicateRules(allow_save=...)``.
+
+        Raises:
+            TypeError: Both ``duplicate_rules`` and ``allow_save`` are passed.
         """
+        rules = duplicate_rules_arg(duplicate_rules, allow_save)
         check_sobject(sobject)
         typed: list[dict[str, Any]] = []
         for r in rows:
@@ -149,7 +165,7 @@ class Collections:
             sobject,
             all_or_none,
             concurrency,
-            headers=write_headers(assignment_rule_id, allow_save),
+            headers=write_headers(assignment_rule_id, rules),
         )
 
     def upsert(
@@ -161,6 +177,7 @@ class Collections:
         all_or_none: bool = False,
         concurrency: int | None = None,
         assignment_rule_id: str | bool | None = None,
+        duplicate_rules: DuplicateRules | None = None,
         allow_save: bool | None = None,
     ) -> BatchResult[RecordResult]:
         """``PATCH composite/sobjects/{o}/{field}`` in chunks of 200.
@@ -173,9 +190,15 @@ class Collections:
             concurrency: Chunks in flight at once (default: the client's setting).
             assignment_rule_id: ``Sforce-Auto-Assign`` on every chunk: an AssignmentRule id, or
                 ``True``/``False``. ``None`` sends nothing (Salesforce runs the active rule).
-            allow_save: ``Sforce-Duplicate-Rule-Header: allowSave=...`` on every chunk: save
-                rows despite a duplicate-rule alert.
+            duplicate_rules: ``Sforce-Duplicate-Rule-Header`` on every chunk
+                (:class:`~even_simpler_salesforce.DuplicateRules`). ``None`` sends nothing.
+            allow_save: Deprecated (removed in 0.7): use
+                ``duplicate_rules=DuplicateRules(allow_save=...)``.
+
+        Raises:
+            TypeError: Both ``duplicate_rules`` and ``allow_save`` are passed.
         """
+        rules = duplicate_rules_arg(duplicate_rules, allow_save)
         check_sobject(sobject)
         soql_identifier(field)
         typed = [with_type(r, sobject) for r in rows]
@@ -187,7 +210,7 @@ class Collections:
             sobject,
             all_or_none,
             concurrency,
-            headers=write_headers(assignment_rule_id, allow_save),
+            headers=write_headers(assignment_rule_id, rules),
         )
 
     def delete(

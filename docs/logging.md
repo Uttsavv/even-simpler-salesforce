@@ -243,6 +243,7 @@ revoked by another refresh, and the client resent the call with the newer stored
 | `request_id` | Salesforce's request id header (`Sforce-Request-Id`, or `X-Request-Id` / `X-B3-TraceId`) |
 | `api_version` | API version used |
 | `client_id_hash` | 12-character SHA-256 prefix of the OAuth client id (`None` for `StaticToken`) |
+| `sf_warning` | text of the `Warning` response header, or `None` when Salesforce sent none. See [Salesforce warnings](errors.md#salesforce-warnings) |
 
 ## The `sf.bulk.job` event
 

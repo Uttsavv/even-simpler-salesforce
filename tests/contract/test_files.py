@@ -823,3 +823,40 @@ def test_children_have_files(h: Harness, mock: respx.MockRouter) -> None:
     child = sf.tagged("billing")
     assert h.run(child.files.link(DOC_ID, ACCOUNT_ID)) == LINK_ID
     assert route.called
+
+
+class _TrackedStream(httpx.SyncByteStream, httpx.AsyncByteStream):
+    """A response body that records whether the client closed it."""
+
+    def __init__(self) -> None:
+        self.closed = False
+
+    def __iter__(self) -> Iterator[bytes]:
+        yield b"data"
+
+    async def __aiter__(self) -> AsyncIterator[bytes]:
+        yield b"data"
+
+    def close(self) -> None:
+        self.closed = True
+
+    async def aclose(self) -> None:
+        self.closed = True
+
+
+def test_download_closed_when_a_warning_filter_raises(h: Harness, mock: respx.MockRouter) -> None:
+    """With ``simplefilter("error")``, a ``Warning`` header raises before the stream is returned,
+    so the client closes the open response instead of leaking the connection."""
+    import warnings
+
+    body = _TrackedStream()
+    mock.get(f"{CV_URL}/{CV_ID}/VersionData").mock(
+        return_value=httpx.Response(
+            200, headers={"content-type": "application/pdf", "Warning": '299 - "old"'}, stream=body
+        )
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", esf.SalesforceWarning)
+        with pytest.raises(esf.SalesforceWarning, match="old"):
+            _read_all(h, h.client())
+    assert body.closed
