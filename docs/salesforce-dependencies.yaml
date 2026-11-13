@@ -65,7 +65,7 @@ rest_endpoints:
     checked: 2026-11-12
   - path: "ui-api/object-info/{}"
     methods: [GET]
-    used_by: "sf.ui.object_info() (describe cache; If-Modified-Since is ignored: always 200, V62)"
+    used_by: "sf.ui.object_info() (describe cache; revalidated with If-None-Match: If-Modified-Since is ignored, V62)"
     dynamic: true  # built by core/ui.py, not a literal in the area code
     docs: https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_object_info.htm
     checked: null
@@ -428,6 +428,11 @@ headers:
     used_for: "describe revalidation, get(if_modified_since=) → 304"
     docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/intro_rest_conditional_requests.htm
     checked: null
+  - name: If-None-Match
+    direction: request
+    used_for: "describe cache revalidation with a stored ETag (UI API object-info and picklist-values, V62) → 304"
+    docs: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/intro_rest_conditional_requests.htm
+    checked: null
   - name: If-Unmodified-Since
     direction: request
     used_for: "update(if_unmodified_since=) → 412"
@@ -466,6 +471,11 @@ headers:
   - name: Last-Modified
     direction: response
     used_for: describe cache revalidation
+    docs: null
+    checked: null
+  - name: ETag
+    direction: response
+    used_for: describe cache revalidation (stored, sent back as If-None-Match)
     docs: null
     checked: null
 

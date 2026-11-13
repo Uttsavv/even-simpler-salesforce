@@ -33,7 +33,7 @@ Paths are relative to `/services/data/vXX.X/` unless they start with `/services/
 | `parameterizedSearch` | POST | sf.parameterized_search | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_search_parameterized.htm) |  |
 | `graphql` | POST | sf.graphql, sf.graphql_iter (body {query, variables}; errors[] on 200 OK) | [docs](https://developer.salesforce.com/docs/platform/graphql/guide/requests-and-responses.html) |  |
 | `ui-api/records/{}` | GET | sf.ui.record() (fields, layoutTypes, modes) | [docs](https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_record_get.htm) | 2026-11-12 |
-| `ui-api/object-info/{}` | GET | sf.ui.object_info() (describe cache; If-Modified-Since is ignored: always 200, V62) | [docs](https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_object_info.htm) |  |
+| `ui-api/object-info/{}` | GET | sf.ui.object_info() (describe cache; revalidated with If-None-Match: If-Modified-Since is ignored, V62) | [docs](https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_object_info.htm) |  |
 | `ui-api/object-info/{}/picklist-values/{}` | GET | sf.ui.picklist_values() (describe cache) | [docs](https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_picklist_values_collection.htm) |  |
 | `ui-api/record-defaults/create/{}` | GET | sf.ui.create_defaults() (recordTypeId) | [docs](https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_record_defaults_create.htm) |  |
 | `ui-api/record-defaults/clone/{}` | GET | sf.ui.clone_defaults() | [docs](https://developer.salesforce.com/docs/atlas.en-us.uiapi.meta/uiapi/ui_api_resources_record_defaults_clone.htm) |  |
@@ -119,6 +119,7 @@ Behaviour relied on:
 | `Sforce-Auto-Assign` | request | assignment_rule_id= (TRUE / FALSE / rule id) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/headers_autoassign.htm) |  |
 | `Sforce-Duplicate-Rule-Header` | request | allow_save= → allowSave=true/false | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/headers_duplicaterules.htm) |  |
 | `If-Modified-Since` | request | describe revalidation, get(if_modified_since=) → 304 | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/intro_rest_conditional_requests.htm) |  |
+| `If-None-Match` | request | describe cache revalidation with a stored ETag (UI API object-info and picklist-values, V62) → 304 | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/intro_rest_conditional_requests.htm) |  |
 | `If-Unmodified-Since` | request | update(if_unmodified_since=) → 412 | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/intro_rest_conditional_requests.htm) |  |
 | `Content-Encoding` | request | gzip for bodies over 64 KiB (Collections) | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/intro_rest_compression.htm) |  |
 | `Sforce-Limit-Info` | response | api-usage=N/M; api-bursts=N/M → sf.usage, budgets | [docs](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/headers_api_usage.htm) |  |
@@ -127,6 +128,7 @@ Behaviour relied on:
 | `Sforce-Request-Id` | response | error.request_id, sf.request events |  |  |
 | `Retry-After` | response | 429 / REQUEST_LIMIT_EXCEEDED back-off (seconds or HTTP date) |  |  |
 | `Last-Modified` | response | describe cache revalidation |  |  |
+| `ETag` | response | describe cache revalidation (stored, sent back as If-None-Match) |  |  |
 
 ## Response shapes
 

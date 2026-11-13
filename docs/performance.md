@@ -128,7 +128,7 @@ suite skips it.
 | Request compression | on | the client compresses Collections bodies over 64 KiB with gzip |
 | HTTP/2 | off | `http2=True` with the `[http2]` extra |
 | Usage tracking | on | from response headers; `/limits` only when you ask |
-| Describe cache | on | in memory, 1 h TTL, 500 entries (LRU), then checked again with `If-Modified-Since`; a `304` costs no download |
+| Describe cache | on | in memory, 1 h TTL, 500 entries (LRU), then checked again with `If-Modified-Since` or the `ETag`; a `304` costs no download |
 | Fewer round trips | n/a | Collections: 200 records per write, 2,000 ids per read; `page_size` up to 2,000 rows per query page; `count()` |
 | Concurrency | unlimited / 4 | `max_concurrency` limits requests in flight for the client family; Collections run 4 chunks at a time |
 | Backoff | on | exponential with full jitter, capped at 8 s; for `429` and `REQUEST_LIMIT_EXCEEDED`, the client waits for `Retry-After` instead if it is at most `max_retry_after` (30 s); 5xx retries use backoff |

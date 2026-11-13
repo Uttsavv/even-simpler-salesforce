@@ -298,6 +298,9 @@ ends like that (in any letter case), the client works around it:
   record with `GET sobjects/{o}/{id}`. That is two API calls instead of one.
 - `upsert` sends the same upsert as one record through `PATCH composite/sobjects/{o}/{field}`.
 
+The workaround is for REST API objects only. A Tooling object (`sf.tooling.sobject`) always
+sends the value in the path, because the workaround isn't verified for the Tooling API.
+
 The results and errors are the same as for other values: `esf.NotFound` when no record has the
 value, `esf.MultipleMatches` (with `.matches`) when several do, `esf.InvalidField` when `data`
 also sets the external id field. Other values, `.csv` or `a.b` for example, use the path.
@@ -308,9 +311,9 @@ The client keys the describe cache by org, API version, sObject and a hash of th
 key includes the user because field-level security differs by user.
 
 The client uses a cached entry for `ttl` seconds without asking Salesforce. The default is 1
-hour. After that, the client revalidates the entry with `If-Modified-Since`. A
-`304 Not Modified` keeps the cached copy and costs no download. The client keeps stale entries
-for revalidation for `stale_ttl`, which is 24 hours by default.
+hour. After that, the client revalidates the entry with `If-Modified-Since`, and with
+`If-None-Match` when Salesforce sent an `ETag` (the UI API needs it). A `304 Not Modified`
+keeps the cached copy and costs no download. The client keeps stale entries for revalidation for `stale_ttl`, which is 24 hours by default.
 
 To configure the cache, pass `describe_cache=esf.DescribeCacheConfig(...)`. To share describe
 results across processes, pass your own `cache=`. It must have `get`, `set(key, value, ttl)` and
