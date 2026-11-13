@@ -193,20 +193,23 @@ same methods. It has three flags. All of them are `False` by default, as in Sale
 | `run_as_current_user` | Find duplicates with the running user's sharing rules. |
 
 When a rule stops the write, the client raises `esf.DuplicateDetected`. `exc.duplicates` is
-the `duplicateResult` that Salesforce returns.
+the `duplicateResult` that Salesforce returns. A retry with `allow_save=True` saves the record
+only if the rule is set to **Allow** (an alert). A rule set to **Block** rejects the write
+again, so catch that and use the matched record instead, as below.
 
 ```python
 details = esf.DuplicateRules(include_record_details=True)
 try:
     lead_id = await leads.create({"LastName": "Hamilton", "Company": "NASA"}, duplicate_rules=details)
 except esf.DuplicateDetected as exc:
-    for match in exc.duplicates["matchResults"]:
-        for found in match["matchRecords"]:
-            print(found["record"]["Id"], found["record"].get("Company"))
-    lead_id = await leads.create(
-        {"LastName": "Hamilton", "Company": "NASA"},
-        duplicate_rules=esf.DuplicateRules(allow_save=True),
-    )
+    matches = [found["record"] for m in exc.duplicates["matchResults"] for found in m["matchRecords"]]
+    try:  # an alert rule: save the duplicate anyway
+        lead_id = await leads.create(
+            {"LastName": "Hamilton", "Company": "NASA"},
+            duplicate_rules=esf.DuplicateRules(allow_save=True),
+        )
+    except esf.DuplicateDetected:  # a blocking rule: use the existing record
+        lead_id = matches[0]["Id"]
 ```
 
 `allow_save=True` is deprecated: use `duplicate_rules=esf.DuplicateRules(allow_save=True)`.

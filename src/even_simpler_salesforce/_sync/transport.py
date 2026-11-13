@@ -678,7 +678,14 @@ class Transport:
         info = parse_limit_info(response.headers.get("sforce-limit-info"))
         if info is not None:
             self.usage.observe(info, org=org_key(token))
-        self._warn_once(parse_warning(response.headers.get("warning")))
+        try:
+            self._warn_once(parse_warning(response.headers.get("warning")))
+        except BaseException:
+            # A warnings filter set to "error" raises here; a streamed response is still open
+            # and nothing else holds it, so close it before the exception leaves.
+            if not response.is_closed:
+                response.close()
+            raise
         if self.debug >= 2:
             self.emit(
                 "sf.debug.attempt",

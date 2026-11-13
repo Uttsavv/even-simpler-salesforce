@@ -212,9 +212,10 @@ await sf.aclose()
 
 When you see this warning, move to a newer `api_version` before Salesforce retires the old one.
 
-With the `"error"` filter, the warning is raised after the response arrives. For a write,
-Salesforce has already saved the change, so don't treat the exception as a failed write. Use the
-`"error"` filter in tests, not in production code that writes records.
+With the `"error"` filter, the warning is raised as soon as the response arrives, before the
+client reads the status. So the exception doesn't tell you whether a write was saved or
+rejected: check the record before you retry. Use the `"error"` filter in tests, not in
+production code that writes records.
 
 ## Attributes
 
