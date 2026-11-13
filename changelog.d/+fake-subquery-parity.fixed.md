@@ -1,1 +1,0 @@
-`FakeSalesforce` matches the real client in more places: a subquery or string literal no longer changes the reported sObject, `MultipleMatches.matches` holds record URLs, a closed fake raises `TransportError`, and `request()` refuses a body on GET and HEAD. `sf.request` events carry `records_failed` for Collections and include `error_message` only with `ESF_DEBUG`.

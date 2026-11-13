@@ -1,1 +1,0 @@
-`esf.testing.record()` now masks Salesforce ids used as JSON object keys (such as the UI API `recordTypeInfos`) the same way as ids in values, and keeps well-known all-zero ids such as the master record type `012000000000000AAA`.

@@ -1,1 +1,0 @@
-`esf migrate` has a new `client-methods` rule. It rewrites `describe()` to `describe_global()` and puts a TODO on `quick_search()`, `is_sandbox()`, `search(...)["searchRecords"]` and `limits()["X"]["Remaining"]`.

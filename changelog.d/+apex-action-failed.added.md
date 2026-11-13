@@ -1,1 +1,0 @@
-A new `esf.ApexActionFailed` error (a `RecordError`) is raised for `APEX_FAILED`, the code Salesforce returns when an Apex invocable action throws an uncaught exception. Its hint points to the Apex debug log. Code that catches `esf.RecordError` keeps working.

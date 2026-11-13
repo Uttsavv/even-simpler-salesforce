@@ -1,1 +1,0 @@
-`GraphQLError.errors` now reads the field path that Salesforce sends as `paths` into `extended["path"]`, and HTML-unescapes the messages (`Field 'Nmae'` instead of `Field &#39;Nmae&#39;`). `graphql_errors` still holds the entries as sent.

@@ -1,1 +1,0 @@
-Files: a `memoryview` upload of wider items now sends the right `Content-Length`, a gzip download reports `content_length=None` instead of the compressed size, a downloaded JSON file is no longer parsed as an API response, and a file the upload opened is closed as soon as a send fails.

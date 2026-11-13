@@ -1,1 +1,0 @@
-`sf.auth.refresh()` refreshes the token now, even if it looks valid, and returns the new token, for tokens sent in a request body such as a SOAP `SessionHeader`. Concurrent calls share one refresh; a `StaticToken` client raises `SessionExpired`.

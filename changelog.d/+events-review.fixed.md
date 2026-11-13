@@ -1,1 +1,0 @@
-`sf.platform_events.publish_many()` now raises `EventPublishFailed` or `EventPublishUnavailable` when every request fails, as `publish()` does, and the contrib helpers answer `EventPublishUnavailable` with `503` instead of `422`. A SOAP session fault after a refresh now gives the connected-app hint.

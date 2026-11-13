@@ -1,1 +1,0 @@
-`esf migrate --write` keeps a UTF-8 byte order mark and reads and writes a file in the encoding of its PEP 263 coding comment, instead of dropping the BOM or reporting a read error. `from simple_salesforce import *` now gets a TODO.

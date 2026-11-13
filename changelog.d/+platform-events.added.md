@@ -1,1 +1,0 @@
-`sf.platform_events.publish()` and `publish_many()` publish platform events and return a `PublishResult` with the event's `EventUuid`. Publish failures raise the new `EventPublishFailed` and `EventPublishUnavailable` errors, both `RecordError` subclasses. `FakeSalesforce` keeps published events for `fake.published(name)`.

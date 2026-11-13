@@ -1,1 +1,0 @@
-`sf.leads.convert()`, `sf.leads.convert_many()` and `sf.merge()` convert leads and merge duplicate leads, contacts or accounts. REST has no resource for these tasks, so the client uses the SOAP API with your OAuth token. SOAP faults map to the usual error classes, and unknown codes raise `SoapFault`. `FakeSalesforce` supports all three calls.

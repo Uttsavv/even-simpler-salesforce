@@ -1,1 +1,0 @@
-`even_simpler_salesforce.contrib.flask.Salesforce` (`[flask]` extra): a Flask extension with `init_app()` that keeps one sync `Salesforce` client per app and process (`ext.client`), reports the `esf.capture()` roll-up of each request to `on_summary=`, and with `error_handlers=True` maps typed errors to the same JSON responses as the FastAPI integration.
