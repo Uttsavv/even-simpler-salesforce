@@ -161,6 +161,7 @@ def test_defaults_and_retryable() -> None:
         (esf.RowLocked, esf.RecordError),
         (esf.RecordSaveBlocked, esf.RecordError),
         (esf.FlowFailed, esf.RecordError),
+        (esf.ApexActionFailed, esf.RecordError),
         (esf.StorageLimitExceeded, esf.RecordError),
         (esf.RequestLimitExceeded, esf.LimitError),
         (esf.BudgetExceeded, esf.LimitError),

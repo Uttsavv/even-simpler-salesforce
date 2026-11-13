@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from .models import BatchResult, DeployResult, UsageSnapshot
 
 __all__ = [
+    "ApexActionFailed",
     "ApexError",
     "AuthError",
     "BudgetExceeded",
@@ -51,9 +52,9 @@ __all__ = [
     "RecordError",
     "RecordSaveBlocked",
     "RefreshFailed",
+    "ReplayUnavailable",
     "ReportRunFailed",
     "ReportTimeout",
-    "ReplayUnavailable",
     "RequestError",
     "RequestLimitExceeded",
     "RequestTimeout",
@@ -394,6 +395,13 @@ class RecordSaveBlocked(RecordError):
 
 class FlowFailed(RecordError):
     """``CANNOT_EXECUTE_FLOW_TRIGGER``."""
+
+
+class ApexActionFailed(RecordError):
+    """``APEX_FAILED``: an uncaught exception in an Apex invocable action (``sf.actions.apex``).
+
+    Salesforce fails every input of the request with it. ``message`` holds the exception text.
+    """
 
 
 class StorageLimitExceeded(RecordError):

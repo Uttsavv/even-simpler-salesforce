@@ -56,6 +56,7 @@ CODE_MAP: dict[str, type[E.SalesforceError]] = {
     "UNABLE_TO_LOCK_ROW": E.RowLocked,
     "CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY": E.RecordSaveBlocked,
     "CANNOT_EXECUTE_FLOW_TRIGGER": E.FlowFailed,
+    "APEX_FAILED": E.ApexActionFailed,
     "STORAGE_LIMIT_EXCEEDED": E.StorageLimitExceeded,
     # limits / auth / server
     "REQUEST_LIMIT_EXCEEDED": E.RequestLimitExceeded,

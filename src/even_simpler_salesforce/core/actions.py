@@ -11,6 +11,7 @@ from typing import Any, ClassVar, Generic, TypeVar, cast
 from ..errors import RecordError, SalesforceError, UnexpectedResponse
 from ..models import ActionResult
 from .classify import error_from_detail, parse_details
+from .hints import add_hint
 from .http import RequestSpec, url_segment
 
 __all__ = [
@@ -160,9 +161,11 @@ def action_error(
             method=spec.method,
             path=spec.path_template,
         )
-    return error_from_detail(
+    err = error_from_detail(
         result.errors[0], status=status, spec=spec, dml=True, error_tags=error_tags, errors=result.errors
     )
+    add_hint(err)
+    return err
 
 
 # --- typed stubs ---------------------------------------------------------------------------

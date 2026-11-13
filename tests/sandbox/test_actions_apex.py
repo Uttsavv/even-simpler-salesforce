@@ -61,6 +61,7 @@ def test_single_failure_raises_with_status_400(sb: Driver, kind: str) -> None:
     err = ei.value
     assert err.status == 400
     assert err.error_code == ("APEX_FAILED" if kind == "apex" else "REQUIRED_FIELD_MISSING")
+    assert isinstance(err, esf.ApexActionFailed if kind == "apex" else esf.RequiredFieldMissing)
     assert err.errors[0].fields == ()
     assert len(sb.recorder.requests(f"actions.{kind}")) == 1  # never resent
 

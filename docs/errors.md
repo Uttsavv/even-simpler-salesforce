@@ -250,6 +250,7 @@ SalesforceError
 │   ├── RowLocked                  UNABLE_TO_LOCK_ROW                   (retryable)
 │   ├── RecordSaveBlocked          CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY (often an unhandled trigger exception)
 │   ├── FlowFailed                 CANNOT_EXECUTE_FLOW_TRIGGER
+│   ├── ApexActionFailed           APEX_FAILED (uncaught exception in an Apex invocable action)
 │   ├── StorageLimitExceeded       STORAGE_LIMIT_EXCEEDED
 │   └── EventPublishFailed         platform event publish refused, e.g. LIMIT_EXCEEDED
 │       └── EventPublishUnavailable  PLATFORM_EVENT_PUBLISHING_UNAVAILABLE  (retryable)
@@ -447,6 +448,12 @@ The save was blocked. In practice this is often an unhandled exception in a trig
 A record-triggered Flow failed. Read `exc.message`, then check the Flow error e-mail or the
 Flow's debug run in the org.
 
+### ApexActionFailed
+
+An Apex invocable action (`sf.actions.apex()` or `sf.run()`) threw an uncaught exception.
+Salesforce fails every input of the request with `APEX_FAILED`. Read `exc.message`, then check
+the Apex debug log. It is a `RecordError`, so `except esf.RecordError` still catches it.
+
 ### EventPublishFailed
 
 Salesforce didn't accept a [platform event](guides/platform-events.md). Read `exc.error_code`.
@@ -631,6 +638,7 @@ The client checks each response in this order:
 | `UNABLE_TO_LOCK_ROW` | `RowLocked` |
 | `CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY` | `RecordSaveBlocked` |
 | `CANNOT_EXECUTE_FLOW_TRIGGER` | `FlowFailed` |
+| `APEX_FAILED` | `ApexActionFailed` |
 | `STORAGE_LIMIT_EXCEEDED` | `StorageLimitExceeded` |
 | `REQUEST_LIMIT_EXCEEDED` | `RequestLimitExceeded` (`.retry_after` from `Retry-After`) |
 | `INVALID_SESSION_ID` | `SessionExpired` |

@@ -83,7 +83,7 @@ def test_single_failure_raises_typed_error_with_tag(h: Harness, mock: respx.Mock
 @pytest.mark.parametrize(
     ("kind", "fixture", "cls", "code"),
     [
-        ("apex", "apex_failed.json", esf.RecordError, "APEX_FAILED"),
+        ("apex", "apex_failed.json", esf.ApexActionFailed, "APEX_FAILED"),
         ("apex", "apex_missing_input.json", esf.RequiredFieldMissing, "REQUIRED_FIELD_MISSING"),
         ("flow", "flow_failed.json", esf.RequiredFieldMissing, "REQUIRED_FIELD_MISSING"),
     ],
@@ -104,6 +104,10 @@ def test_recorded_single_failure(
     assert ei.value.status == 400
     assert ei.value.operation == f"actions.{kind}"
     assert route.call_count == 1
+    if cls is esf.ApexActionFailed:  # still a RecordError; the hint names the debug log
+        assert isinstance(ei.value, esf.RecordError)
+        assert ei.value.hint
+        assert "debug log" in ei.value.hint
 
 
 def test_single_failure_with_http_200(h: Harness, mock: respx.MockRouter) -> None:

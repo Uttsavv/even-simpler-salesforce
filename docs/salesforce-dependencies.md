@@ -178,6 +178,7 @@ Behaviour relied on:
 | `UNABLE_TO_LOCK_ROW` | `RowLocked` |
 | `CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY` | `RecordSaveBlocked` |
 | `CANNOT_EXECUTE_FLOW_TRIGGER` | `FlowFailed` |
+| `APEX_FAILED` | `ApexActionFailed` |
 | `STORAGE_LIMIT_EXCEEDED` | `StorageLimitExceeded` |
 | `REQUEST_LIMIT_EXCEEDED` | `RequestLimitExceeded` |
 | `INVALID_SESSION_ID` | `SessionExpired` |
