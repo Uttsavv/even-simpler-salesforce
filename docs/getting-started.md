@@ -176,7 +176,8 @@ await packaged.aclose()
 
 Salesforce also leaves the prefix out of the field names it returns, so the dict keys change:
 a record has `"botId__c"`, not `"battle__botId__c"`. Code that reads the prefixed keys breaks
-when you turn this on. Describe calls ignore the option.
+when you turn this on. Describe calls ignore the option. The client doesn't send it on SOAP
+calls (`sf.leads.convert()`, `sf.leads.merge()`), only `client_name`.
 
 The prefix must have 1 to 15 letters, digits or underscores, start with a letter, and contain
 no `__`. Otherwise the client raises `ValueError`. An org without a namespace accepts any value

@@ -1565,7 +1565,7 @@ case-insensitively), and an option key the caller sets for one call (`client=`,
 `defaultNamespace=`) wins for that call. Pure function in `core/http.py`, unit-tested.
 
 Salesforce documents `Sforce-Call-Options` for sObject Basic Information, sObject Rows, sObject
-Rows by External ID, Query, QueryAll, Search and Bulk. We send it on every REST data call; V20
+Rows by External ID, Query, QueryAll, Search and Bulk. We send it on every REST data call; SOAP calls (convert, merge) get only `client=`, because `defaultNamespace` is documented for REST resources and the SOAP API has its own `CallOptions` envelope element (Codex review, 2026-11-13); V20
 checks it is accepted (or ignored, not rejected) on Collections and Composite and where admins see
 the `client` value.
 

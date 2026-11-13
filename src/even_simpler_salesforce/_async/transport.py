@@ -283,6 +283,7 @@ class AsyncTransport:
         self.instance_url = check_instance_url(instance_url) if instance_url else None
         self.debug = debug
         self.call_options = call_options(client_name, default_namespace)
+        self.soap_call_options = call_options(client_name, None)
         self.update_mru = update_mru
         # Texts of Warning response headers already passed to warnings.warn (once per family).
         self.warned: set[str] = set()
@@ -613,8 +614,11 @@ class AsyncTransport:
             del headers["Authorization"]
             content = spec.session_body(token.access_token)
         headers.update(spec.headers)
-        if self.call_options:
-            headers = merge_call_options(headers, self.call_options)
+        # SOAP calls get only ``client=``: ``defaultNamespace`` is documented for REST resources,
+        # and the SOAP API takes its own CallOptions element in the envelope.
+        options = self.soap_call_options if spec.session_body is not None else self.call_options
+        if options:
+            headers = merge_call_options(headers, options)
         headers.update(mru_header(spec, self.update_mru))
         sent_bytes = [0]
         body: Any = content

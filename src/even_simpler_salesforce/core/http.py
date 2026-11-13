@@ -284,15 +284,19 @@ def parse_warning(value: str | None) -> str | None:
 
     Salesforce sends ``Warning: 299 - "<text>"`` when a request uses a deprecated API version
     (REST API Developer Guide, *Warning Header*). The quoted text is returned unescaped. A value
-    without quotes is returned without its leading code.
+    with a code and no quotes at all (``299 Deprecated API version``, the form in the spec's
+    Appendix A) is returned without its code. Anything else, such as an unterminated quote or
+    a value with no leading code, is malformed and returns ``None``.
     """
     if not value or not value.strip():
         return None
     m = _WARNING_RE.match(value)
     if m:
         text = re.sub(r"\\(.)", r"\1", m.group(3)).strip()
+    elif '"' not in value and _WARNING_CODE_RE.match(value):
+        text = _WARNING_CODE_RE.sub("", value).strip()
     else:
-        text = _WARNING_CODE_RE.sub("", value).strip().strip('"').strip()
+        return None
     return text or None
 
 

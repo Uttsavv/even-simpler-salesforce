@@ -92,9 +92,10 @@ def test_mru_not_sent_elsewhere(operation: str, path: str) -> None:
         ('299 sfdc "Deprecated" "Wed, 01 Jan 2025 00:00:00 GMT"', "Deprecated"),
         ('299 - "say \\"hi\\""', 'say "hi"'),
         ("299 Deprecated API version", "Deprecated API version"),
-        ('299 - "x', "x"),
+        ('299 - "x', None),  # unterminated quote: malformed, not a warning
         ('299 - ""', None),
-        ("plain text", "plain text"),
+        ("plain text", None),  # no leading warn-code
+        ('299 - x "y', None),
     ],
 )
 def test_parse_warning(value: str | None, text: str | None) -> None:
