@@ -1,0 +1,1 @@
+Added `esf.SalesforceWarning`. When Salesforce sends a `Warning` response header (for example for a deprecated API version), the client warns once per distinct text per client family, and the `sf.request` event has a new `sf_warning` field.

@@ -299,7 +299,7 @@ all `Auth` classes and `AuthStart`, `Token`, `AsyncTokenStore` / `TokenStore`,
 `Cursor`, all exceptions, result models (`QueryResult`, `BatchResult`, `RecordResult`,
 `UpsertResult`, `UsageSnapshot`, `Limit`), config (`Budget`, `RetryPolicy`, `Timeouts`,
 `DescribeCacheConfig`), `Cache` / `MemoryCache`, `Event`, `Observer`, `capture`,
-`call_context`, `EsfDeprecationWarning`, `__version__`. (`DuplicateRules` and `SalesforceWarning` are planned, not shipped: §9.1, §7.1 step 7.) 0.5 adds `PubSubEvent`, `ChangeHeader`,
+`call_context`, `EsfDeprecationWarning`, `__version__`. (`DuplicateRules` is planned, not shipped: §9.1.) 0.5 adds `SalesforceWarning` (§7.1 step 7), `PubSubEvent`, `ChangeHeader`,
 `ChangeType`, `AsyncReplayStore` / `ReplayStore` and `AsyncInMemoryReplayStore` /
 `InMemoryReplayStore` (§9.16). Naming rule: the async variant carries the
 `Async` prefix, like `AsyncSalesforce` / `Salesforce`.
@@ -334,7 +334,7 @@ all `Auth` classes and `AuthStart`, `Token`, `AsyncTokenStore` / `TokenStore`,
 
 ### 5.2 Client lifecycle
 
-- `AsyncSalesforce(auth, *, api_version="68.0", http_client=None, store=None, cache=None, observers=(), budget=None, retry=None, timeout=None, max_concurrency=None, user_agent=None, json=None, error_tags=None, cursor_key=None, instance_url=None, describe_cache=None, log_soql="hash", http2=False, client_name=None, pubsub_endpoint=None)` (`None` means the default config object). `default_namespace=` and `update_mru=` (§10.2) are planned, not shipped.
+- `AsyncSalesforce(auth, *, api_version="68.0", http_client=None, store=None, cache=None, observers=(), budget=None, retry=None, timeout=None, max_concurrency=None, user_agent=None, json=None, error_tags=None, cursor_key=None, instance_url=None, describe_cache=None, log_soql="hash", http2=False, client_name=None, pubsub_endpoint=None, default_namespace=None, update_mru=None)` (`None` means the default config object; `default_namespace` and `update_mru`: §10.2).
 - If `http_client` is not given, the client creates one (`httpx.AsyncClient` with HTTP/1.1, pool limits, timeouts, `Accept-Encoding: gzip`) and **owns** it: `aclose()` / `async with` closes it. An injected client is never closed by the library.
 - `with_auth(auth)` returns a child client sharing transport, caches, observers, usage counters and budget, with its own auth runtime. Children are cheap (no new pool) and SHOULD NOT be closed individually; closing the parent closes the pool.
 - Clients are safe to share across tasks (async) or threads (sync).
@@ -564,7 +564,7 @@ hard-coded (#506, #78, #268). Both rules are enforced by an AST test (`tests/uni
 4. **Concurrency gate**: optional `max_concurrency` semaphore per client family.
 5. **Compression**: always send `Accept-Encoding: gzip`. Gzip request bodies over 64 KiB (`Content-Encoding: gzip`) for Bulk ingest, Collections and Composite.
 6. **Send** via httpx.
-7. **Parse `Sforce-Limit-Info`** (`api-usage=used/max`, and `api-bursts=used/max` when present) into usage counters. Parse a `Warning` response header (`<code> - "<text>"`; code `299` = deprecated API version) and emit `warnings.warn(text, esf.SalesforceWarning)` **once per distinct text per client family** (**planned, not shipped** (spec-vs-code check, 2026-11-13): the client doesn't read `Warning` today), so a deprecation notice is not lost or repeated on every call. `SalesforceWarning` subclasses `UserWarning`; users silence or escalate it with the standard `warnings` filters.
+7. **Parse `Sforce-Limit-Info`** (`api-usage=used/max`, and `api-bursts=used/max` when present) into usage counters. Parse a `Warning` response header (`<code> - "<text>"`; code `299` = deprecated API version) and emit `warnings.warn(text, esf.SalesforceWarning)` **once per distinct text per client family** (the set of seen texts lives on the family's transport), so a deprecation notice is not lost or repeated on every call. `SalesforceWarning` subclasses `UserWarning`; users silence or escalate it with the standard `warnings` filters.
 8. **Classify** the response (§8.2) into success or a typed error.
 9. **Refresh** on `INVALID_SESSION_ID` (§6.4).
 10. **Retry** per policy (§7.4).
@@ -830,9 +830,8 @@ in REST; the records guide says so and shows a read-then-delete pattern with its
 (sandbox): Salesforce does not ignore the header, it rejects the DELETE (500 `UNKNOWN_EXCEPTION`
 for a past date, 400 `BAD_HEADER` for a future one) and keeps the record.
 
-**Client-wide headers** (§10.2): `client_name` (`Sforce-Call-Options`) ships.
-`default_namespace` (`Sforce-Call-Options`) and `update_mru` (`Sforce-Mru`) are planned, not
-shipped (spec-vs-code check, 2026-11-13).
+**Client-wide headers** (§10.2): `client_name` and `default_namespace` (`Sforce-Call-Options`)
+and `update_mru` (`Sforce-Mru`).
 
 ### 9.2 Query and search (0.1)
 
@@ -1534,7 +1533,7 @@ sf_client.sobject("Lead").update.assert_awaited_once_with(LEAD_ID, {"Status": "W
 attributed to this integration on the Salesforce side. Opt-in; validated to
 `[A-Za-z0-9_.:-]{1,64}`.
 
-**Default namespace** (managed-package orgs; **planned, not shipped** (spec-vs-code check, 2026-11-13)): `AsyncSalesforce(..., default_namespace="battle")`
+**Default namespace** (managed-package orgs): `AsyncSalesforce(..., default_namespace="battle")`
 adds `defaultNamespace=battle`, so SOQL and records can name `botId__c` instead of
 `battle__botId__c`. Per the REST API Developer Guide (*Call Options Header*): Salesforce strips the
 prefix from response field names when this is set, and ignores it for describe calls; it is not
@@ -1559,14 +1558,15 @@ Rows by External ID, Query, QueryAll, Search and Bulk. We send it on every REST 
 checks it is accepted (or ignored, not rejected) on Collections and Composite and where admins see
 the `client` value.
 
-**MRU updates** (**planned, not shipped** (spec-vs-code check, 2026-11-13)): `AsyncSalesforce(..., update_mru=False)` would send `Sforce-Mru: updateMru=false`
+**MRU updates**: `AsyncSalesforce(..., update_mru=False)` sends `Sforce-Mru: updateMru=false`
 (API 60.0+; `ValueError` at construction if `api_version` is older). Salesforce defaults to
 `true` and recommends `false` for integration users, who never see Recent Items. Default `None`
 (no header, Salesforce's behaviour) so the library doesn't silently change what users see in
 the UI; the records guide recommends `update_mru=False` for integrations. Sent only on the
 resources Salesforce documents for it: `sf.sobject(...)` create, get, get-by-external-id,
 update and upsert (sObject Basic Information POST, Rows, Rows by External ID). SOQL never updates
-the MRU, so it is not sent on query.
+the MRU, so it is not sent on query. Sandbox (2026-11-13, `tests/sandbox/test_client_headers.py`): with `update_mru=False`,
+create, get and update leave the Lead out of `RecentlyViewed`; a get with `True` or with no header adds it.
 
 
 `sf.tagged(caller="job:backfill", priority="low")` returns a child view whose calls carry those
@@ -1634,7 +1634,7 @@ opaque positions, not secrets). Payloads and decoded field values are never logg
 `priority`, `soql_hash` (SHA-256 of normalised SOQL, first 12 hex), `soql` (only if
 `log_soql="redacted"`: string/number literals and SOSL `FIND {...}` terms replaced by `?`),
 `request_id`, `api_version`, `client_id_hash`, `records_failed` (Collections only),
-`sf_warning` (text of a `Warning` response header, when present; planned with `SalesforceWarning`),
+`sf_warning` (text of a `Warning` response header; `None` when absent),
 `error_message` (only with `ESF_DEBUG`: Salesforce messages can quote record values).
 
 **Never logged:** access/refresh tokens, `Authorization` headers, client secrets, private keys,
@@ -1875,7 +1875,7 @@ Scope:
 - Errors: §8 complete including custom error tags.
 - Areas: Records (§9.1), Query/Search + `soql` + Cursor (§9.2) incl. values in SOQL methods, `query_one`, `query_first`, `explain`, `esf.flatten`, Collections (§9.3), raw `request` (§9.5), `limits()` (§9.17).
 - CLI: `esf query`, `whoami`, `limits`, `version`, and `esf migrate` (§9.19) so users moving off simple-salesforce have it from the first release.
-- Request headers (D30, ADR 0012): fixes (no conditional headers on delete; `"; "` in `Sforce-Call-Options`); Collections write headers (V24 passed: `assignment_rule_id=`, `allow_save=`). Not shipped, moved to planned (2026-11-13): `DuplicateRules`, `default_namespace`, `update_mru`, `Warning` → `SalesforceWarning`.
+- Request headers (D30, ADR 0012): fixes (no conditional headers on delete; `"; "` in `Sforce-Call-Options`); Collections write headers (V24 passed: `assignment_rule_id=`, `allow_save=`). Not shipped, moved to planned (2026-11-13): `DuplicateRules`. Shipped in 0.5: `default_namespace`, `update_mru`, `Warning` → `SalesforceWarning`.
 - Usage (§10) and observability (§11) complete, stdlib observer; structlog/otel adapters.
 - Testing module (§14) for the areas above.
 - Docs: getting started, auth pages, records/query/collections guides, errors, logging, usage, migration guide (partial).
