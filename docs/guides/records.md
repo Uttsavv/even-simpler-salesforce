@@ -195,21 +195,29 @@ same methods. It has three flags. All of them are `False` by default, as in Sale
 When a rule stops the write, the client raises `esf.DuplicateDetected`. `exc.duplicates` is
 the `duplicateResult` that Salesforce returns. A retry with `allow_save=True` saves the record
 only if the rule is set to **Allow** (an alert). A rule set to **Block** rejects the write
-again, so catch that and use the matched record instead, as below.
+again: show the matched records so that someone can pick the right one, as below. A
+response can hold several matches, and match groups for other objects.
 
 ```python
 details = esf.DuplicateRules(include_record_details=True)
 try:
     lead_id = await leads.create({"LastName": "Hamilton", "Company": "NASA"}, duplicate_rules=details)
 except esf.DuplicateDetected as exc:
-    matches = [found["record"] for m in exc.duplicates["matchResults"] for found in m["matchRecords"]]
+    similar_leads = [
+        found["record"]
+        for group in exc.duplicates["matchResults"]
+        if group["entityType"] == "Lead"
+        for found in group["matchRecords"]
+    ]
     try:  # an alert rule: save the duplicate anyway
         lead_id = await leads.create(
             {"LastName": "Hamilton", "Company": "NASA"},
             duplicate_rules=esf.DuplicateRules(allow_save=True),
         )
-    except esf.DuplicateDetected:  # a blocking rule: use the existing record
-        lead_id = matches[0]["Id"]
+    except esf.DuplicateDetected:  # a blocking rule: let the user choose an existing Lead
+        for lead in similar_leads:
+            print(lead["Id"], lead.get("Company"), lead.get("Email"))
+        raise
 ```
 
 `allow_save=True` is deprecated: use `duplicate_rules=esf.DuplicateRules(allow_save=True)`.
