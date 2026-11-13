@@ -71,7 +71,8 @@ class DescribeCacheConfig:
     Attributes:
         ttl: Seconds a cached describe is used without asking Salesforce.
         max_entries: Maximum entries in the default in-memory cache.
-        revalidate: When an entry is stale, revalidate with ``If-Modified-Since`` (304 keeps it).
+        revalidate: When an entry is stale, revalidate with ``If-None-Match`` (when Salesforce
+            sent an ``ETag``) and ``If-Modified-Since``; a 304 keeps the entry.
         stale_ttl: Seconds a stale entry is kept for revalidation.
     """
 

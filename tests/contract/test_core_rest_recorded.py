@@ -131,15 +131,6 @@ def test_plain_values_keep_the_path(h: Harness, mock: respx.MockRouter) -> None:
     assert get.called
 
 
-def test_tooling_fallback_uses_tooling_paths(h: Harness, mock: respx.MockRouter) -> None:
-    q = mock.get(f"{DATA}/tooling/query").respond(json={"totalSize": 0, "done": True, "records": []})
-    sf = h.client()
-    with pytest.raises(esf.NotFound) as ei:
-        h.run(sf.tooling.sobject("ApexClass").get_by_external_id("Name", "x.json"))
-    assert q.called
-    assert ei.value.operation == "tooling.sobject.get_by_external_id"
-
-
 def test_fallback_unexpected_bodies(h: Harness, mock: respx.MockRouter) -> None:
     mock.get(f"{DATA}/query").respond(json={"oops": True})
     mock.patch(f"{DATA}/composite/sobjects/Lead/{EXT}").respond(json=[{"success": False, "errors": []}])

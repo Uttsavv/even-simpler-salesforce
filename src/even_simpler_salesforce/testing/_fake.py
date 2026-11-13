@@ -26,6 +26,7 @@ from ..core.actions import (
     action_path,
     action_result_type,
     build_action_result,
+    check_action_inputs,
 )
 from ..core.cursor import Cursor
 from ..core.files import safe_filename
@@ -915,6 +916,7 @@ class FakeActions:
         if not single and not items:  # like the real client: no request, no call recorded
             empty: BatchResult[ActionResult] = BatchResult([], operation=operation)
             return empty
+        check_action_inputs(kind, len(items))
 
         def fn() -> Any:
             results, errors = self._state.invoke_action(kind, name, items)

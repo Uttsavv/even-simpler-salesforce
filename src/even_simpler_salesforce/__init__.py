@@ -39,6 +39,7 @@ from .core.cursor import Cursor
 from .core.records import flatten
 from .core.soql import soql, soql_identifier, soql_like, sosl_term
 from .errors import (
+    ApexActionFailed,
     ApexError,
     AuthError,
     BudgetExceeded,
@@ -145,6 +146,7 @@ __all__ = [
     "Action",
     "ActionResult",
     "AnonymousResult",
+    "ApexActionFailed",
     "ApexError",
     "AsyncFileStream",
     "AsyncInMemoryReplayStore",

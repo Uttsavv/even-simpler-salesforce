@@ -83,7 +83,7 @@ def test_single_failure_raises_typed_error_with_tag(h: Harness, mock: respx.Mock
 @pytest.mark.parametrize(
     ("kind", "fixture", "cls", "code"),
     [
-        ("apex", "apex_failed.json", esf.RecordError, "APEX_FAILED"),
+        ("apex", "apex_failed.json", esf.ApexActionFailed, "APEX_FAILED"),
         ("apex", "apex_missing_input.json", esf.RequiredFieldMissing, "REQUIRED_FIELD_MISSING"),
         ("flow", "flow_failed.json", esf.RequiredFieldMissing, "REQUIRED_FIELD_MISSING"),
     ],
@@ -104,6 +104,10 @@ def test_recorded_single_failure(
     assert ei.value.status == 400
     assert ei.value.operation == f"actions.{kind}"
     assert route.call_count == 1
+    if cls is esf.ApexActionFailed:  # still a RecordError; the hint names the debug log
+        assert isinstance(ei.value, esf.RecordError)
+        assert ei.value.hint
+        assert "debug log" in ei.value.hint
 
 
 def test_single_failure_with_http_200(h: Harness, mock: respx.MockRouter) -> None:
@@ -172,6 +176,16 @@ def test_bulk_empty_sends_nothing(h: Harness, mock: respx.MockRouter) -> None:
     assert not mock.calls
     with pytest.raises(ValueError):
         h.run(sf.actions.apex("bad name", []))  # the name is checked also when nothing is sent
+
+
+def test_more_than_2000_inputs_raise_before_sending(h: Harness, mock: respx.MockRouter) -> None:
+    """V32: Salesforce runs the first 2,000 inputs and fails the rest, so nothing is sent."""
+    sf = h.client()
+    with pytest.raises(ValueError, match="2001 inputs for a flow action"):
+        h.run(sf.actions.flow("Assign_Lead", [{"leadId": str(i)} for i in range(2001)]))
+    with pytest.raises(ValueError, match="apex"):
+        h.run(sf.actions.apex("OrderService", [{}] * 2001))
+    assert not mock.calls
 
 
 def test_inputs_must_be_dicts(h: Harness) -> None:

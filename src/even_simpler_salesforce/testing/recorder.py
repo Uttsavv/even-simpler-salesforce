@@ -60,6 +60,10 @@ Redaction, applied before anything touches the disk:
 - In sObject records (JSON objects with ``attributes``), names and postal addresses
   (``Name``, ``FirstName``, ``LastName``, ``*Street``, ``*City``, ``*PostalCode``...) become
   ``<Field> <N>``, consistently within one fixture (``mask_personal=False`` keeps them).
+- User names anywhere in JSON or XML (``createdByName``, ``lastModifiedByName``,
+  ``canceledByName``, ``userName``, ``userFullName``, ``ownerName``...), such as those in
+  Metadata API deploy and SOAP results, become ``User <N>``, one label per person within one
+  fixture (``mask_personal=False`` keeps them).
 - Literals in SOQL/SOSL query parameters (``q``, ``explain``) become ``?``.
 - Instance hosts (``*.salesforce.com``, ``*.force.com``) become ``example.my.salesforce.com``.
 - Salesforce ids are replaced with fake ids keeping the key prefix (consistently, in paths,
@@ -117,7 +121,14 @@ _SECRET_KEYS = frozenset(
         "code_verifier",
     }
 )
-_KEEP_REQUEST_HEADERS = ("content-type", "accept", "if-modified-since", "if-unmodified-since", "if-match")
+_KEEP_REQUEST_HEADERS = (
+    "content-type",
+    "accept",
+    "if-modified-since",
+    "if-unmodified-since",
+    "if-match",
+    "if-none-match",
+)
 _KEEP_RESPONSE_HEADERS = (
     "content-type",
     "location",
@@ -143,6 +154,11 @@ _PERSONAL_KEY = re.compile(
     r"[a-z]*name__c|birthdate)$"
 )
 _SOQL_PARAMS = frozenset({"q", "explain"})
+# Keys and XML elements that hold a user's name (Metadata API ``createdByName``, SOAP
+# ``userFullName``...), whether or not they are inside an sObject record.
+_USER_NAMES = r"[A-Za-z]*ByName|userName|userFullName|ownerName"
+_USER_KEY = re.compile(rf"(?i)^(?:{_USER_NAMES})$")
+_XML_USER = re.compile(rf"(?i)(<(?:[A-Za-z_][\w.\-]*:)?(?:{_USER_NAMES})(?:\s[^>]*)?>)([^<]+)(</)")
 
 
 class ReplayMismatch(AssertionError):
@@ -157,8 +173,8 @@ class Redactor:
         mask_emails: Replace e-mail addresses.
         mask_phones: Replace values of ``*Phone*`` / ``*Fax*`` fields.
         mask_hosts: Replace instance host names.
-        mask_personal: Replace names and postal addresses in sObject records, and literals
-            in SOQL/SOSL query parameters.
+        mask_personal: Replace names and postal addresses in sObject records, user names in
+            JSON and XML, and literals in SOQL/SOSL query parameters.
         extra_keys: More JSON/form keys whose values must be redacted (e.g. custom fields
             holding personal data).
     """
@@ -183,6 +199,7 @@ class Redactor:
         self._phones: dict[str, str] = {}
         self._personal: dict[tuple[str, str], str] = {}
         self._personal_counts: dict[str, int] = {}
+        self._users: dict[str, str] = {}
         self._ids: dict[str, str] = {}
         self._lock = threading.Lock()
 
@@ -219,6 +236,12 @@ class Redactor:
                 label = self._personal[(key, value)] = f"{key} {n}"
             return label
 
+    def _user(self, value: str) -> str:
+        if value == REDACTED:
+            return value
+        with self._lock:
+            return self._users.setdefault(value, f"User {len(self._users) + 1}")
+
     @staticmethod
     def _host(m: re.Match[str]) -> str:
         host = m.group(0)
@@ -229,6 +252,8 @@ class Redactor:
         value = _SESSION.sub(REDACTED, value)
         value = _XML_SESSION.sub(rf"\g<1>{REDACTED}\g<2>", value)
         value = _BEARER.sub(f"Bearer {REDACTED}", value)
+        if self.mask_personal:
+            value = _XML_USER.sub(lambda m: m.group(1) + self._user(m.group(2)) + m.group(3), value)
         if self.mask_emails:
             value = _EMAIL.sub(self._email, value)
         if self.mask_hosts:
@@ -247,6 +272,8 @@ class Redactor:
         if isinstance(obj, str):
             if self.mask_phones and key is not None and _PHONE_KEY.search(key) and obj:
                 return self._phone(obj)
+            if self.mask_personal and key is not None and obj and _USER_KEY.match(key):
+                return self._user(obj)
             if self.mask_personal and in_record and key is not None and obj and _PERSONAL_KEY.match(key):
                 return self._personal_value(key, obj)
             return self.text(obj)

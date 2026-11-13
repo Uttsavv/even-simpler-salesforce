@@ -82,6 +82,7 @@ def test_spec_listed_codes_are_mapped() -> None:
         "UNABLE_TO_LOCK_ROW": esf.RowLocked,
         "CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY": esf.RecordSaveBlocked,
         "CANNOT_EXECUTE_FLOW_TRIGGER": esf.FlowFailed,
+        "APEX_FAILED": esf.ApexActionFailed,
         "STORAGE_LIMIT_EXCEEDED": esf.StorageLimitExceeded,
         "REQUEST_LIMIT_EXCEEDED": esf.RequestLimitExceeded,
         "SERVER_UNAVAILABLE": esf.ServerError,

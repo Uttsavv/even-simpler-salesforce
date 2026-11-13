@@ -406,6 +406,9 @@ class AsyncSalesforce:
         if entry is not None:
             if now - float(entry.get("fetched_at", 0)) < cfg.ttl:
                 return entry["body"], None
+            if cfg.revalidate and entry.get("etag"):
+                # The UI API sends an ETag and no Last-Modified, and ignores If-Modified-Since.
+                headers["If-None-Match"] = str(entry["etag"])
             if cfg.revalidate and entry.get("last_modified"):
                 headers["If-Modified-Since"] = str(entry["last_modified"])
         raw = await self._send(
@@ -419,17 +422,22 @@ class AsyncSalesforce:
             )
         )
         last_modified = raw.headers.get("last-modified") or formatdate(now, usegmt=True)
+        etag = raw.headers.get("etag")
         data: Any = None
         if raw.status == 304 and entry is not None:
             body: str = entry["body"]
             last_modified = str(entry.get("last_modified") or last_modified)
+            etag = etag or entry.get("etag")
         else:
             data = raw.json()
             try:
                 body = raw.content.decode("utf-8")
             except UnicodeDecodeError:  # pragma: no cover - Salesforce sends UTF-8 JSON
                 body = jsonlib.dumps(data).decode("utf-8")
-        t.cache.set(key, {"body": body, "last_modified": last_modified, "fetched_at": now}, cfg.stale_ttl)
+        stored: dict[str, Any] = {"body": body, "last_modified": last_modified, "fetched_at": now}
+        if etag:
+            stored["etag"] = str(etag)
+        t.cache.set(key, stored, cfg.stale_ttl)
         return body, data
 
     # --- query & search ----------------------------------------------------------------

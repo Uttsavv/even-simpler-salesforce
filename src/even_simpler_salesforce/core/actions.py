@@ -11,9 +11,11 @@ from typing import Any, ClassVar, Generic, TypeVar, cast
 from ..errors import RecordError, SalesforceError, UnexpectedResponse
 from ..models import ActionResult
 from .classify import error_from_detail, parse_details
+from .hints import add_hint
 from .http import RequestSpec, url_segment
 
 __all__ = [
+    "ACTION_INPUT_LIMIT",
     "ACTION_KINDS",
     "Action",
     "action_error",
@@ -22,6 +24,7 @@ __all__ = [
     "action_path",
     "action_result_type",
     "build_action_result",
+    "check_action_inputs",
     "check_action_kind",
     "check_action_name",
     "parse_action_results",
@@ -31,6 +34,14 @@ R = TypeVar("R")
 
 ACTION_KINDS = ("standard", "flow", "apex")
 """Action kinds with their own ``sf.actions`` method (and valid in ``Action.__action__``)."""
+
+ACTION_INPUT_LIMIT = 2000
+"""Most inputs one Apex or Flow action request may carry (org-observed, spec V32).
+
+With more, Salesforce runs the first 2,000 and fails each extra input, so the client refuses
+the list before sending. The limit for standard actions is not verified, so it isn't checked."""
+
+_LIMITED_KINDS = ("flow", "apex")
 
 _KIND = re.compile(r"^[A-Za-z][A-Za-z0-9]*$")
 # Flow API names, Apex class names (with an optional namespace) and standard action names.
@@ -75,6 +86,20 @@ def check_action_name(name: str) -> str:
     if not isinstance(name, str) or not _NAME.fullmatch(name):  # pyright: ignore[reportUnnecessaryIsInstance]
         raise ValueError(f"invalid action name: {name!r}")
     return name
+
+
+def check_action_inputs(kind: str, count: int) -> None:
+    """Refuse more than :data:`ACTION_INPUT_LIMIT` inputs for an Apex or Flow action.
+
+    Raises:
+        ValueError: ``count`` is above the limit for this kind.
+    """
+    if kind in _LIMITED_KINDS and count > ACTION_INPUT_LIMIT:
+        raise ValueError(
+            f"{count} inputs for a {kind} action: Salesforce runs at most {ACTION_INPUT_LIMIT} "
+            "per request and fails the rest, so split the list into calls of at most "
+            f"{ACTION_INPUT_LIMIT}"
+        )
 
 
 def action_list_path(kind: str) -> str:
@@ -136,9 +161,11 @@ def action_error(
             method=spec.method,
             path=spec.path_template,
         )
-    return error_from_detail(
+    err = error_from_detail(
         result.errors[0], status=status, spec=spec, dml=True, error_tags=error_tags, errors=result.errors
     )
+    add_hint(err)
+    return err
 
 
 # --- typed stubs ---------------------------------------------------------------------------

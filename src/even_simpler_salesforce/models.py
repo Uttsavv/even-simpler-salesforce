@@ -1020,6 +1020,10 @@ class ChangeType(str, Enum):
     ``GAP_*`` events say that Salesforce could not produce a normal change event, so they carry
     no field values: re-read the records. ``GAP_OVERFLOW`` says that one transaction changed
     too many records for Salesforce to send a change event for each one: re-sync the object.
+
+    ``SNAPSHOT`` is in the ``ChangeType`` enum of the change event schema that Salesforce sends
+    (org-observed, API v68.0), but the Change Data Capture documentation doesn't say when an
+    event has it. It is listed so that such an event doesn't end the subscription.
     """
 
     CREATE = "CREATE"
@@ -1031,6 +1035,7 @@ class ChangeType(str, Enum):
     GAP_DELETE = "GAP_DELETE"
     GAP_UNDELETE = "GAP_UNDELETE"
     GAP_OVERFLOW = "GAP_OVERFLOW"
+    SNAPSHOT = "SNAPSHOT"
 
     @property
     def is_gap(self) -> bool:

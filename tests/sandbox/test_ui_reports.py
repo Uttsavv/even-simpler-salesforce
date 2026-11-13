@@ -230,7 +230,8 @@ def _status(sb: Driver, sf: Any, path: str, headers: dict[str, str]) -> int:
 def test_ui_if_modified_since_is_ignored(sb: Driver) -> None:
     """V62: object-info and picklist-values ignore ``If-Modified-Since`` (always 200).
 
-    They send no ``Last-Modified`` header, but an ``ETag``; ``If-None-Match`` with it gets 304.
+    They send no ``Last-Modified`` header, but an ``ETag``; ``If-None-Match`` with it gets 304,
+    so the describe cache revalidates them with the ``ETag``.
     """
     sf = sb.client(describe_cache=esf.DescribeCacheConfig(ttl=0))
     first = sb.run(sf.ui.object_info("Lead"))
@@ -239,8 +240,8 @@ def test_ui_if_modified_since_is_ignored(sb: Driver) -> None:
     sb.run(sf.ui.picklist_values("Lead", MASTER))
     info = [e["status"] for e in sb.recorder.requests("ui.object_info")]
     picks = [e["status"] for e in sb.recorder.requests("ui.picklist_values")]
-    assert info == [200, 200], info
-    assert picks == [200, 200], picks
+    assert info == [200, 304], info
+    assert picks == [200, 304], picks
     for path in ("ui-api/object-info/Lead", f"ui-api/object-info/Lead/picklist-values/{MASTER}"):
         raw = sb.run(sf._send(RequestSpec("GET", path, operation="raw")))  # pyright: ignore[reportPrivateUsage]
         assert raw.headers.get("last-modified") is None

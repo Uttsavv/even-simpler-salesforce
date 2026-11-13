@@ -152,3 +152,28 @@ def test_recorded_trailer_keys() -> None:
     assert statuses["subscribe_unknown_topic"] == grpc.StatusCode.NOT_FOUND.name
     assert statuses["subscribe_bad_token"] == grpc.StatusCode.UNAUTHENTICATED.name
     assert statuses["get_schema_unknown"] == grpc.StatusCode.UNAVAILABLE.name
+
+
+def test_change_type_matches_the_recorded_schema() -> None:
+    """Every ``changeType`` symbol in the org's change event schema is a ``ChangeType``."""
+    import json
+
+    from ...fixtures import RECORDED
+
+    def find(node: Any) -> Any:
+        if isinstance(node, dict):
+            if node.get("type") == "enum" and node.get("name") == "ChangeType":
+                return node["symbols"]
+            for v in node.values():
+                if (got := find(v)) is not None:
+                    return got
+        elif isinstance(node, list):
+            for v in node:
+                if (got := find(v)) is not None:
+                    return got
+        return None
+
+    schema = json.loads((RECORDED / "pubsub/schema_account_change_event.json").read_text("utf-8"))
+    symbols = find(schema)
+    assert symbols, "no ChangeType enum in the recorded schema"
+    assert sorted(symbols) == sorted(t.value for t in esf.ChangeType)

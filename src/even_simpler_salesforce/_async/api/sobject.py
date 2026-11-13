@@ -166,7 +166,9 @@ class AsyncSObject:
         Salesforce reads a path that ends in ``.json``, ``.xml`` or ``.html`` as a response
         format, so it can't find a record whose value ends like that. For such values the client
         finds the id with ``SELECT Id ... WHERE field = value`` and then reads the record with
-        ``GET sobjects/{o}/{id}``: two requests, the same result and the same errors.
+        ``GET sobjects/{o}/{id}``: two requests, the same result and the same errors. The
+        fallback is for REST API objects only: a Tooling object (``sf.tooling.sobject``) always
+        sends the value in the path, because the fallback isn't verified for the Tooling API.
 
         Raises:
             NotFound: No record has this value.
@@ -181,7 +183,7 @@ class AsyncSObject:
             sobject=self.name,
             path_template=f"/sobjects/{self.name}/{field}/:value",
         )
-        if needs_external_id_fallback(str(value)):
+        if not self._base and needs_external_id_fallback(str(value)):
             record_id = await self._find_by_external_id(field, str(value), spec)
             return await self.get(record_id, fields, model=model)
         raw = await self._send(spec)
@@ -331,13 +333,14 @@ class AsyncSObject:
         For a value that ends in ``.json``, ``.xml`` or ``.html`` (which Salesforce reads as a
         response format in a path), the client sends the same upsert as one record through
         ``PATCH composite/sobjects/{o}/{field}`` instead. The result and the errors are the same.
+        A Tooling object (``sf.tooling.sobject``) always sends the value in the path.
 
         Raises:
             MultipleMatches: Several records have this value (HTTP 300).
             InvalidField: ``data`` also sets ``field``.
         """
         headers = _write_headers(assignment_rule_id, allow_save)
-        if needs_external_id_fallback(str(value)):
+        if not self._base and needs_external_id_fallback(str(value)):
             return await self._upsert_by_collection(field, str(value), data, headers)
         content, ctype = self._sf._transport.encode(dict(data))
         raw = await self._send(

@@ -197,6 +197,24 @@ def test_sobject_external_id_path_template(h: Harness, mock: respx.MockRouter, r
     assert rec.requests[0]["operation"] == "tooling.sobject.get_by_external_id"
 
 
+def test_sobject_external_id_ending_in_json_stays_in_the_path(
+    h: Harness, mock: respx.MockRouter, rec: Recorder
+) -> None:
+    """The REST API ``.json``/``.xml``/``.html`` fallback (V19) is not used for Tooling objects."""
+    got = mock.get(f"{TOOLING}/sobjects/ApexClass/Name/a.json").respond(json={"Id": "01pxx0000000009AAA"})
+    up = mock.patch(f"{TOOLING}/sobjects/ApexClass/Name/a.xml").respond(
+        201, json={"id": "01pxx0000000009AAA", "success": True, "errors": [], "created": True}
+    )
+    sf = _client(h, rec)
+    assert h.run(sf.tooling.sobject("ApexClass").get_by_external_id("Name", "a.json"))["Id"]
+    assert h.run(sf.tooling.sobject("ApexClass").upsert("Name", "a.xml", {"Body": "x"})).created
+    assert (got.call_count, up.call_count) == (1, 1)
+    assert [e["operation"] for e in rec.requests] == [
+        "tooling.sobject.get_by_external_id",
+        "tooling.sobject.upsert",
+    ]
+
+
 def test_create_without_id_names_the_tooling_operation(h: Harness, mock: respx.MockRouter) -> None:
     mock.post(f"{TOOLING}/sobjects/ApexClass/").respond(201, json={"success": True})
     sf = _client(h)

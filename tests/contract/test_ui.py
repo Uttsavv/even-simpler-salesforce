@@ -183,15 +183,35 @@ def test_object_info_stale_revalidates(h: Harness, mock: respx.MockRouter) -> No
     assert route.calls[1].request.headers["if-modified-since"] == lm
 
 
-def test_object_info_revalidation_answered_with_200(h: Harness, mock: respx.MockRouter) -> None:
-    """V62: the real answer to ``If-Modified-Since``: a full 200 with an ``ETag``, no ``Last-Modified``."""
+def test_object_info_revalidates_with_the_etag(h: Harness, mock: respx.MockRouter) -> None:
+    """V62: the org sends an ``ETag`` and no ``Last-Modified``, and ignores ``If-Modified-Since``.
+
+    So the cache revalidates with ``If-None-Match``; a 304 keeps the copy and the ``ETag``.
+    """
     body = load_fixture("ui/object_info_lead.json")
-    route = mock.get(f"{UI}/object-info/Lead").respond(json=body, headers={"ETag": '"abc--gzip"'})
+    etag = '"9630fcc30722d1a03c35c3490acbdd8d--gzip"'
+    route = mock.get(f"{UI}/object-info/Lead")
+    route.side_effect = [
+        httpx.Response(200, json=body, headers={"ETag": etag}),
+        httpx.Response(304),
+        httpx.Response(304),
+    ]
     sf = h.client(describe_cache=esf.DescribeCacheConfig(ttl=0))
     h.run(sf.ui.object_info("Lead"))
-    again = h.run(sf.ui.object_info("Lead"))
-    assert again["apiName"] == "Lead"
-    assert "if-modified-since" in route.calls[1].request.headers
+    assert h.run(sf.ui.object_info("Lead"))["apiName"] == "Lead"
+    assert h.run(sf.ui.object_info("Lead"))["apiName"] == "Lead"
+    assert route.calls[1].request.headers["if-none-match"] == etag
+    assert route.calls[2].request.headers["if-none-match"] == etag  # kept across the 304
+
+
+def test_object_info_without_revalidation_sends_no_etag(h: Harness, mock: respx.MockRouter) -> None:
+    route = mock.get(f"{UI}/object-info/Lead").respond(
+        json=load_fixture("ui/object_info_lead.json"), headers={"ETag": '"abc--gzip"'}
+    )
+    sf = h.client(describe_cache=esf.DescribeCacheConfig(ttl=0, revalidate=False))
+    h.run(sf.ui.object_info("Lead"))
+    h.run(sf.ui.object_info("Lead"))
+    assert "if-none-match" not in route.calls[1].request.headers
     assert route.call_count == 2
 
 

@@ -144,6 +144,12 @@ def hint_for(
             "API access is off. The org edition must include API access, and the user needs "
             "the 'API Enabled' permission in a profile or permission set."
         )
+    if code == "APEX_FAILED":
+        return (
+            "The Apex action threw an uncaught exception, and Salesforce failed every input of "
+            "the request. Check the Apex debug log, or catch the exception in the "
+            "@InvocableMethod and return an error output instead."
+        )
     if code == "REQUEST_LIMIT_EXCEEDED":
         return (
             "The org is over its API request limit, or runs too many long requests at once. "

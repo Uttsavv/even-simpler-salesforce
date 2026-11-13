@@ -39,7 +39,8 @@ next page from the Tooling API. `query()` doesn't take `page_size`, `include_del
 
 `sobject(name)` has the methods of `sf.sobject(name)`: `get`, `get_by_external_id`, `create`,
 `update`, `upsert`, `delete`, `describe` and the others. The paths start with `tooling/`. The
-describe cache keeps Tooling and REST describes apart.
+describe cache keeps Tooling and REST describes apart. An external id value that ends in `.json`, `.xml` or
+`.html` is sent in the path as it is: the REST API workaround isn't used for Tooling objects.
 
 ```python
 classes = sf.tooling.sobject("ApexClass")
