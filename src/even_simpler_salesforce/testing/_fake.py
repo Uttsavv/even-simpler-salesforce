@@ -18,7 +18,7 @@ from .._async.client import DEFAULT_API_VERSION
 from .._sync.api.apex import _apex_path  # pyright: ignore[reportPrivateUsage]
 from ..auth.flows import Auth, StaticToken, WebServerFlow
 from ..auth.token import Token
-from ..config import Budget, Priority
+from ..config import Budget, DuplicateRules, Priority
 from ..core.actions import (
     Action,
     action_inputs,
@@ -33,7 +33,7 @@ from ..core.files import safe_filename
 from ..core.graphql import parse_path
 from ..core.http import check_instance_url, check_record_id, check_sobject
 from ..core.limits import LimitInfo
-from ..core.records import apply_model
+from ..core.records import apply_model, duplicate_rules_arg
 from ..core.soql import soql_identifier, soql_values
 from ..errors import MalformedQuery, MultipleMatches, NotFound, SalesforceError, SessionExpired
 from ..models import (
@@ -86,6 +86,11 @@ __all__ = [
 _DEFAULT_INSTANCE = "https://example.my.salesforce.com"
 _APEX = "/services/apexrest"
 R = TypeVar("R")
+
+
+def _rules_kwargs(rules: DuplicateRules | None) -> dict[str, Any]:
+    """How a write's duplicate rules show in ``FakeCall.kwargs`` (``allow_save`` is kept for 0.1 tests)."""
+    return {"duplicate_rules": rules, "allow_save": rules.allow_save if rules is not None else None}
 
 
 def _instance_of(auth: Auth | None) -> str:
@@ -635,14 +640,16 @@ class FakeSObject:
         data: Mapping[str, Any],
         *,
         assignment_rule_id: str | bool | None = None,
+        duplicate_rules: DuplicateRules | None = None,
         allow_save: bool | None = None,
     ) -> str:
         """Store a new record and return its 18-character id."""
+        rules = duplicate_rules_arg(duplicate_rules, allow_save)
         return self._state.run(
             self._who,
             self._op + "create",
             self.name,
-            {"data": dict(data), "assignment_rule_id": assignment_rule_id, "allow_save": allow_save},
+            {"data": dict(data), "assignment_rule_id": assignment_rule_id, **_rules_kwargs(rules)},
             lambda: self._state.create(self.name, data),
             method="POST",
             path=self._path(),
@@ -655,10 +662,12 @@ class FakeSObject:
         data: Mapping[str, Any],
         *,
         assignment_rule_id: str | bool | None = None,
+        duplicate_rules: DuplicateRules | None = None,
         allow_save: bool | None = None,
         if_unmodified_since: datetime | None = None,
     ) -> None:
         """Merge ``data`` into a stored record. :class:`NotFound` / :class:`Conflict` like the real API."""
+        rules = duplicate_rules_arg(duplicate_rules, allow_save)
         self._state.run(
             self._who,
             self._op + "update",
@@ -667,7 +676,7 @@ class FakeSObject:
                 "id": record_id,
                 "data": dict(data),
                 "assignment_rule_id": assignment_rule_id,
-                "allow_save": allow_save,
+                **_rules_kwargs(rules),
                 "if_unmodified_since": if_unmodified_since,
             },
             lambda: self._state.update(self.name, record_id, data, if_unmodified_since),
@@ -683,9 +692,11 @@ class FakeSObject:
         data: Mapping[str, Any],
         *,
         assignment_rule_id: str | bool | None = None,
+        duplicate_rules: DuplicateRules | None = None,
         allow_save: bool | None = None,
     ) -> UpsertResult:
         """Update the record whose ``field == value``, or create it. :class:`MultipleMatches` on >1."""
+        rules = duplicate_rules_arg(duplicate_rules, allow_save)
         soql_identifier(field)
         return self._state.run(
             self._who,
@@ -696,7 +707,7 @@ class FakeSObject:
                 "value": value,
                 "data": dict(data),
                 "assignment_rule_id": assignment_rule_id,
-                "allow_save": allow_save,
+                **_rules_kwargs(rules),
             },
             lambda: self._state.upsert(self.name, field, value, data),
             method="PATCH",
@@ -738,9 +749,11 @@ class FakeCollections:
         all_or_none: bool = False,
         concurrency: int | None = None,
         assignment_rule_id: str | bool | None = None,
+        duplicate_rules: DuplicateRules | None = None,
         allow_save: bool | None = None,
     ) -> BatchResult[RecordResult]:
         """Create records. Rows need ``attributes.type`` or ``sobject=``."""
+        rules = duplicate_rules_arg(duplicate_rules, allow_save)
         row_list = [dict(r) for r in rows]
         return self._state.run(
             self._who,
@@ -751,7 +764,7 @@ class FakeCollections:
                 "sobject": sobject,
                 "all_or_none": all_or_none,
                 "assignment_rule_id": assignment_rule_id,
-                "allow_save": allow_save,
+                **_rules_kwargs(rules),
             },
             lambda: self._state.coll_create(row_list, sobject, all_or_none),
             method="POST",
@@ -767,9 +780,11 @@ class FakeCollections:
         all_or_none: bool = False,
         concurrency: int | None = None,
         assignment_rule_id: str | bool | None = None,
+        duplicate_rules: DuplicateRules | None = None,
         allow_save: bool | None = None,
     ) -> BatchResult[RecordResult]:
         """Update records; each row needs ``Id``."""
+        rules = duplicate_rules_arg(duplicate_rules, allow_save)
         row_list = [dict(r) for r in rows]
         return self._state.run(
             self._who,
@@ -779,7 +794,7 @@ class FakeCollections:
                 "rows": row_list,
                 "all_or_none": all_or_none,
                 "assignment_rule_id": assignment_rule_id,
-                "allow_save": allow_save,
+                **_rules_kwargs(rules),
             },
             lambda: self._state.coll_update(sobject, row_list, all_or_none),
             method="PATCH",
@@ -796,9 +811,11 @@ class FakeCollections:
         all_or_none: bool = False,
         concurrency: int | None = None,
         assignment_rule_id: str | bool | None = None,
+        duplicate_rules: DuplicateRules | None = None,
         allow_save: bool | None = None,
     ) -> BatchResult[RecordResult]:
         """Upsert records by external id ``field``."""
+        rules = duplicate_rules_arg(duplicate_rules, allow_save)
         row_list = [dict(r) for r in rows]
         return self._state.run(
             self._who,
@@ -809,7 +826,7 @@ class FakeCollections:
                 "rows": row_list,
                 "all_or_none": all_or_none,
                 "assignment_rule_id": assignment_rule_id,
-                "allow_save": allow_save,
+                **_rules_kwargs(rules),
             },
             lambda: self._state.coll_upsert(sobject, field, row_list, all_or_none),
             method="PATCH",
@@ -1568,10 +1585,12 @@ class AsyncFakeSObject:
         data: Mapping[str, Any],
         *,
         assignment_rule_id: str | bool | None = None,
+        duplicate_rules: DuplicateRules | None = None,
         allow_save: bool | None = None,
     ) -> str:
         """See :meth:`FakeSObject.create`."""
-        return self._inner.create(data, assignment_rule_id=assignment_rule_id, allow_save=allow_save)
+        rules = duplicate_rules_arg(duplicate_rules, allow_save)
+        return self._inner.create(data, assignment_rule_id=assignment_rule_id, duplicate_rules=rules)
 
     async def update(
         self,
@@ -1579,15 +1598,17 @@ class AsyncFakeSObject:
         data: Mapping[str, Any],
         *,
         assignment_rule_id: str | bool | None = None,
+        duplicate_rules: DuplicateRules | None = None,
         allow_save: bool | None = None,
         if_unmodified_since: datetime | None = None,
     ) -> None:
         """See :meth:`FakeSObject.update`."""
+        rules = duplicate_rules_arg(duplicate_rules, allow_save)
         self._inner.update(
             record_id,
             data,
             assignment_rule_id=assignment_rule_id,
-            allow_save=allow_save,
+            duplicate_rules=rules,
             if_unmodified_since=if_unmodified_since,
         )
 
@@ -1598,11 +1619,13 @@ class AsyncFakeSObject:
         data: Mapping[str, Any],
         *,
         assignment_rule_id: str | bool | None = None,
+        duplicate_rules: DuplicateRules | None = None,
         allow_save: bool | None = None,
     ) -> UpsertResult:
         """See :meth:`FakeSObject.upsert`."""
+        rules = duplicate_rules_arg(duplicate_rules, allow_save)
         return self._inner.upsert(
-            field, value, data, assignment_rule_id=assignment_rule_id, allow_save=allow_save
+            field, value, data, assignment_rule_id=assignment_rule_id, duplicate_rules=rules
         )
 
     async def delete(self, record_id: str) -> None:
@@ -1625,16 +1648,18 @@ class AsyncFakeCollections:
         all_or_none: bool = False,
         concurrency: int | None = None,
         assignment_rule_id: str | bool | None = None,
+        duplicate_rules: DuplicateRules | None = None,
         allow_save: bool | None = None,
     ) -> BatchResult[RecordResult]:
         """See :meth:`FakeCollections.create`."""
+        rules = duplicate_rules_arg(duplicate_rules, allow_save)
         return self._inner.create(
             rows,
             sobject=sobject,
             all_or_none=all_or_none,
             concurrency=concurrency,
             assignment_rule_id=assignment_rule_id,
-            allow_save=allow_save,
+            duplicate_rules=rules,
         )
 
     async def update(
@@ -1645,16 +1670,18 @@ class AsyncFakeCollections:
         all_or_none: bool = False,
         concurrency: int | None = None,
         assignment_rule_id: str | bool | None = None,
+        duplicate_rules: DuplicateRules | None = None,
         allow_save: bool | None = None,
     ) -> BatchResult[RecordResult]:
         """See :meth:`FakeCollections.update`."""
+        rules = duplicate_rules_arg(duplicate_rules, allow_save)
         return self._inner.update(
             sobject,
             rows,
             all_or_none=all_or_none,
             concurrency=concurrency,
             assignment_rule_id=assignment_rule_id,
-            allow_save=allow_save,
+            duplicate_rules=rules,
         )
 
     async def upsert(
@@ -1666,9 +1693,11 @@ class AsyncFakeCollections:
         all_or_none: bool = False,
         concurrency: int | None = None,
         assignment_rule_id: str | bool | None = None,
+        duplicate_rules: DuplicateRules | None = None,
         allow_save: bool | None = None,
     ) -> BatchResult[RecordResult]:
         """See :meth:`FakeCollections.upsert`."""
+        rules = duplicate_rules_arg(duplicate_rules, allow_save)
         return self._inner.upsert(
             sobject,
             field,
@@ -1676,7 +1705,7 @@ class AsyncFakeCollections:
             all_or_none=all_or_none,
             concurrency=concurrency,
             assignment_rule_id=assignment_rule_id,
-            allow_save=allow_save,
+            duplicate_rules=rules,
         )
 
     async def delete(

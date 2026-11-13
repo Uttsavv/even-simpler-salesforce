@@ -8,11 +8,13 @@ from datetime import datetime, timezone
 from email.utils import format_datetime
 from typing import TYPE_CHECKING, Any, TypeVar, overload
 
+from ...config import DuplicateRules
 from ...core.classify import error_from_detail
 from ...core.http import RawResponse, RequestSpec, check_record_id, check_sobject, path_template, url_segment
 from ...core.records import (
     apply_model,
     duplicate_matches,
+    duplicate_rules_arg,
     external_id_in_data,
     external_id_lookup_soql,
     format_sf_datetime,
@@ -43,10 +45,10 @@ def _http_date(dt: datetime) -> str:
 
 def _write_headers(
     assignment_rule_id: str | bool | None,
-    allow_save: bool | None,
+    duplicate_rules: DuplicateRules | None,
     if_unmodified_since: datetime | None = None,
 ) -> dict[str, str]:
-    h = write_headers(assignment_rule_id, allow_save)
+    h = write_headers(assignment_rule_id, duplicate_rules)
     if if_unmodified_since is not None:
         h["If-Unmodified-Since"] = _http_date(if_unmodified_since)
     return h
@@ -258,6 +260,7 @@ class AsyncSObject:
         data: Mapping[str, Any],
         *,
         assignment_rule_id: str | bool | None = None,
+        duplicate_rules: DuplicateRules | None = None,
         allow_save: bool | None = None,
     ) -> str:
         """``POST sobjects/{o}``. Returns the new record id.
@@ -265,8 +268,17 @@ class AsyncSObject:
         Args:
             data: Field values.
             assignment_rule_id: ``Sforce-Auto-Assign``: an AssignmentRule id, or ``True``/``False``.
-            allow_save: Send ``Sforce-Duplicate-Rule-Header: allowSave=...``.
+            duplicate_rules: ``Sforce-Duplicate-Rule-Header``: how the org's duplicate rules
+                apply (:class:`~even_simpler_salesforce.DuplicateRules`). ``None`` sends nothing.
+            allow_save: Deprecated (removed in 0.7): use
+                ``duplicate_rules=DuplicateRules(allow_save=...)``.
+
+        Raises:
+            DuplicateDetected: A duplicate rule blocked the record, or alerted without
+                ``allow_save``.
+            TypeError: Both ``duplicate_rules`` and ``allow_save`` are passed.
         """
+        rules = duplicate_rules_arg(duplicate_rules, allow_save)
         content, ctype = self._sf._transport.encode(dict(data))
         raw = await self._send(
             RequestSpec(
@@ -274,7 +286,7 @@ class AsyncSObject:
                 f"sobjects/{self.name}/",
                 content=content,
                 content_type=ctype,
-                headers=_write_headers(assignment_rule_id, allow_save),
+                headers=_write_headers(assignment_rule_id, rules),
                 operation="sobject.create",
                 sobject=self.name,
                 records=1,
@@ -296,6 +308,7 @@ class AsyncSObject:
         data: Mapping[str, Any],
         *,
         assignment_rule_id: str | bool | None = None,
+        duplicate_rules: DuplicateRules | None = None,
         allow_save: bool | None = None,
         if_unmodified_since: datetime | None = None,
     ) -> None:
@@ -303,7 +316,21 @@ class AsyncSObject:
 
         A key set to ``None`` is sent as JSON ``null`` and clears the field; a key left out of
         ``data`` keeps its value.
+
+        Args:
+            record_id: The record to change.
+            data: Field values.
+            assignment_rule_id: ``Sforce-Auto-Assign``: an AssignmentRule id, or ``True``/``False``.
+            duplicate_rules: ``Sforce-Duplicate-Rule-Header``, as in :meth:`create`.
+            allow_save: Deprecated (removed in 0.7): use
+                ``duplicate_rules=DuplicateRules(allow_save=...)``.
+            if_unmodified_since: Send ``If-Unmodified-Since``.
+
+        Raises:
+            Conflict: The record changed after ``if_unmodified_since`` (HTTP 412).
+            TypeError: Both ``duplicate_rules`` and ``allow_save`` are passed.
         """
+        rules = duplicate_rules_arg(duplicate_rules, allow_save)
         content, ctype = self._sf._transport.encode(dict(data))
         await self._send(
             RequestSpec(
@@ -311,7 +338,7 @@ class AsyncSObject:
                 f"sobjects/{self.name}/{check_record_id(record_id)}",
                 content=content,
                 content_type=ctype,
-                headers=_write_headers(assignment_rule_id, allow_save, if_unmodified_since),
+                headers=_write_headers(assignment_rule_id, rules, if_unmodified_since),
                 operation="sobject.update",
                 sobject=self.name,
                 records=1,
@@ -326,6 +353,7 @@ class AsyncSObject:
         data: Mapping[str, Any],
         *,
         assignment_rule_id: str | bool | None = None,
+        duplicate_rules: DuplicateRules | None = None,
         allow_save: bool | None = None,
     ) -> UpsertResult:
         """``PATCH sobjects/{o}/{field}/{value}``: update the matching record, or create one.
@@ -335,11 +363,21 @@ class AsyncSObject:
         ``PATCH composite/sobjects/{o}/{field}`` instead. The result and the errors are the same.
         A Tooling object (``sf.tooling.sobject``) always sends the value in the path.
 
+        Args:
+            field: The external id field.
+            value: The external id value.
+            data: Field values.
+            assignment_rule_id: ``Sforce-Auto-Assign``: an AssignmentRule id, or ``True``/``False``.
+            duplicate_rules: ``Sforce-Duplicate-Rule-Header``, as in :meth:`create`.
+            allow_save: Deprecated (removed in 0.7): use
+                ``duplicate_rules=DuplicateRules(allow_save=...)``.
+
         Raises:
             MultipleMatches: Several records have this value (HTTP 300).
             InvalidField: ``data`` also sets ``field``.
+            TypeError: Both ``duplicate_rules`` and ``allow_save`` are passed.
         """
-        headers = _write_headers(assignment_rule_id, allow_save)
+        headers = _write_headers(assignment_rule_id, duplicate_rules_arg(duplicate_rules, allow_save))
         if not self._base and needs_external_id_fallback(str(value)):
             return await self._upsert_by_collection(field, str(value), data, headers)
         content, ctype = self._sf._transport.encode(dict(data))

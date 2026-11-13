@@ -7,6 +7,7 @@ import re
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from typing import Any, TypeVar, cast
 
+from ..config import DuplicateRules
 from ..errors import ErrorDetail, InvalidField, MultipleMatches, UnexpectedResponse
 from ..models import QueryPlan, QueryPlanNote, RecordResult, UpsertResult
 from .classify import parse_details
@@ -20,6 +21,7 @@ __all__ = [
     "chunked",
     "duplicate_matches",
     "duplicate_rule_header",
+    "duplicate_rules_arg",
     "external_id_in_data",
     "external_id_lookup_soql",
     "flatten",
@@ -167,7 +169,38 @@ def duplicate_matches(detail: ErrorDetail, api_version: str, sobject: str) -> Mu
     )
 
 
-def write_headers(assignment_rule_id: str | bool | None, allow_save: bool | None) -> dict[str, str]:
+def duplicate_rules_arg(
+    duplicate_rules: DuplicateRules | None, allow_save: bool | None, *, stacklevel: int = 3
+) -> DuplicateRules | None:
+    """The :class:`DuplicateRules` of a write, from ``duplicate_rules=`` or the deprecated ``allow_save=``.
+
+    ``allow_save=`` emits :class:`EsfDeprecationWarning`; ``stacklevel`` is counted from this
+    function (the default points at the caller of the method that calls it).
+
+    Raises:
+        TypeError: Both are passed.
+    """
+    if allow_save is None:
+        return duplicate_rules
+    if duplicate_rules is not None:
+        raise TypeError("pass duplicate_rules= or allow_save=, not both (allow_save= is deprecated)")
+    import warnings
+
+    from .. import EsfDeprecationWarning
+
+    flag = bool(allow_save)
+    warnings.warn(
+        f"allow_save= is deprecated and will be removed in 0.7: use "
+        f"duplicate_rules=esf.DuplicateRules(allow_save={flag})",
+        EsfDeprecationWarning,
+        stacklevel=stacklevel,
+    )
+    return DuplicateRules(allow_save=flag)
+
+
+def write_headers(
+    assignment_rule_id: str | bool | None, duplicate_rules: DuplicateRules | None
+) -> dict[str, str]:
     """``Sforce-Auto-Assign`` and ``Sforce-Duplicate-Rule-Header`` for a write (``None``: not sent)."""
     h: dict[str, str] = {}
     if assignment_rule_id is not None:
@@ -175,8 +208,12 @@ def write_headers(assignment_rule_id: str | bool | None, allow_save: bool | None
             h["Sforce-Auto-Assign"] = "TRUE" if assignment_rule_id else "FALSE"
         else:
             h["Sforce-Auto-Assign"] = check_record_id(assignment_rule_id)
-    if allow_save is not None:
-        h["Sforce-Duplicate-Rule-Header"] = duplicate_rule_header(allow_save=allow_save)
+    if duplicate_rules is not None:
+        h["Sforce-Duplicate-Rule-Header"] = duplicate_rule_header(
+            allow_save=duplicate_rules.allow_save,
+            include_record_details=duplicate_rules.include_record_details,
+            run_as_current_user=duplicate_rules.run_as_current_user,
+        )
     return h
 
 

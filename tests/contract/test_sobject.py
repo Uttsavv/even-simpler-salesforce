@@ -96,7 +96,9 @@ def test_create(h: Harness, mock: respx.MockRouter) -> None:
     sf = h.client()
     new_id = h.run(
         sf.sobject("Lead").create(
-            {"LastName": "Doe", "Company": "Acme"}, assignment_rule_id=True, allow_save=True
+            {"LastName": "Doe", "Company": "Acme"},
+            assignment_rule_id=True,
+            duplicate_rules=esf.DuplicateRules(allow_save=True),
         )
     )
     assert new_id == "00Qxx0000000003AAA"
@@ -110,7 +112,13 @@ def test_create(h: Harness, mock: respx.MockRouter) -> None:
 def test_create_headers_variants(h: Harness, mock: respx.MockRouter) -> None:
     route = mock.post(f"{DATA}/sobjects/Lead/").respond(201, json={"id": "00Qxx0000000003AAA"})
     sf = h.client()
-    h.run(sf.sobject("Lead").create({"a": 1}, assignment_rule_id="01Qxx0000000001AAA", allow_save=False))
+    h.run(
+        sf.sobject("Lead").create(
+            {"a": 1},
+            assignment_rule_id="01Qxx0000000001AAA",
+            duplicate_rules=esf.DuplicateRules(allow_save=False),
+        )
+    )
     req = route.calls.last.request
     assert req.headers["Sforce-Auto-Assign"] == "01Qxx0000000001AAA"
     assert req.headers["Sforce-Duplicate-Rule-Header"].startswith("allowSave=false")

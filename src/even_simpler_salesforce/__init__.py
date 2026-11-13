@@ -31,7 +31,7 @@ from .auth import (
     WebServerFlow,
 )
 from .cache import Cache, MemoryCache
-from .config import Backoff, Budget, DescribeCacheConfig, RetryPolicy, Timeouts
+from .config import Backoff, Budget, DescribeCacheConfig, DuplicateRules, RetryPolicy, Timeouts
 from .context import call_context
 from .core.actions import Action
 from .core.composite import Reference
@@ -186,6 +186,7 @@ __all__ = [
     "DeployTestFailure",
     "DescribeCacheConfig",
     "DuplicateDetected",
+    "DuplicateRules",
     "ErrorDetail",
     "EsfDeprecationWarning",
     "Event",

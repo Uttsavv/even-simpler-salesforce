@@ -78,7 +78,7 @@ def test_query_ids() -> None:
 
 def test_write_headers() -> None:
     assert R.write_headers(None, None) == {}
-    assert R.write_headers(True, False) == {
+    assert R.write_headers(True, esf.DuplicateRules()) == {
         "Sforce-Auto-Assign": "TRUE",
         "Sforce-Duplicate-Rule-Header": "allowSave=false; includeRecordDetails=false; runAsCurrentUser=false",
     }
@@ -86,3 +86,32 @@ def test_write_headers() -> None:
     assert R.write_headers("01Qxx0000000001AAA", None) == {"Sforce-Auto-Assign": "01Qxx0000000001AAA"}
     with pytest.raises(ValueError):
         R.write_headers("not an id", None)
+    every = esf.DuplicateRules(allow_save=True, include_record_details=True, run_as_current_user=True)
+    assert R.write_headers(None, every) == {
+        "Sforce-Duplicate-Rule-Header": "allowSave=true; includeRecordDetails=true; runAsCurrentUser=true"
+    }
+
+
+def test_duplicate_rules_arg() -> None:
+    rules = esf.DuplicateRules(include_record_details=True)
+    assert R.duplicate_rules_arg(None, None) is None
+    assert R.duplicate_rules_arg(rules, None) is rules
+    with pytest.warns(
+        esf.EsfDeprecationWarning, match=r"duplicate_rules=esf\.DuplicateRules\(allow_save=True\)"
+    ):
+        assert R.duplicate_rules_arg(None, True) == esf.DuplicateRules(allow_save=True)
+    with pytest.warns(esf.EsfDeprecationWarning, match=r"removed in 0\.7"):
+        assert R.duplicate_rules_arg(None, False) == esf.DuplicateRules()
+    with pytest.raises(TypeError, match="not both"):
+        R.duplicate_rules_arg(rules, True)
+
+
+def test_duplicate_rules_defaults_and_frozen() -> None:
+    rules = esf.DuplicateRules()
+    assert (rules.allow_save, rules.include_record_details, rules.run_as_current_user) == (
+        False,
+        False,
+        False,
+    )
+    with pytest.raises(AttributeError):
+        rules.allow_save = True  # type: ignore[misc]
