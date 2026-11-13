@@ -1,6 +1,10 @@
 # ADR 0012: Request headers are keyword arguments, scoped to the resources that document them
 
 - **Status:** accepted, 2026-11-09
+- **Implementation (2026-11-13):** partly shipped. The delete fix, the `; ` separator,
+  `assignment_rule_id`, `client_name` and Collections write headers ship. Duplicate rules ship as
+  `allow_save=`, not `DuplicateRules`. `default_namespace`, `update_mru` and
+  `SalesforceWarning` are planned, not shipped (`big-bang.md` §9.1, §10.2).
 - **Source:** [`big-bang.md`](https://github.com/Uttsavv/even-simpler-salesforce/blob/main/big-bang.md) §2, decision D30 (details in §7.1, §9.1, §9.3, §10.2, §21 V20/V24–V26)
 - **Supersedes:** `delete(id, if_unmodified_since=)` and the comma separator for
   `Sforce-Call-Options` in the 0.1 drafts of §9.1 and §10.2.
