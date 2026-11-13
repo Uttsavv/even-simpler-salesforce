@@ -231,11 +231,14 @@ pip install --pre "even-simpler-salesforce[jwt,speed]"
 
 ## Project status
 
-even-simpler-salesforce is in alpha. Breaking changes can happen in 0.x minor releases, and
-each one is listed in the [changelog](changelog.md) with migration notes.
+even-simpler-salesforce is in beta. Breaking changes can still happen in 0.x minor releases.
+Each one is listed in the [changelog](changelog.md) with migration notes, and a deprecated API
+keeps working for at least one minor release.
 
-So far it has been tested against one production org, on API version 68.0. If you run it
-against a sandbox, a scratch org or another edition, please
+The full test suite runs against a Developer Edition org on API version 68.0, with the web
+server flow (PKCE) and refresh-token rotation. Read-only checks also run against a sandbox of an
+Enterprise org. Not tested yet: orgs with a namespace, Experience Cloud sites, person accounts,
+multi-currency and Shield. If you run it against another setup, please
 [share your results](https://github.com/Uttsavv/even-simpler-salesforce/issues).
 
 ## Next steps

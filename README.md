@@ -24,19 +24,20 @@ structured log event with its API usage, and SOQL values are quoted for you. You
 flow (client credentials, JWT bearer, web server with PKCE, or an existing token). The client
 then handles tokens, retries, pagination, chunking and error mapping.
 
-> [!WARNING]
-> **Project status: alpha (0.1).** Breaking changes are possible in 0.x minor releases. They
-> are always listed under *Changed* / *Removed* in the [changelog](CHANGELOG.md) with migration
-> notes. So far the library has been tested against **one production org** only:
+> [!NOTE]
+> **Project status: beta (0.5).** Breaking changes are still possible in 0.x minor releases.
+> They are always listed under *Changed* / *Removed* in the [changelog](CHANGELOG.md) with
+> migration notes, and deprecated APIs keep working for at least one minor release.
 >
 > | Tested on | |
 > |---|---|
-> | Edition | _TBD_ |
+> | Editions | Developer Edition, and a sandbox of an Enterprise org (read-only checks) |
 > | API version | 68.0 (library default) |
-> | Auth flows exercised | _TBD_ |
+> | Auth flows exercised | Web server flow with PKCE and refresh-token rotation (External Client App) |
 >
-> If you can run it against another edition, a sandbox, a scratch org or another login setup,
-> please share your results by opening an issue or pull request.
+> Not tested yet: orgs with a namespace, Experience Cloud sites, person accounts,
+> multi-currency and Shield. If you run it against another setup, please share your results by
+> opening an issue or pull request.
 
 ## Install
 

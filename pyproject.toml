@@ -13,7 +13,7 @@ requires-python = ">=3.10"
 authors = [{ name = "Utsav Singh" }]
 keywords = ["salesforce", "api", "async", "httpx", "oauth"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Framework :: AsyncIO",
     "Programming Language :: Python :: 3",
