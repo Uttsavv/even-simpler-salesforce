@@ -81,7 +81,7 @@ async def print_changes(sf: esf.AsyncSalesforce) -> None:
 | Attribute | Value |
 |---|---|
 | `entity_name` | the object, such as `"Account"` |
-| `change_type` | `ChangeType.CREATE`, `UPDATE`, `DELETE`, `UNDELETE`, or a `GAP_*` value |
+| `change_type` | `ChangeType.CREATE`, `UPDATE`, `DELETE`, `UNDELETE`, `SNAPSHOT`, or a `GAP_*` value |
 | `is_gap` | `True` for every `GAP_*` value, including `GAP_OVERFLOW` |
 | `is_overflow` | `True` for `GAP_OVERFLOW` |
 | `record_ids` | the changed records; several ids if Salesforce merged identical changes |
