@@ -396,3 +396,36 @@ def test_rerecording_keeps_the_fixture_file_mode(tmp_path: Path) -> None:
     with httpx.Client(transport=t) as c:
         c.get("https://h/x")
     assert path.stat().st_mode & 0o777 == 0o640
+
+
+def test_redactor_masks_user_names_in_json_and_xml() -> None:
+    """User names outside sObject records (Metadata API deploy JSON, SOAP XML) become ``User <N>``."""
+    r = Redactor()
+    deploy = r.value(
+        {
+            "deployResult": {
+                "createdByName": "Ada Admin",
+                "canceledByName": "Bob Builder",
+                "details": {"componentSuccesses": [{"createdByName": "Ada Admin", "createdBy": "x"}]},
+            }
+        }
+    )
+    result = deploy["deployResult"]
+    assert result["createdByName"] == "User 1"
+    assert result["canceledByName"] == "User 2"
+    assert result["details"]["componentSuccesses"][0] == {"createdByName": "User 1", "createdBy": "x"}
+    xml = (
+        "<m:result><createdByName>Ada Admin</createdByName>"
+        "<m:lastModifiedByName>Carol C</m:lastModifiedByName>"
+        '<userFullName xsi:type="xsd:string">Ada Admin</userFullName>'
+        "<createdById>keep</createdById><fullName>Esf_Item__c</fullName></m:result>"
+    )
+    assert r.text(xml) == (
+        "<m:result><createdByName>User 1</createdByName>"
+        "<m:lastModifiedByName>User 3</m:lastModifiedByName>"
+        '<userFullName xsi:type="xsd:string">User 1</userFullName>'
+        "<createdById>keep</createdById><fullName>Esf_Item__c</fullName></m:result>"
+    )
+    keep = Redactor(mask_personal=False)
+    assert keep.value({"createdByName": "Ada Admin"}) == {"createdByName": "Ada Admin"}
+    assert keep.text("<userName>Ada</userName>") == "<userName>Ada</userName>"
