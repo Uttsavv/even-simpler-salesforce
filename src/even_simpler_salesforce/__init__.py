@@ -27,6 +27,7 @@ from .auth import (
     JwtBearer,
     StaticToken,
     Token,
+    TokenProvider,
     TokenStore,
     WebServerFlow,
 )
@@ -269,6 +270,7 @@ __all__ = [
     "Token",
     "TokenConflict",
     "TokenIdentityChanged",
+    "TokenProvider",
     "TokenStore",
     "TransportError",
     "UnexpectedResponse",

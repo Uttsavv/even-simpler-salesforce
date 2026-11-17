@@ -15,6 +15,9 @@ if TYPE_CHECKING:
 
 __all__ = ["AsyncAuthApi"]
 
+#: Flows without an OAuth client: revoke goes to the token's instance, and other keys need ``auth=``.
+_NO_CLIENT = ("static", "token_provider")
+
 
 class AsyncAuthApi:
     """``sf.auth``: code exchange, revoke, userinfo and introspection."""
@@ -33,10 +36,10 @@ class AsyncAuthApi:
             return other
         if token_key is None or token_key == rt.key:
             return rt
-        if rt.auth.kind == "static":
+        if rt.auth.kind in _NO_CLIENT:
             raise ValueError(
-                "this client uses StaticToken, which has no OAuth client to revoke/introspect "
-                "other keys with; pass auth=<the flow that issued the token>"
+                f"this client uses {type(rt.auth).__name__}, which has no OAuth client to "
+                "revoke/introspect other keys with; pass auth=<the flow that issued the token>"
             )
         from ..auth_runtime import AsyncAuthRuntime as _RT
 
@@ -88,8 +91,8 @@ class AsyncAuthApi:
         tok = rt.transport.tokens.get(rt.key) or await rt.store.load(rt.key) or rt.auth.static_token()
         if tok is not None:
             value = tok.refresh_token or tok.access_token
-            # A StaticToken has no login domain; its instance accepts the revoke call.
-            base = tok.instance_url if rt.auth.kind == "static" else rt.auth.base_url
+            # StaticToken and TokenProvider have no login domain; the instance accepts the call.
+            base = tok.instance_url if rt.auth.kind in _NO_CLIENT else rt.auth.base_url
             resp = await rt._post_form(base + "/services/oauth2/revoke", {"token": value})
             if resp.status not in (200, 204):
                 err, desc = rt._oauth_error(resp)

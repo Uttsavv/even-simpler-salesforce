@@ -12,7 +12,7 @@ from contextlib import AbstractContextManager
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 
-from ..auth.flows import Auth
+from ..auth.flows import Auth, TokenProvider
 from ..auth.store import TokenStore, store_lock_sync
 from ..auth.token import Token, check_same_identity, merge_token, parse_token_response
 from ..core.http import RawResponse, check_instance_url
@@ -29,6 +29,7 @@ from ..errors import (
     TransportError,
     UnexpectedResponse,
 )
+from . import _compat
 
 if TYPE_CHECKING:
     from .transport import Transport
@@ -125,8 +126,15 @@ class AuthRuntime:
         try:
             with self.transport.single_flight(key):
                 cur = self.transport.tokens.get(self.key)
-                if cur is not None and cur.access_token != stale.access_token and not self._due(cur):
-                    return cur  # another caller already refreshed
+                if (
+                    cur is not None
+                    and not self._due(cur)
+                    and (cur.access_token != stale.access_token or self._refreshed_since(entered))
+                ):
+                    # Another caller already refreshed. A refresh that finished after the
+                    # rejected request was sent counts even if it returned the same token
+                    # (a TokenProvider, or a flow that reissues a still-valid token).
+                    return cur
                 self._raise_shared_failure(entered)
                 new = self._refresh_recorded(stale, proactive=proactive)
                 self.transport.tokens[self.key] = new
@@ -266,6 +274,10 @@ class AuthRuntime:
     def _generation(self) -> int:
         return self.transport.refresh_outcomes.get(self.key, (0, None))[0]
 
+    def _refreshed_since(self, entered: int) -> bool:
+        generation, failure = self.transport.refresh_outcomes.get(self.key, (0, None))
+        return generation != entered and failure is None
+
     def _raise_shared_failure(self, entered: int) -> None:
         generation, failure = self.transport.refresh_outcomes.get(self.key, (0, None))
         if generation != entered and failure is not None:
@@ -320,7 +332,6 @@ class AuthRuntime:
 
     def _refresh_locked(self, stale: Token | None, *, proactive: bool) -> Token:
         started = time.perf_counter()
-        policy = self.transport.retry
         with store_lock_sync(self.store, self.key):
             current = self._load()
             if current is not None:
@@ -330,82 +341,12 @@ class AuthRuntime:
             if newer and current is not None and not self._due(current):
                 return current  # another process refreshed already
             base = current or stale
-            attempts = 0
-            busy = 0
-            while True:
-                attempts += 1
-                form = self.auth.token_form(base)  # may raise ReauthorizationRequired
-                try:
-                    resp = self._post_form(self.auth.token_url, form)
-                except ConnectError as exc:  # never sent: safe to retry
-                    if attempts < policy.max_attempts:
-                        self.transport.sleep(backoff_delay(policy, attempts))
-                        continue
-                    raise RefreshFailed(f"token endpoint unreachable: {exc}", ambiguous=False) from exc
-                except TransportError as exc:  # may have reached Salesforce
-                    if not self.auth.uses_refresh_token:
-                        if attempts < policy.max_attempts:  # a fresh token request is safe to resend
-                            self.transport.sleep(backoff_delay(policy, attempts))
-                            continue
-                        raise RefreshFailed(f"token request failed: {exc}", ambiguous=True) from exc
-                    # The refresh may have reached Salesforce (and rotated the token): never resend.
-                    self.transport.sleep(policy.base_delay)
-                    reloaded = self._reload_if_changed(base)
-                    if reloaded is not None:
-                        return reloaded
-                    raise RefreshFailed(
-                        "token refresh outcome unknown (timeout/reset after send); not resent",
-                        ambiguous=True,
-                    ) from exc
-
-                if resp.status == 200:
-                    break
-
-                err, desc = self._oauth_error(resp)
-                if _BUSY_TEXT in desc.lower() or _BUSY_TEXT in err.lower():
-                    busy += 1
-                    if busy >= BUSY_ATTEMPTS:  # BUSY_ATTEMPTS POSTs in total
-                        raise RefreshFailed(desc or err, error_code=err or None, status=resp.status)
-                    self.transport.sleep(backoff_delay(policy, busy))
-                    reloaded = self._reload_if_changed(base)
-                    if reloaded is not None:
-                        return reloaded
-                    continue
-                if err == "invalid_grant" and self.auth.uses_refresh_token:
-                    self.transport.emit_later("sf.auth.reauth_required", {"token_key_hash": self.key_hash})
-                    raise ReauthorizationRequired(
-                        desc or "refresh token expired, revoked or rotated out",
-                        error_code=err,
-                        status=resp.status,
-                        operation="oauth.refresh",
-                    )
-                if resp.status >= 500 and not self.auth.uses_refresh_token and attempts < policy.max_attempts:
-                    self.transport.sleep(backoff_delay(policy, attempts))
-                    continue
-                if err:
-                    raise OAuthError(
-                        desc or err,
-                        error=err,
-                        error_description=desc or None,
-                        status=resp.status,
-                        operation="oauth.refresh",
-                    )
-                raise RefreshFailed(
-                    f"token endpoint returned HTTP {resp.status}",
-                    status=resp.status,
-                    operation="oauth.refresh",
-                    raw=resp.content[:4096],
-                )
-
-            try:
-                data = resp.json()
-            except ValueError:
-                raise UnexpectedResponse(
-                    "token endpoint returned non-JSON", raw=resp.content[:4096]
-                ) from None
-            if not isinstance(data, dict):
-                raise UnexpectedResponse("token endpoint returned unexpected JSON")
-            parsed = parse_token_response(data, now=self.transport.now())  # pyright: ignore[reportUnknownArgumentType]
+            if isinstance(self.auth, TokenProvider):
+                parsed = self._provide()
+            else:
+                parsed, adopted = self._request_token(base)
+                if adopted:
+                    return parsed
             self._check_identity(parsed, base, "refreshed token")
             new = merge_token(parsed, base)
             rotated = bool(
@@ -443,6 +384,116 @@ class AuthRuntime:
             },
         )
         return saved
+
+    def _request_token(self, base: Token | None) -> tuple[Token, bool]:
+        """POST the flow's token form. Returns the token and whether it was re-read from the
+        store (another process refreshed meanwhile; use it as it is)."""
+        policy = self.transport.retry
+        attempts = 0
+        busy = 0
+        while True:
+            attempts += 1
+            form = self.auth.token_form(base)  # may raise ReauthorizationRequired
+            try:
+                resp = self._post_form(self.auth.token_url, form)
+            except ConnectError as exc:  # never sent: safe to retry
+                if attempts < policy.max_attempts:
+                    self.transport.sleep(backoff_delay(policy, attempts))
+                    continue
+                raise RefreshFailed(f"token endpoint unreachable: {exc}", ambiguous=False) from exc
+            except TransportError as exc:  # may have reached Salesforce
+                if not self.auth.uses_refresh_token:
+                    if attempts < policy.max_attempts:  # a fresh token request is safe to resend
+                        self.transport.sleep(backoff_delay(policy, attempts))
+                        continue
+                    raise RefreshFailed(f"token request failed: {exc}", ambiguous=True) from exc
+                # The refresh may have reached Salesforce (and rotated the token): never resend.
+                self.transport.sleep(policy.base_delay)
+                reloaded = self._reload_if_changed(base)
+                if reloaded is not None:
+                    return reloaded, True
+                raise RefreshFailed(
+                    "token refresh outcome unknown (timeout/reset after send); not resent",
+                    ambiguous=True,
+                ) from exc
+
+            if resp.status == 200:
+                break
+
+            err, desc = self._oauth_error(resp)
+            if _BUSY_TEXT in desc.lower() or _BUSY_TEXT in err.lower():
+                busy += 1
+                if busy >= BUSY_ATTEMPTS:  # BUSY_ATTEMPTS POSTs in total
+                    raise RefreshFailed(desc or err, error_code=err or None, status=resp.status)
+                self.transport.sleep(backoff_delay(policy, busy))
+                reloaded = self._reload_if_changed(base)
+                if reloaded is not None:
+                    return reloaded, True
+                continue
+            if err == "invalid_grant" and self.auth.uses_refresh_token:
+                self.transport.emit_later("sf.auth.reauth_required", {"token_key_hash": self.key_hash})
+                raise ReauthorizationRequired(
+                    desc or "refresh token expired, revoked or rotated out",
+                    error_code=err,
+                    status=resp.status,
+                    operation="oauth.refresh",
+                )
+            if resp.status >= 500 and not self.auth.uses_refresh_token and attempts < policy.max_attempts:
+                self.transport.sleep(backoff_delay(policy, attempts))
+                continue
+            if err:
+                raise OAuthError(
+                    desc or err,
+                    error=err,
+                    error_description=desc or None,
+                    status=resp.status,
+                    operation="oauth.refresh",
+                )
+            raise RefreshFailed(
+                f"token endpoint returned HTTP {resp.status}",
+                status=resp.status,
+                operation="oauth.refresh",
+                raw=resp.content[:4096],
+            )
+
+        try:
+            data = resp.json()
+        except ValueError:
+            raise UnexpectedResponse("token endpoint returned non-JSON", raw=resp.content[:4096]) from None
+        if not isinstance(data, dict):
+            raise UnexpectedResponse("token endpoint returned unexpected JSON")
+        return parse_token_response(data, now=self.transport.now()), False  # pyright: ignore[reportUnknownArgumentType]
+
+    def _provide(self) -> Token:
+        """Call ``TokenProvider.get_token`` once (in a worker thread for the async client).
+
+        Errors never contain the token or the provider's own message; the provider's
+        exception is kept as ``__cause__``.
+        """
+        auth = self.auth
+        assert isinstance(auth, TokenProvider)
+        try:
+            tok: Any = _compat.to_thread(auth.get_token)  # user code: check what it returns
+        except SalesforceError:
+            raise
+        except Exception as exc:
+            raise RefreshFailed(
+                f"token provider raised {type(exc).__name__} (token_key_hash={self.key_hash})",
+                operation="oauth.refresh",
+            ) from exc
+        if not isinstance(tok, Token):
+            raise RefreshFailed(
+                f"token provider returned {type(tok).__name__}, not an esf.Token "
+                f"(token_key_hash={self.key_hash})",
+                operation="oauth.refresh",
+            )
+        try:
+            instance = check_instance_url(tok.instance_url, what="token provider instance_url")
+        except ValueError as exc:
+            raise RefreshFailed(
+                f"{exc} (token_key_hash={self.key_hash})", operation="oauth.refresh"
+            ) from None
+        return tok.replace(instance_url=instance)
 
     @staticmethod
     def _oauth_error(resp: RawResponse) -> tuple[str, str]:
