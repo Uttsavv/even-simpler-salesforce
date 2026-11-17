@@ -55,7 +55,7 @@ import decimal
 import io
 import math
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from datetime import date, datetime
 from typing import Any, Literal, cast
 
@@ -241,11 +241,13 @@ def csv_cell(value: Any) -> str:
 class RowEncoder:
     """Turns row dicts into CSV lines.
 
-    The keys of the first row are the columns. A later row may leave a column out (its cell is
-    empty, so the field stays unchanged), but it can't add one.
+    The columns are ``columns`` if given, else the keys of the first row. A row may leave a
+    column out (its cell is empty, so the field stays unchanged), but it can't add one.
     """
 
-    def __init__(self, column_delimiter: str = "COMMA", line_ending: str = "LF") -> None:
+    def __init__(
+        self, column_delimiter: str = "COMMA", line_ending: str = "LF", columns: Sequence[str] | None = None
+    ) -> None:
         self._buf = io.StringIO()
         self._writer = csv.writer(
             self._buf,
@@ -253,8 +255,26 @@ class RowEncoder:
             lineterminator=LINE_ENDINGS[line_ending],
             quoting=csv.QUOTE_MINIMAL,
         )
+        self._explicit = columns is not None
         self.columns: tuple[str, ...] | None = None
         self._known: frozenset[str] = frozenset()
+        self._started = False
+        if columns is not None:
+            if isinstance(columns, str):
+                raise TypeError("columns must be a sequence of field names, not a string")
+            self._set_columns(tuple(columns), "columns is empty")
+
+    def _set_columns(self, columns: tuple[str, ...], empty: str) -> None:
+        if not columns:
+            raise ValueError(empty)
+        for name in columns:
+            if not isinstance(name, str) or not name.strip():  # pyright: ignore[reportUnnecessaryIsInstance]
+                raise ValueError(f"field names must be non-empty strings, got {name!r}")
+        if len(set(columns)) != len(columns):
+            dup = next(c for c in columns if columns.count(c) > 1)
+            raise ValueError(f"field {dup!r} appears twice in columns")
+        self.columns = columns
+        self._known = frozenset(columns)
 
     def _line(self, cells: Iterable[str]) -> bytes:
         self._buf.seek(0)
@@ -263,31 +283,44 @@ class RowEncoder:
         return self._buf.getvalue().encode("utf-8")
 
     def header(self, row: Mapping[str, Any]) -> bytes:
-        """Set the columns from ``row`` and return the header line."""
+        """Return the header line; without ``columns``, the keys of ``row`` become the columns."""
         if not isinstance(row, Mapping):  # pyright: ignore[reportUnnecessaryIsInstance]
             raise TypeError(f"rows must be dicts, got {type(row).__name__}")
-        columns = tuple(row)
-        if not columns:
-            raise ValueError("the first row has no fields")
-        for name in columns:
-            if not isinstance(name, str) or not name.strip():  # pyright: ignore[reportUnnecessaryIsInstance]
-                raise ValueError(f"field names must be non-empty strings, got {name!r}")
-        self.columns = columns
-        self._known = frozenset(columns)
-        return self._line(columns)
+        if not self._explicit:
+            self._set_columns(tuple(row), "the first row has no fields")
+        assert self.columns is not None
+        self._started = True
+        return self._line(self.columns)
 
     def encode(self, row: Mapping[str, Any]) -> bytes:
         """One CSV line for ``row``. Call :meth:`header` first."""
         if not isinstance(row, Mapping):  # pyright: ignore[reportUnnecessaryIsInstance]
             raise TypeError(f"rows must be dicts, got {type(row).__name__}")
-        assert self.columns is not None, "call header() first"
+        assert self._started, "call header() first"
+        assert self.columns is not None
         extra = [k for k in row if k not in self._known]
         if extra:
+            if self._explicit:
+                raise ValueError(f"field {extra[0]!r} is not in columns")
             raise ValueError(
-                f"field {extra[0]!r} is not in the first row; the first row sets the columns, "
-                "so put every field in it (use None to set null)"
+                f"field {extra[0]!r} is not in the first row, which sets the columns. Pass "
+                "columns= with every field name when rows have different fields, or put every "
+                "field in the first row (None sets null)"
             )
         return self._line([csv_cell(row[c]) if c in row else "" for c in self.columns])
+
+    def lines(self, rows: Iterable[Mapping[str, Any]]) -> Iterator[bytes]:
+        """The header line, then one line per row.
+
+        Raises:
+            ValueError: ``rows`` is empty, or a row has a field that isn't a column.
+        """
+        for row in rows:
+            if not self._started:
+                yield self.header(row)
+            yield self.encode(row)
+        if not self._started:
+            raise ValueError("rows is empty; there is nothing to upload")
 
 
 def check_line_ending(header: bytes, line_ending: str) -> None:

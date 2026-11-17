@@ -676,6 +676,7 @@ class Bulk:
         external_id_field: str | None = None,
         line_ending: LineEnding = "LF",
         column_delimiter: ColumnDelimiter = "COMMA",
+        columns: Sequence[str] | None = None,
     ) -> IngestJob:
         """Create an ingest job, upload the data and mark the upload complete.
 
@@ -692,6 +693,9 @@ class Bulk:
                 a field to null, and a missing key leaves the field unchanged. On insert, both
                 give the field its default value. A CSV file must be UTF-8 and is streamed
                 from disk; a byte order mark is removed.
+            columns: The columns for dict rows, when rows have different fields. A row may
+                leave a column out, but every field of every row must be a column. Without it,
+                the keys of the first row are the columns.
             external_id_field: The external id field that matches records. Required for
                 ``upsert``, not allowed otherwise.
             line_ending: ``"LF"`` or ``"CRLF"``: the line ending of your CSV, or the one the
@@ -715,7 +719,7 @@ class Bulk:
         """
         check_sobject(sobject)
         check_ingest(operation, external_id_field, line_ending, column_delimiter)
-        source, header, parts = self._prepare(rows, line_ending, column_delimiter)
+        source, header, parts = self._prepare(rows, line_ending, column_delimiter, columns)
         done: list[BulkJobInfo] = []
         try:
             check_line_ending(header, line_ending)
@@ -745,9 +749,12 @@ class Bulk:
         return IngestJob(self._sf, done)
 
     def _prepare(
-        self, rows: Any, line_ending: str, column_delimiter: str
+        self, rows: Any, line_ending: str, column_delimiter: str, columns: Sequence[str] | None
     ) -> tuple[_Source, bytes, list[tuple[int, int]]]:
         """Scan (or write) the CSV and find the parts, before anything is sent."""
+        if columns is not None and isinstance(rows, (bytes, bytearray, memoryview, str, os.PathLike)):
+            raise ValueError("columns= is for rows given as dicts; a CSV sets its own header")
+        encoder = RowEncoder(column_delimiter, line_ending, columns)
         cutter = CsvCutter(_bulk.MAX_PART_BYTES)
         if isinstance(rows, (bytes, bytearray, memoryview)):
             source = _Source(data=rows)  # pyright: ignore[reportUnknownArgumentType]
@@ -764,7 +771,7 @@ class Bulk:
                 source.close()
                 raise
         elif isinstance(rows, Iterable):
-            source = self._spool_rows(rows, cutter, line_ending, column_delimiter)  # pyright: ignore[reportUnknownArgumentType]
+            source = self._spool_rows(rows, cutter, encoder)  # pyright: ignore[reportUnknownArgumentType]
         else:
             raise TypeError(
                 f"rows must be an iterable of dicts, a CSV path or CSV bytes, got {type(rows).__name__}"
@@ -777,23 +784,18 @@ class Bulk:
         return source, header, parts
 
     def _spool_rows(
-        self, rows: Iterable[Mapping[str, Any]], cutter: CsvCutter, line_ending: str, column_delimiter: str
+        self, rows: Iterable[Mapping[str, Any]], cutter: CsvCutter, encoder: RowEncoder
     ) -> _Source:
-        encoder = RowEncoder(column_delimiter, line_ending)
         f = _spool()
         try:
             buf = bytearray()
-            for row in rows:
-                if encoder.columns is None:
-                    buf += encoder.header(row)
-                buf += encoder.encode(row)
+            for line in encoder.lines(rows):
+                buf += line
                 if len(buf) >= CHUNK_SIZE:
                     data = bytes(buf)
                     buf.clear()
                     cutter.feed(data)
                     _compat.to_thread(f.write, data)
-            if encoder.columns is None:
-                raise ValueError("rows is empty; there is nothing to upload")
             if buf:
                 cutter.feed(bytes(buf))
                 _compat.to_thread(f.write, bytes(buf))

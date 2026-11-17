@@ -7,7 +7,7 @@ class Repo:
         self.sf_client = sf_client
 
     def consent(self, path, data):
-        # esf-migrate: REVIEW[apexecute] apexecute(path) → apex.post("/path"); errors raise esf.ApexError; check the path has no query string (use params=)
+        # esf-migrate: REVIEW[apexecute] apexecute(path) → apex.post("/path"); every error raises esf.ApexError, also an unknown path (status 404, not esf.NotFound); check the path has no query string (use params=)
         return self.sf_client.apex.post("/" + path, json=data)
 
     def otp(self):
@@ -53,5 +53,5 @@ def more(sf: Salesforce, payloads, flag):
     sf.bulk.Lead.insert(data=payloads, batch_size=500)
     # esf-migrate: TODO[bulk] Bulk API v1 isn't supported; use job = sf.bulk.ingest("Lead", "insert", rows=rows), then job.wait(); read job.successful_results() / job.failed_results() (await ingest() and wait() on AsyncSalesforce)
     sf.bulk.Lead.insert(load(token="abc123secret"))
-    # esf-migrate: REVIEW[apexecute] apexecute(path) → apex.get("/path"); errors raise esf.ApexError; check the path has no query string (use params=)
+    # esf-migrate: REVIEW[apexecute] apexecute(path) → apex.get("/path"); every error raises esf.ApexError, also an unknown path (status 404, not esf.NotFound); check the path has no query string (use params=)
     return sf.apex.get("/" + ("a" if flag else "b"))

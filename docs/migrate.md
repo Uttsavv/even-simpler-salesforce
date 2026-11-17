@@ -313,8 +313,9 @@ TODO.
 ### `apexecute`
 
 `X.apexecute(path, method=..., data=...)` becomes an [Apex REST](guides/apex.md) call:
-`X.apex.get(...)`, `X.apex.post(..., json=data)`, and so on. Errors raise `esf.ApexError`, with
-the decoded body.
+`X.apex.get(...)`, `X.apex.post(..., json=data)`, and so on. Every error raises `esf.ApexError`,
+with the decoded body. That includes an unknown path, which raises `ApexError` with `.status` 404,
+not `esf.NotFound`.
 
 ```diff
 - result = sf.apexecute("orders/submit", method="POST", data={"orderId": "1"})

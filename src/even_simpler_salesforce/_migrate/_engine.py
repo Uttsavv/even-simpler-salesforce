@@ -1860,7 +1860,10 @@ class _Transformer(cst.CSTTransformer):
             func=cst.Attribute(value=apex, attr=cst.Name(method.lower())), args=new_args
         )
         status: Status = "rewritten" if conf == "yes" and text is not None else "needs-review"
-        msg = f'apexecute(path) → apex.{method.lower()}("/path"); errors raise esf.ApexError'
+        msg = (
+            f'apexecute(path) → apex.{method.lower()}("/path"); every error raises esf.ApexError, '
+            "also an unknown path (status 404, not esf.NotFound)"
+        )
         if text is None:
             msg += "; check the path has no query string (use params=)"
         self.record("apexecute", status, msg, original, new)
