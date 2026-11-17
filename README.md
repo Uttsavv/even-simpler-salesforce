@@ -134,6 +134,10 @@ with esf.Salesforce(auth) as sf:
 - **CLI:** `esf whoami`, `esf limits`, `esf query`, `esf describe`, `esf request`,
   `esf generate models`, `esf generate actions`, and `esf migrate` (rewrites simple-salesforce
   code, `[migrate]` extra).
+- **Coding agents:** agent skills that ship with the library (`esf skills install`, for Claude
+  Code, Codex and other Agent Skills clients) and an
+  [`llms.txt`](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/llms.txt)
+  index of the docs. See [Coding agents](https://uttsavv.github.io/even-simpler-salesforce/latest/integrations/agents/).
 - **More API areas:** Files (streamed uploads and downloads), invocable actions and Apex REST,
   lead convert and merge, platform events, Bulk API 2.0, Tooling (including anonymous Apex),
   GraphQL, Composite, UI API, reports and dashboards, the Metadata API, and Pub/Sub

@@ -1,0 +1,76 @@
+# even-simpler-salesforce
+
+> A typed Salesforce client for Python built on httpx. It is async-first, and a sync client with the same methods is generated from the async code.
+
+- Install: `pip install even-simpler-salesforce`. Import it as `import even_simpler_salesforce as esf`.
+- The links below point to the Markdown source on `main`, which can be newer than the installed version. Check `esf.__version__` and the changelog if a name is missing.
+- The rendered site is at https://uttsavv.github.io/even-simpler-salesforce/ (the root redirects to `/latest/`).
+- The library ships agent skills that match the installed version: run `esf skills list` and `esf skills install`.
+
+## Start
+
+- [Getting started](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/getting-started.md): even-simpler-salesforce is a typed Salesforce client for Python. It has an async client and a sync client with the same methods, and it handles login, token refresh and errors for you.
+- [Tutorial](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/tutorial.md): In this tutorial, you build a small leads API with FastAPI and even-simpler-salesforce. It takes about 25 minutes to code along, and less to read.
+
+## Authentication
+
+- [Authentication](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/authentication/index.md): You give the client one login flow. The client gets the token, keeps it in memory, saves it to a token store and refreshes it for you.
+- [Salesforce setup](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/authentication/salesforce-setup.md): Your code logs in through an OAuth app defined in your org. This page shows how to create one and what each login flow needs from it.
+- [Client credentials](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/authentication/client-credentials.md): The app logs in as itself, and every call runs as the app's Run As user. Use it for backend services, jobs and integrations that don't act for a particular person.
+- [JWT bearer](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/authentication/jwt-bearer.md): Your service signs a short-lived JWT with its private key, and Salesforce issues an access token for the user named in it. Use it for server-to-server login with a certificate, acting as a named user.
+- [Web server flow](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/authentication/web-server-flow.md): People log in to Salesforce through the browser, and your app calls the API as each of them. The flow uses PKCE and keeps each user's refresh token in a token store.
+- [Static token](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/authentication/static-token.md): Use an access token you got somewhere else, such as the Salesforce CLI, another service or a test fixture. The client can't refresh it.
+- [Token stores](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/authentication/token-stores.md): A token store keeps tokens that must outlive the process or be shared between processes. The client keeps the current access token in memory and saves every new token to its token store.
+
+## Working with data
+
+- [Records](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/guides/records.md): `sf.sobject(name)` gives you the methods to create, read, update and delete records of one sObject type. Use it to work with one record at a time.
+- [Query and search](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/guides/query.md): `sf.query()` and its siblings run SOQL queries, and `sf.search()` runs SOSL searches. Pass values after the query, and the client quotes them for you.
+- [sObject Collections](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/guides/collections.md): `sf.collections` creates, updates, upserts, deletes and gets many records per request. Use it to write more than a few records at a time.
+- [Composite requests](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/guides/composite.md): `sf.composite` sends many REST calls in one round trip. Use it when later calls need the results of earlier ones, or when a group of writes must succeed or fail together.
+- [Invocable actions](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/guides/actions.md): `sf.actions` runs Flows, Apex `@InvocableMethod` classes and standard actions. Use it to run logic that lives in the org.
+- [Apex REST](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/guides/apex.md): `sf.apex` calls your own Apex REST classes under `/services/apexrest`. Use it for endpoints that a `@RestResource` class in the org exposes.
+- [Files](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/guides/files.md): `sf.files` uploads, downloads and shares Salesforce Files. Use it for attachments on records, such as invoices on an Account.
+- [GraphQL](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/guides/graphql.md): `sf.graphql()` runs a query against the Salesforce GraphQL API and returns its `data`. Use it to get only the fields you need, from one or more objects, in one call.
+- [Tooling API](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/guides/tooling.md): `sf.tooling` calls the Tooling API under `/services/data/vXX.X/tooling/`. Use it to read and change Apex classes, triggers and debug settings, to run anonymous Apex and to start Apex tests.
+- [Bulk API 2.0](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/guides/bulk.md): `sf.bulk` loads and reads large numbers of records with Bulk API 2.0 jobs. Use it for thousands to millions of records, where sObject Collections would need too many calls.
+- [UI API](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/guides/ui.md): `sf.ui` reads records, object metadata and list views through the Salesforce User Interface API. Use it when you build a user interface: the UI API applies the user's layouts, field access and sharing, and returns each value with its display format.
+- [Reports and dashboards](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/guides/reports.md): `sf.reports` runs the reports your admins built in Salesforce and reads dashboards. Use it when the numbers you need already live in a report, with its filters and groupings.
+- [Raw requests](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/guides/requests.md): `sf.request()` calls any REST resource. Use it for resources the library doesn't wrap yet.
+- [Lead convert and merge](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/guides/leads.md): `sf.leads.convert()` turns a lead into an account, a contact and an opportunity. `sf.merge()` merges duplicate leads, contacts or accounts into one record.
+- [Platform events](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/guides/platform-events.md): `sf.platform_events` publishes platform events, such as `Order_Event__e`. Use it to tell Flows, Apex triggers and other subscribers that something happened.
+- [Metadata API](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/guides/metadata.md): `sf.metadata` deploys and retrieves metadata such as Apex classes, objects and fields. Use it to move configuration between orgs, or to back up metadata from a script.
+- [Pub/Sub API](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/guides/pubsub.md): `sf.pubsub.subscribe()` receives platform events and Change Data Capture (CDC) events from the Salesforce Pub/Sub API. Use it to react to changes in Salesforce, or to keep a copy of records up to date.
+
+## In production
+
+- [Errors](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/errors.md): Every error from Salesforce or the network is a subclass of `esf.SalesforceError`. This is true for REST, OAuth and Collections.
+- [Usage and budgets](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/usage-and-budgets.md): Salesforce limits the API calls an org can make in a rolling 24 hours. Every integration in the org shares that limit.
+- [Logging and observability](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/logging.md): The client sends a structured event to your observers for each thing it does. It never configures logging.
+- [Performance](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/performance.md): The client's defaults keep round trips few and the work per call small. This page shows how to get the most from them, and which settings change them.
+
+## Tools
+
+- [FastAPI](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/integrations/fastapi.md): `SalesforceIntegration` creates one `AsyncSalesforce` when your app starts and closes it when the app stops. Your routes get the client through a dependency.
+- [Flask](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/integrations/flask.md): The `Salesforce` extension keeps one sync `Salesforce` client per app and process. All threads share it.
+- [Testing](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/testing.md): `even_simpler_salesforce.testing` lets you test code that uses the client without a real org. Use the fakes for unit tests, and record and replay for contract tests.
+- [Command-line tool](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/cli.md): The package installs an `esf` command for quick checks against an org. It uses the sync client and only the standard library.
+- [Coding agents](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/integrations/agents.md): The library ships agent skills and an `llms.txt` index, so coding agents such as Claude Code and Codex know how to use it. A skill tells the agent which API to use for a task and which mistakes to avoid.
+
+## Migrating
+
+- [Migrating from simple-salesforce](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/migrating-from-simple-salesforce.md): This page maps the simple-salesforce calls you use most to even-simpler-salesforce. Use it when you move existing code over.
+- [The esf migrate codemod](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/migrate.md): `esf migrate` rewrites simple-salesforce code to even-simpler-salesforce. It changes only what it can prove is safe.
+
+## Agent skills
+
+- [esf-debug](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/src/even_simpler_salesforce/skills/esf-debug/SKILL.md): Diagnose failures in code that uses even-simpler-salesforce: read the typed error, its hint and docs link, turn on ESF_DEBUG, log the sf.request events, check API usage and org limits, and fix common login problems such as SessionExpired, ReauthorizationRequired, invalid_grant, refresh-token rotation and superseded tokens.
+- [esf-migrate](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/src/even_simpler_salesforce/skills/esf-migrate/SKILL.md): Migrate Python code from simple-salesforce to even-simpler-salesforce with the esf migrate codemod: dry run, JSON report, --write, then resolve every esf-migrate TODO and REVIEW marker by its rule id until esf migrate --check passes.
+- [esf-probe](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/src/even_simpler_salesforce/skills/esf-probe/SKILL.md): Read-only introspection of a Salesforce org's metadata and data with even-simpler-salesforce: the esf CLI (query, describe, request, limits) and sf.tooling in short throwaway scripts.
+- [esf-testing](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/src/even_simpler_salesforce/skills/esf-testing/SKILL.md): Write tests for code that uses even-simpler-salesforce without a real org: the even_simpler_salesforce.testing fakes (FakeSalesforce, AsyncFakeSalesforce) with scripted queries and injected errors, the pytest fixtures (esf_fake, esf_async_fake, esf_replay, esf_sandbox_auth), and record and replay of redacted traffic.
+- [esf-usage](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/src/even_simpler_salesforce/skills/esf-usage/SKILL.md): Write application code that calls Salesforce with even-simpler-salesforce (import even_simpler_salesforce as esf): pick a login flow, create the async or sync client and close it, create, get, update, upsert and delete records, run SOQL with safe {} placeholders, and choose between sObject Collections, Composite and Bulk API 2.0.
+
+## Optional
+
+- [Salesforce dependency index](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/salesforce-dependencies.md): Every Salesforce endpoint, OAuth flow, header, response shape, error code and limit this library depends on. Review it against each Salesforce release; anything here that changes or is retired is a potential break.
+- [Roadmap](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/roadmap.md): 0.1 covers authentication, records, queries, sObject Collections and raw requests. 0.2 adds Files. 0.3 adds Bulk API 2.0, Tooling, GraphQL and Composite. 0.4 adds the UI API, Reports and dashboards and the Metadata API. 0.5 adds the Pub/Sub API.

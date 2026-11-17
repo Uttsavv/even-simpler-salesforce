@@ -42,6 +42,10 @@ assert not missing, f"__all__ names that don't resolve: {missing}"
 assert importlib.resources.files("even_simpler_salesforce").joinpath("py.typed").is_file(), "py.typed missing"
 for mod in ("_sync", "testing", "cli"):
     importlib.import_module(f"even_simpler_salesforce.{mod}")
+skills = importlib.resources.files("even_simpler_salesforce").joinpath("skills")
+for name in ("esf-debug", "esf-migrate", "esf-probe", "esf-testing", "esf-usage"):
+    assert skills.joinpath(name, "SKILL.md").is_file(), f"skill {name} missing from the wheel"
+assert skills.joinpath("esf-probe", "probe_template.py").is_file(), "probe template missing"
 
 INSTANCE = "https://smoke.my.salesforce.com"
 
@@ -107,6 +111,7 @@ def main(argv: list[str]) -> int:
         # Run from the temp dir with -I so the source tree can't shadow the installed wheel.
         run(python, "-I", script, cwd=tmpdir)
         run(bindir / ("esf.exe" if os.name == "nt" else "esf"), "version", cwd=tmpdir)
+        run(bindir / ("esf.exe" if os.name == "nt" else "esf"), "skills", "install", cwd=tmpdir)
     print(f"smoke_wheel: OK ({wheel.name})")
     return 0
 
