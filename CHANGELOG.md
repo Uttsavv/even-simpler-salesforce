@@ -17,6 +17,24 @@ Pending changes live as fragments in [`changelog.d/`](changelog.d/); preview the
 
 <!-- towncrier release notes start -->
 
+## [0.6.0](https://github.com/Uttsavv/even-simpler-salesforce/releases/tag/v0.6.0) - 2026-11-17
+
+### Added
+
+- The docs now have an [`llms.txt`](https://raw.githubusercontent.com/Uttsavv/even-simpler-salesforce/main/docs/llms.txt) index for coding agents. It lists every page with a summary and a link to its Markdown source, and the docs site serves it at `/llms.txt`. ([#2](https://github.com/Uttsavv/even-simpler-salesforce/issues/2))
+- `esf.TokenProvider(get_token)` is a login flow that calls your function for a token. The client calls it for the first request and once more after a `401`, so you can reuse an existing login such as the Salesforce CLI (`sf org display --json`) or a token from a secrets manager. Concurrent `401` responses share one call, and `AsyncSalesforce` runs the function in a worker thread. ([#4](https://github.com/Uttsavv/even-simpler-salesforce/issues/4))
+- Agent skills ship with the library: `esf-usage`, `esf-probe`, `esf-migrate`, `esf-testing` and `esf-debug`. `esf skills list`, `esf skills show NAME` and `esf skills install [NAME ...] [--dir DIR] [--force]` copy them into `.claude/skills` (Claude Code) or `.agents/skills` (Codex). Run `esf skills install --force` again after you upgrade. See [Coding agents](https://uttsavv.github.io/even-simpler-salesforce/latest/integrations/agents/).
+- `sf.bulk.ingest(rows=..., columns=[...])` sets the CSV columns for dict rows that set different fields. Without it, the error for an extra field now names `columns=`.
+
+### Changed
+
+- The Apex REST guide and the `esf migrate` hint say that an unknown Apex REST path raises `ApexError` with status 404, not `NotFound`, and show how to map `ApexError.status` to an HTTP response.
+- `esf migrate` rewrites `apexecute()` to `sf.apex.*`, and a new `bulk` rule names the Bulk API 2.0 call for each Bulk v1 use. TODOs for `session_id`, `sf_instance`, `toolingexecute` and `mdapi` now name the 0.5 replacements.
+
+### Fixed
+
+- `esf migrate` no longer rewrites `sf.bulk.<Obj>.query_all()` as a REST `query_iter()` call.
+
 ## [0.5.1](https://github.com/Uttsavv/even-simpler-salesforce/releases/tag/v0.5.1) - 2026-11-17
 
 ### Fixed
