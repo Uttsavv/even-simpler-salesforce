@@ -1816,6 +1816,20 @@ class _Transformer(cst.CSTTransformer):
             f"(await ingest() and wait() on AsyncSalesforce){note}"
         )
 
+    def _caught_as_not_found(self, node: cst.CSTNode) -> bool:
+        """Whether ``node`` sits in a ``try`` body with an ``except SalesforceResourceNotFound``."""
+        prev: cst.CSTNode = node
+        cur = self.parent(node)
+        while cur is not None and not isinstance(cur, (cst.FunctionDef, cst.ClassDef, cst.Lambda)):
+            if isinstance(cur, (cst.Try, cst.TryStar)) and prev is cur.body:
+                for handler in cur.handlers:
+                    t = handler.type
+                    types = [e.value for e in t.elements] if isinstance(t, cst.Tuple) else [t]
+                    if any(x is not None and _last_segment(x) == "SalesforceResourceNotFound" for x in types):
+                        return True
+            prev, cur = cur, self.parent(cur)
+        return False
+
     def _apexecute(self, original: cst.Call, updated: cst.Call) -> Any:
         func = cast(cst.Attribute, original.func)
         conf = self.confirm_distinctive(func.value)
@@ -1861,9 +1875,15 @@ class _Transformer(cst.CSTTransformer):
         )
         status: Status = "rewritten" if conf == "yes" and text is not None else "needs-review"
         msg = (
-            f'apexecute(path) → apex.{method.lower()}("/path"); every error raises esf.ApexError, '
-            "also an unknown path (status 404, not esf.NotFound)"
+            f'apexecute(path) → apex.{method.lower()}("/path"); errors from the Apex class raise '
+            "esf.ApexError, also an unknown path (status 404, not esf.NotFound)"
         )
+        if self._caught_as_not_found(original):
+            status = "needs-review"
+            msg += (
+                "; the except SalesforceResourceNotFound around it becomes esf.NotFound, which "
+                "this call doesn't raise: catch esf.ApexError and check .status == 404"
+            )
         if text is None:
             msg += "; check the path has no query string (use params=)"
         self.record("apexecute", status, msg, original, new)

@@ -313,9 +313,14 @@ TODO.
 ### `apexecute`
 
 `X.apexecute(path, method=..., data=...)` becomes an [Apex REST](guides/apex.md) call:
-`X.apex.get(...)`, `X.apex.post(..., json=data)`, and so on. Every error raises `esf.ApexError`,
-with the decoded body. That includes an unknown path, which raises `ApexError` with `.status` 404,
-not `esf.NotFound`.
+`X.apex.get(...)`, `X.apex.post(..., json=data)`, and so on. Errors that the Apex class returns
+raise `esf.ApexError`, with the decoded body. So does an unknown path: `ApexError` with `.status`
+404, not `esf.NotFound`. Session, limit and server errors keep their own classes; see
+[Apex REST](guides/apex.md#handle-errors).
+
+If the call sits in a `try` whose `except SalesforceResourceNotFound` becomes `esf.NotFound`, the
+rewrite needs review: that handler no longer catches an unknown path. Catch `esf.ApexError` and
+check `.status == 404` instead.
 
 ```diff
 - result = sf.apexecute("orders/submit", method="POST", data={"orderId": "1"})

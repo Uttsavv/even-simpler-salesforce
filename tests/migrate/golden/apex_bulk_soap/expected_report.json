@@ -88,5 +88,15 @@
     "rule": "apexecute",
     "status": "needs-review",
     "line": 41
+  },
+  {
+    "rule": "apexecute",
+    "status": "needs-review",
+    "line": 48
+  },
+  {
+    "rule": "exceptions",
+    "status": "rewritten",
+    "line": 49
   }
 ]

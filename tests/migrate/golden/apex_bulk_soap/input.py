@@ -39,3 +39,12 @@ def more(sf: Salesforce, payloads, flag):
     sf.bulk.Lead.insert(data=payloads, batch_size=500)
     sf.bulk.Lead.insert(load(token="abc123secret"))
     return sf.apexecute("a" if flag else "b")
+
+
+def guarded(sf: Salesforce):
+    from simple_salesforce import SalesforceResourceNotFound
+
+    try:
+        return sf.apexecute("api/v1/maybe", method="GET")
+    except SalesforceResourceNotFound:
+        return None
