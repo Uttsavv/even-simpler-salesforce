@@ -156,6 +156,25 @@ def test_install_refuses_to_overwrite(capsys: pytest.CaptureFixture[str], tmp_pa
     assert (tmp_path / "esf-debug" / "SKILL.md").read_text(encoding="utf-8") == "mine"
 
 
+def test_install_never_deletes_a_dir_another_install_created(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Another install creates the directory between the existence check and the copy.
+    theirs = tmp_path / "esf-probe"
+    theirs.mkdir()
+    (theirs / "SKILL.md").write_text("theirs")
+    real_exists = Path.exists
+
+    def exists(p: Path) -> bool:
+        return False if p == theirs else real_exists(p)
+
+    monkeypatch.setattr(Path, "exists", exists)
+    code, _, err = run(capsys, "skills", "install", "esf-probe", "--dir", str(tmp_path))
+    assert code == EXIT_USAGE
+    assert "already exists" in err
+    assert (theirs / "SKILL.md").read_text() == "theirs"
+
+
 def test_install_force_replaces(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
     old = tmp_path / "esf-debug"
     old.mkdir()
@@ -249,13 +268,25 @@ def test_template_greps_apex_bodies() -> None:
         list(probe.grep_apex(fake, "x", kind="Flow"))
 
 
+def test_template_table_id_resolves_custom_objects() -> None:
+    probe = _template()
+    fake = FakeSalesforce()
+    fake.on_query(re.compile(r"QualifiedApiName = 'Invoice__c'"), rows=[{"DurableId": "01I000000000001"}])
+    fake.on_query(re.compile(r"QualifiedApiName = 'Nope__c'"), rows=[])
+    assert probe.table_id(fake, "Invoice__c") == "01I000000000001"
+    assert probe.table_id(fake, "Nope__c") == "Nope__c"
+
+
 def test_template_main_only_reads(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     probe = _template()
     fake = FakeSalesforce()
     fake.on_query(
-        re.compile(r"FROM ApexTrigger WHERE TableEnumOrId"),
+        re.compile(r"FROM EntityDefinition WHERE QualifiedApiName = 'Lead'"), rows=[{"DurableId": "Lead"}]
+    )
+    fake.on_query(
+        re.compile(r"FROM ApexTrigger WHERE TableEnumOrId = 'Lead'"),
         rows=[{"Name": "LeadTrigger", "Status": "Active"}],
     )
     fake.on_query(

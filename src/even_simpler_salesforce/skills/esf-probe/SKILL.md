@@ -109,6 +109,16 @@ with esf.Salesforce(esf.StaticToken("<from ESF_ACCESS_TOKEN>", "https://acme.my.
 Pass values after the query, as in `WHERE TableEnumOrId = {}`. The client quotes them. Never
 build SOQL with an f-string.
 
+`TableEnumOrId` holds the name only for standard objects. For a custom object it holds the id
+of the object's definition, so `TableEnumOrId = 'Invoice__c'` finds nothing. Get the value first
+(Tooling), and use the result in the `ApexTrigger` and `WorkflowRule` queries:
+
+```sql
+SELECT DurableId FROM EntityDefinition WHERE QualifiedApiName = 'Invoice__c'
+```
+
+`probe_template.py` does this for you (`table_id()`).
+
 ## Recipe queries
 
 Triggers on an object, with the body (Tooling):

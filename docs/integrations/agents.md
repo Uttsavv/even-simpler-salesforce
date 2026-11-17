@@ -61,11 +61,12 @@ replace it. `--force` deletes the old directory first, so don't edit installed s
 
 The skills ship inside the package, so `esf skills install` always writes the skills of the
 installed version. They name no version themselves. After you upgrade the library, install
-them again:
+them again, with the same `--dir` you installed them with:
 
 ```sh
 pip install -U even-simpler-salesforce
-esf skills install --force
+esf skills install --force                      # Claude Code (.claude/skills)
+esf skills install --force --dir .agents/skills # Codex
 ```
 
 ## llms.txt

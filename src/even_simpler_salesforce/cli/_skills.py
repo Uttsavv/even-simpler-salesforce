@@ -117,10 +117,19 @@ def _cmd_install(args: argparse.Namespace, env: Mapping[str, str], out: TextIO, 
     try:
         for name, skill in chosen.items():
             target = base / name
-            if target.is_symlink() or target.is_file():
-                target.unlink()
-            elif target.exists():
-                shutil.rmtree(target)
+            if args.force:
+                if target.is_symlink() or target.is_file():
+                    target.unlink()
+                elif target.exists():
+                    shutil.rmtree(target)
+            else:
+                # Claim the directory: if another install created it since the check above,
+                # fail instead of writing into (or deleting) its files.
+                base.mkdir(parents=True, exist_ok=True)
+                try:
+                    target.mkdir()
+                except FileExistsError:
+                    raise ValueError(f"{target} already exists; pass --force to replace it") from None
             _copy(skill, target, written)
     except OSError as exc:
         raise ValueError(f"cannot write {exc.filename or base}: {exc.strerror}") from None
@@ -138,7 +147,7 @@ def add_skills_parser(sub: Any) -> None:
         description=(
             "Agent skills (SKILL.md files) for coding agents such as Claude Code and Codex. "
             "They ship with the library, so they match the installed version: after an "
-            "upgrade, run 'esf skills install --force' again."
+            "upgrade, run 'esf skills install --force' again, with the same --dir."
         ),
     )
     actions = s.add_subparsers(dest="skills_command", metavar="ACTION")

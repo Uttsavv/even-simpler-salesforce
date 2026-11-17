@@ -86,14 +86,25 @@ def grep_apex(
                 yield str(row["Name"]), number, line
 
 
+def table_id(sf: Any, object_name: str) -> str:
+    """The ``TableEnumOrId`` value for ``object_name``.
+
+    Standard objects use their name (``Lead``). Custom objects use the id of their definition
+    (``01I...``), which ``EntityDefinition.DurableId`` holds; their API name matches nothing.
+    """
+    rows = tooling(sf, "SELECT DurableId FROM EntityDefinition WHERE QualifiedApiName = {}", object_name)
+    return str(rows[0]["DurableId"]) if rows else object_name
+
+
 def section(title: str) -> None:
     print(f"\n== {title}")
 
 
 def main() -> None:
     with connect() as sf:
+        table = table_id(sf, OBJECT)
         section(f"Apex triggers on {OBJECT}")
-        for t in tooling(sf, "SELECT Name, Status FROM ApexTrigger WHERE TableEnumOrId = {}", OBJECT):
+        for t in tooling(sf, "SELECT Name, Status FROM ApexTrigger WHERE TableEnumOrId = {}", table):
             print(f"{t['Name']} ({t['Status']})")
 
         section(f"Apex lines that mention {FIELD}")
@@ -126,7 +137,7 @@ def main() -> None:
             print(f"{v['ValidationName']} active={v['Active']}: {v['ErrorMessage']}")
 
         section(f"Workflow rules on {OBJECT}")
-        for w in tooling(sf, "SELECT Name FROM WorkflowRule WHERE TableEnumOrId = {}", OBJECT):
+        for w in tooling(sf, "SELECT Name FROM WorkflowRule WHERE TableEnumOrId = {}", table):
             print(w["Name"])
 
         usage = sf.usage.snapshot()
