@@ -415,6 +415,7 @@ All are frozen config objects implementing the `Auth` protocol. They hold no tok
 | `WebServerFlow` | A human user logged in via the browser; app holds their refresh token | `domain`, `client_id`, `client_secret` (optional for PKCE public clients), `redirect_uri`, `scopes`, `token_key` (**required**: one per Salesforce identity), `refresh_ahead=None`, `expiry="unknown"\|"introspect"` | Refresh token grant |
 | `ClientCredentials` | The app acting as its integration user | `domain` (**must be My Domain**), `client_id`, `client_secret` | Re-request a token (no refresh token issued) |
 | `JwtBearer` | Server-to-server with a certificate | `domain`, `client_id`, `username`, `private_key`, `private_key_passphrase=None` (encrypted PEM; decrypted locally, never logged), `audience` (`login`/`test`/custom) | Re-sign and re-request |
+| `TokenProvider` | Reuse an existing login: the `sf` CLI, a secrets manager, a platform (#4) | `get_token` (a sync `Callable[[], Token]`), `token_key=None` (default: unique per object) | Calls `get_token` again |
 | `StaticToken` | Tests, scripts, tokens obtained elsewhere | `access_token`, `instance_url` | None: a 401 raises `SessionExpired` |
 | `TokenExchange` *(later)* | RFC 8693 exchange | | |
 | `DeviceFlow` *(later)* | CLIs and devices | | |
@@ -451,6 +452,15 @@ PKCE (S256) is on by default for `WebServerFlow`.
   → the site URL; `test`, `https://test.salesforce.com` or a `*.sandbox.my.salesforce.com` host →
   `https://test.salesforce.com`; anything else → `https://login.salesforce.com`. The assertion
   lives 180 s. A missing `[jwt]` extra raises `ImportError` at construction, not at the first call.
+
+**`TokenProvider`** (0.6, issue #4) wraps a function the user writes:
+
+- `get_token` is a plain **sync** callable returning the existing `Token` type (at least `access_token`, `instance_url`, `issued_at`; `expires_at` opts into proactive refresh, §6.5). One config object then serves both clients: `AsyncSalesforce` runs it with `_compat.to_thread` (`asyncio.to_thread`), so a blocking call such as `subprocess.run` never blocks the event loop; `Salesforce` calls it directly. An async callable was rejected (it would only work with one client) and raises `TypeError` at construction.
+- It is called in step 1 (no token in memory or store) and in REFRESH (§6.4) in place of the token POST, once, never retried. Everything else is shared with the other flows: single flight per `token_key`, the store lock, the shared-failure generation, the identity check and the compare-and-swap save. A 401 on the new token raises `SessionExpired` as for every flow.
+- A `SalesforceError` from `get_token` propagates unchanged (e.g. `ReauthorizationRequired`). Any other exception becomes `RefreshFailed` naming only the exception type, with the original as `__cause__`, so a token in the user's message never reaches events or the error message (`__cause__` still shows in tracebacks; the docs say not to put credentials in exception messages). A non-`Token` result or an unsafe `instance_url` raises `RefreshFailed` before the token is sent.
+- The token is saved to the store under `token_key`. The default key is `token_provider:<random>`, unique per object, because the provider has no stable identity to hash; pass `token_key` to share a durable store across processes.
+- `revoke`/`introspect` behave as for `StaticToken`: no OAuth client, so revoke goes to the token's instance and other keys need `auth=`. `client_id_hash` is empty.
+- D29: not a duplicate of `StaticToken`, which can't refresh; and not the rejected "`sf` CLI-backed auth": the library calls no external binary, the CLI is a docs recipe in user code. The forced-refresh helper from the same issue (item 2) is not extended.
 
 ### 6.2 `Token`
 
@@ -510,7 +520,7 @@ Flow* help page, 2026-11-09; see Appendix A):
 Algorithm for a call on a client with `token_key = K`:
 
 ```
-1. tok = memory[K] or await store.load(K) (or initial acquisition for ClientCredentials/JwtBearer)
+1. tok = memory[K] or await store.load(K) (or initial acquisition for ClientCredentials/JwtBearer/TokenProvider)
 2. If refresh_ahead is set and tok.issued_at + refresh_ahead <= now  → go to REFRESH(tok)
    If expiry == "introspect" and tok.expires_at known and <= now + skew → go to REFRESH(tok)
 3. Send request with tok.access_token.
@@ -529,11 +539,13 @@ Algorithm for a call on a client with `token_key = K`:
 
 REFRESH(stale):
   a. In-process single-flight on K: if a refresh for K is already running, await its result.
+     A refresh that finished after the rejected request was sent is reused even if it returned
+     the same access token (a TokenProvider, or a flow that reissues a still-valid token).
   b. async with store.lock(K):
        current = await store.load(K)
        if current and current.access_token != stale.access_token:
            memory[K] = current; return current          # someone else already refreshed
-       resp = POST /services/oauth2/token (grant per flow)
+       resp = POST /services/oauth2/token (grant per flow; TokenProvider: get_token() once)
          - connect error before the request was sent  → retry with backoff (safe)
          - timeout / connection reset after send       → DO NOT resend. Sleep briefly, re-load
                                                          the store; if it changed, use it; else

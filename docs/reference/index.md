@@ -82,6 +82,8 @@ The reasons behind the design are written down in the
 
 ::: even_simpler_salesforce.WebServerFlow
 
+::: even_simpler_salesforce.TokenProvider
+
 ::: even_simpler_salesforce.StaticToken
 
 ::: even_simpler_salesforce.AuthStart

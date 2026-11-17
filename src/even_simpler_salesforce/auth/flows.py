@@ -8,9 +8,10 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import inspect
 import secrets
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, ClassVar, Literal
@@ -26,6 +27,7 @@ __all__ = [
     "ClientCredentials",
     "JwtBearer",
     "StaticToken",
+    "TokenProvider",
     "WebServerFlow",
     "resolve_domain",
 ]
@@ -542,3 +544,67 @@ class StaticToken(Auth):
     def token_form(self, current: Token | None) -> dict[str, str]:  # pragma: no cover
         """Not supported: a static token can't be refreshed."""
         raise NotImplementedError("StaticToken can't be refreshed")
+
+
+@dataclass(frozen=True, slots=True)
+class TokenProvider(Auth):
+    """A token from your own code, such as the Salesforce CLI or a secrets manager.
+
+    The client calls ``get_token`` for the first request, and again once when Salesforce
+    rejects the token with ``401``. If the new token is rejected too, the call raises
+    :class:`SessionExpired`. Concurrent ``401`` responses share one call.
+
+    ``get_token`` is a plain function, so one ``TokenProvider`` works with both clients.
+    ``AsyncSalesforce`` runs it in a worker thread, so a blocking call such as
+    ``subprocess.run`` doesn't block the event loop. ``Salesforce`` calls it directly.
+
+    Args:
+        get_token: Returns a :class:`Token` with at least ``access_token``,
+            ``instance_url`` and ``issued_at``. Set ``expires_at`` if you know it, and the
+            client gets a new token within 60 seconds of that time. Raise an exception if it
+            can't get a token. Don't put the token in the exception message: it isn't in
+            ``RefreshFailed``'s message, but it is ``__cause__``, which tracebacks print.
+        token_key: Token store key. Pass one to share the token through a shared token store,
+            for example across processes. The default is unique to this ``TokenProvider``.
+
+    Raises:
+        TypeError: ``get_token`` isn't callable, or is an ``async`` function.
+    """
+
+    kind: ClassVar[str] = "token_provider"
+
+    get_token: Callable[[], Token] = field(repr=False)
+    key: str = ""
+    domain: str = "login"
+    client_id: str = ""
+    client_secret: str | None = None
+    refresh_ahead: timedelta | None = None
+    expiry: Expiry = "unknown"
+
+    def __init__(self, get_token: Callable[[], Token], *, token_key: str | None = None) -> None:
+        if not callable(get_token):
+            raise TypeError("TokenProvider needs a function that returns an esf.Token")
+        if inspect.iscoroutinefunction(get_token) or inspect.iscoroutinefunction(type(get_token).__call__):
+            raise TypeError("TokenProvider needs a plain function, not an async one; it returns an esf.Token")
+        set_ = object.__setattr__
+        set_(self, "get_token", get_token)
+        set_(self, "key", token_key or f"token_provider:{secrets.token_hex(6)}")
+        set_(self, "domain", "login")
+        set_(self, "client_id", "")
+        set_(self, "client_secret", None)
+        set_(self, "refresh_ahead", None)
+        set_(self, "expiry", "unknown")
+
+    @property
+    def token_key(self) -> str:
+        """``token_key`` if given, else ``token_provider:<random>``, unique to this object."""
+        return self.key
+
+    @property
+    def client_id_hash(self) -> str:
+        """Always empty: a token provider has no OAuth client."""
+        return ""
+
+    def token_form(self, current: Token | None) -> dict[str, str]:  # pragma: no cover
+        """Not used: the client calls ``get_token`` instead of the token endpoint."""
+        raise NotImplementedError("TokenProvider gets its token from get_token")

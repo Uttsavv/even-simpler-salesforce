@@ -118,7 +118,8 @@ class AsyncSalesforce:
     children that share the connection pool, caches, observers and usage counters.
 
     Args:
-        auth: Login flow (``ClientCredentials``, ``WebServerFlow``, ``JwtBearer``, ``StaticToken``).
+        auth: Login flow (``ClientCredentials``, ``WebServerFlow``, ``JwtBearer``, ``StaticToken``,
+            ``TokenProvider``).
         api_version: Salesforce API version (pinned per library release; v59.0 or newer).
         http_client: Inject your own ``httpx.AsyncClient`` (never closed by the library).
         store: Token store. Defaults to an in-memory store shared by the family.

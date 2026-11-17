@@ -26,6 +26,7 @@ nav = [
     { "Client credentials" = "authentication/client-credentials.md" },
     { "JWT bearer" = "authentication/jwt-bearer.md" },
     { "Web server flow" = "authentication/web-server-flow.md" },
+    { "Token provider" = "authentication/token-provider.md" },
     { "Static token" = "authentication/static-token.md" },
     { "Token stores" = "authentication/token-stores.md" },
   ] },
