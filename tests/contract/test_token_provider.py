@@ -49,18 +49,33 @@ class Provider:
 
 
 class Api:
-    """401 for every token in ``reject``; synthetic ``200 {}`` otherwise."""
+    """401 for every token in ``reject``; synthetic ``200 {}`` otherwise.
 
-    def __init__(self, reject: set[str]) -> None:
+    With ``gate``, the first ``gate.parties`` requests wait until all of them have been
+    sent, so every concurrent caller is rejected before any refresh starts. Without it a
+    slow thread (coarse timers on Windows) can send after the refresh and legitimately
+    refresh again.
+    """
+
+    def __init__(self, reject: set[str], gate: threading.Barrier | None = None) -> None:
         self.reject = reject
+        self.gate = gate
         self.lock = threading.Lock()
         self.sent: list[str] = []
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         tok = request.headers["Authorization"].removeprefix("Bearer ")
         with self.lock:
+            n = len(self.sent)
             self.sent.append(tok)
+        if self.gate is not None and n < self.gate.parties:
+            self.gate.wait(timeout=30)
         return rejected() if tok in self.reject else httpx.Response(200, json={})  # synthetic
+
+
+def first_wave(h: Harness, n: int) -> threading.Barrier | None:
+    """A gate for the sync client's threads (the async client's callers already overlap)."""
+    return None if h.is_async else threading.Barrier(n)
 
 
 def client(h: Harness, auth: esf.TokenProvider, rec: Recorder | None = None, **kw: Any) -> Any:
@@ -119,7 +134,7 @@ def test_a_second_401_raises_session_expired(h: Harness, mock: respx.MockRouter)
 
 def test_concurrent_401s_make_one_provider_call(h: Harness, mock: respx.MockRouter) -> None:
     provider = Provider()
-    api = Api({"AT-provided-1"})
+    api = Api({"AT-provided-1"}, first_wave(h, 30))
     mock.get(URL).mock(side_effect=api)
     sf = client(h, esf.TokenProvider(provider))
     h.run(sf.auth.token())  # the first token, before the race
@@ -140,7 +155,7 @@ def test_concurrent_401s_share_a_refresh_that_returned_the_same_token(
     The callers that waited on the refresh reuse its result instead of each calling again.
     """
     provider = Provider(["AT-same"])
-    api = Api({"AT-same"})
+    api = Api({"AT-same"}, first_wave(h, 20))
     mock.get(URL).mock(side_effect=api)
     sf = client(h, esf.TokenProvider(provider))
     h.run(sf.auth.token())
