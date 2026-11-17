@@ -153,8 +153,28 @@ def test_row_encoder_rejects_bad_rows() -> None:
     enc.header({"A": 1})
     with pytest.raises(TypeError, match="must be dicts"):
         enc.encode(("A",))  # type: ignore[arg-type]
-    with pytest.raises(ValueError, match="'B' is not in the first row"):
+    with pytest.raises(ValueError, match="'B' is not in the first row.*columns="):
         enc.encode({"A": 1, "B": 2})
+
+
+def test_row_encoder_explicit_columns() -> None:
+    """columns= sets the header, so rows with different fields share one CSV."""
+    enc = B.RowEncoder(columns=["LastName", "Company", "Phone"])
+    assert enc.columns == ("LastName", "Company", "Phone")
+    rows = [{"LastName": "Doe"}, {"Company": "Acme", "Phone": None}]
+    assert b"".join(enc.lines(rows)) == b"LastName,Company,Phone\nDoe,,\n,Acme,#N/A\n"
+    with pytest.raises(ValueError, match="'Email' is not in columns"):
+        enc.encode({"Email": "x"})
+    with pytest.raises(TypeError, match="not a string"):
+        B.RowEncoder(columns="LastName")
+    with pytest.raises(ValueError, match="columns is empty"):
+        B.RowEncoder(columns=[])
+    with pytest.raises(ValueError, match="appears twice"):
+        B.RowEncoder(columns=["A", "A"])
+    with pytest.raises(ValueError, match="non-empty strings"):
+        B.RowEncoder(columns=["A", ""])
+    with pytest.raises(ValueError, match="rows is empty"):
+        list(B.RowEncoder(columns=["A"]).lines([]))
 
 
 def test_check_line_ending() -> None:

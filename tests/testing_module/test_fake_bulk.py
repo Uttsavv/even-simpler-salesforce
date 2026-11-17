@@ -47,6 +47,21 @@ def test_ingest_insert_applies_rows_with_csv_null_rules() -> None:
         job.wait(timeout=0)
 
 
+def test_ingest_columns_like_the_real_client() -> None:
+    fake = FakeSalesforce()
+    rows = [{"LastName": "Doe"}, {"LastName": "Roe", "Company": "Globex"}]
+    with pytest.raises(ValueError, match="columns="):
+        fake.bulk.ingest("Lead", "insert", rows=rows)
+    job = fake.bulk.ingest("Lead", "insert", rows=rows, columns=["LastName", "Company"])
+    assert job.info.records_processed == 2
+    with pytest.raises(ValueError, match="for rows given as dicts"):
+        fake.bulk.ingest("Lead", "insert", rows=b"LastName\nDoe\n", columns=["LastName"])
+    async_job = asyncio.run(
+        AsyncFakeSalesforce().bulk.ingest("Lead", "insert", rows=rows, columns=["LastName", "Company"])
+    )
+    assert async_job.info.records_processed == 2
+
+
 def test_ingest_update_upsert_delete_and_failures(tmp_path: Path) -> None:
     fake = FakeSalesforce()
     lead = fake.add("Lead", {"LastName": "Doe", "Company": "Acme", "Ext__c": "E1"})

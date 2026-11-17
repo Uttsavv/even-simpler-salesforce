@@ -1816,6 +1816,39 @@ class _Transformer(cst.CSTTransformer):
             f"(await ingest() and wait() on AsyncSalesforce){note}"
         )
 
+    def _names_not_found(self, expr: cst.BaseExpression) -> bool:
+        """Whether an ``except`` type names simple-salesforce's ``SalesforceResourceNotFound``.
+
+        Resolves import aliases (``... import SalesforceResourceNotFound as Missing``) and module
+        aliases (``ss.SalesforceResourceNotFound``), so a same-named class from elsewhere doesn't count.
+        """
+        types = [e.value for e in expr.elements] if isinstance(expr, cst.Tuple) else [expr]
+        for n in types:  # top-level types only: the "Missing" in other.Missing isn't the import
+            if (
+                isinstance(n, cst.Name)
+                and self.facts.exception_names.get(n.value) == "SalesforceResourceNotFound"
+            ):
+                return True
+            if (
+                isinstance(n, cst.Attribute)
+                and n.attr.value == "SalesforceResourceNotFound"
+                and _root_name(n.value) in self.facts.sf_module_aliases
+            ):
+                return True
+        return False
+
+    def _caught_as_not_found(self, node: cst.CSTNode) -> bool:
+        """Whether ``node`` sits in a ``try`` body with an ``except SalesforceResourceNotFound``."""
+        prev: cst.CSTNode = node
+        cur = self.parent(node)
+        while cur is not None and not isinstance(cur, (cst.FunctionDef, cst.ClassDef, cst.Lambda)):
+            if isinstance(cur, (cst.Try, cst.TryStar)) and prev is cur.body:
+                for handler in cur.handlers:
+                    if handler.type is not None and self._names_not_found(handler.type):
+                        return True
+            prev, cur = cur, self.parent(cur)
+        return False
+
     def _apexecute(self, original: cst.Call, updated: cst.Call) -> Any:
         func = cast(cst.Attribute, original.func)
         conf = self.confirm_distinctive(func.value)
@@ -1860,7 +1893,16 @@ class _Transformer(cst.CSTTransformer):
             func=cst.Attribute(value=apex, attr=cst.Name(method.lower())), args=new_args
         )
         status: Status = "rewritten" if conf == "yes" and text is not None else "needs-review"
-        msg = f'apexecute(path) → apex.{method.lower()}("/path"); errors raise esf.ApexError'
+        msg = (
+            f'apexecute(path) → apex.{method.lower()}("/path"); errors from the Apex class raise '
+            "esf.ApexError, also an unknown path (status 404, not esf.NotFound)"
+        )
+        if self._caught_as_not_found(original):
+            status = "needs-review"
+            msg += (
+                "; the except SalesforceResourceNotFound around it becomes esf.NotFound, which "
+                "this call doesn't raise: catch esf.ApexError and check .status == 404"
+            )
         if text is None:
             msg += "; check the path has no query string (use params=)"
         self.record("apexecute", status, msg, original, new)

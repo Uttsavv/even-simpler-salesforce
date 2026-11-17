@@ -1,5 +1,6 @@
 # esf-migrate: TODO[unsupported] still uses simple-salesforce (Salesforce); replace before uninstalling it
 from simple_salesforce import Salesforce
+import even_simpler_salesforce as esf
 
 
 class Repo:
@@ -7,7 +8,7 @@ class Repo:
         self.sf_client = sf_client
 
     def consent(self, path, data):
-        # esf-migrate: REVIEW[apexecute] apexecute(path) → apex.post("/path"); errors raise esf.ApexError; check the path has no query string (use params=)
+        # esf-migrate: REVIEW[apexecute] apexecute(path) → apex.post("/path"); errors from the Apex class raise esf.ApexError, also an unknown path (status 404, not esf.NotFound); check the path has no query string (use params=)
         return self.sf_client.apex.post("/" + path, json=data)
 
     def otp(self):
@@ -53,5 +54,31 @@ def more(sf: Salesforce, payloads, flag):
     sf.bulk.Lead.insert(data=payloads, batch_size=500)
     # esf-migrate: TODO[bulk] Bulk API v1 isn't supported; use job = sf.bulk.ingest("Lead", "insert", rows=rows), then job.wait(); read job.successful_results() / job.failed_results() (await ingest() and wait() on AsyncSalesforce)
     sf.bulk.Lead.insert(load(token="abc123secret"))
-    # esf-migrate: REVIEW[apexecute] apexecute(path) → apex.get("/path"); errors raise esf.ApexError; check the path has no query string (use params=)
+    # esf-migrate: REVIEW[apexecute] apexecute(path) → apex.get("/path"); errors from the Apex class raise esf.ApexError, also an unknown path (status 404, not esf.NotFound); check the path has no query string (use params=)
     return sf.apex.get("/" + ("a" if flag else "b"))
+
+
+def guarded(sf: Salesforce):
+
+    try:
+        # esf-migrate: REVIEW[apexecute] apexecute(path) → apex.get("/path"); errors from the Apex class raise esf.ApexError, also an unknown path (status 404, not esf.NotFound); the except SalesforceResourceNotFound around it becomes esf.NotFound, which this call doesn't raise: catch esf.ApexError and check .status == 404
+        return sf.apex.get("/api/v1/maybe")
+    except esf.NotFound:
+        return None
+
+
+def aliased(sf: Salesforce):
+
+    try:
+        # esf-migrate: REVIEW[apexecute] apexecute(path) → apex.get("/path"); errors from the Apex class raise esf.ApexError, also an unknown path (status 404, not esf.NotFound); the except SalesforceResourceNotFound around it becomes esf.NotFound, which this call doesn't raise: catch esf.ApexError and check .status == 404
+        return sf.apex.get("/api/v1/other")
+    except (ValueError, esf.NotFound):
+        return None
+
+
+def other_module(sf: Salesforce, other):
+
+    try:
+        return sf.apex.get("/api/v1/third")
+    except other.Missing:
+        return None
