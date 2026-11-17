@@ -74,3 +74,11 @@ def aliased(sf: Salesforce):
         return sf.apex.get("/api/v1/other")
     except (ValueError, esf.NotFound):
         return None
+
+
+def other_module(sf: Salesforce, other):
+
+    try:
+        return sf.apex.get("/api/v1/third")
+    except other.Missing:
+        return None

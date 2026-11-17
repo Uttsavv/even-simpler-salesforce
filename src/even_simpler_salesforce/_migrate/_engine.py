@@ -1822,7 +1822,8 @@ class _Transformer(cst.CSTTransformer):
         Resolves import aliases (``... import SalesforceResourceNotFound as Missing``) and module
         aliases (``ss.SalesforceResourceNotFound``), so a same-named class from elsewhere doesn't count.
         """
-        for n in m.findall(expr, m.Name() | m.Attribute()):
+        types = [e.value for e in expr.elements] if isinstance(expr, cst.Tuple) else [expr]
+        for n in types:  # top-level types only: the "Missing" in other.Missing isn't the import
             if (
                 isinstance(n, cst.Name)
                 and self.facts.exception_names.get(n.value) == "SalesforceResourceNotFound"

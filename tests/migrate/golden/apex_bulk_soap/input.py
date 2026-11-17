@@ -57,3 +57,12 @@ def aliased(sf: Salesforce):
         return sf.apexecute("api/v1/other", method="GET")
     except (ValueError, Missing):
         return None
+
+
+def other_module(sf: Salesforce, other):
+    from simple_salesforce import SalesforceResourceNotFound as Missing  # noqa: F401
+
+    try:
+        return sf.apexecute("api/v1/third", method="GET")
+    except other.Missing:
+        return None
