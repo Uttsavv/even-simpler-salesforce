@@ -46,6 +46,9 @@ with the Salesforce CLI. You need the `sf` CLI installed and logged in to the or
 ```python
 import json
 import subprocess
+from datetime import datetime, timezone
+
+import even_simpler_salesforce as esf
 
 
 def sf_cli_token() -> esf.Token:
