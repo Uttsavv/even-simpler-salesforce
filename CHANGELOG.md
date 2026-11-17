@@ -17,6 +17,12 @@ Pending changes live as fragments in [`changelog.d/`](changelog.d/); preview the
 
 <!-- towncrier release notes start -->
 
+## [0.5.1](https://github.com/Uttsavv/even-simpler-salesforce/releases/tag/v0.5.1) - 2026-11-17
+
+### Fixed
+
+- The PyPI page now renders the README correctly: the project-status note no longer shows a stray `[!NOTE]` marker, and links to the changelog, contributing guide and licence work. The README also lists the `pubsub` and `migrate` extras, and the docs no longer tell you to install with `pip install --pre`.
+
 ## [0.5.0](https://github.com/Uttsavv/even-simpler-salesforce/releases/tag/v0.5.0) - 2026-11-13
 
 ### Added
