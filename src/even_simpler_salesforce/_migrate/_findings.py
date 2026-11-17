@@ -35,6 +35,7 @@ RULES: tuple[str, ...] = (
     "format-soql",
     "restful",
     "apexecute",
+    "bulk",
     "exceptions",
     "client-internals",
     "client-methods",

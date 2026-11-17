@@ -15,5 +15,5 @@ rows = sf.query("SELECT Id FROM Lead", include_deleted=True)
 by_ext = sf.sobject("Account").get_by_external_id
 # esf-migrate: REVIEW[upsert-path] upsert() now takes the field and value separately: upsert("Ext__c", value, data); check the callers
 put = sf.sobject("Account").upsert
-# esf-migrate: TODO[unsupported] describe_layout() has no 0.1 method; use sf.request("GET", "sobjects/Account/describe/layouts/<recordTypeId>")
+# esf-migrate: TODO[unsupported] describe_layout() has no method here; use sf.request("GET", "sobjects/Account/describe/layouts/<recordTypeId>")
 layout = sf.Account.describe_layout

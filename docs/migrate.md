@@ -158,7 +158,8 @@ Each finding has a rule id. Rule ids are stable: new rules can come, but ids nev
 | [`query-more`](#query-more) | TODO |
 | [`format-soql`](#format-soql) | rewritten, or TODO |
 | [`restful`](#restful) | rewritten, or TODO |
-| [`apexecute`](#apexecute) | rewritten, or TODO |
+| [`apexecute`](#apexecute) | rewritten, needs review, or TODO |
+| [`bulk`](#bulk) | TODO |
 | [`exceptions`](#exceptions) | rewritten, or TODO |
 | [`client-internals`](#client-internals) | rewritten, or TODO |
 | [`client-methods`](#client-methods) | rewritten, or TODO |
@@ -311,9 +312,41 @@ TODO.
 
 ### `apexecute`
 
-`X.apexecute(path, method=..., data=...)` becomes
-`X.request(METHOD, "/services/apexrest/<path>", json=data)`. The codemod rewrites only a literal
-path. Other paths get a TODO. You can also call Apex REST with the `sf.apex.*` helpers.
+`X.apexecute(path, method=..., data=...)` becomes an [Apex REST](guides/apex.md) call:
+`X.apex.get(...)`, `X.apex.post(..., json=data)`, and so on. Errors raise `esf.ApexError`, with
+the decoded body.
+
+```diff
+- result = sf.apexecute("orders/submit", method="POST", data={"orderId": "1"})
++ result = sf.apex.post("/orders/submit", json={"orderId": "1"})
+```
+
+| Path | Result |
+|---|---|
+| A string literal | rewritten |
+| A variable or other expression | `"/" + path`, needs review: pass a query string with `params=` |
+
+These cases get a TODO:
+
+- a method that isn't a string literal (`GET`, `POST`, `PUT`, `PATCH` or `DELETE`);
+- `data=` with `GET` or `DELETE`;
+- a literal path with a query string;
+- other keyword arguments.
+
+### `bulk`
+
+Bulk API v1 isn't supported. Each `X.bulk` use gets a TODO that names the
+[Bulk API 2.0](guides/bulk.md) call. The codemod doesn't rewrite it, because a Bulk 2.0 job returns
+its results in a different shape.
+
+| Before | TODO suggests |
+|---|---|
+| `X.bulk.Lead.insert(rows)` | `job = X.bulk.ingest("Lead", "insert", rows=rows)`, then `job.wait()`, `job.successful_results()` and `job.failed_results()` |
+| `X.bulk.Lead.upsert(rows, "Ext__c")` | the same, with `external_id_field="Ext__c"` |
+| `X.bulk.Lead.hard_delete(rows)` | operation `"hardDelete"` |
+| `X.bulk.Lead.query(soql)`, `query_all(soql)` | `X.bulk.query(soql)`, with `include_deleted=True` for `query_all` |
+
+`batch_size=` and `use_serial=` have no equivalent: the client splits large data into jobs itself.
 
 ### `exceptions`
 
@@ -357,11 +390,15 @@ These cases get a TODO:
 |---|---|---|
 | `X.sf_version` | `X.api_version` | rewritten |
 | `X.sf_instance`, `X.base_url` | `X.instance_url` for links, `X.request(...)` for calls | TODO |
-| `X.session_id`, `X.headers`, `X.session` | `X.request(...)` | TODO |
+| `X.session_id` | `X.auth.token().access_token`; `X.auth.refresh()` after `INVALID_SESSION_ID` | TODO |
+| `X.headers`, `X.session` | `X.request(...)` | TODO |
 
 `X.instance_url` is the instance of the current token. It is `None` before the first call. The
-access token isn't public by design. The codemod matches `session_id`, `headers` and `session` only
-on a confirmed client.
+codemod matches `session_id`, `headers` and `session` only on a confirmed client.
+
+If you use `session_id` and `sf_instance` to build a SOAP `convertLead` or `merge` call, replace
+the call with [`X.leads.convert(...)`](guides/leads.md) or `X.merge(...)`. The
+TODO messages say so.
 
 ### `client-methods`
 
@@ -398,15 +435,15 @@ If you pass `--client-names`, matching sites become plain rewrites.
 
 ### `unsupported`
 
-These APIs have no replacement in 0.1, so they get a TODO with a link to the
-[migration guide](migrating-from-simple-salesforce.md):
+These calls have no direct rewrite, so they get a TODO that names the replacement:
 
-- Bulk API v1, such as `X.bulk.Obj.insert(...)`
-- `bulk2`
-- `toolingexecute`
-- `mdapi`
-- `describe_layout()`
-- the `headers=` and `raw_response=` keywords
+| Before | TODO suggests |
+|---|---|
+| `X.bulk2` | `X.bulk.ingest(...)` or `X.bulk.query(...)` |
+| `X.toolingexecute(...)` | `X.tooling.query(soql)`, `X.tooling.sobject(name)` or `X.tooling.execute_anonymous(code)` |
+| `X.mdapi` | `X.metadata` |
+| `X.Obj.describe_layout()` | `X.request("GET", "sobjects/<Obj>/describe/layouts/<recordTypeId>")` |
+| the `headers=` and `raw_response=` keywords | drop them, or use `X.request(...)` |
 
 The codemod removes simple-salesforce imports that are no longer used. If code still uses a name
 from an import, the import line gets an `unsupported` TODO.

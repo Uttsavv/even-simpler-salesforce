@@ -15,7 +15,7 @@
     "line": 4
   },
   {
-    "rule": "unsupported",
+    "rule": "bulk",
     "status": "todo",
     "line": 5
   }

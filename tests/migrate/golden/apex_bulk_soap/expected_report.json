@@ -1,0 +1,77 @@
+[
+  {
+    "rule": "unsupported",
+    "status": "todo",
+    "line": 1
+  },
+  {
+    "rule": "apexecute",
+    "status": "needs-review",
+    "line": 9
+  },
+  {
+    "rule": "apexecute",
+    "status": "rewritten",
+    "line": 12
+  },
+  {
+    "rule": "apexecute",
+    "status": "rewritten",
+    "line": 15
+  },
+  {
+    "rule": "apexecute",
+    "status": "todo",
+    "line": 18
+  },
+  {
+    "rule": "apexecute",
+    "status": "todo",
+    "line": 19
+  },
+  {
+    "rule": "apexecute",
+    "status": "todo",
+    "line": 20
+  },
+  {
+    "rule": "bulk",
+    "status": "todo",
+    "line": 23
+  },
+  {
+    "rule": "client-internals",
+    "status": "todo",
+    "line": 26
+  },
+  {
+    "rule": "client-internals",
+    "status": "todo",
+    "line": 27
+  },
+  {
+    "rule": "bulk",
+    "status": "todo",
+    "line": 31
+  },
+  {
+    "rule": "bulk",
+    "status": "todo",
+    "line": 32
+  },
+  {
+    "rule": "bulk",
+    "status": "todo",
+    "line": 33
+  },
+  {
+    "rule": "bulk",
+    "status": "todo",
+    "line": 34
+  },
+  {
+    "rule": "unsupported",
+    "status": "todo",
+    "line": 35
+  }
+]
