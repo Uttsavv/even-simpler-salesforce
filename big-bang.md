@@ -1485,10 +1485,11 @@ Every finding carries a stable rule id. Ids are part of the public interface (do
 | `query-more` | `X.query_more(url, True)` | marker only (needs a `Cursor`, not a URL) | `todo` |
 | `format-soql` | `format_soql("... {} ...", v)` passed directly to a query method | → values in SOQL methods | `rewritten`; `todo` when the formatted string is built elsewhere |
 | `restful` | `X.restful(path, method=..., json=...)` | → `X.request(method, path, json=...)` | `rewritten` |
-| `apexecute` | `X.apexecute(path, method=, data=)` | → `X.apex.<method>("/<path>", json=data)` | `rewritten` for a literal path and method; `todo` for a non-literal path or method, a query string in the path, or `data=` with `GET` / `DELETE` |
+| `apexecute` | `X.apexecute(path, method=, data=)` with a literal method | → `X.apex.<method>("/<path>", json=data)` | `rewritten` for a literal path; `needs-review` (`"/" + path`) for another expression; `todo` for a non-literal method, `data=` with GET/DELETE, a query string in the path or other keywords |
+| `bulk` | `X.bulk`, `X.bulk.<Obj>.<op>(data, ...)` (Bulk v1) | marker only, naming `X.bulk.ingest("<Obj>", "<op>", rows=data)` + `job.wait()` / `successful_results()` / `failed_results()`, or `X.bulk.query(soql)` | `todo` |
 | `exceptions` | simple-salesforce exceptions in `except`, `isinstance`, `raise` and the imports | 1:1: `SalesforceError` → `esf.SalesforceError`, `SalesforceResourceNotFound` → `esf.NotFound`, `SalesforceMoreThanOneRecord` → `esf.MultipleMatches`, `SalesforceRefusedRequest` → `esf.Forbidden`, `SalesforceAuthenticationFailed` → `esf.AuthError`; `import even_simpler_salesforce as esf` added once | `rewritten`; `todo` (with a suggestion) for `SalesforceExpiredSession` (§20: refresh is automatic), `SalesforceMalformedRequest`, `SalesforceGeneralError` |
 | `client-internals` | `X.sf_version` | → `X.api_version` | `rewritten` |
-| `client-internals` | `X.session_id`, `X.base_url`, `X.sf_instance`, `X.headers`, `X.session` | marker only, with the §20 replacement in the message | `todo` |
+| `client-internals` | `X.session_id`, `X.base_url`, `X.sf_instance`, `X.headers`, `X.session` | marker only, with the §20 replacement in the message (`session_id` → `X.auth.token()` / `X.auth.refresh()`; `session_id` / `sf_instance` also name `X.leads.convert()` / `X.merge()` for hand-built SOAP calls) | `todo` |
 | `client-methods` | `X.describe()`; `X.quick_search()`, `X.is_sandbox()`, `X.search(s)["searchRecords"]`, `X.limits()[k]["Remaining"]` | → `X.describe_global()`; others marker only | `rewritten`; `todo` |
 | `login` | `Salesforce(...)` / `AsyncSalesforce(...)` / `SalesforceLogin(...)` construction | marker only (auth is a design choice, §6) | `todo` |
 | `not-a-client` | a shaped site that couldn't be confirmed (§9.19.1) | case 3: rewritten like its rule; sObject-looking: marker with suggestion | `needs-review` / `todo` |
@@ -1500,8 +1501,8 @@ More cases:
   (`sobject()` returns a new object each time).
 - `describe_layout()`, the `headers=` / `raw_response=` keywords, and `upsert(record_id=...)` as a
   keyword have no direct equivalent → `todo` (`unsupported` / `upsert-path`).
-- Rules not listed (Bulk v1, `bulk2`, `toolingexecute`, `mdapi`, SOAP-only calls) produce a
-  generic `unsupported` `todo` pointing at §20.
+- `bulk2`, `toolingexecute` and `mdapi` produce an `unsupported` `todo` naming the replacement
+  (`X.bulk`, `X.tooling.*`, `X.metadata`). Bulk v1 has its own `bulk` rule.
 - A simple-salesforce import that is still needed after the run (some name from it is still used)
   gets an `unsupported` `todo` on the import statement; imports no longer used are removed.
 
@@ -2024,10 +2025,10 @@ The docs page contains this table (extended per release). No compatibility shim 
 | a whole codebase | `esf migrate src/` rewrites the mechanical rows of this table and marks the rest (§9.19) |
 | `sf.restful("composite/sobjects", method="PATCH", json=...)` | `sf.collections.update(...)` |
 | `sf.restful(path, ...)` | `sf.request(method, path, ...)` |
-| `sf.apexecute("path", method="POST", data=...)` | `sf.apex.post("/path", json=...)` (0.2; in 0.1 `sf.request("POST", "/services/apexrest/path", json=...)`) |
+| `sf.apexecute("path", method="POST", data=...)` | `sf.apex.post("/path", json=...)` |
 | `sf.bulk.Lead.insert(rows)` (Bulk v1) | `sf.bulk.ingest("Lead", "insert", rows=rows)` (Bulk 2.0) |
 | `sf.bulk2.Lead.query(q)` | `sf.bulk.query(q)` |
-| `sf.toolingexecute(...)` | `sf.tooling.request(...)` / `sf.tooling.query(...)` |
+| `sf.toolingexecute(...)` | `sf.tooling.query(...)` / `sf.tooling.sobject(...)` / `sf.tooling.execute_anonymous(...)`; other paths: `sf.request(method, "tooling/<path>")` |
 | `sf.limits()` | `sf.limits()`; usage also in `sf.usage.snapshot()` for free |
 | `SalesforceMalformedRequest` (inspect `.content`) | specific classes (`InvalidField`, `ValidationRuleFailed`, ...) with `.error_code`, `.fields` |
 | `SalesforceExpiredSession` | handled automatically; `ReauthorizationRequired` if the refresh token is dead |

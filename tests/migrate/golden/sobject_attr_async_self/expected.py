@@ -13,5 +13,5 @@ class LeadRepository:
         await self.sf_client.sobject("Task").update(task_id, {"Status": "Completed"})
 
     async def layout(self) -> dict:
-        # esf-migrate: TODO[unsupported] describe_layout() has no 0.1 method; use sf.request("GET", "sobjects/Custom_Object__c/describe/layouts/<recordTypeId>")
+        # esf-migrate: TODO[unsupported] describe_layout() has no method here; use sf.request("GET", "sobjects/Custom_Object__c/describe/layouts/<recordTypeId>")
         return await self.sf_client.Custom_Object__c.describe_layout("012000000000001AAA")
