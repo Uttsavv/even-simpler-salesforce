@@ -1,0 +1,1 @@
+`esf migrate` rewrites `apexecute()` to `sf.apex.*`, and a new `bulk` rule names the Bulk API 2.0 call for each Bulk v1 use. TODOs for `session_id`, `sf_instance`, `toolingexecute` and `mdapi` now name the 0.5 replacements.

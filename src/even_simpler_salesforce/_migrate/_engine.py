@@ -26,7 +26,7 @@ from libcst.metadata import (
     ScopeProvider,
 )
 
-from ._findings import MARKER_RE, Finding, Status, marker_text
+from ._findings import MARKER_RE, Finding, Status, marker_text, redact
 
 __all__ = ["Options", "transform_source"]
 
@@ -97,11 +97,14 @@ EXCEPTIONS: dict[str, tuple[str, bool]] = {
     "SalesforceGeneralError": ("catch esf.ServerError (5xx) or esf.SalesforceError", False),
 }
 INTERNALS_TODO = {
-    "session_id": "the access token isn't public; make calls with sf.request(...)",
+    "session_id": "use sf.auth.token().access_token (and sf.auth.refresh() after INVALID_SESSION_ID; "
+    "await both on AsyncSalesforce); "
+    "a hand-built SOAP convertLead/merge call becomes sf.leads.convert(...) / sf.merge(...)",
     "headers": "make calls with sf.request(...); auth headers are added for you",
     "session": "make calls with sf.request(...); the HTTP client is managed for you",
     "base_url": "use sf.instance_url to build links, sf.request(...) for calls",
-    "sf_instance": "use sf.instance_url (the instance of the current token; None before the first call)",
+    "sf_instance": "use sf.instance_url (the instance of the current token; None before the first call); "
+    "a hand-built SOAP convertLead/merge call becomes sf.leads.convert(...) / sf.merge(...)",
 }
 #: Attributes of simple-salesforce exceptions -> the closest attribute of esf errors.
 CAUGHT_ATTRS = {"content": "raw", "resource_name": "sobject", "url": "path"}
@@ -110,11 +113,25 @@ QUERY_RESULT_ATTRS = frozenset({"records", "total_size", "done", "cursor"})
 QUERY_RESULT_MSG = "query() returns a QueryResult (records, total_size, done, cursor), not a dict"
 QUERY_KEYS = {"records": "records", "totalSize": "total_size", "done": "done"}
 UNSUPPORTED = {
-    "bulk": "Bulk API v1 isn't supported; use sf.bulk (Bulk 2.0, planned for 0.3)",
-    "bulk2": "Bulk 2.0 arrives as sf.bulk in 0.3",
-    "toolingexecute": "Tooling arrives as sf.tooling in 0.3; use sf.request(...) meanwhile",
-    "mdapi": "the Metadata API arrives as sf.metadata in 0.4",
+    "bulk2": "use sf.bulk (Bulk API 2.0): "
+    "sf.bulk.ingest(sobject, operation, rows=...) or sf.bulk.query(soql)",
+    "toolingexecute": "use sf.tooling.query(soql), sf.tooling.sobject(name) or "
+    'sf.tooling.execute_anonymous(code); other Tooling paths: sf.request(method, "tooling/<path>")',
+    "mdapi": "use sf.metadata (Metadata API)",
 }
+BULK_GENERIC = (
+    "Bulk API v1 isn't supported; use sf.bulk (Bulk API 2.0): "
+    "sf.bulk.ingest(sobject, operation, rows=...) or sf.bulk.query(soql)"
+)
+#: simple-salesforce Bulk v1 operation -> Bulk 2.0 ingest operation.
+BULK_OPS = {
+    "insert": "insert",
+    "update": "update",
+    "upsert": "upsert",
+    "delete": "delete",
+    "hard_delete": "hardDelete",
+}
+APEX_METHODS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE"})
 _PLACEHOLDER = re.compile(r"(?<!\{)\{([^{}]*)\}(?!\})")
 #: Common standard objects: an unconfirmed ``x.<Name>.<method>(...)`` with one of these (or a
 #: custom suffix) is reported as a TODO rather than ignored.
@@ -157,7 +174,7 @@ STANDARD_OBJECTS = frozenset(
 CUSTOM_SUFFIXES = ("__c", "__e", "__mdt", "__x", "__b", "__kav")
 #: Methods simple-salesforce has per object that the sObject facade here doesn't.
 NO_EQUIVALENT = {
-    "describe_layout": "describe_layout() has no 0.1 method; use "
+    "describe_layout": "describe_layout() has no method here; use "
     'sf.request("GET", "sobjects/<Obj>/describe/layouts/<recordTypeId>")',
 }
 CLIENT_METHODS = frozenset({"describe", "quick_search", "search", "limits", "is_sandbox"})
@@ -234,6 +251,21 @@ def _string_value(node: cst.BaseExpression) -> str | None:
 
 def _code(node: cst.CSTNode) -> str:
     return cst.Module(body=[]).code_for_node(node)
+
+
+def _atom(expr: cst.BaseExpression) -> cst.BaseExpression:
+    """``expr`` safe as the right operand of ``+``: parenthesised unless it binds tighter."""
+    if isinstance(expr, (cst.Name, cst.Attribute, cst.Call, cst.Subscript, cst.SimpleString)) or expr.lpar:
+        return expr
+    return expr.with_changes(lpar=[cst.LeftParen()], rpar=[cst.RightParen()])
+
+
+def _short(node: cst.CSTNode | None, fallback: str) -> str:
+    """Source of a short single-line expression for a marker message, else ``fallback``."""
+    text = _code(node) if node is not None else ""
+    if not text or len(text) > 40 or "\n" in text or redact(text) != text:
+        return fallback  # long, multi-line, or holds something that looks like a secret
+    return text
 
 
 def _sobject_call(value: cst.BaseExpression, obj: cst.BaseExpression) -> cst.Call:
@@ -853,6 +885,10 @@ class _Transformer(cst.CSTTransformer):
                 return new
             self.record("client-internals", "todo", f"{attr}: {INTERNALS_TODO[attr]}", original_node)
             return updated_node
+        # Bulk API v1
+        if attr == "bulk" and self.enabled("bulk") and self.confirm(inner):
+            self.record("bulk", "todo", self._bulk_message(original_node), original_node)
+            return updated_node
         # unsupported API areas
         if attr in UNSUPPORTED and self.confirm(inner) and self.enabled("unsupported"):
             self.record("unsupported", "todo", UNSUPPORTED[attr], original_node)
@@ -1065,6 +1101,8 @@ class _Transformer(cst.CSTTransformer):
             return updated_node
         method = func.attr.value
         target = func.value
+        if isinstance(target, cst.Attribute) and _last_segment(target.value) in ("bulk", "bulk2"):
+            return updated_node  # X.bulk.<Obj>.<op>(...): the bulk / unsupported marker covers it
         if method in CLIENT_METHODS and self.enabled("client-methods") and not self.ignored("client-methods"):
             done = self._client_method(original_node, updated_node)
             if done is not None:
@@ -1731,6 +1769,53 @@ class _Transformer(cst.CSTTransformer):
         self.record("restful", status, "restful(path, method=...) → request(method, path)", original, new)
         return new
 
+    def _bulk_message(self, node: cst.Attribute) -> str:
+        """The TODO for ``X.bulk``: names the Bulk 2.0 call for ``X.bulk.<Obj>.<op>(data, ...)``."""
+        obj_attr = self.parent(node)
+        op_attr = self.parent(obj_attr) if isinstance(obj_attr, cst.Attribute) else None
+        call = self.parent(op_attr) if isinstance(op_attr, cst.Attribute) else None
+        if not (
+            isinstance(obj_attr, cst.Attribute)
+            and isinstance(op_attr, cst.Attribute)
+            and isinstance(call, cst.Call)
+            and call.func is op_attr
+        ):
+            return BULK_GENERIC
+        obj, op = obj_attr.attr.value, op_attr.attr.value
+        positional = [a for a in call.args if a.keyword is None and not a.star]
+        if op in ("query", "query_all"):
+            soql = _short(positional[0].value if positional else None, "soql")
+            deleted = ", include_deleted=True" if op == "query_all" else ""
+            return f"Bulk API v1 isn't supported; use sf.bulk.query({soql}{deleted}) (Bulk API 2.0)"
+        if op not in BULK_OPS:
+            return BULK_GENERIC
+        data_kw = [a.value for a in call.args if a.keyword is not None and a.keyword.value == "data"]
+        payload = positional[0].value if positional else (data_kw[0] if data_kw else None)
+        rows = _short(payload, "rows")
+        ext = ""
+        if op == "upsert":
+            named = [
+                a.value for a in call.args if a.keyword is not None and a.keyword.value == "external_id_field"
+            ]
+            given = positional[1].value if len(positional) > 1 else (named[0] if named else None)
+            ext = f", external_id_field={_short(given, '...')}"
+        dropped = sorted(
+            a.keyword.value
+            for a in call.args
+            if a.keyword is not None and a.keyword.value not in ("data", "external_id_field")
+        )
+        note = (
+            f"; {'= and '.join(dropped)}= {'has' if len(dropped) == 1 else 'have'} no equivalent "
+            "(the client splits large data)"
+            if dropped
+            else ""
+        )
+        return (
+            f'Bulk API v1 isn\'t supported; use job = sf.bulk.ingest("{obj}", "{BULK_OPS[op]}", '
+            f"rows={rows}{ext}), then job.wait(); read job.successful_results() / job.failed_results() "
+            f"(await ingest() and wait() on AsyncSalesforce){note}"
+        )
+
     def _apexecute(self, original: cst.Call, updated: cst.Call) -> Any:
         func = cast(cst.Attribute, original.func)
         conf = self.confirm_distinctive(func.value)
@@ -1739,35 +1824,46 @@ class _Transformer(cst.CSTTransformer):
         args = list(updated.args)
         positional = [a for a in args if a.keyword is None]
         kw = {a.keyword.value: a for a in args if a.keyword is not None}
-        action = positional[0].value if positional else None
-        text = _string_value(action) if action is not None else None
-        if text is None or len(positional) > 3 or set(kw) - {"method", "data"}:
-            self.record(
-                "apexecute",
-                "todo",
-                'use sf.request(METHOD, "/services/apexrest/<path>", json=data)',
-                original,
-            )
+        hint = 'use sf.apex.get("/<path>") / sf.apex.post("/<path>", json=data) (also put, patch, delete)'
+        if not positional or len(positional) > 3 or set(kw) - {"method", "data"}:
+            self.record("apexecute", "todo", hint, original)
             return updated
-        method = (
+        method_node = (
             kw["method"].value
             if "method" in kw
             else (positional[1].value if len(positional) > 1 else self.s("GET"))
         )
+        method = _string_value(method_node)
+        method = method.upper() if method is not None else None
         data = kw["data"].value if "data" in kw else (positional[2].value if len(positional) > 2 else None)
-        new_args = [
-            cst.Arg(method, comma=_comma()),
-            cst.Arg(self.s("/services/apexrest/" + text.lstrip("/"))),
-        ]
+        if method not in APEX_METHODS or (data is not None and method in ("GET", "DELETE")):
+            self.record("apexecute", "todo", hint, original)
+            return updated
+        action = positional[0].value
+        text = _string_value(action)
+        if text is not None and ("?" in text or "#" in text):
+            self.record("apexecute", "todo", f"{hint}; pass query parameters with params=", original)
+            return updated
+        # simple-salesforce appends the path to ".../apexrest/"; sf.apex wants it to start with "/".
+        path: cst.BaseExpression = (
+            self.s("/" + text.lstrip("/"))
+            if text is not None
+            else cst.BinaryOperation(left=self.s("/"), operator=cst.Add(), right=_atom(action))
+        )
+        new_args = [cst.Arg(path)]
         if data is not None:
-            new_args[-1] = new_args[-1].with_changes(comma=_comma())
+            new_args[0] = new_args[0].with_changes(comma=_comma())
             new_args.append(cst.Arg(data, keyword=cst.Name("json"), equal=_eq()))
         ufunc = cast(cst.Attribute, updated.func)
-        new = updated.with_changes(func=ufunc.with_changes(attr=cst.Name("request")), args=new_args)
-        status: Status = "rewritten" if conf == "yes" else "needs-review"
-        self.record(
-            "apexecute", status, 'apexecute(path) → request(method, "/services/apexrest/path")', original, new
+        apex = cst.Attribute(value=ufunc.value, attr=cst.Name("apex"))
+        new = updated.with_changes(
+            func=cst.Attribute(value=apex, attr=cst.Name(method.lower())), args=new_args
         )
+        status: Status = "rewritten" if conf == "yes" and text is not None else "needs-review"
+        msg = f'apexecute(path) → apex.{method.lower()}("/path"); errors raise esf.ApexError'
+        if text is None:
+            msg += "; check the path has no query string (use params=)"
+        self.record("apexecute", status, msg, original, new)
         return new
 
     def leave_Await(self, original_node: cst.Await, updated_node: cst.Await) -> Any:
