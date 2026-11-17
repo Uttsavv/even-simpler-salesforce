@@ -451,6 +451,32 @@ def test_static_token() -> None:
     assert s.expiry == "unknown"
 
 
+# --- TokenProvider -------------------------------------------------------------------------------------
+
+
+def test_token_provider() -> None:
+    def get_token() -> esf.Token:  # pragma: no cover - never called here
+        raise AssertionError
+
+    p = esf.TokenProvider(get_token)
+    assert p.get_token is get_token
+    assert p.kind == "token_provider"
+    assert p.client_id_hash == ""
+    assert p.refresh_ahead is None
+    assert p.expiry == "unknown"
+    assert p.static_token() is None
+    assert "get_token" not in repr(p)
+    # The default key is unique to each object; an explicit one is kept.
+    assert p.token_key.startswith("token_provider:")
+    assert esf.TokenProvider(get_token).token_key != p.token_key
+    assert esf.TokenProvider(get_token, token_key="cli:dev").token_key == "cli:dev"
+
+
+def test_token_provider_needs_a_callable() -> None:
+    with pytest.raises(TypeError, match="function that returns an esf.Token"):
+        esf.TokenProvider("not callable")  # type: ignore[arg-type]
+
+
 def test_flows_accept_refresh_ahead_and_expiry() -> None:
     f = _flow(refresh_ahead=timedelta(minutes=30), expiry="introspect")
     assert f.refresh_ahead == timedelta(minutes=30)
