@@ -65,3 +65,12 @@ def guarded(sf: Salesforce):
         return sf.apex.get("/api/v1/maybe")
     except esf.NotFound:
         return None
+
+
+def aliased(sf: Salesforce):
+
+    try:
+        # esf-migrate: REVIEW[apexecute] apexecute(path) → apex.get("/path"); errors from the Apex class raise esf.ApexError, also an unknown path (status 404, not esf.NotFound); the except SalesforceResourceNotFound around it becomes esf.NotFound, which this call doesn't raise: catch esf.ApexError and check .status == 404
+        return sf.apex.get("/api/v1/other")
+    except (ValueError, esf.NotFound):
+        return None

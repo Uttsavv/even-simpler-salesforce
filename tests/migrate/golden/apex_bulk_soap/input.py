@@ -48,3 +48,12 @@ def guarded(sf: Salesforce):
         return sf.apexecute("api/v1/maybe", method="GET")
     except SalesforceResourceNotFound:
         return None
+
+
+def aliased(sf: Salesforce):
+    from simple_salesforce import SalesforceResourceNotFound as Missing
+
+    try:
+        return sf.apexecute("api/v1/other", method="GET")
+    except (ValueError, Missing):
+        return None

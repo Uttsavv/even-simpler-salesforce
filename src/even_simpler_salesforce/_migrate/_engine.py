@@ -1816,6 +1816,26 @@ class _Transformer(cst.CSTTransformer):
             f"(await ingest() and wait() on AsyncSalesforce){note}"
         )
 
+    def _names_not_found(self, expr: cst.BaseExpression) -> bool:
+        """Whether an ``except`` type names simple-salesforce's ``SalesforceResourceNotFound``.
+
+        Resolves import aliases (``... import SalesforceResourceNotFound as Missing``) and module
+        aliases (``ss.SalesforceResourceNotFound``), so a same-named class from elsewhere doesn't count.
+        """
+        for n in m.findall(expr, m.Name() | m.Attribute()):
+            if (
+                isinstance(n, cst.Name)
+                and self.facts.exception_names.get(n.value) == "SalesforceResourceNotFound"
+            ):
+                return True
+            if (
+                isinstance(n, cst.Attribute)
+                and n.attr.value == "SalesforceResourceNotFound"
+                and _root_name(n.value) in self.facts.sf_module_aliases
+            ):
+                return True
+        return False
+
     def _caught_as_not_found(self, node: cst.CSTNode) -> bool:
         """Whether ``node`` sits in a ``try`` body with an ``except SalesforceResourceNotFound``."""
         prev: cst.CSTNode = node
@@ -1823,9 +1843,7 @@ class _Transformer(cst.CSTTransformer):
         while cur is not None and not isinstance(cur, (cst.FunctionDef, cst.ClassDef, cst.Lambda)):
             if isinstance(cur, (cst.Try, cst.TryStar)) and prev is cur.body:
                 for handler in cur.handlers:
-                    t = handler.type
-                    types = [e.value for e in t.elements] if isinstance(t, cst.Tuple) else [t]
-                    if any(x is not None and _last_segment(x) == "SalesforceResourceNotFound" for x in types):
+                    if handler.type is not None and self._names_not_found(handler.type):
                         return True
             prev, cur = cur, self.parent(cur)
         return False
