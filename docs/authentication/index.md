@@ -25,6 +25,7 @@ Pick the login flow that matches who your code acts as.
 | [`esf.ClientCredentials`](client-credentials.md) | a backend acts as its own integration user | requests a new token |
 | [`esf.JwtBearer`](jwt-bearer.md) | a server acts as a named user, with a certificate | signs a new assertion and requests a new token |
 | [`esf.WebServerFlow`](web-server-flow.md) | people log in through the browser and your app acts as each of them | refresh-token grant, safe under rotation |
+| [`esf.TokenProvider`](token-provider.md) | you already have a login, such as the Salesforce CLI or a secrets manager | calls your function again |
 | [`esf.StaticToken`](static-token.md) | scripts and tests with a token you got elsewhere | none: a `401` raises `SessionExpired` |
 
 Each login flow needs an app in your org. [Salesforce setup](salesforce-setup.md) lists what
@@ -32,7 +33,7 @@ each one needs.
 
 ## The `domain` argument
 
-Every login flow except `StaticToken` takes `domain=`. It names the host the client logs in to.
+Every login flow except `StaticToken` and `TokenProvider` takes `domain=`. It names the host the client logs in to.
 
 | Value | Login host | Use for |
 |---|---|---|
@@ -103,6 +104,7 @@ Every login flow has a `token_key`. It names the token's record in the token sto
 | `JwtBearer` | `jwt_bearer:<hash of domain, client id and username>` |
 | `WebServerFlow` | none; pass one per Salesforce identity, such as `f"user:{user_id}"` |
 | `StaticToken` | `static:<hash of instance URL and token>` |
+| `TokenProvider` | `token_provider:<random>`, unique to each object; pass one to share a durable store |
 
 Clients in one family that use the same key share one in-memory token and one refresh. Events
 show only `token_key_hash`, a 12-character SHA-256 prefix of the key.
@@ -147,6 +149,7 @@ async with esf.AsyncSalesforce(auth) as sf:
 - Concurrent calls share one refresh and get the same token.
 - The client saves the new token to the token store and emits `sf.auth.refreshed`.
 - A client with `StaticToken` raises `SessionExpired`, because it can't refresh.
+- A client with `TokenProvider` calls your function.
 - Other failures raise the same errors as an automatic refresh, such as
   `ReauthorizationRequired`.
 

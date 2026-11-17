@@ -35,6 +35,8 @@ async with esf.AsyncSalesforce(auth) as sf:
 
 `sf org display` prints an access token and instance URL for an org you have logged in to with
 the Salesforce CLI. This is handy for local scripts. For services, use a flow that can refresh.
+To get a new token from the CLI after a `401`, use
+[`TokenProvider`](token-provider.md#reuse-the-salesforce-cli-login) instead.
 
 ```sh
 sf org display --target-org <alias> --json
