@@ -37,7 +37,7 @@ shows how to create it. The rest of the tutorial stays the same.
 ```sh
 mkdir leads-api && cd leads-api
 python -m venv .venv && source .venv/bin/activate
-pip install --pre "even-simpler-salesforce[fastapi]" uvicorn
+pip install "even-simpler-salesforce[fastapi]" uvicorn
 ```
 
 👉 **Put the credentials of your app in the environment**

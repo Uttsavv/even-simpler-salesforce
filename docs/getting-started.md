@@ -8,10 +8,8 @@ sync client with the same methods, and it handles login, token refresh and error
 You need Python 3.10 or newer.
 
 ```sh
-pip install --pre even-simpler-salesforce
+pip install even-simpler-salesforce
 ```
-
-`--pre` is needed until 0.1.0 is final, because pip skips release candidates by default.
 
 The import name is `even_simpler_salesforce`. These docs import it as `esf`:
 
@@ -213,7 +211,7 @@ await root.aclose()
 Install extras for the features that need extra packages:
 
 ```sh
-pip install --pre "even-simpler-salesforce[jwt,speed]"
+pip install "even-simpler-salesforce[jwt,speed]"
 ```
 
 | Extra | Installs | Enables |

@@ -1,0 +1,1 @@
+The PyPI page now renders the README correctly: the project-status note no longer shows a stray `[!NOTE]` marker, and links to the changelog, contributing guide and licence work. The README also lists the `pubsub` and `migrate` extras, and the docs no longer tell you to install with `pip install --pre`.
