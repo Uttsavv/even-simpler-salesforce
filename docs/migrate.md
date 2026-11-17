@@ -5,7 +5,7 @@ can prove is safe. It marks everything else with a comment and lists it in a rep
 coding agent can finish the job from a checklist.
 
 ```sh
-pip install --pre "even-simpler-salesforce[migrate]"   # adds libcst
+pip install "even-simpler-salesforce[migrate]"   # adds libcst
 
 esf migrate src/                # dry run: prints a diff and a summary, changes nothing
 esf migrate src/ --write        # applies the rewrites and inserts markers
@@ -107,7 +107,7 @@ version.
 ```json
 {
   "version": 1,
-  "esf_version": "0.1.0rc1",
+  "esf_version": "0.5.0",
   "mode": "write",
   "summary": {"files": 18, "rewritten": 47, "needs_review": 9, "todo": 6, "errors": 0},
   "findings": [

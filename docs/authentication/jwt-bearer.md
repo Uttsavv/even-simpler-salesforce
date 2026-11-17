@@ -25,7 +25,7 @@ You need the `[jwt]` extra. Without PyJWT installed, creating `JwtBearer` raises
 straight away, not at the first call.
 
 ```sh
-pip install --pre "even-simpler-salesforce[jwt]"
+pip install "even-simpler-salesforce[jwt]"
 ```
 
 You also need an app with a certificate and pre-authorized users.

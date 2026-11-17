@@ -24,9 +24,8 @@ structured log event with its API usage, and SOQL values are quoted for you. You
 flow (client credentials, JWT bearer, web server with PKCE, or an existing token). The client
 then handles tokens, retries, pagination, chunking and error mapping.
 
-> [!NOTE]
 > **Project status: beta (0.5).** Breaking changes are still possible in 0.x minor releases.
-> They are always listed under *Changed* / *Removed* in the [changelog](CHANGELOG.md) with
+> They are always listed under *Changed* / *Removed* in the [changelog](https://github.com/Uttsavv/even-simpler-salesforce/blob/main/CHANGELOG.md) with
 > migration notes, and deprecated APIs keep working for at least one minor release.
 >
 > | Tested on | |
@@ -56,6 +55,8 @@ The only required dependency is `httpx`. Extras add optional features:
 | `otel` | opentelemetry-api | `esf.observability.OpenTelemetry` |
 | `structlog` | structlog | `esf.observability.Structlog` |
 | `testing` | pytest, respx | the `esf.testing` helpers and pytest plugin |
+| `pubsub` | grpcio, protobuf, fastavro | `sf.pubsub` subscriptions and Change Data Capture |
+| `migrate` | libcst | the `esf migrate` codemod from simple-salesforce |
 | `fastapi`, `flask` | the framework | the `even_simpler_salesforce.contrib.fastapi` and `.contrib.flask` integrations |
 | `all` | everything above | |
 
@@ -97,7 +98,7 @@ with esf.Salesforce(auth) as sf:
         print(lead["Name"])
 ```
 
-## What 0.1 includes
+## What's included
 
 - **Clients:** `AsyncSalesforce` and the generated `Salesforce`. `with_auth()` and `tagged()`
   return child clients that share the connection pool, caches and usage counters.
@@ -115,6 +116,9 @@ with esf.Salesforce(auth) as sf:
 - **sObject Collections:** create, update, upsert, delete and retrieve, chunked (200 rows per
   write, 2,000 ids per read) and run concurrently. Results keep the input order, and a failure
   in one chunk raises `PartialFailure` with every row's result.
+- **Request options:** `esf.DuplicateRules(...)` and assignment rules on writes, `update_mru=`
+  for recently viewed lists, `default_namespace=` for managed packages, and Salesforce
+  `Warning` headers raised as `esf.SalesforceWarning`.
 - **Raw requests:** `sf.request()` sends any REST call through the same auth, retry, error and
   logging pipeline.
 - **Errors:** one exception hierarchy for REST, OAuth and Collections errors, with opt-in
@@ -128,7 +132,8 @@ with esf.Salesforce(auth) as sf:
 - **Testing:** `FakeSalesforce` / `AsyncFakeSalesforce`, a recorder and replayer for redacted
   traffic, and a pytest plugin.
 - **CLI:** `esf whoami`, `esf limits`, `esf query`, `esf describe`, `esf request`,
-  `esf generate models` and `esf generate actions`.
+  `esf generate models`, `esf generate actions`, and `esf migrate` (rewrites simple-salesforce
+  code, `[migrate]` extra).
 - **More API areas:** Files (streamed uploads and downloads), invocable actions and Apex REST,
   lead convert and merge, platform events, Bulk API 2.0, Tooling (including anonymous Apex),
   GraphQL, Composite, UI API, reports and dashboards, the Metadata API, and Pub/Sub
@@ -146,11 +151,11 @@ reference.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md). Commits need a DCO sign-off.
+See [CONTRIBUTING.md](https://github.com/Uttsavv/even-simpler-salesforce/blob/main/CONTRIBUTING.md) and [AGENTS.md](https://github.com/Uttsavv/even-simpler-salesforce/blob/main/AGENTS.md). Commits need a DCO sign-off.
 
 ## Licence
 
-Apache License 2.0; see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Apache License 2.0; see [LICENSE](https://github.com/Uttsavv/even-simpler-salesforce/blob/main/LICENSE) and [NOTICE](https://github.com/Uttsavv/even-simpler-salesforce/blob/main/NOTICE).
 
 Not affiliated with or endorsed by Salesforce, Inc. "Salesforce" is a trademark of
 Salesforce, Inc.
