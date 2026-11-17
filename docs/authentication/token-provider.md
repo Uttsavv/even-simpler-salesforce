@@ -78,7 +78,9 @@ as [client credentials](client-credentials.md).
 `get_token` is a plain function, so one `TokenProvider` works with both clients.
 
 - `AsyncSalesforce` runs `get_token` in a worker thread. A blocking call such as
-  `subprocess.run` doesn't block the event loop.
+  `subprocess.run` doesn't block the event loop. A thread can't be stopped: if the call is
+  cancelled while `get_token` runs, the function finishes and its token is not used. The next
+  call runs `get_token` again.
 - `Salesforce` calls `get_token` in the thread that sends the request.
 
 ## Errors

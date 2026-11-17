@@ -303,6 +303,18 @@ def test_revoke_and_introspect_match_static_token(h: Harness, mock: respx.MockRo
     assert h.load(store, auth.token_key) is None
 
 
+def test_revoke_refuses_a_stored_token_with_a_plain_http_instance(h: Harness, mock: respx.MockRouter) -> None:
+    """Revoke reads the store directly, so it checks the URL before sending the token."""
+    revoke = mock.post(url__startswith="http://").respond(200)
+    store = h.new_store()
+    h.seed(store, "cli:dev", make_token("AT-stored", instance_url="http://acme.example.com"))
+    sf = client(h, esf.TokenProvider(Provider(), token_key="cli:dev"), store=store)
+
+    with pytest.raises(ValueError, match="stored token instance_url must be an https:// URL"):
+        h.run(sf.auth.revoke())
+    assert revoke.call_count == 0
+
+
 def test_force_refresh_calls_the_provider(h: Harness) -> None:
     provider = Provider()
     sf = client(h, esf.TokenProvider(provider))

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from ...auth.flows import Auth, WebServerFlow
 from ...auth.token import Token, parse_token_response
-from ...core.http import RequestSpec
+from ...core.http import RequestSpec, check_instance_url
 from ...errors import OAuthError, UnexpectedResponse
 
 if TYPE_CHECKING:
@@ -92,7 +92,12 @@ class AsyncAuthApi:
         if tok is not None:
             value = tok.refresh_token or tok.access_token
             # StaticToken and TokenProvider have no login domain; the instance accepts the call.
-            base = tok.instance_url if rt.auth.kind in _NO_CLIENT else rt.auth.base_url
+            # The token may come straight from the store: never send it over plain HTTP.
+            base = (
+                check_instance_url(tok.instance_url, what="stored token instance_url")
+                if rt.auth.kind in _NO_CLIENT
+                else rt.auth.base_url
+            )
             resp = await rt._post_form(base + "/services/oauth2/revoke", {"token": value})
             if resp.status not in (200, 204):
                 err, desc = rt._oauth_error(resp)
