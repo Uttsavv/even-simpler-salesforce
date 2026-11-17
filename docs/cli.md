@@ -176,6 +176,7 @@ file.
 | `esf version` | prints the library, default API version, httpx and Python versions | none |
 | `esf migrate PATH...` | rewrites simple-salesforce code; needs the `[migrate]` extra; see [`esf migrate`](migrate.md) | none, and no login |
 | `esf generate actions` | writes typed stubs for invocable actions; see [below](#generate-action-stubs) | one `GET` per action, plus one per kind for a pattern |
+| `esf skills list`, `show NAME`, `install [NAME...]` | lists, prints or installs the agent skills; see [Coding agents](integrations/agents.md) | none, and no login |
 
 ## Generate action stubs
 
@@ -197,6 +198,19 @@ esf generate actions --include flow:Assign_Lead --include apex:* --out myapp/sf_
 The file header names the org, the API version and the time. Field names are snake case, and
 each field keeps its API name: in `metadata["api_name"]` for a dataclass, as the alias for a
 Pydantic model. Run the command again when an action changes. Don't edit the file by hand.
+
+## Install agent skills
+
+`esf skills` installs the agent skills that ship with the library, so coding agents such as
+Claude Code and Codex know how to use it. It needs no login.
+
+```sh
+esf skills list
+esf skills install                       # into .claude/skills
+esf skills install --dir .agents/skills  # for Codex
+```
+
+See [Coding agents](integrations/agents.md) for the skills and the options.
 
 ## Exit codes
 

@@ -9,6 +9,7 @@ Usage::
     esf request GET sobjects/Lead/describe [--json BODY | --json @FILE] [--param KEY=VALUE]
     esf generate models Lead Account [--out models.py] [--pydantic]
     esf generate actions --include flow:Assign_Lead --out sf_actions.py [--pydantic]
+    esf skills list | show NAME | install [NAME ...] [--dir DIR] [--force]
     esf version
 
 Login comes from the environment only (first complete set wins):
@@ -40,6 +41,7 @@ from .._version import __version__
 from ..core.records import flatten
 from ._env import EnvConfigError, auth_from_env, client_from_env
 from ._generate import add_generate_parser
+from ._skills import add_skills_parser
 
 if TYPE_CHECKING:
     from ..errors import SalesforceError
@@ -106,6 +108,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     add_generate_parser(sub)
+    add_skills_parser(sub)
     return p
 
 
@@ -434,7 +437,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if args.command == "version":
             return _cmd_version(out)
-        if args.command == "generate":
+        if args.command in ("generate", "skills"):
             return int(args.handler(args, env, out, err))
         if args.command == "describe":
             return _cmd_describe(args, env, out)

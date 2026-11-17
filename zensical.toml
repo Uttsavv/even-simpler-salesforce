@@ -59,6 +59,7 @@ nav = [
     { "Flask" = "integrations/flask.md" },
     { "Testing" = "testing.md" },
     { "CLI" = "cli.md" },
+    { "Coding agents" = "integrations/agents.md" },
   ] },
   { "Migrating" = [
     { "From simple-salesforce" = "migrating-from-simple-salesforce.md" },

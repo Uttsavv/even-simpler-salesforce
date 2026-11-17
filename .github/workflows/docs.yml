@@ -69,6 +69,10 @@ jobs:
           <a href="${target}/">Redirecting to the ${target} documentation…</a>
           HTML
           [ -d _site/latest ] || ln -s dev _site/latest
+          # llms.txt (https://llmstxt.org/) belongs at the root; its links point to main anyway.
+          for d in "$target" dev; do
+            if [ -f "_site/$d/llms.txt" ]; then cp "_site/$d/llms.txt" _site/llms.txt; break; fi
+          done
           touch _site/.nojekyll
 
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
