@@ -335,8 +335,8 @@ all `Auth` classes and `AuthStart`, `Token`, `AsyncTokenStore` / `TokenStore`,
 ### 5.2 Client lifecycle
 
 - `AsyncSalesforce(auth, *, api_version="68.0", http_client=None, store=None, cache=None, observers=(), budget=None, retry=None, timeout=None, max_concurrency=None, user_agent=None, json=None, error_tags=None, cursor_key=None, instance_url=None, describe_cache=None, log_soql="hash", http2=False, client_name=None, pubsub_endpoint=None, default_namespace=None, update_mru=None)` (`None` means the default config object; `default_namespace` and `update_mru`: §10.2).
-- If `http_client` is not given, the client creates one (`httpx.AsyncClient` with HTTP/1.1, pool limits, timeouts, `Accept-Encoding: gzip`) and **owns** it: `aclose()` / `async with` closes it. An injected client is never closed by the library.
-- `with_auth(auth)` returns a child client sharing transport, caches, observers, usage counters and budget, with its own auth runtime. Children are cheap (no new pool) and SHOULD NOT be closed individually; closing the parent closes the pool.
+- If `http_client` is not given, the client creates one (`httpx.AsyncClient` with HTTP/1.1, pool limits, timeouts, `Accept-Encoding: gzip, deflate`) and **owns** it: `aclose()` / `async with` closes it. An injected client is never closed by the library.
+- `with_auth(auth, *, store=None, instance_url=None)` returns a child client sharing transport, caches, observers, usage counters and budget, with its own auth runtime. Children are cheap (no new pool) and SHOULD NOT be closed individually; closing the parent closes the pool. The parent's `instance_url=` override is not inherited (the child may be another org); pass `instance_url=` to `with_auth` instead.
 - Clients are safe to share across tasks (async) or threads (sync).
 - Instance URL is learned from the token response (`instance_url`) and MAY be overridden.
 
@@ -374,7 +374,7 @@ generic `Async<Name>→<Name>` rule (`AsyncTokenStore→TokenStore`, ...).
 |---|---|---|
 | *(core)* | `httpx>=0.27` | everything not listed below |
 | `[pydantic]` | `pydantic>=2` | `model=` typed results, generated action stubs as models |
-| `[speed]` | `orjson` | faster JSON |
+| `[speed]` | `orjson>=3.10` | faster JSON (3.10 adds `orjson.Fragment`, §7.3) |
 | `[http2]` | `h2` (via `httpx[http2]`) | HTTP/2 |
 | `[jwt]` | `cryptography`, `pyjwt` | `JwtBearer` |
 | `[pubsub]` | `grpcio`, `protobuf`, `fastavro` | Pub/Sub API (§9.16) |
@@ -430,9 +430,27 @@ await sf.auth.revoke(token_key)                  # POST /services/oauth2/revoke,
 info  = await sf.auth.userinfo()                 # /services/oauth2/userinfo
 intro = await sf.auth.introspect(token_key)      # /services/oauth2/introspect
 token = await sf.auth.refresh()                  # forced refresh (single-flight); StaticToken → SessionExpired
+token = await sf.auth.token()                    # the current Token, acquired if needed (a secret)
+await sf.auth.revoke(key, auth=other_flow)       # revoke / introspect a token another flow issued
 ```
 
 PKCE (S256) is on by default for `WebServerFlow`.
+
+- **`sf.auth.token()` is public**, as an escape hatch for code that must hand the access token to
+  something else (a SOAP `SessionHeader` built by hand, another HTTP library). It returns a secret;
+  the docs warn never to log it. Calls through the client never need it.
+- **`revoke` / `introspect` take `auth=`**: the flow that issued the token, when it isn't this
+  client's (its domain and client credentials are used). A `StaticToken` client has no OAuth client,
+  so another `token_key` without `auth=` → `ValueError`. Revoking a `StaticToken` posts to the
+  token's `instance_url` (it has no login domain).
+- **`token_key`:** `WebServerFlow` requires it (a default would share one store record across
+  users). The others default to a hash: `client_credentials:<h>` with
+  `h = sha256(base_url|client_id)[:12]`, `jwt_bearer:<h>` with `sha256(base_url|client_id|username)[:12]`,
+  `static:<h>` with `sha256(instance_url|access_token)[:12]`.
+- **`JwtBearer`:** without `audience`, the `aud` is inferred from `domain`: an Experience Cloud site
+  → the site URL; `test`, `https://test.salesforce.com` or a `*.sandbox.my.salesforce.com` host →
+  `https://test.salesforce.com`; anything else → `https://login.salesforce.com`. The assertion
+  lives 180 s. A missing `[jwt]` extra raises `ImportError` at construction, not at the first call.
 
 ### 6.2 `Token`
 
@@ -471,7 +489,7 @@ class AsyncTokenStore(Protocol):
 ```
 
 - The sync twin has the same protocol without `async`.
-- `InMemoryTokenStore` ships in core: dict + version counter + per-key lock. Lost on restart, which is fine for `ClientCredentials` and `JwtBearer`.
+- `InMemoryTokenStore` ships in core: dict + version counter + per-key lock. `lock()` is a real per-key lock, in-process only: client families that share one store instance refresh one at a time. Lost on restart, which is fine for `ClientCredentials` and `JwtBearer`.
 - **Contract for durable stores** (documented in `docs/authentication/token-stores.md`, enforced by a reusable test suite `esf.testing.token_store_contract`):
   1. One record per **Salesforce identity**, not per app user. Two app users that share a Salesforce connection MUST share one record; copying refresh tokens into several records breaks under rotation.
   2. `save` with `expected_version` MUST be atomic (compare-and-swap or row lock).
@@ -535,7 +553,10 @@ REFRESH(stale):
 Rules:
 - The new refresh token MUST be saved **before** the new access token is used for any request.
 - The refresh POST itself is never retried blindly. This is a deliberate exception to the general retry policy.
-- `ClientCredentials` / `JwtBearer` have no refresh token; "refresh" is a fresh token request, and blind retries are safe.
+- `ClientCredentials` / `JwtBearer` have no refresh token; "refresh" is a fresh token request, and blind retries are safe. A 5xx from their token POST is retried with backoff (up to `RetryPolicy.max_attempts`); a refresh-token grant never is.
+- For `ClientCredentials` / `JwtBearer`, `invalid_grant` is a configuration problem (wrong user, app or certificate): it raises `OAuthError`, not `ReauthorizationRequired`, and emits no `sf.auth.reauth_required`.
+- **Shared failed refresh:** each call captures the refresh generation of K before it sends. If a refresh for K fails while the call is in flight, the call gets a copy of the same error instead of a second token POST. A later call tries again.
+- Refresh events (`sf.auth.refreshed`, `sf.auth.reauth_required`) are emitted after the per-key lock is released, because an observer may call the client.
 - Default skew for `expires_at` checks: 60 s.
 - Identity check: every token the client adopts in place of a previous one (the refresh response, a store re-read after a concurrent refresh, a timeout, a busy answer or a `TokenConflict`) MUST have the same org id and user id as the previous token. Otherwise raise `TokenIdentityChanged` (an `AuthError`; no token in the message) and don't use it. Ids missing on either side aren't compared; 15-character ids compare with the first 15 characters of an 18-character id. The refresh-token, JWT bearer and client-credentials responses all carry `id` (help pages in Appendix A).
 
@@ -559,10 +580,10 @@ hard-coded (#506, #78, #268). Both rules are enforced by an AST test (`tests/uni
 
 
 1. **Build**: absolute URL from `instance_url` + `/services/data/v{api_version}/...` unless the spec says otherwise (OAuth, Apex REST `/services/apexrest`, SOAP `/services/Soap/u/{v}`, Pub/Sub host).
-2. **Auth**: attach `Authorization: Bearer <token>`.
+2. **Auth**: attach `Authorization: Bearer <token>`. Every request also sends `User-Agent: even-simpler-salesforce/<version>` unless `user_agent=` is set.
 3. **Budget guard** (§10.4): may raise `BudgetExceeded` for low-priority calls.
 4. **Concurrency gate**: optional `max_concurrency` semaphore per client family.
-5. **Compression**: always send `Accept-Encoding: gzip`. Gzip request bodies over 64 KiB (`Content-Encoding: gzip`) for Bulk ingest, Collections and Composite.
+5. **Compression**: always send `Accept-Encoding: gzip, deflate`. Gzip request bodies over 64 KiB (`Content-Encoding: gzip`) for Bulk ingest, Collections and Composite.
 6. **Send** via httpx.
 7. **Parse `Sforce-Limit-Info`** (`api-usage=used/max`, and `api-bursts=used/max` when present) into usage counters. Parse a `Warning` response header (`<code> - "<text>"`; code `299` = deprecated API version) and emit `warnings.warn(text, esf.SalesforceWarning)` **once per distinct text per client family** (the set of seen texts lives on the family's transport), so a deprecation notice is not lost or repeated on every call. `SalesforceWarning` subclasses `UserWarning`; users silence or escalate it with the standard `warnings` filters.
 8. **Classify** the response (§8.2) into success or a typed error.
@@ -587,14 +608,16 @@ Both backends MUST behave identically (implemented in `core/jsonlib.py`):
   before anything is sent. orjson would send `null` and silently blank the field; the stdlib would
   send `NaN`, which is not JSON (simple-salesforce #442, #309).
 - **`Decimal` is encoded as a JSON number** with its exact digits, never via `float` and never as a
-  string, so currency/percent values keep their precision on the way in (#135).
+  string, so currency/percent values keep their precision on the way in (#135). The stdlib backend
+  encodes a placeholder string and swaps in the bare number; orjson uses `orjson.Fragment`
+  (hence `orjson>=3.10`).
 - **Reading numbers as `Decimal`** is opt-in: pass `json=` a codec whose `loads` uses
   `parse_float=decimal.Decimal` (stdlib). orjson can't parse to `Decimal`, so the default stays
   `float`; docs show the codec. With `model=`, Pydantic `Decimal` fields are the recommended route.
 
 ### 7.4 Retry policy
 
-`RetryPolicy(max_attempts=3, base_delay=0.25, max_delay=8.0, jitter=True, respect_retry_after=True)`.
+`RetryPolicy(max_attempts=3, base_delay=0.25, max_delay=8.0, jitter=True, respect_retry_after=True, max_retry_after=30.0)`.
 
 | Situation | GET / HEAD reads | PATCH / PUT / DELETE, upsert, code-running GETs | POST create & other POSTs | Refresh POST |
 |---|---|---|---|---|
@@ -613,6 +636,10 @@ Both backends MUST behave identically (implemented in `core/jsonlib.py`):
   composite with only GETs, Bulk job status polls). Upsert by external id is **not** idempotent here.
 - Each retry is recorded in the final `sf.request` event (`retries`, `retry_reasons`).
 - Exponential backoff with full jitter, capped by `max_delay`; `Retry-After` wins when present.
+- A `Retry-After` longer than `max_retry_after` is not waited for: the error is raised with
+  `retry_after` set, so the caller decides. A 429 / `REQUEST_LIMIT_EXCEEDED` **without**
+  `Retry-After` is not retried. `respect_retry_after=False` ignores the header and uses the normal
+  backoff.
 
 ---
 
@@ -706,6 +733,14 @@ Responses* (V5, done). The official one-line descriptions for `FIELD_CUSTOM_VALI
 and `CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY` don't describe how they show up in practice, so the
 mapping of validation rules / trigger exceptions to those codes needs recorded sandbox responses (V5b).
 
+- `NOT_FOUND` on an operation on an sObject *type* (describe, metadata, updated, deleted, UI API
+  object-info) → `InvalidType`: the type doesn't exist. On a record it stays `NotFound`.
+- `UnsupportedApiVersion` has two sources, told apart by `error_code`: `UNSUPPORTED_API_VERSION`
+  from Salesforce, or `API_VERSION_TOO_OLD` raised by the library before sending. A version newer
+  than the org's release is not one of them: Salesforce answers 404 `NOT_FOUND` (`NotFound`; V21).
+- A non-JSON 2xx body where JSON is expected raises `InvalidJSONResponse` (an `UnexpectedResponse`
+  that is also a `ValueError`) inside the pipeline, so the `sf.request` event says `outcome="error"`.
+
 ### 8.3 Sources normalised to this shape
 
 | Source | Body shape | Handling |
@@ -737,7 +772,7 @@ sf = esf.AsyncSalesforce(auth, error_tags={"ADDR_REQUIRED": AddressRequired})
 
 - Pattern: `^\[(?P<tag>[A-Z0-9_]{2,64})\]\s*` at the start of the message.
 - Registered classes MUST subclass the class the error would otherwise have been.
-- Unmatched tags still populate `.tag` on the default class. Nothing changes for users who don't opt in.
+- The `[TAG] ` prefix is stripped from `message` only when the tag is registered. An unregistered tag sets `.tag` on the default class and keeps the message as sent. Nothing changes for users who don't opt in.
 
 ### 8.5 Hints and docs links (0.2)
 
@@ -851,8 +886,8 @@ page = await sf.query(soql, page_size=2000, include_deleted=False, model=None) -
 page2 = await sf.query_more(page.cursor)
 async for rec in sf.query_iter(soql, page_size=2000): ...
 n = await sf.count(soql_count)                    # SELECT COUNT() ...
-res = await sf.search(sosl)                        # GET search?q=
-res = await sf.parameterized_search(q, sobjects=[...], fields=[...])
+rows = await sf.search(sosl)                       # GET search?q=; the searchRecords list
+rows = await sf.parameterized_search(q, sobjects=[...], fields=[...])   # same
 ```
 
 - `include_deleted=True` uses `queryAll`.
@@ -865,6 +900,8 @@ res = await sf.parameterized_search(q, sobjects=[...], fields=[...])
   when at least one value is given; without values the string is sent unchanged (no `{{` handling),
   so existing queries keep working. Named placeholders (`{name}`) and `{:like}` are only available
   through `esf.soql`, because keyword arguments are taken by options (`page_size=`, `model=`, ...).
+  `esf.soql` itself is not strict: it follows `str.format` (extra values are ignored, a missing one
+  raises `IndexError`).
   Docs teach this form and warn that an f-string (`f"... = '{email}'"`) looks similar but escapes
   nothing. `esf.soql` stays public for building a query in pieces.
 - **`query_one(soql, *values, include_deleted=False, model=None)`:** returns exactly one row.
@@ -877,8 +914,9 @@ res = await sf.parameterized_search(q, sobjects=[...], fields=[...])
   avoid fetching more rows than needed.
 - **`explain(soql, *values) -> list[QueryPlan]`:** `GET query?explain=`; returns the query plans
   ordered as Salesforce sends them (cheapest first), each with `leading_operation`,
-  `relative_cost`, `cardinality`, `sobject_cardinality`, `sobject_type`, `fields` and `notes`. The
-  query itself is not run. ⚠️ **VERIFY** the response fields (V22).
+  `relative_cost`, `cardinality` (estimated rows the plan returns), `sobject_cardinality`,
+  `sobject_type`, `fields` and `notes` (`tuple[QueryPlanNote, ...]`: why a field can't use an
+  index). The query itself is not run. Fields verified in V22.
 - **`esf.flatten(row) -> dict`:** pure function in `core/records.py` for exporting rows to CSV,
   DataFrames or JSON. Drops `attributes` at every level; parent lookups become dotted keys
   (`"Owner.Name"`, `"Owner.Manager.Email"`); a null lookup stays as one key (`"Owner": None`), so
@@ -890,12 +928,15 @@ res = await sf.parameterized_search(q, sobjects=[...], fields=[...])
 
 **Safe SOQL building** (`esf.soql`): `{}` placeholders, values quoted and escaped per SOQL rules:
 strings (escape `\ ' " \n \r \t \b \f`), numbers, bools, `None→null`, `date`/`datetime` (ISO,
-UTC `Z`), sequences → `('a','b')`. `esf.soql_like(value)` additionally escapes `%` and `_`.
+UTC `Z`), sequences → `('a','b')`. `esf.soql_like(value, pattern="{}")` additionally escapes `%`
+and `_`; `pattern` adds your own wildcards around the escaped value (`"%{}%"` = contains). In
+`esf.soql` the same is `{:like}`.
 Field and object names are **not** placeholders: pass them through `esf.soql_identifier(name)`,
 which validates `^[A-Za-z][A-Za-z0-9_]*(__[a-z]+)?$` (dotted paths allowed).
 
 **Cursor (O9):** `Cursor` is an opaque string safe to hand to a frontend.
 - Encoding: base64url of the `nextRecordsUrl` path.
+- At most 512 characters. Every rejection (length, format, signature) is `MalformedQuery` with `error_code="INVALID_CURSOR"`.
 - Decoding validates the path against `^/services/data/v\d+\.\d/query(All)?/[0-9A-Za-z]{15,18}-\d+$`; anything else raises `MalformedQuery`. This prevents a client-supplied cursor from making the server call arbitrary URLs.
 - Optional signing: `AsyncSalesforce(..., cursor_key=b"...")` appends an HMAC-SHA256 tag; tampered or foreign cursors are rejected.
 
@@ -922,7 +963,13 @@ which validates `^[A-Za-z][A-Za-z0-9_]*(__[a-z]+)?$` (dotted paths allowed).
   the `capture()` roll-up even if the app never calls `raise_for_errors()`. A "never inspected"
   warning from `__del__` was considered and rejected: it fires at unpredictable times (or never, on
   interpreter exit), is noisy in tests, and can't name the call site.
-- Chunks run with bounded concurrency (`concurrency=4` default). With `all_or_none=True`, a single failing chunk raises a typed error; earlier chunks are **already committed**. This is documented prominently, and `all_or_none=True` with more than 200 rows logs a warning.
+- `retrieve` returns `list[dict | None]` in input order (`None` for an id not found), not a `BatchResult`.
+- Chunks run with bounded concurrency (`concurrency=4` default) and **always all finish**. If some
+  write chunks failed as a whole (timeout, 5xx, ...), `PartialFailure` carries the full ordered
+  `BatchResult`; each row of a failed chunk has `extended["outcome"]` = `"unknown"` (the request may
+  have reached Salesforce) or `"rejected"`. If every chunk failed, or a `retrieve` chunk failed, the
+  first chunk error is raised as is.
+- With `all_or_none=True`, chunks run one at a time and the first failing chunk raises a typed error; earlier chunks are **already committed**. This is documented prominently, and `all_or_none=True` with more than 200 rows logs a warning.
 
 ### 9.4 Composite family (0.3; `sf.request` in 0.1)
 
@@ -942,7 +989,10 @@ which validates `^[A-Za-z][A-Za-z0-9_]*(__[a-z]+)?$` (dotted paths allowed).
 ### 9.5 Raw requests — `sf.request` (0.1)
 
 `await sf.request(method, path, *, params=None, json=None, content=None, headers=None, idempotent=None, operation="raw")`.
-Goes through the full pipeline (auth, refresh, retries, errors, logging). `path` may be relative
+Goes through the full pipeline (auth, refresh, retries, errors, logging). Returns decoded JSON,
+`None` for an empty body, `str` for a text body (`text/*`, XML or any `charset=`) and `bytes` for
+anything else; a JSON-labelled body that doesn't parse → `UnexpectedResponse`. A body on GET or
+HEAD, or both `json=` and `content=` → `ValueError`. `path` may be relative
 to `/services/data/vXX.X/` or absolute starting with `/services/`. Absolute URLs to other hosts are
 rejected. This is the escape hatch that replaces simple-salesforce's `restful()`.
 
@@ -1406,10 +1456,18 @@ Shaped but unconfirmed sites:
 In test files, mock-shaped chains (`X.Obj.method.assert_*`, ...) on sObject-looking names use the
 fallback without the import condition (tests rarely import simple-salesforce).
 
+Not every rule uses the fallback. `stored-ref`, `sobject-getattr`, `query-result` and the generic
+internals (`session_id`, `headers`, `session`, `base_url`) need a confirmed client (case 1 or 2):
+on a guess they would match `settings.SOME_CONST` or `payload.session_id`. Names only
+simple-salesforce uses (`query_all`, `query_more`, `restful`, `apexecute`, `sf_version`,
+`sf_instance`) take the fallback without the upper-case condition; a rewrite made on the fallback
+is `needs-review`.
+
 #### 9.19.2 Rules
 
 Every finding carries a stable rule id. Ids are part of the public interface (docs pages link to
-`.../migrate/#<rule>`); new rules may be added, ids are never renamed.
+`.../migrate/#<rule>`); new rules may be added, ids are never renamed. `docs_url` points at
+`.../latest/migrate/#<rule>`.
 
 | Rule | Finds | Action | Status |
 |---|---|---|---|
@@ -1427,7 +1485,7 @@ Every finding carries a stable rule id. Ids are part of the public interface (do
 | `query-more` | `X.query_more(url, True)` | marker only (needs a `Cursor`, not a URL) | `todo` |
 | `format-soql` | `format_soql("... {} ...", v)` passed directly to a query method | → values in SOQL methods | `rewritten`; `todo` when the formatted string is built elsewhere |
 | `restful` | `X.restful(path, method=..., json=...)` | → `X.request(method, path, json=...)` | `rewritten` |
-| `apexecute` | `X.apexecute(path, method=, data=)` | → `X.request(METHOD, "/services/apexrest/<path>", json=data)` (until `sf.apex` ships in 0.2) | `rewritten` for a literal path; else `todo` |
+| `apexecute` | `X.apexecute(path, method=, data=)` | → `X.apex.<method>("/<path>", json=data)` | `rewritten` for a literal path and method; `todo` for a non-literal path or method, a query string in the path, or `data=` with `GET` / `DELETE` |
 | `exceptions` | simple-salesforce exceptions in `except`, `isinstance`, `raise` and the imports | 1:1: `SalesforceError` → `esf.SalesforceError`, `SalesforceResourceNotFound` → `esf.NotFound`, `SalesforceMoreThanOneRecord` → `esf.MultipleMatches`, `SalesforceRefusedRequest` → `esf.Forbidden`, `SalesforceAuthenticationFailed` → `esf.AuthError`; `import even_simpler_salesforce as esf` added once | `rewritten`; `todo` (with a suggestion) for `SalesforceExpiredSession` (§20: refresh is automatic), `SalesforceMalformedRequest`, `SalesforceGeneralError` |
 | `client-internals` | `X.sf_version` | → `X.api_version` | `rewritten` |
 | `client-internals` | `X.session_id`, `X.base_url`, `X.sf_instance`, `X.headers`, `X.session` | marker only, with the §20 replacement in the message | `todo` |
@@ -1519,7 +1577,9 @@ sf_client.sobject("Lead").update.assert_awaited_once_with(LEAD_ID, {"Status": "W
   async, `self.`-prefixed clients, custom objects, nested calls, already-migrated code (no change),
   and the `ignore` marker.
 - Idempotence property test: `migrate(migrate(x)) == migrate(x)`.
-- Formatting test: comments and blank lines outside rewritten nodes are byte-identical.
+- Formatting test: comments and blank lines outside rewritten nodes are byte-identical. Known
+  libcst limitation: at the end of a file, a blank line followed by a whitespace-only line
+  collapses into one.
 - Run against a real production codebase that uses `simple_salesforce.aio`: every client-shaped
   site is either rewritten or marked, `--check` is green after the marked items are resolved, and
   the project's tests pass.
@@ -1534,7 +1594,7 @@ sf_client.sobject("Lead").update.assert_awaited_once_with(LEAD_ID, {"Status": "W
 |---|---|---|---|
 | `Sforce-Limit-Info: api-usage=used/max` on every response | org-wide daily API calls | free | on |
 | Library counters | calls by operation, sObject, caller tag, status; retries; refreshes | free | on |
-| `GET /limits` | every limit (Bulk, async Apex, platform events, storage) | 1 call | opt-in poller, min interval 5 min |
+| `GET /limits` | every limit (Bulk, async Apex, platform events, storage) | 1 call | opt-in poller (`sf.start_limits_poller()`), min interval 300 s, one per client family, stopped when the root client closes |
 | `ApiTotalUsage` event log | per-app/per-user usage | needs Event Monitoring | out of scope (O15) |
 
 ### 10.2 Caller tags and priority
@@ -1589,15 +1649,16 @@ per-call spec priority, then the `tagged()` view, then `call_context`, then `"no
 
 `sf.usage.snapshot() -> UsageSnapshot`:
 `api_used`, `api_max`, `api_fraction`, `as_of`, `calls_by_operation`, `calls_by_caller`,
-`errors_by_code`, `retries`, `refreshes`, `projected_exhaustion` (linear projection from the rate
-over the last hour of observed header values; `None` if insufficient data). Counters are
-per-process; the header values are org-wide.
+`calls_by_sobject`, `errors_by_code`, `retries`, `refreshes`, `api_bursts_used`, `api_bursts_max`,
+`projected_exhaustion` (linear projection from the rate over the last hour of observed header
+values; needs samples spanning at least 1 minute, and at most 2 samples per minute are kept;
+`None` if insufficient data). Counters are per-process; the header values are org-wide.
 
 ### 10.4 Budget events and guard
 
 ```python
 sf = esf.AsyncSalesforce(auth, budget=esf.Budget(
-    warn_at=(0.5, 0.8, 0.95),             # emit sf.usage.threshold once per threshold per day
+    warn_at=(0.5, 0.8, 0.95),             # emit sf.usage.threshold once per threshold per UTC day
     pause_low_priority_above=0.8,          # raise BudgetExceeded for priority="low" calls
     block_all_above=None,                  # optional hard stop for everything except priority="high"
 ))
@@ -1623,7 +1684,7 @@ usage so jobs can sleep and resume.
 |---|---|---|
 | `sf.request` | each logical call finishes | see 11.3 |
 | `sf.retry` | before each retry | attempt, reason, delay_ms |
-| `sf.auth.refreshed` | token refreshed | token_key_hash, flow, duration_ms, rotated: bool, proactive: bool |
+| `sf.auth.refreshed` | token acquired or refreshed | token_key_hash, flow, duration_ms, rotated: bool, proactive: bool, initial: bool (first acquisition) |
 | `sf.auth.reauth_required` | invalid_grant | token_key_hash |
 | `sf.usage.threshold` | budget threshold crossed | fraction, used, max |
 | `sf.bulk.job` | bulk job created, state changes, or a `wait()` poll sees `numberRecordsProcessed`/`numberRecordsFailed` change | job_id, operation, sobject, state, records_processed, records_failed (`None` for query jobs: their job info has no `numberRecordsFailed`) |
@@ -1688,7 +1749,7 @@ esf PATCH sobject.update Lead   400   88ms  FIELD_CUSTOM_VALIDATION_EXCEPTION  "
 esf POST oauth.refresh          200  240ms  rotated
 ```
 
-`ESF_DEBUG=2` adds request/response headers (redacted) and timing per attempt.
+`ESF_DEBUG=2` adds request/response headers (redacted) and timing per attempt, as `sf.debug.attempt` events. They carry the path template, not the URL, because paths can hold external id values.
 
 ---
 
@@ -1698,10 +1759,10 @@ esf POST oauth.refresh          200  240ms  rotated
 |---|---|---|
 | Token reuse | In-memory per process; refresh only on 401 (or opt-in proactive) | on |
 | Connection reuse | One pooled httpx client per client family; children share it | on |
-| Compression | `Accept-Encoding: gzip` (Salesforce returns gzip-compressed responses when asked); gzip large request bodies | on |
+| Compression | `Accept-Encoding: gzip, deflate` (Salesforce returns gzip-compressed responses when asked); gzip large request bodies | on |
 | HTTP/2 | `[http2]` extra; `http2=True` | off |
 | Usage tracking | From headers, never by polling `/limits` | on |
-| Describe cache | In-memory TTL (default 1 h, max 500 entries, LRU); `Cache` protocol for shared caches; keyed by org id + api version + sObject + user id hash (FLS differs by user) | on |
+| Describe cache | In-memory TTL (default 1 h, max 500 entries, LRU); `Cache` protocol for shared caches; keyed by org id (instance URL when unknown) + api version + sObject + user id hash (FLS differs by user); stale entries kept 24 h (`stale_ttl`) for revalidation | on |
 | Conditional describe | When a cached describe is stale, revalidate with `If-Modified-Since`, and with `If-None-Match` when Salesforce sent an `ETag` (the UI API sends no `Last-Modified` and ignores `If-Modified-Since`, V62); Salesforce documents `304 Not Modified` with no body for describe | on |
 | Round trips | Collections (200 writes / 2,000 reads), Composite (25), Graph, GraphQL nested reads, query `batchSize` up to 2,000, Bulk 2.0 with parallel result download | n/a |
 | Concurrency | Bounded per client (`max_concurrency`), chunk concurrency for Collections | none / 4 |
@@ -1764,6 +1825,7 @@ One sync client per process, shared across threads; `teardown_appcontext` emits 
   - **Query is scripted, not executed**: `fake.on_query("SELECT Id FROM Lead WHERE ...", rows=[...])` or a predicate/callable. No SOQL engine (a fake engine would lie).
   - Error injection: `fake.fail_next("sobject.update", esf.ValidationRuleFailed(...))`.
   - Records every call for assertions: `fake.calls`.
+  - Emits one `sf.request` event per Collections call (the real client emits one per chunk). `expand_children=` is accepted and ignored.
 - **Recorder**: `esf.testing.record(path)` captures real responses (redacted: tokens, ids optional, emails/phones masked) into JSON fixtures for contract tests; `esf.testing.replay(path)` serves them via `httpx.MockTransport`.
 - **pytest plugin** (auto-registered entry point): fixtures `esf_fake`, `esf_async_fake`, `esf_replay`; marker `@pytest.mark.esf_sandbox` skipped unless `ESF_SANDBOX_*` env vars are set.
 - **`token_store_contract`**: a parametrisable test suite apps run against their own `TokenStore` (CAS, concurrency, delete, round-trip).
@@ -1848,6 +1910,14 @@ Coverage gate: **≥ 90 % lines and branches** overall, **100 %** for `core/` an
 uv (env + lock), nox (sessions), ruff (lint + format), pyright strict, pytest, coverage,
 hypothesis, respx, pytest-benchmark, pre-commit, Dependabot (pip + actions).
 
+- `pytest<9.2` in the dev group: 9.2.0 crashes at startup on Python 3.10 (the `[testing]` extra
+  excludes only 9.2.0 on 3.10). CPython 3.10.0 itself breaks pytest and hypothesis (a dataclass
+  bug); use a current 3.10.x.
+- Zensical needs Python ≥ 3.11, so the `docs` dependency group is gated to 3.11+.
+- ruff excludes `big-bang.md`: ruff formats Markdown code blocks, and the spec's pseudo-code is
+  aligned by hand.
+- GitHub Actions are pinned to commit SHAs; Dependabot updates them.
+
 ### 18.2 `ci.yml` on every PR
 
 1. ruff check + format check
@@ -1862,7 +1932,8 @@ hypothesis, respx, pytest-benchmark, pre-commit, Dependabot (pip + actions).
 
 ### 18.3 Security
 
-`SECURITY.md` with private reporting via GitHub Security Advisories. CodeQL workflow. No
+`SECURITY.md` with private reporting via GitHub Security Advisories. CodeQL workflow with the
+`security-extended` queries (not `security-and-quality`: ruff and pyright cover quality). No
 secrets in fixtures (recorder redaction + a CI grep for token patterns `00D[A-Za-z0-9]{12,15}!`).
 
 ### 18.4 `AGENTS.md` (for AI-driven development)
@@ -1953,7 +2024,7 @@ The docs page contains this table (extended per release). No compatibility shim 
 | a whole codebase | `esf migrate src/` rewrites the mechanical rows of this table and marks the rest (§9.19) |
 | `sf.restful("composite/sobjects", method="PATCH", json=...)` | `sf.collections.update(...)` |
 | `sf.restful(path, ...)` | `sf.request(method, path, ...)` |
-| `sf.apexecute("path", method="POST", data=...)` | `sf.request("POST", "/services/apexrest/path", json=...)` (0.1); `sf.apex.post("/path", json=...)` from 0.2 |
+| `sf.apexecute("path", method="POST", data=...)` | `sf.apex.post("/path", json=...)` (0.2; in 0.1 `sf.request("POST", "/services/apexrest/path", json=...)`) |
 | `sf.bulk.Lead.insert(rows)` (Bulk v1) | `sf.bulk.ingest("Lead", "insert", rows=rows)` (Bulk 2.0) |
 | `sf.bulk2.Lead.query(q)` | `sf.bulk.query(q)` |
 | `sf.toolingexecute(...)` | `sf.tooling.request(...)` / `sf.tooling.query(...)` |
@@ -1963,7 +2034,7 @@ The docs page contains this table (extended per release). No compatibility shim 
 | `OrderedDict` results | plain `dict` |
 | `sf.sf_version` | `sf.api_version` |
 | `sf.sf_instance` / `sf.base_url` (to build links or URLs) | `sf.instance_url` (read-only; the instance of the current token, `None` before the first call) and `sf.request(...)` for calls |
-| `sf.session_id`, `sf.headers`, `sf.session` (to make your own HTTP calls) | `sf.request(...)` / `sf.apex.*`; the access token is not public by design |
+| `sf.session_id`, `sf.headers`, `sf.session` (to make your own HTTP calls) | `sf.request(...)` / `sf.apex.*`; if other code needs the access token, `sf.auth.token()` returns it (a secret, §6.1) |
 
 ---
 

@@ -64,7 +64,7 @@ sf = esf.Salesforce(
 | `Salesforce(..., session=requests.Session())` | `esf.Salesforce(auth, http_client=httpx.Client(...))` |
 | `sf.sf_version` | `sf.api_version` |
 | `sf.sf_instance`, `sf.base_url` (to build links or URLs) | `sf.instance_url` for links; `sf.request(...)` for calls |
-| `sf.session_id`, `sf.headers`, `sf.session` (to make your own HTTP calls) | `sf.request(...)`; the access token is not public by design |
+| `sf.session_id`, `sf.headers`, `sf.session` (to make your own HTTP calls) | `sf.request(...)`; `sf.auth.token()` returns the token if other code needs it (a secret) |
 
 `sf.instance_url` is read-only. It is the instance of the current token, and `None` before the
 first call. `sf.request(...)` applies login, refresh, retries and logging for you.
@@ -137,7 +137,7 @@ For an endpoint without a helper, use [`sf.request()`](guides/requests.md).
 | simple-salesforce | even-simpler-salesforce |
 |---|---|
 | `sf.restful(path, method=..., json=...)` | `sf.request(method, path, json=...)` |
-| `sf.apexecute("Path", method="POST", data=...)` | `sf.request("POST", "/services/apexrest/Path", json=...)`; dedicated helpers planned for 0.2 |
+| `sf.apexecute("Path", method="POST", data=...)` | `sf.apex.post("/Path", json=...)` |
 | `sf.toolingexecute(...)` | `sf.request("GET", "tooling/query", params={"q": ...})`; Tooling helpers planned for 0.3 |
 | `sf.limits()` | `sf.limits()` returns `dict[str, Limit]`; `sf.usage.snapshot()` gives usage at no cost |
 | `sf.is_sandbox()` | not provided; query `SELECT IsSandbox FROM Organization` |

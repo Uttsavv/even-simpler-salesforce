@@ -311,9 +311,14 @@ TODO.
 
 ### `apexecute`
 
-`X.apexecute(path, method=..., data=...)` becomes
-`X.request(METHOD, "/services/apexrest/<path>", json=data)`. The codemod rewrites only a literal
-path. Other paths get a TODO. You can also call Apex REST with the `sf.apex.*` helpers.
+`X.apexecute(path, method=..., data=...)` becomes `X.apex.<method>("/<path>", json=data)`, for
+example `X.apex.post("/orders/submit", json=data)`. The codemod rewrites only a literal path and a
+literal method. These cases get a TODO:
+
+- a path in a variable
+- a path with a query string; pass the query parameters as `params=`
+- a method in a variable
+- `data=` with `GET` or `DELETE`, which send no body
 
 ### `exceptions`
 
@@ -359,8 +364,9 @@ These cases get a TODO:
 | `X.sf_instance`, `X.base_url` | `X.instance_url` for links, `X.request(...)` for calls | TODO |
 | `X.session_id`, `X.headers`, `X.session` | `X.request(...)` | TODO |
 
-`X.instance_url` is the instance of the current token. It is `None` before the first call. The
-access token isn't public by design. The codemod matches `session_id`, `headers` and `session` only
+`X.instance_url` is the instance of the current token. It is `None` before the first call. If you
+must pass the access token to other code, `await sf.auth.token()` returns it. Treat it as a secret.
+The codemod matches `session_id`, `headers` and `session` only
 on a confirmed client.
 
 ### `client-methods`

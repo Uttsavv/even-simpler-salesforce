@@ -97,7 +97,10 @@ EXCEPTIONS: dict[str, tuple[str, bool]] = {
     "SalesforceGeneralError": ("catch esf.ServerError (5xx) or esf.SalesforceError", False),
 }
 INTERNALS_TODO = {
-    "session_id": "the access token isn't public; make calls with sf.request(...)",
+    "session_id": (
+        "make calls with sf.request(...); if you must pass the token on, "
+        "sf.auth.token() returns it (a secret)"
+    ),
     "headers": "make calls with sf.request(...); auth headers are added for you",
     "session": "make calls with sf.request(...); the HTTP client is managed for you",
     "base_url": "use sf.instance_url to build links, sf.request(...) for calls",
@@ -106,6 +109,7 @@ INTERNALS_TODO = {
 #: Attributes of simple-salesforce exceptions -> the closest attribute of esf errors.
 CAUGHT_ATTRS = {"content": "raw", "resource_name": "sobject", "url": "path"}
 DISTINCTIVE_INTERNALS = frozenset({"sf_instance", "sf_version"})  # names only simple-salesforce uses
+APEX_METHODS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE"})  # the sf.apex.<method> helpers
 QUERY_RESULT_ATTRS = frozenset({"records", "total_size", "done", "cursor"})
 QUERY_RESULT_MSG = "query() returns a QueryResult (records, total_size, done, cursor), not a dict"
 QUERY_KEYS = {"records": "records", "totalSize": "total_size", "done": "done"}
@@ -1741,33 +1745,33 @@ class _Transformer(cst.CSTTransformer):
         kw = {a.keyword.value: a for a in args if a.keyword is not None}
         action = positional[0].value if positional else None
         text = _string_value(action) if action is not None else None
-        if text is None or len(positional) > 3 or set(kw) - {"method", "data"}:
-            self.record(
-                "apexecute",
-                "todo",
-                'use sf.request(METHOD, "/services/apexrest/<path>", json=data)',
-                original,
-            )
-            return updated
-        method = (
-            kw["method"].value
-            if "method" in kw
-            else (positional[1].value if len(positional) > 1 else self.s("GET"))
+        method_node = (
+            kw["method"].value if "method" in kw else (positional[1].value if len(positional) > 1 else None)
         )
+        method = "GET" if method_node is None else (_string_value(method_node) or "").upper()
         data = kw["data"].value if "data" in kw else (positional[2].value if len(positional) > 2 else None)
-        new_args = [
-            cst.Arg(method, comma=_comma()),
-            cst.Arg(self.s("/services/apexrest/" + text.lstrip("/"))),
-        ]
+        if (
+            text is None
+            or "?" in text  # sf.apex takes query parameters as params=, not in the path
+            or "#" in text
+            or len(positional) > 3
+            or set(kw) - {"method", "data"}
+            or method not in APEX_METHODS
+            or (data is not None and method in ("GET", "DELETE"))  # sf.apex.get/delete send no body
+        ):
+            self.record("apexecute", "todo", 'use sf.apex.<method>("/<path>", json=data)', original)
+            return updated
+        new_args = [cst.Arg(self.s("/" + text.lstrip("/")))]
         if data is not None:
             new_args[-1] = new_args[-1].with_changes(comma=_comma())
             new_args.append(cst.Arg(data, keyword=cst.Name("json"), equal=_eq()))
         ufunc = cast(cst.Attribute, updated.func)
-        new = updated.with_changes(func=ufunc.with_changes(attr=cst.Name("request")), args=new_args)
-        status: Status = "rewritten" if conf == "yes" else "needs-review"
-        self.record(
-            "apexecute", status, 'apexecute(path) → request(method, "/services/apexrest/path")', original, new
+        apex = cst.Attribute(value=ufunc.value, attr=cst.Name("apex"))
+        new = updated.with_changes(
+            func=cst.Attribute(value=apex, attr=cst.Name(method.lower())), args=new_args
         )
+        status: Status = "rewritten" if conf == "yes" else "needs-review"
+        self.record("apexecute", status, f"apexecute(path) → apex.{method.lower()}(path)", original, new)
         return new
 
     def leave_Await(self, original_node: cst.Await, updated_node: cst.Await) -> Any:
