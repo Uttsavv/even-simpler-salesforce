@@ -26,7 +26,7 @@ from libcst.metadata import (
     ScopeProvider,
 )
 
-from ._findings import MARKER_RE, Finding, Status, marker_text
+from ._findings import MARKER_RE, Finding, Status, marker_text, redact
 
 __all__ = ["Options", "transform_source"]
 
@@ -97,7 +97,8 @@ EXCEPTIONS: dict[str, tuple[str, bool]] = {
     "SalesforceGeneralError": ("catch esf.ServerError (5xx) or esf.SalesforceError", False),
 }
 INTERNALS_TODO = {
-    "session_id": "use sf.auth.token().access_token (and sf.auth.refresh() after INVALID_SESSION_ID); "
+    "session_id": "use sf.auth.token().access_token (and sf.auth.refresh() after INVALID_SESSION_ID; "
+    "await both on AsyncSalesforce); "
     "a hand-built SOAP convertLead/merge call becomes sf.leads.convert(...) / sf.merge(...)",
     "headers": "make calls with sf.request(...); auth headers are added for you",
     "session": "make calls with sf.request(...); the HTTP client is managed for you",
@@ -252,10 +253,19 @@ def _code(node: cst.CSTNode) -> str:
     return cst.Module(body=[]).code_for_node(node)
 
 
+def _atom(expr: cst.BaseExpression) -> cst.BaseExpression:
+    """``expr`` safe as the right operand of ``+``: parenthesised unless it binds tighter."""
+    if isinstance(expr, (cst.Name, cst.Attribute, cst.Call, cst.Subscript, cst.SimpleString)) or expr.lpar:
+        return expr
+    return expr.with_changes(lpar=[cst.LeftParen()], rpar=[cst.RightParen()])
+
+
 def _short(node: cst.CSTNode | None, fallback: str) -> str:
     """Source of a short single-line expression for a marker message, else ``fallback``."""
     text = _code(node) if node is not None else ""
-    return text if text and len(text) <= 40 and "\n" not in text else fallback
+    if not text or len(text) > 40 or "\n" in text or redact(text) != text:
+        return fallback  # long, multi-line, or holds something that looks like a secret
+    return text
 
 
 def _sobject_call(value: cst.BaseExpression, obj: cst.BaseExpression) -> cst.Call:
@@ -1779,7 +1789,9 @@ class _Transformer(cst.CSTTransformer):
             return f"Bulk API v1 isn't supported; use sf.bulk.query({soql}{deleted}) (Bulk API 2.0)"
         if op not in BULK_OPS:
             return BULK_GENERIC
-        rows = _short(positional[0].value if positional else None, "rows")
+        data_kw = [a.value for a in call.args if a.keyword is not None and a.keyword.value == "data"]
+        payload = positional[0].value if positional else (data_kw[0] if data_kw else None)
+        rows = _short(payload, "rows")
         ext = ""
         if op == "upsert":
             named = [
@@ -1790,16 +1802,18 @@ class _Transformer(cst.CSTTransformer):
         dropped = sorted(
             a.keyword.value
             for a in call.args
-            if a.keyword is not None and a.keyword.value != "external_id_field"
+            if a.keyword is not None and a.keyword.value not in ("data", "external_id_field")
         )
         note = (
-            f"; {'= and '.join(dropped)}= have no equivalent (the client splits large data)"
+            f"; {'= and '.join(dropped)}= {'has' if len(dropped) == 1 else 'have'} no equivalent "
+            "(the client splits large data)"
             if dropped
             else ""
         )
         return (
             f'Bulk API v1 isn\'t supported; use job = sf.bulk.ingest("{obj}", "{BULK_OPS[op]}", '
-            f"rows={rows}{ext}), then job.wait(); read job.successful_results() / job.failed_results(){note}"
+            f"rows={rows}{ext}), then job.wait(); read job.successful_results() / job.failed_results() "
+            f"(await ingest() and wait() on AsyncSalesforce){note}"
         )
 
     def _apexecute(self, original: cst.Call, updated: cst.Call) -> Any:
@@ -1834,7 +1848,7 @@ class _Transformer(cst.CSTTransformer):
         path: cst.BaseExpression = (
             self.s("/" + text.lstrip("/"))
             if text is not None
-            else cst.BinaryOperation(left=self.s("/"), operator=cst.Add(), right=action)
+            else cst.BinaryOperation(left=self.s("/"), operator=cst.Add(), right=_atom(action))
         )
         new_args = [cst.Arg(path)]
         if data is not None:

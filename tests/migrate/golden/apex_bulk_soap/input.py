@@ -33,3 +33,9 @@ def top(sf: Salesforce, rows, soql):
     found = sf.bulk.Account.query_all(soql)
     jobs = sf.bulk
     return found, jobs, sf.toolingexecute("query/?q=SELECT+Id+FROM+ApexClass")
+
+
+def more(sf: Salesforce, payloads, flag):
+    sf.bulk.Lead.insert(data=payloads, batch_size=500)
+    sf.bulk.Lead.insert(load(token="abc123secret"))
+    return sf.apexecute("a" if flag else "b")

@@ -135,6 +135,21 @@ def test_report_redacts_long_strings_and_secrets(tmp_path: Path) -> None:
     assert long not in text
 
 
+def test_report_redacts_secrets_quoted_in_messages(tmp_path: Path) -> None:
+    """Messages can quote source (the bulk rule names the rows): they are redacted like the code."""
+    from even_simpler_salesforce._migrate._findings import Finding
+
+    f = Finding("bulk", "todo", f'use rows=load(token="{SECRET}")', 1, 0, 1, 1, "x")
+    assert SECRET not in json.dumps(f.as_json())
+    src = tmp_path / "a.py"
+    src.write_text(
+        "from simple_salesforce import Salesforce\nsf = Salesforce()\n"
+        f'sf.bulk.Lead.insert(load(token="{SECRET}"))\n'
+    )
+    _, out, _ = run(["--report", "-", str(src)])
+    assert SECRET not in out[out.index('{\n  "version"') :]
+
+
 def test_parse_error_is_reported_and_other_files_still_run(tmp_path: Path) -> None:
     (tmp_path / "bad.py").write_text("def broken(:\n")
     (tmp_path / "good.py").write_text(CLEAN)

@@ -25,20 +25,20 @@ class Repo:
         return a, b, self.sf_client.apexecute("api/v1/x?y=1")
 
     def load(self, payloads):
-        # esf-migrate: TODO[bulk] Bulk API v1 isn't supported; use job = sf.bulk.ingest("Lead", "insert", rows=payloads), then job.wait(); read job.successful_results() / job.failed_results(); batch_size= and use_serial= have no equivalent (the client splits large data)
+        # esf-migrate: TODO[bulk] Bulk API v1 isn't supported; use job = sf.bulk.ingest("Lead", "insert", rows=payloads), then job.wait(); read job.successful_results() / job.failed_results() (await ingest() and wait() on AsyncSalesforce); batch_size= and use_serial= have no equivalent (the client splits large data)
         return self.sf_client.bulk.Lead.insert(payloads, batch_size=10000, use_serial=False)
 
     def soap(self):
         # esf-migrate: TODO[client-internals] sf_instance: use sf.instance_url (the instance of the current token; None before the first call); a hand-built SOAP convertLead/merge call becomes sf.leads.convert(...) / sf.merge(...)
         url = f"https://{self.sf_client.sf_instance}/services/Soap/u/60.0"
-        # esf-migrate: TODO[client-internals] session_id: use sf.auth.token().access_token (and sf.auth.refresh() after INVALID_SESSION_ID); a hand-built SOAP convertLead/merge call becomes sf.leads.convert(...) / sf.merge(...)
+        # esf-migrate: TODO[client-internals] session_id: use sf.auth.token().access_token (and sf.auth.refresh() after INVALID_SESSION_ID; await both on AsyncSalesforce); a hand-built SOAP convertLead/merge call becomes sf.leads.convert(...) / sf.merge(...)
         return url, self.sf_client.session_id
 
 
 def top(sf: Salesforce, rows, soql):
-    # esf-migrate: TODO[bulk] Bulk API v1 isn't supported; use job = sf.bulk.ingest("Contact", "upsert", rows=rows, external_id_field="Ext__c"), then job.wait(); read job.successful_results() / job.failed_results()
+    # esf-migrate: TODO[bulk] Bulk API v1 isn't supported; use job = sf.bulk.ingest("Contact", "upsert", rows=rows, external_id_field="Ext__c"), then job.wait(); read job.successful_results() / job.failed_results() (await ingest() and wait() on AsyncSalesforce)
     sf.bulk.Contact.upsert(rows, external_id_field="Ext__c")
-    # esf-migrate: TODO[bulk] Bulk API v1 isn't supported; use job = sf.bulk.ingest("Lead", "hardDelete", rows=rows), then job.wait(); read job.successful_results() / job.failed_results()
+    # esf-migrate: TODO[bulk] Bulk API v1 isn't supported; use job = sf.bulk.ingest("Lead", "hardDelete", rows=rows), then job.wait(); read job.successful_results() / job.failed_results() (await ingest() and wait() on AsyncSalesforce)
     sf.bulk.Lead.hard_delete(rows)
     # esf-migrate: TODO[bulk] Bulk API v1 isn't supported; use sf.bulk.query(soql, include_deleted=True) (Bulk API 2.0)
     found = sf.bulk.Account.query_all(soql)
@@ -46,3 +46,12 @@ def top(sf: Salesforce, rows, soql):
     jobs = sf.bulk
     # esf-migrate: TODO[unsupported] use sf.tooling.query(soql), sf.tooling.sobject(name) or sf.tooling.execute_anonymous(code); other Tooling paths: sf.request(method, "tooling/<path>")
     return found, jobs, sf.toolingexecute("query/?q=SELECT+Id+FROM+ApexClass")
+
+
+def more(sf: Salesforce, payloads, flag):
+    # esf-migrate: TODO[bulk] Bulk API v1 isn't supported; use job = sf.bulk.ingest("Lead", "insert", rows=payloads), then job.wait(); read job.successful_results() / job.failed_results() (await ingest() and wait() on AsyncSalesforce); batch_size= has no equivalent (the client splits large data)
+    sf.bulk.Lead.insert(data=payloads, batch_size=500)
+    # esf-migrate: TODO[bulk] Bulk API v1 isn't supported; use job = sf.bulk.ingest("Lead", "insert", rows=rows), then job.wait(); read job.successful_results() / job.failed_results() (await ingest() and wait() on AsyncSalesforce)
+    sf.bulk.Lead.insert(load(token="abc123secret"))
+    # esf-migrate: REVIEW[apexecute] apexecute(path) → apex.get("/path"); errors raise esf.ApexError; check the path has no query string (use params=)
+    return sf.apex.get("/" + ("a" if flag else "b"))

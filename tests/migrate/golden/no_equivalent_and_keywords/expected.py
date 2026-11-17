@@ -12,7 +12,7 @@ sf.sobject("Lead").update("00Q000000000001AAA", {}, headers={"Sforce-Auto-Assign
 sf.sobject("Lead").get("00Q000000000001AAA", raw_response=True)
 # esf-migrate: TODO[upsert-path] upsert() takes the external id field and value positionally: upsert("Ext__c", value, data)
 sf.sobject("Lead").upsert(record_id="Ext__c/1", data={})
-# esf-migrate: TODO[bulk] Bulk API v1 isn't supported; use job = sf.bulk.ingest("Lead", "update", rows=[{"Id": "00Q000000000001AAA"}]), then job.wait(); read job.successful_results() / job.failed_results()
+# esf-migrate: TODO[bulk] Bulk API v1 isn't supported; use job = sf.bulk.ingest("Lead", "update", rows=[{"Id": "00Q000000000001AAA"}]), then job.wait(); read job.successful_results() / job.failed_results() (await ingest() and wait() on AsyncSalesforce)
 sf.bulk.Lead.update([{"Id": "00Q000000000001AAA"}])
 # esf-migrate: TODO[unsupported] use sf.metadata (Metadata API)
 sf.mdapi.CustomObject.create({})

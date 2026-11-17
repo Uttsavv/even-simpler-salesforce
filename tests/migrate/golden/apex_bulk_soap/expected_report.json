@@ -73,5 +73,20 @@
     "rule": "unsupported",
     "status": "todo",
     "line": 35
+  },
+  {
+    "rule": "bulk",
+    "status": "todo",
+    "line": 39
+  },
+  {
+    "rule": "bulk",
+    "status": "todo",
+    "line": 40
+  },
+  {
+    "rule": "apexecute",
+    "status": "needs-review",
+    "line": 41
   }
 ]
