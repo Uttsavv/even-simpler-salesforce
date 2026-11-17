@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import inspect
 import secrets
 import time
 from collections.abc import Callable, Sequence
@@ -561,12 +562,13 @@ class TokenProvider(Auth):
         get_token: Returns a :class:`Token` with at least ``access_token``,
             ``instance_url`` and ``issued_at``. Set ``expires_at`` if you know it, and the
             client gets a new token within 60 seconds of that time. Raise an exception if it
-            can't get a token. Don't put the token in the exception message.
+            can't get a token. Don't put the token in the exception message: it isn't in
+            ``RefreshFailed``'s message, but it is ``__cause__``, which tracebacks print.
         token_key: Token store key. Pass one to share the token through a shared token store,
             for example across processes. The default is unique to this ``TokenProvider``.
 
     Raises:
-        TypeError: ``get_token`` isn't callable.
+        TypeError: ``get_token`` isn't callable, or is an ``async`` function.
     """
 
     kind: ClassVar[str] = "token_provider"
@@ -582,6 +584,8 @@ class TokenProvider(Auth):
     def __init__(self, get_token: Callable[[], Token], *, token_key: str | None = None) -> None:
         if not callable(get_token):
             raise TypeError("TokenProvider needs a function that returns an esf.Token")
+        if inspect.iscoroutinefunction(get_token) or inspect.iscoroutinefunction(type(get_token).__call__):
+            raise TypeError("TokenProvider needs a plain function, not an async one; it returns an esf.Token")
         set_ = object.__setattr__
         set_(self, "get_token", get_token)
         set_(self, "key", token_key or f"token_provider:{secrets.token_hex(6)}")

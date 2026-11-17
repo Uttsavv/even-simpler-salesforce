@@ -476,6 +476,17 @@ def test_token_provider_needs_a_callable() -> None:
     with pytest.raises(TypeError, match="function that returns an esf.Token"):
         esf.TokenProvider("not callable")  # type: ignore[arg-type]
 
+    async def async_token() -> esf.Token:  # pragma: no cover - never called
+        raise AssertionError
+
+    class AsyncCallable:
+        async def __call__(self) -> esf.Token:  # pragma: no cover - never called
+            raise AssertionError
+
+    for bad in (async_token, AsyncCallable()):
+        with pytest.raises(TypeError, match="not an async one"):
+            esf.TokenProvider(bad)  # type: ignore[arg-type]
+
 
 def test_flows_accept_refresh_ahead_and_expiry() -> None:
     f = _flow(refresh_ahead=timedelta(minutes=30), expiry="introspect")

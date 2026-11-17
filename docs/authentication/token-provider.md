@@ -81,8 +81,11 @@ as [client credentials](client-credentials.md).
 ## Errors
 
 If `get_token` raises, the call raises `RefreshFailed`. The message names the exception type but
-not its message, so a token in your exception doesn't reach logs. The original exception is
-`__cause__`. The next call tries `get_token` again.
+not its message. The original exception is `__cause__`, and logged tracebacks print it, so don't
+put credentials in your exception messages. The next call tries `get_token` again.
+
+`get_token` must be a plain function. An `async def` function raises `TypeError` when you create
+the `TokenProvider`.
 
 ```python
 def logged_out() -> esf.Token:
