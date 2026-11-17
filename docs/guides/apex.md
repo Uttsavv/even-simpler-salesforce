@@ -47,8 +47,21 @@ except esf.ApexError as exc:
 ```
 
 An unhandled exception in the class also raises `ApexError`, with `.error_code` set to
-`APEX_ERROR` and the exception text in `.message`. A path that no class maps raises
-`ApexError` with `.error_code` set to `NOT_FOUND`.
+`APEX_ERROR` and the exception text in `.message`.
+
+A path that no class maps raises `ApexError` with `.status` 404 and `.error_code` set to
+`NOT_FOUND`. It doesn't raise `esf.NotFound`, so catch `ApexError` and check `.status`.
+
+`ApexError` is not a subclass of `RequestError` or `ServerError`, because the class chooses its
+own status. To map it to your own HTTP response, use `.status`: a 4xx means the class rejected
+the input, and a 5xx means it failed.
+
+```python
+def http_status(exc: esf.ApexError) -> int:
+    if exc.status is not None and 400 <= exc.status < 500:
+        return exc.status  # 400, 404, 422, ...: pass the class's answer on
+    return 502
+```
 
 These errors keep their own class, because the cause is not the Apex class. A `401` or `429`
 that your class sets itself, with its own body, raises `ApexError` like any other status:

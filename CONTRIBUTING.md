@@ -20,6 +20,10 @@ uvx pre-commit install               # ruff + hygiene hooks on every commit
 
 Run things inside the environment with `uv run`, e.g. `uv run pytest tests/unit -q`.
 
+On Python 3.10, use a current 3.10.x release. CPython 3.10.0 has a dataclass bug that breaks
+pytest and hypothesis. The docs build needs Python 3.11 or later, so the `docs` dependency group
+installs only there.
+
 ## Checks (nox)
 
 All checks are [nox](https://nox.thea.codes/) sessions using uv as the backend. They are

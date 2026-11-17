@@ -35,6 +35,7 @@ RULES: tuple[str, ...] = (
     "format-soql",
     "restful",
     "apexecute",
+    "bulk",
     "exceptions",
     "client-internals",
     "client-methods",
@@ -128,7 +129,7 @@ class Finding:
             "status": self.status,
             "before": redact(self.before),
             "after": redact(self.after) if self.after is not None else None,
-            "message": self.message,
+            "message": redact(self.message),
             "suggestion": redact(self.suggestion) if self.suggestion is not None else None,
             "docs_url": DOCS_BASE + "#" + self.rule,
         }

@@ -165,6 +165,20 @@ def test_ingest_rows_creates_uploads_and_closes(h: Harness, mock: respx.MockRout
     assert "content-encoding" not in put.headers  # 64 KiB or less goes uncompressed
 
 
+def test_ingest_columns_for_rows_with_different_fields(h: Harness, mock: respx.MockRouter) -> None:
+    """columns= sets the header; each row leaves out the fields it doesn't set (synthetic)."""
+    routes = ingest_routes(mock)
+    sf = h.client()
+    rows = [{"LastName": "Doe"}, {"LastName": "Roe", "Phone": "1"}]
+    with pytest.raises(ValueError, match="columns="):
+        h.run(sf.bulk.ingest("Lead", "insert", rows=rows))
+    assert not routes["create"].called
+    h.run(sf.bulk.ingest("Lead", "insert", rows=rows, columns=["LastName", "Phone"]))
+    assert routes["upload"].calls.last.request.content == b"LastName,Phone\nDoe,\nRoe,1\n"
+    with pytest.raises(ValueError, match="for rows given as dicts"):
+        h.run(sf.bulk.ingest("Lead", "insert", rows=b"LastName\nDoe\n", columns=["LastName"]))
+
+
 def test_ingest_gzips_uploads_over_64_kib(h: Harness, mock: respx.MockRouter) -> None:
     """V40: a Developer Edition org (API 68.0) accepted gzipped uploads, chunked and with
     Content-Length. The client gzips parts over 64 KiB and sends them chunked."""

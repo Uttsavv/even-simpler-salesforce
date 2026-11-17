@@ -64,7 +64,7 @@ sf = esf.Salesforce(
 | `Salesforce(..., session=requests.Session())` | `esf.Salesforce(auth, http_client=httpx.Client(...))` |
 | `sf.sf_version` | `sf.api_version` |
 | `sf.sf_instance`, `sf.base_url` (to build links or URLs) | `sf.instance_url` for links; `sf.request(...)` for calls |
-| `sf.session_id`, `sf.headers`, `sf.session` (to make your own HTTP calls) | `sf.request(...)`; the access token is not public by design |
+| `sf.session_id`, `sf.headers`, `sf.session` (to make your own HTTP calls) | `sf.request(...)`; for a token sent in a body, `sf.auth.token().access_token` and `sf.auth.refresh()` |
 
 `sf.instance_url` is read-only. It is the instance of the current token, and `None` before the
 first call. `sf.request(...)` applies login, refresh, retries and logging for you.
@@ -120,15 +120,15 @@ rows = list(sf.query_iter("SELECT Id FROM Lead"))
 
 ## Many records
 
-Use [sObject Collections](guides/collections.md) for writes of many records. Bulk API 2.0 is
-planned for 0.3.
+Use [sObject Collections](guides/collections.md) for writes of up to a few thousand records, and
+[Bulk API 2.0](guides/bulk.md) for larger loads.
 
 | simple-salesforce | even-simpler-salesforce |
 |---|---|
 | `sf.restful("composite/sobjects", method="POST", json=...)` | `sf.collections.create(rows, sobject="Lead")` (chunked, ordered `BatchResult`) |
 | `sf.restful("composite/sobjects", method="PATCH", json=...)` | `sf.collections.update("Lead", rows)` |
-| `sf.bulk.Lead.insert(rows)` (Bulk API 1.0) | Bulk API 2.0 is planned for 0.3; Collections handles thousands of rows today |
-| `sf.bulk2.Lead.query(q)` | planned for 0.3 (`sf.bulk.query`); use `query_iter(q, page_size=2000)` |
+| `sf.bulk.Lead.insert(rows)` (Bulk API 1.0) | `job = sf.bulk.ingest("Lead", "insert", rows=rows)`, then `job.wait()`; read `job.successful_results()` and `job.failed_results()` |
+| `sf.bulk.Lead.query(q)`, `sf.bulk2.Lead.query(q)` | `sf.bulk.query(q)`, which yields every row |
 
 ## Other calls
 
@@ -137,11 +137,12 @@ For an endpoint without a helper, use [`sf.request()`](guides/requests.md).
 | simple-salesforce | even-simpler-salesforce |
 |---|---|
 | `sf.restful(path, method=..., json=...)` | `sf.request(method, path, json=...)` |
-| `sf.apexecute("Path", method="POST", data=...)` | `sf.request("POST", "/services/apexrest/Path", json=...)`; dedicated helpers planned for 0.2 |
-| `sf.toolingexecute(...)` | `sf.request("GET", "tooling/query", params={"q": ...})`; Tooling helpers planned for 0.3 |
+| `sf.apexecute("Path", method="POST", data=...)` | [`sf.apex.post("/Path", json=...)`](guides/apex.md); errors raise `esf.ApexError` |
+| `sf.toolingexecute(...)` | [`sf.tooling.query(soql)`](guides/tooling.md), `sf.tooling.sobject(name)` or `sf.tooling.execute_anonymous(code)` |
+| a hand-built SOAP `convertLead` or `merge` call | [`sf.leads.convert(...)`](guides/leads.md) or `sf.merge(...)` |
 | `sf.limits()` | `sf.limits()` returns `dict[str, Limit]`; `sf.usage.snapshot()` gives usage at no cost |
 | `sf.is_sandbox()` | not provided; query `SELECT IsSandbox FROM Organization` |
-| `sf.mdapi` | Metadata API planned for 0.4 |
+| `sf.mdapi` | [`sf.metadata`](guides/metadata.md) |
 
 ## Exceptions
 

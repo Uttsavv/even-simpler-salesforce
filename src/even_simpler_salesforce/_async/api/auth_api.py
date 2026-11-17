@@ -126,7 +126,11 @@ class AsyncAuthApi:
         return await rt.introspect(tok)
 
     async def token(self) -> Token:
-        """The current token (acquiring one if needed). Treat it as a secret."""
+        """The current token (acquiring one if needed). Treat it as a secret.
+
+        Calls through the client never need it. Use it only to hand the access token to other
+        code, such as a SOAP ``SessionHeader`` you build yourself. Never log it.
+        """
         return await self._sf._runtime.token()
 
     async def refresh(self) -> Token:

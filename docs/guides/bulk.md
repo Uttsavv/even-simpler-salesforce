@@ -58,6 +58,20 @@ An upsert that creates a record behaves like an insert. A field with a default v
 `Lead.Status`, gets its default from both an empty cell and `#N/A`.
 
 The keys of the first row are the columns. A later row may leave a key out, but it can't add one.
+When rows set different fields, pass `columns=` with every field name. Each row then leaves out
+the fields it doesn't set:
+
+```python
+await sf.bulk.ingest(
+    "Lead",
+    "insert",
+    rows=[
+        {"LastName": "Doe", "Company": "Acme"},
+        {"LastName": "Roe", "Company": "Globex", "Phone": "+91 98765 43210"},
+    ],
+    columns=["LastName", "Company", "Phone"],
+)
+```
 
 ```python
 await sf.bulk.ingest(

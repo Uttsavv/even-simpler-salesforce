@@ -58,7 +58,10 @@ def _sobject_of(soql: str) -> str | None:
     return real(soql)
 
 
-def _csv_bytes(rows: Any, line_ending: str, column_delimiter: str) -> bytes:
+def _csv_bytes(rows: Any, line_ending: str, column_delimiter: str, columns: Sequence[str] | None) -> bytes:
+    encoder = RowEncoder(column_delimiter, line_ending, columns)
+    if columns is not None and isinstance(rows, (bytes, bytearray, memoryview, str, os.PathLike)):
+        raise ValueError("columns= is for rows given as dicts; a CSV sets its own header")
     if isinstance(rows, (bytes, bytearray, memoryview)):
         return bytes(rows)  # pyright: ignore[reportUnknownArgumentType]
     if isinstance(rows, (str, os.PathLike)):
@@ -68,15 +71,7 @@ def _csv_bytes(rows: Any, line_ending: str, column_delimiter: str) -> bytes:
         raise TypeError(
             f"rows must be an iterable of dicts, a CSV path or CSV bytes, got {type(rows).__name__}"
         )
-    encoder = RowEncoder(column_delimiter, line_ending)
-    out = bytearray()
-    for row in rows:  # pyright: ignore[reportUnknownVariableType]
-        if encoder.columns is None:
-            out += encoder.header(row)  # pyright: ignore[reportUnknownArgumentType]
-        out += encoder.encode(row)  # pyright: ignore[reportUnknownArgumentType]
-    if encoder.columns is None:
-        raise ValueError("rows is empty; there is nothing to upload")
-    return bytes(out)
+    return b"".join(encoder.lines(rows))  # pyright: ignore[reportUnknownArgumentType]
 
 
 def _text(value: Any) -> str | None:
@@ -297,11 +292,12 @@ class FakeBulk:
         external_id_field: str | None = None,
         line_ending: LineEnding = "LF",
         column_delimiter: ColumnDelimiter = "COMMA",
+        columns: Sequence[str] | None = None,
     ) -> FakeIngestJob:
         """Apply the rows to the store and return a finished job (operation ``bulk.ingest``)."""
         check_sobject(sobject)
         check_ingest(operation, external_id_field, line_ending, column_delimiter)
-        data = _csv_bytes(rows, line_ending, column_delimiter)
+        data = _csv_bytes(rows, line_ending, column_delimiter, columns)
         cutter = CsvCutter(limit=max(len(data), 1))
         cutter.feed(data)
         header, _ = cutter.finish()
@@ -633,6 +629,7 @@ class AsyncFakeBulk:
         external_id_field: str | None = None,
         line_ending: LineEnding = "LF",
         column_delimiter: ColumnDelimiter = "COMMA",
+        columns: Sequence[str] | None = None,
     ) -> AsyncFakeIngestJob:
         """See :meth:`FakeBulk.ingest`."""
         job = self._inner.ingest(
@@ -642,6 +639,7 @@ class AsyncFakeBulk:
             external_id_field=external_id_field,
             line_ending=line_ending,
             column_delimiter=column_delimiter,
+            columns=columns,
         )
         return AsyncFakeIngestJob(job)
 
