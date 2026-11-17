@@ -133,7 +133,7 @@ def test_install_all_into_the_default_dir(
     assert (probe / "probe_template.py").is_file()
     assert not list(base.rglob("__pycache__"))
     assert f"wrote {Path('.claude/skills/esf-probe/SKILL.md')}" in out.splitlines()
-    assert "installed 5 skills in .claude/skills" in err
+    assert f"installed 5 skills in {Path('.claude/skills')}" in err
 
 
 def test_install_named_into_a_dir(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
