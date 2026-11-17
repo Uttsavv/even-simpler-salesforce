@@ -26,6 +26,7 @@ linked below or `dir(esf)`.
 | `esf.JwtBearer(domain=, client_id=, username=, private_key=)` | a server acts as a named user, with a certificate; needs the `[jwt]` extra |
 | `esf.WebServerFlow(domain=, client_id=, redirect_uri=, token_key=)` | people log in in the browser and the app acts as each of them |
 | `esf.StaticToken(access_token, instance_url)` | scripts and tests with a token from elsewhere; it can't refresh |
+| `esf.TokenProvider(get_token)` | a login you already have (the `sf` CLI, a secrets manager): your function returns an `esf.Token`, and it's called again on a `401` |
 
 There is no username and password login. Read secrets from the environment or a secret
 manager. Never hard-code them, and never log `sf.auth` or a token.

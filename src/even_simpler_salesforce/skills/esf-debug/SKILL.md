@@ -117,7 +117,7 @@ library's own guard, not Salesforce.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `SessionExpired` with `StaticToken` | the token expired or was revoked; a static token can't refresh | get a new token, or use a login flow that refreshes |
+| `SessionExpired` with `StaticToken` | the token expired or was revoked; a static token can't refresh | get a new token, or use a login flow that refreshes (`TokenProvider` wraps a token source you already have) |
 | `SessionExpired` after a refresh, with a hint about the connected app | the app lacks the `api` scope, or a session policy blocks it | check the app's OAuth scopes and session policies |
 | `ReauthorizationRequired`, event `sf.auth.reauth_required` | the refresh token is expired, revoked or rotated out (`invalid_grant`) | the user must log in again |
 | `ReauthorizationRequired` with `error_code="no_refresh_token"` | the token store has nothing under that `token_key` | finish the login callback, or check the `token_key` |
